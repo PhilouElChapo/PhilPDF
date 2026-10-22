@@ -1,7 +1,8 @@
 # Fabrication automatique de PhilPDF pour Windows, dans le cloud GitHub.
 # Rien a installer sur le PC : Python, Qt, PyMuPDF et Tesseract sont embarques dans le paquet.
-# - A chaque envoi de code : paquet de test telechargeable dans l'onglet "Actions".
-# - A chaque etiquette v0.2, v0.3... : publication d'une version (Releases), que PhilPDF
+# - A chaque envoi de code sur main : fabrication, auto-controle, puis publication dans
+#   "Releases" sous le numero de version de app/config.py (VERSION). La version publiee est
+#   mise a jour a chaque envoi ; changer VERSION cree une nouvelle version, que PhilPDF
 #   detecte tout seul au demarrage pour se mettre a jour.
 name: Fabriquer PhilPDF
 
@@ -18,9 +19,9 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -80,7 +81,7 @@ jobs:
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DVersion=$env:VERSION installateur.iss
           Move-Item Output\PhilPDF_Setup.exe .
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: PhilPDF-${{ env.VERSION }}-windows
           path: |
@@ -88,9 +89,17 @@ jobs:
             PhilPDF_Setup.exe
 
       - name: Publication de la version
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ env.VERSION }}
+          name: PhilPDF ${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          body: |
+            PhilPDF ${{ env.VERSION }} pour Windows, tout en un (rien a installer a cote).
+            - PhilPDF_portable.zip : a decompresser, aucune trace sur le PC.
+            - PhilPDF_Setup.exe : installation sans droits administrateur.
           files: |
             PhilPDF_portable.zip
             PhilPDF_Setup.exe
