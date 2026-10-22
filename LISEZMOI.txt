@@ -79,8 +79,17 @@ Verification manuelle : Aide > Rechercher les mises a jour.
   Aussi     Rechercher et remplacer, combiner, imprimer plusieurs documents,
             alleger, mot de passe, biffer, reconnaissance de texte (OCR)
   Drive     Tampons et signatures ranges sur ce PC et sauvegardes sur le
-            Drive (Google Drive, OneDrive, Dropbox detectes) ; la session
-            n'enregistre que les emplacements des fichiers ouverts
+            Drive (Google Drive, OneDrive, Dropbox detectes)
+  Session   Le Drive ne garde que les EMPLACEMENTS des fichiers ouverts
+            (jamais les PDF). Sur un autre PC : "Reprendre la session de
+            Pharmacie (5 fichiers) ?". Chaque fichier est cherche : dossier
+            deja appris, meme chemin, meme chemin sous votre dossier
+            utilisateur, sous vos emplacements declares (Preferences :
+            D:\Documents, NAS...), par son nom, puis par son contenu s'il a
+            ete renomme. Sinon : "introuvable sur Maison (ouvert sur
+            Pharmacie le ...)". Les correspondances de dossiers trouvees
+            sont retenues pour la fois suivante. La page affichee et le
+            zoom sont repris.
   Plus tard : signature numerique (certificat), formulaires, comparer, IA
 
 

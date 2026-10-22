@@ -581,3 +581,104 @@ class DialogueExporter(QDialog):
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         f.addRow(bb)
+
+
+# ------------------------------------------------------------------ reprise de session
+from PySide6.QtCore import QThread
+
+
+class _Recherche(QThread):
+    etape = Signal(int, str, str)          # indice, chemin trouve ("" si non), comment
+
+    def __init__(self, session, machine, fichiers):
+        super().__init__()
+        self.s, self.machine, self.fichiers, self.stop = session, machine, fichiers, False
+
+    def run(self):
+        restants = []
+        for i, e in enumerate(self.fichiers):
+            if self.stop:
+                return
+            c, comment = self.s.retrouver_rapide(self.machine, e)
+            if c:
+                self.etape.emit(i, c, comment)
+            else:
+                restants.append(i)
+                self.etape.emit(i, "", "recherche du fichier renommé...")
+        for i in restants:
+            if self.stop:
+                return
+            c = self.s.retrouver_par_empreinte(self.fichiers[i], lambda: self.stop)
+            self.etape.emit(i, c or "", "renommé, retrouvé par son empreinte" if c else "introuvable")
+
+
+class DialogueReprise(QDialog):
+    """Reprise de la session d'une autre machine : chaque fichier est recherche en cascade."""
+
+    def __init__(self, parent, session, machine):
+        super().__init__(parent)
+        self.s, self.machine = session, machine
+        info = session.lire().get(machine, {})
+        self.fichiers = info.get("fichiers", [])
+        from .session import date_fr, nb_fichiers
+        date = date_fr(info.get("maj", ""))
+        ici = session.params["machine"]
+        self.date = date
+        self.setWindowTitle("Reprendre une session")
+        self.resize(780, 420)
+        v = QVBoxLayout(self)
+        v.addWidget(QLabel(f"<b>Session de {machine}</b> ({nb_fichiers(len(self.fichiers))}, mise à jour le {date}) — "
+                           f"recherche des fichiers sur <b>{ici}</b>"))
+        self.liste = QListWidget()
+        v.addWidget(self.liste, 1)
+        for e in self.fichiers:
+            it = QListWidgetItem(f"{e['nom']}  —  recherche...")
+            it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
+            it.setCheckState(Qt.Unchecked)
+            it.setToolTip(e["chemin"])
+            self.liste.addItem(it)
+        self.trouves = {}
+        aide = QLabel("Ordre de recherche : dossiers déjà appris, même emplacement, dossier utilisateur, "
+                      "vos emplacements déclarés (Préférences), recherche par nom puis par empreinte.")
+        aide.setWordWrap(True)
+        aide.setStyleSheet("color:#555;font-size:12px")
+        v.addWidget(aide)
+        bb = QDialogButtonBox()
+        self.b_ouvrir = bb.addButton("Ouvrir les fichiers cochés", QDialogButtonBox.AcceptRole)
+        bb.addButton("Annuler", QDialogButtonBox.RejectRole)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        v.addWidget(bb)
+        self.t = _Recherche(session, machine, self.fichiers)
+        self.t.etape.connect(self._etape)
+        self.t.start()
+
+    def _etape(self, i, chemin, comment):
+        it = self.liste.item(i)
+        e = self.fichiers[i]
+        if chemin:
+            self.trouves[i] = chemin
+            it.setText(f"{e['nom']}  —  {chemin}   ({comment})")
+            it.setCheckState(Qt.Checked)
+            it.setForeground(QColor("#1d5a2b"))
+        elif comment == "introuvable":
+            it.setText(f"{e['nom']}  —  introuvable sur {self.s.params['machine']} (ouvert sur {self.machine} le {self.date})")
+            it.setForeground(QColor("#999999"))
+            it.setFlags(it.flags() & ~Qt.ItemIsUserCheckable)
+        else:
+            it.setText(f"{e['nom']}  —  {comment}")
+
+    def choisis(self):
+        """[(chemin, page, zoom)] a ouvrir ; les correspondances trouvees sont apprises."""
+        out = []
+        for i, c in self.trouves.items():
+            if self.liste.item(i).checkState() == Qt.Checked:
+                e = self.fichiers[i]
+                self.s.apprendre_depuis(self.machine, e, c)
+                out.append((c, e.get("page", 0), e.get("zoom")))
+        return out
+
+    def done(self, r):
+        self.t.stop = True
+        self.t.wait(3000)
+        super().done(r)

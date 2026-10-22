@@ -297,10 +297,11 @@ class PageAccueil(QWidget):
             if not existe:
                 it.setForeground(Qt.gray)
             self.liste.addItem(it)
-        sess = self.params.lire_session()
-        autres = {m: f for m, f in sess.items() if m != self.params["machine"] and f}
+        from .session import session_de, date_fr, nb_fichiers
+        autres = session_de(self.params).autres_machines()
         if autres:
-            liens = " · ".join(f'<a href="{m}">Reprendre la session de {m} ({len(f)} fichiers)</a>' for m, f in autres.items())
+            liens = " · ".join(f'<a href="{m}">Reprendre la session de {m} ({nb_fichiers(n)}, le {date_fr(d)})</a>'
+                               for m, d, n in autres)
             self.bandeau.setText(liens)
             self.bandeau.show()
         else:

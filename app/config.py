@@ -7,7 +7,7 @@ et rien n'est ecrit ailleurs sur le PC ni dans le registre.
 import json, os, platform, sys
 
 APP = "PhilPDF"
-VERSION = "0.2.1"
+VERSION = "0.2.2"
 
 
 def dossier_programme():
@@ -47,6 +47,7 @@ DEFAUTS = {
     "maj_source": "github",         # "github" ou "dossier" (dossier synchronise)
     "maj_auto": True,               # verifier au demarrage (une fois par jour)
     "maj_derniere": "",
+    "racines": [],                  # emplacements de documents declares sur ce PC (session partagee)
 }
 
 
@@ -74,7 +75,7 @@ class Parametres(dict):
         self["recents"] = [chemin] + r[:29]
         self.enregistrer()
 
-    # ---- session partagee (version 0.1 : fichiers ouverts de cette machine)
+    # ---- session partagee : voir app/session.py
     def chemin_session(self):
         """La session (emplacements des fichiers ouverts, pas les fichiers) vit sur le Drive."""
         racine = self.get("drive") or ""
@@ -83,26 +84,6 @@ class Parametres(dict):
             os.makedirs(d, exist_ok=True)
             return os.path.join(d, "session.json")
         return os.path.join(dossier_donnees(), "session.json")
-
-    def ecrire_session(self, fichiers):
-        try:
-            data = {}
-            p = self.chemin_session()
-            if os.path.exists(p):
-                with open(p, encoding="utf-8") as f:
-                    data = json.load(f)
-            data[self["machine"]] = fichiers
-            with open(p, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-        except (OSError, ValueError):
-            pass
-
-    def lire_session(self):
-        try:
-            with open(self.chemin_session(), encoding="utf-8") as f:
-                return json.load(f)
-        except (OSError, ValueError):
-            return {}
 
 
 def associer_pdf(activer):

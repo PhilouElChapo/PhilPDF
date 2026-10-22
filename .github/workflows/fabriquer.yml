@@ -33,6 +33,9 @@ jobs:
       - name: Test du moteur
         run: python tests/test_moteur.py
 
+      - name: Test de la session partagee
+        run: python tests/test_session.py
+
       - name: Tesseract (embarque dans le paquet)
         shell: pwsh
         run: |

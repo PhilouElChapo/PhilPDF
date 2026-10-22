@@ -14,8 +14,9 @@ from .pages import PageOutils, PageAccueil
 from .document import OngletDocument, DialogueRemplacer, question
 from .outils import outil
 from .bibliotheque import Bibliotheque, detecter_clouds
+from .session import session_de, date_fr, nb_fichiers
 from .dialogues import (boutons_fr, DialogueFiligrane, DialogueEntete, DialogueNumeriser, DialogueExporter,
-                        DialogueBibliotheque)
+                        DialogueBibliotheque, DialogueReprise)
 
 FILTRE = "Documents PDF (*.pdf *.PDF)"
 
@@ -90,6 +91,11 @@ class Fenetre(QMainWindow):
             self.params["maj_derniere"] = aujourd_hui
             self.params.enregistrer()
             self.verifier_maj(silencieux=True)
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(800, self.proposer_reprise)
+        self._minuterie = QTimer(self)
+        self._minuterie.timeout.connect(self._session)
+        self._minuterie.start(60000)       # page courante memorisee chaque minute
         # nouveau PC : proposer de recuperer tampons et signatures sauvegardes sur le Drive
         nouv = self.biblio.nouveautes_drive()
         if nouv and not self.params.get("drive_restaure"):
@@ -251,7 +257,8 @@ class Fenetre(QMainWindow):
         self.params.enregistrer()
 
     def _session(self):
-        self.params.ecrire_session([o.chemin for o in self.documents() if o.chemin])
+        """Ecrit les EMPLACEMENTS des fichiers ouverts (jamais les fichiers) dans la session du Drive."""
+        session_de(self.params).ecrire([(o.chemin, o.page_courante(), o.zoom) for o in self.documents() if o.chemin])
 
     def ouvrir(self, chemin):
         chemin = os.path.abspath(chemin)
@@ -314,36 +321,43 @@ class Fenetre(QMainWindow):
         e.accept()
 
     def reprendre_session(self, machine):
-        fichiers = self.params.lire_session().get(machine, [])
-        absents = []
-        for f in fichiers:
-            if os.path.exists(f):
-                self.ouvrir(f)
-            else:
-                # meme chemin sous le dossier utilisateur de ce PC
-                parts = os.path.normpath(f).split(os.sep)
-                trouve = None
-                if "Users" in parts or "home" in parts:
-                    k = parts.index("Users") if "Users" in parts else parts.index("home")
-                    cand = os.path.join(os.path.expanduser("~"), *parts[k + 2:])
-                    if os.path.exists(cand):
-                        trouve = cand
-                if trouve:
-                    self.ouvrir(trouve)
-                else:
-                    absents.append(os.path.basename(f))
-        if absents:
-            QMessageBox.information(self, "Session", f"Introuvables sur {self.params['machine']} (ouverts sur {machine}) :\n"
-                                    + "\n".join(absents))
+        d = DialogueReprise(self, session_de(self.params), machine)
+        if d.exec() != QDialog.Accepted:
+            return
+        for chemin, page, zoom in d.choisis():
+            o = self.ouvrir(chemin)
+            if o:
+                if zoom:
+                    o.changer_zoom(zoom)
+                if page and page < len(o.doc):
+                    from PySide6.QtCore import QTimer
+                    QTimer.singleShot(200, lambda o=o, p=page: o.aller_a(p))
 
     def choisir_session(self):
-        sess = self.params.lire_session()
-        if not sess:
-            QMessageBox.information(self, "Session", "Aucune session enregistrée. Indiquez un dossier synchronisé dans les préférences.")
+        autres = session_de(self.params).autres_machines()
+        if not autres:
+            QMessageBox.information(self, "Session", "Aucune autre machine n'a encore de session. "
+                                    "Indiquez votre Drive dans Edition › Préférences, sur chaque PC.")
             return
-        m, ok = QInputDialog.getItem(self, "Reprendre une session", "Machine :", [f"{k} ({len(v)} fichiers)" for k, v in sess.items()], 0, False)
+        libs = [f"{m} ({nb_fichiers(n)}, le {date_fr(d)})" for m, d, n in autres]
+        m, ok = QInputDialog.getItem(self, "Reprendre une session", "Machine :", libs, 0, False)
         if ok:
-            self.reprendre_session(m.rsplit(" (", 1)[0])
+            self.reprendre_session(autres[libs.index(m)][0])
+
+    def proposer_reprise(self):
+        """Au demarrage : une autre machine a une session plus recente que la notre -> proposer."""
+        s = session_de(self.params)
+        autres = s.autres_machines()
+        if not autres:
+            return
+        m, date, n = autres[0]
+        mienne = s.lire().get(self.params["machine"], {}).get("maj", "")
+        if date > mienne and date != self.params.get("reprise_vue"):
+            self.params["reprise_vue"] = date
+            self.params.enregistrer()
+            if question(self, "Session", f"Reprendre la session de {m} ({nb_fichiers(n)}, le {date_fr(date)}) ?",
+                        [("Reprendre", QMessageBox.AcceptRole), ("Non merci", QMessageBox.RejectRole)]) == 0:
+                self.reprendre_session(m)
 
     # ------------------------------------------------------------ enregistrer
     def enregistrer(self, o=None, sous=False):
@@ -762,6 +776,18 @@ class Fenetre(QMainWindow):
         sauver = QPushButton("Sauvegarder maintenant")
         sauver.clicked.connect(lambda: QMessageBox.information(d, "Drive", f"{self.biblio.sauvegarder_drive() or 0} élément(s) copiés sur le Drive."
                                                                if self.params.get("drive") else "Choisissez d'abord votre Drive."))
+        racines = QListWidget()
+        racines.setMaximumHeight(90)
+        for r in self.params.get("racines", []) or [os.path.expanduser("~")]:
+            racines.addItem(r)
+        hr = QHBoxLayout()
+        br = QPushButton("Ajouter un emplacement...")
+        br.clicked.connect(lambda: (lambda p: p and racines.addItem(p))(QFileDialog.getExistingDirectory(d, "Emplacement de vos documents")))
+        hr.addWidget(br)
+        bs = QPushButton("Retirer")
+        bs.clicked.connect(lambda: [racines.takeItem(racines.row(i)) for i in racines.selectedItems()])
+        hr.addWidget(bs)
+        hr.addStretch()
         fixer = QCheckBox("Fixer signatures et tampons dans la page à l'enregistrement (non déplaçables ensuite)")
         fixer.setChecked(self.params.get("fixer_objets", False))
         moteur = QComboBox()
@@ -774,7 +800,7 @@ class Fenetre(QMainWindow):
         assoc = QCheckBox("Ouvrir les fichiers PDF avec PhilPDF (proposé dans « Ouvrir avec »)")
         assoc.setChecked(self.params["association_pdf"])
         assoc.setEnabled(sys.platform == "win32" and not est_portable())
-        f.addRow("Nom de cette machine", machine)
+        f.addRow("Nom de cette machine (alias)", machine)
         f.addRow("Votre nom", auteur)
         f.addRow("Drive (Google Drive, OneDrive...)", hs)
         expl = QLabel("Tampons et signatures restent sur ce PC ; le Drive en garde une sauvegarde (dossier PhilPDF) "
@@ -783,6 +809,8 @@ class Fenetre(QMainWindow):
         expl.setStyleSheet("color:#555;font-size:12px")
         f.addRow(expl)
         f.addRow("", sauver)
+        f.addRow("Emplacements de vos documents sur ce PC", racines)
+        f.addRow("", hr)
         f.addRow(fixer)
         f.addRow("Moteur IA", moteur)
         f.addRow("Clef API Claude", kc)
@@ -809,6 +837,7 @@ class Fenetre(QMainWindow):
         self.params.update(machine=machine.text().strip() or self.params["machine"],
                            drive=drive.currentData() if drive.currentData() is not None else drive.currentText().strip(),
                            auteur=auteur.text().strip(), fixer_objets=fixer.isChecked(),
+                           racines=[racines.item(i).text() for i in range(racines.count())],
                            ia_moteur=["claude", "gemini", "deux"][moteur.currentIndex()],
                            clef_claude=kc.text().strip(), clef_gemini=kg.text().strip(),
                            maj_source=["github", "dossier"][majs.currentIndex()], maj_auto=maja.isChecked())
