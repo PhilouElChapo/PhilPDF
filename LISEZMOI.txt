@@ -46,25 +46,42 @@ Source des mises a jour (Edition > Preferences) :
 Verification manuelle : Aide > Rechercher les mises a jour.
 
 
-3. CE QUE FAIT LA VERSION 0.1
+3. CE QUE FAIT LA VERSION 0.2
 -----------------------------
 
-  Oui   Accueil, fichiers recents, onglets, menus
-  Oui   Page Outils par familles, recherche, bulles d'aide, etoiles
-  Oui   Visionneuse : defilement, zoom, vignettes, plein ecran
-  Oui   Pivoter, avec la question "conserver dans le fichier ?"
-  Oui   Organiser : glisser les vignettes, pivoter, extraire, supprimer
-  Oui   Barre rapide sur selection : surligner, souligner, barrer, note,
-        copier, modifier, biffer
-  Oui   Mode Modifier : corriger une ligne avec la police d'origine, + Texte
-  Oui   Rechercher et remplacer : compteur, casse, accents, un ou tout
-  Oui   Combiner, creer, exporter en PNG ou en texte
-  Oui   Imprimer un ou plusieurs documents
-  Oui   Alleger, mot de passe (AES 256), signature manuscrite (image)
-  Oui   Reconnaissance de texte avec redressement et nettoyage
-  Oui   Annuler (30 etapes), session ecrite dans le dossier synchronise
-  Plus tard : tampons, filigranes, en-tete, signature numerique,
-        formulaires, comparer, IA, numeriser
+  Lecture   Onglets, vignettes, zoom, plein ecran, recherche
+  Outils    Page Outils par familles, bulles d'aide ; les etoiles epinglent
+            un outil dans la barre du document et dans le volet de droite
+            (glisser pour changer l'ordre ; volet reglable et masquable)
+  Modifier  Comme Acrobat : cliquer une ligne ou une image pour la
+            selectionner, la glisser pour la deplacer ; double-clic pour
+            corriger directement dans la page (bouton ... pour la boite de
+            dialogue) ; police d'origine conservee ; ajouter texte et images,
+            lien, recadrer, en-tete et pied de page, filigrane, arriere-plan ;
+            panneau Format (taille, couleur, police)
+  Tampons   Prets a l'emploi a la date du jour (Recu, Valide, Approuve,
+            Rejete, Paye, Urgent, Confidentiel...), tampons texte personnels,
+            import d'une image ou d'une zone d'un PDF (tampons Acrobat
+            reconnus) ; poses, ils restent deplacables et redimensionnables
+  Signatures  Plusieurs signatures, dessinees ou importees, avec une par
+            defaut ; deplacables et redimensionnables apres pose
+  Filigranes  Modeles (Copie, Confidentiel...), texte personnel memorise,
+            image ; opacite, angle, position, devant ou derriere
+  Pages     Organiser en grille ou dans les vignettes par glisser-deposer,
+            pivoter, inserer, remplacer, extraire, supprimer ; rotation
+            "dans le fichier ou affichage seulement"
+  Edition   Annuler, retablir, couper, copier, coller, supprimer,
+            selectionner tout
+  Numeriser Scanner directement (chargeur, recto-verso, vitre), modes
+            automatique / noir et blanc / gris / couleur, resolution, taille
+            estimee, pages blanches retirees, redressement
+  Exporter  Word (.docx), JPG, PNG, texte
+  Aussi     Rechercher et remplacer, combiner, imprimer plusieurs documents,
+            alleger, mot de passe, biffer, reconnaissance de texte (OCR)
+  Drive     Tampons et signatures ranges sur ce PC et sauvegardes sur le
+            Drive (Google Drive, OneDrive, Dropbox detectes) ; la session
+            n'enregistre que les emplacements des fichiers ouverts
+  Plus tard : signature numerique (certificat), formulaires, comparer, IA
 
 
 4. RACCOURCIS

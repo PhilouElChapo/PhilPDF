@@ -2,6 +2,10 @@
 import os, sys
 
 sys.path.insert(0, getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))))
+if sys.stdout is None:          # programme sans console (Windows) : certaines bibliotheques ecrivent quand meme
+    sys.stdout = open(os.devnull, "w")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QFont, QPalette, QColor
@@ -22,6 +26,21 @@ def verifier(sortie):
     t = fitz.open(src + ".ok.pdf")[0].get_text()
     ok &= "Montant payé" in t
     lignes.append(f"modifier: {'OK' if 'Montant payé' in t else 'ECHEC'}")
+    from moteur import objets
+    d2 = fitz.open(src + ".ok.pdf")
+    objets.poser(d2, 0, fitz.Rect(300, 300, 450, 350), objets.tampon_predefini("REÇU", (0, 0, 1)), "Reçu")
+    bon = len(list(d2[0].annots())) == 1
+    ok &= bon
+    lignes.append(f"tampon: {'OK' if bon else 'ECHEC'}")
+    try:
+        from pdf2docx import Converter
+        c = Converter(src + ".ok.pdf"); c.convert(src + ".docx"); c.close()
+        bon = os.path.getsize(src + ".docx") > 1000
+    except Exception as ex:
+        bon = False
+        lignes.append(f"word: {ex}")
+    ok &= bon
+    lignes.append(f"word: {'OK' if bon else 'ECHEC'}")
     exe = tesseract_exe()
     lignes.append(f"tesseract: {exe}")
     if exe:
@@ -47,6 +66,14 @@ def main():
     if "--verifier" in sys.argv:
         sys.exit(verifier(sys.argv[sys.argv.index("--verifier") + 1]))
     app = QApplication(sys.argv)
+    from PySide6.QtCore import QTranslator, QLibraryInfo, QLocale
+    QLocale.setDefault(QLocale(QLocale.French, QLocale.France))
+    trad = QTranslator(app)
+    for dossier in (QLibraryInfo.path(QLibraryInfo.TranslationsPath),
+                    os.path.join(getattr(sys, "_MEIPASS", ""), "PySide6", "Qt", "translations")):
+        if trad.load("qtbase_fr", dossier):
+            app.installTranslator(trad)
+            break
     app.setApplicationName("PhilPDF")
     app.setOrganizationName("PhilPDF")
     app.setStyle("Fusion")

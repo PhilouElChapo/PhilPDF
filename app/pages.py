@@ -225,6 +225,13 @@ class PageOutils(QScrollArea):
             sec.setVisible(fid in visibles)
             sec.updateGeometry()
 
+    def maj_etoiles(self):
+        for t, _ in self.tuiles:
+            t.etoile.blockSignals(True)
+            t.etoile.setChecked(t.oid in self.params["outils_epingles"])
+            t._maj_etoile()
+            t.etoile.blockSignals(False)
+
     def _epingler(self, oid, on):
         e = [x for x in self.params["outils_epingles"] if x != oid]
         if on:
@@ -297,5 +304,6 @@ class PageAccueil(QWidget):
             self.bandeau.setText(liens)
             self.bandeau.show()
         else:
-            self.bandeau.setText(f"Machine : <b>{self.params['machine']}</b>. Indiquez un dossier synchronisé dans "
-                                 "Paramètres pour retrouver vos fichiers ouverts sur vos autres PC.")
+            self.bandeau.setText(f"Machine : <b>{self.params['machine']}</b>. " + (
+                "Drive : " + self.params["drive"] if self.params.get("drive") else
+                "Indiquez votre Drive dans Edition › Préférences pour retrouver vos fichiers ouverts et vos tampons sur vos autres PC."))

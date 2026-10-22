@@ -2,7 +2,7 @@
 
 Deux sources possibles (Parametres) :
  - "github"  : derniere version publiee sur GitHub (Releases du depot PhilPDF) ;
- - "dossier" : un fichier PhilPDF_version.json depose dans le dossier synchronise,
+ - "dossier" : un fichier PhilPDF_version.json depose dans <Drive>/PhilPDF,
                pratique pour mettre a jour toutes ses machines sans Internet direct.
 
 Application :
@@ -25,12 +25,14 @@ def chercher(params):
     """Renvoie (version, url_ou_chemin_du_paquet, notes) si une version plus recente existe, sinon None."""
     source = params.get("maj_source", "github")
     try:
-        if source == "dossier" and params.get("dossier_synchro"):
-            p = os.path.join(params["dossier_synchro"], "PhilPDF_version.json")
+        from .bibliotheque import dossier_philpdf_drive
+        dd = dossier_philpdf_drive(params) if source == "dossier" else None
+        if dd:
+            p = os.path.join(dd, "PhilPDF_version.json")
             with open(p, encoding="utf-8") as f:
                 info = json.load(f)
             version = info["version"]
-            paquet = os.path.join(params["dossier_synchro"], info["portable" if est_portable() else "installateur"])
+            paquet = os.path.join(dd, info["portable" if est_portable() else "installateur"])
             notes = info.get("notes", "")
         else:
             req = urllib.request.Request(f"https://api.github.com/repos/{DEPOT}/releases/latest",

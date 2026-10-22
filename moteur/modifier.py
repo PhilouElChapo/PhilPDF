@@ -296,6 +296,134 @@ class Editeur:
                     return PoliceIncorporee(n, f)
         return None
 
+    def deplacer_ligne(self, num_page, zone, dx, dy):
+        """Deplace une ligne entiere, chaque lettre gardant sa police, sa taille et sa couleur."""
+        page = self.doc[num_page]
+        zone = fitz.Rect(zone)
+        for chars in self._lignes(page):
+            r = fitz.Rect()
+            for c, _ in chars:
+                r |= fitz.Rect(c["bbox"])
+            if not r.intersects(zone) or (r & zone).get_area() < 0.5 * min(r.get_area(), zone.get_area()):
+                continue
+            plan, repli = [], None
+            for c, s in chars:
+                ch = c["c"]
+                p = self._police_du_span(page, s)
+                cible = p if p and p.a(ch) else next((q for q in self._polices(page).values()
+                                                      if p and q.famille() == p.famille() and q.a(ch)), None)
+                if cible is None and ch != " ":
+                    if repli is None:
+                        repli = self._police_par_nom(p) or PoliceIncorporee(*self._choisir_par_rendu(page, chars[:12])[1:])
+                    cible = repli
+                plan.append((ch, cible, s["size"], fitz.sRGB_to_pdf(s["color"]), c["origin"][0] + dx, "", c["origin"][1] + dy))
+            h = r.height
+            page.add_redact_annot(fitz.Rect(r.x0 + 0.3, r.y0 + h * 0.25, r.x1 + 0.5, r.y1 - h * 0.25), fill=False)
+            page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE,
+                                  text=fitz.PDF_REDACT_TEXT_REMOVE)
+            self._ecrire(page, [x for x in plan if x[1] is not None], plan[0][6])
+            self.journal.append(f"ligne déplacée de {dx:+.0f} / {dy:+.0f} pt, polices d'origine conservées")
+            return True
+        raise ValueError("Ligne introuvable à cet endroit")
+
+    def restyler_ligne(self, num_page, zone, taille=None, couleur=None, texte=None):
+        """Change taille et/ou couleur (et eventuellement le texte) d'une ligne entiere."""
+        page = self.doc[num_page]
+        for chars in self._lignes(page):
+            r = fitz.Rect()
+            for c, _ in chars:
+                r |= fitz.Rect(c["bbox"])
+            if r.intersects(fitz.Rect(zone)):
+                t = "".join(c["c"] for c, _ in chars).rstrip()
+                n = len(t)
+                return self._remplacer_dans_ligne(page, chars, 0, n, texte if texte is not None else t, taille, couleur)
+        raise ValueError("Ligne introuvable à cet endroit")
+
+    def ligne_a(self, num_page, zone):
+        """(chars, rect, texte) de la ligne qui recoupe le plus la zone."""
+        page = self.doc[num_page]
+        zone = fitz.Rect(zone)
+        meilleur = None
+        for chars in self._lignes(page):
+            r = fitz.Rect()
+            for c, _ in chars:
+                r |= fitz.Rect(c["bbox"])
+            inter = (r & zone).get_area() if r.intersects(zone) else 0
+            if inter > 0 and (meilleur is None or inter > meilleur[0]):
+                meilleur = (inter, chars, r)
+        if not meilleur:
+            raise ValueError("Ligne introuvable à cet endroit")
+        _, chars, r = meilleur
+        return chars, r, "".join(c["c"] for c, _ in chars)
+
+    def modifier_ligne(self, num_page, zone, nouveau, taille=None, couleur=None):
+        """Remplace le texte d'une ligne. Seule la partie changee est reecrite, pour garder
+        le style (gras, couleur) des parties intactes."""
+        page = self.doc[num_page]
+        chars, r, ancien = self.ligne_a(num_page, zone)
+        ancien_net = ancien.rstrip()
+        if not nouveau.strip():
+            page.add_redact_annot(fitz.Rect(r.x0 + 0.3, r.y0 + r.height * 0.25, r.x1 + 0.5, r.y1 - r.height * 0.25), fill=False)
+            page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE,
+                                  text=fitz.PDF_REDACT_TEXT_REMOVE)
+            self.journal.append("ligne supprimée")
+            return
+        if taille or couleur:
+            return self._remplacer_dans_ligne(page, chars, 0, len(ancien_net), nouveau, taille, couleur)
+        p = 0
+        while p < min(len(ancien_net), len(nouveau)) and ancien_net[p] == nouveau[p]:
+            p += 1
+        s = 0
+        while s < min(len(ancien_net), len(nouveau)) - p and ancien_net[-1 - s] == nouveau[-1 - s]:
+            s += 1
+        if p == len(ancien_net) == len(nouveau):
+            return
+        fin = len(ancien_net) - s
+        mid = nouveau[p:len(nouveau) - s]
+        if p == fin:   # insertion pure : on reecrit au moins une lettre pour prendre son style
+            if p > 0:
+                p -= 1
+                mid = ancien_net[p] + mid
+            else:
+                fin += 1
+                mid = mid + ancien_net[0]
+        return self._remplacer_dans_ligne(page, chars, p, fin, mid)
+
+    # ---- images
+    def images(self, num_page):
+        """[(xref, rect)] des images visibles de la page."""
+        out = []
+        for info in self.doc[num_page].get_image_info(xrefs=True):
+            if info.get("xref") and info.get("width", 2) > 1 and info.get("height", 2) > 1:
+                out.append((info["xref"], fitz.Rect(info["bbox"])))
+        return out
+
+    def _pixmap_image(self, xref):
+        info = self.doc.extract_image(xref)
+        if info.get("smask"):
+            pix = fitz.Pixmap(fitz.Pixmap(self.doc, xref), fitz.Pixmap(self.doc, info["smask"]))
+            return dict(pixmap=pix)
+        if info.get("ext") in ("jpeg", "jpg", "png", "jpx"):
+            return dict(stream=info["image"])
+        return dict(pixmap=fitz.Pixmap(self.doc, xref))
+
+    def deplacer_image(self, num_page, xref, nouveau_rect):
+        page = self.doc[num_page]
+        src = self._pixmap_image(xref)
+        page.delete_image(xref)
+        page.insert_image(fitz.Rect(nouveau_rect), keep_proportion=False, **src)
+        self.journal.append("image déplacée")
+
+    def supprimer_image(self, num_page, xref):
+        self.doc[num_page].delete_image(xref)
+        self.journal.append("image supprimée")
+
+    def remplacer_image(self, num_page, xref, rect, fichier):
+        page = self.doc[num_page]
+        page.delete_image(xref)
+        page.insert_image(fitz.Rect(rect), filename=fichier)
+        self.journal.append("image remplacée")
+
     def remplacer(self, num_page, ancien, nouveau, occurrence=1, zone=None, casse=True, accents=True):
         page = self.doc[num_page]
         occ = self.occurrences(num_page, ancien, casse, accents)
@@ -321,13 +449,13 @@ class Editeur:
                 n += 1
         return n
 
-    def _remplacer_dans_ligne(self, page, chars, deb, fin, nouveau):
+    def _remplacer_dans_ligne(self, page, chars, deb, fin, nouveau, taille=None, couleur=None):
         pol = self._polices(page)
         # 1) style : celui du 1er caractere remplace, applique a tout le fragment
         s_ref = chars[deb][1]
         p_ref = self._police_du_span(page, s_ref)
-        size = s_ref["size"]
-        coul = fitz.sRGB_to_pdf(s_ref["color"])
+        size = taille or s_ref["size"]
+        coul = couleur or fitz.sRGB_to_pdf(s_ref["color"])
         # espacement entre lettres mesure sur la ligne (equivalent du Tc)
         ecarts = []
         for k in range(len(chars) - 1):
@@ -337,14 +465,21 @@ class Editeur:
                 ecarts.append(c2["origin"][0] - c1["origin"][0] - p1.avance(c1["c"]) * s1["size"])
         tc = sorted(ecarts)[len(ecarts) // 2] if ecarts else 0
         tc = max(-0.5, min(0.8, tc))
-        # 2) suite de la ligne a decaler si la longueur change
-        suite = chars[fin:]
+        # 2) toute la ligne est reecrite d'un seul tenant (debut garde a l'identique, suite decalee) :
+        #    elle reste ainsi une seule ligne pour les modifications suivantes
+        prefixe, suite = chars[:deb], chars[fin:]
         a_ecrire = [(ch, s_ref) for ch in nouveau] + [(c["c"], s) for c, s in suite]
         # 3) choix de la police caractere par caractere
         soeurs = [p for p in pol.values() if p_ref and p.famille() == p_ref.famille()]
         repli = None
-        plan, x = [], chars[deb][0]["origin"][0]
-        y = chars[deb][0]["origin"][1]
+        plan, x = [], chars[deb][0]["origin"][0] if deb < len(chars) else chars[-1][0]["origin"][0]
+        y = chars[deb][0]["origin"][1] if deb < len(chars) else chars[-1][0]["origin"][1]
+        for c, s in prefixe:
+            p_s = self._police_du_span(page, s)
+            cible = p_s if p_s and p_s.a(c["c"]) else next((q for q in pol.values() if p_s and q.famille() == p_s.famille() and q.a(c["c"])), None)
+            if cible is not None or c["c"] == " ":
+                plan.append((c["c"], cible, s["size"], fitz.sRGB_to_pdf(s["color"]), c["origin"][0], "prefixe", c["origin"][1]))
+        n_prefixe = len(plan)
         for ch, s in a_ecrire:
             p_span = self._police_du_span(page, s) if s is not s_ref else p_ref
             cible = None
@@ -369,9 +504,9 @@ class Editeur:
             sz = s["size"] if s is not s_ref else size
             plan.append((ch, cible, sz, fitz.sRGB_to_pdf(s["color"]) if s is not s_ref else coul, x, how))
             x += cible.avance(ch) * sz + (tc if ch != " " else tc)
-        # 4) effacer l'ancien texte (fragment + suite de ligne), sans toucher images ni traits
+        # 4) effacer l'ancien texte (toute la ligne), sans toucher images ni traits
         zone = fitz.Rect()
-        for c, _ in chars[deb:]:
+        for c, _ in chars:
             zone |= fitz.Rect(c["bbox"])
         h = zone.height
         zone = fitz.Rect(zone.x0 + 0.3, zone.y0 + h * 0.25, zone.x1 + 0.5, zone.y1 - h * 0.25)
@@ -380,10 +515,10 @@ class Editeur:
                               graphics=fitz.PDF_REDACT_LINE_ART_NONE,
                               text=fitz.PDF_REDACT_TEXT_REMOVE)
         # 5) reecrire
-        self._ecrire(page, plan, y)
+        self._ecrire(page, [x for x in plan if x[1] is not None or x[0] == " "], y)
         usages = {}
-        for ch, cible, *_r, how in plan[: len(nouveau)]:
-            usages.setdefault(how, []).append(ch)
+        for entree in plan[n_prefixe: n_prefixe + len(nouveau)]:
+            usages.setdefault(entree[5], []).append(entree[0])
         self.journal.append(f"'{''.join(c['c'] for c, _ in chars[deb:fin])}' -> '{nouveau}' : " +
                             "; ".join(f"{how} [{''.join(v)}]" for how, v in usages.items()) +
                             f" ; corps {size:.1f} pt, interlettrage {tc:+.2f} pt")
@@ -392,7 +527,10 @@ class Editeur:
         inv = ~page.transformation_matrix
         flux = ["q"]
         incorporees = {}
-        for ch, cible, sz, coul, x, how in plan:
+        for entree in plan:
+            ch, cible, sz, coul, x, how = entree[:6]
+            if len(entree) > 6:
+                y = entree[6]
             if ch == " ":
                 continue
             if isinstance(cible, PoliceIncorporee):
@@ -430,7 +568,16 @@ class Editeur:
             cont = page.get_contents()
             self.doc.xref_set_key(page.xref, "Contents", "[" + " ".join(f"{c} 0 R" for c in cont + [x]) + "]")
 
-    def ajouter_texte(self, num_page, point, texte, taille=None):
+    def ajouter_texte(self, num_page, point, texte, taille=None, couleur=None, police=None):
+        if police:  # police choisie explicitement (fichier .ttf)
+            page = self.doc[num_page]
+            page.insert_font(fontname="PhilAjout", fontfile=police)
+            page.insert_text(point, texte, fontname="PhilAjout", fontsize=taille or 11, color=couleur or (0, 0, 0))
+            self.journal.append(f"texte ajouté ({os.path.basename(police)}, {taille or 11:.0f} pt)")
+            return
+        return self._ajouter_texte_auto(num_page, point, texte, taille, couleur)
+
+    def _ajouter_texte_auto(self, num_page, point, texte, taille=None, couleur=None):
         """Ajoute du texte avec la police dominante de la page (glyphes d'origine si possible)."""
         page = self.doc[num_page]
         lignes = list(self._lignes(page))
@@ -446,7 +593,7 @@ class Editeur:
         span = next(s for chars in lignes for c, s in chars if (s["font"], round(s["size"], 1), s["color"]) == dom)
         p = self._police_du_span(page, span)
         sz = taille or span["size"]
-        coul = fitz.sRGB_to_pdf(span["color"])
+        coul = couleur or fitz.sRGB_to_pdf(span["color"])
         soeurs = [q for q in self._polices(page).values() if p and q.famille() == p.famille()]
         plan, x, repli = [], point[0], None
         for ch in texte:

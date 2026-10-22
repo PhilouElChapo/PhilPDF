@@ -11,8 +11,11 @@ from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from .config import Parametres, VERSION, est_portable, associer_pdf, dossier_donnees
 from .icones import icone, logo
 from .pages import PageOutils, PageAccueil
-from .document import OngletDocument, DialogueRemplacer
+from .document import OngletDocument, DialogueRemplacer, question
 from .outils import outil
+from .bibliotheque import Bibliotheque, detecter_clouds
+from .dialogues import (boutons_fr, DialogueFiligrane, DialogueEntete, DialogueNumeriser, DialogueExporter,
+                        DialogueBibliotheque)
 
 FILTRE = "Documents PDF (*.pdf *.PDF)"
 
@@ -49,6 +52,8 @@ class Fenetre(QMainWindow):
     def __init__(self, fichiers=()):
         super().__init__()
         self.params = Parametres()
+        self.biblio = Bibliotheque(self.params)
+        self.dernier_doc = None
         self.setWindowTitle("PhilPDF")
         self.setWindowIcon(logo(64))
         self.resize(1400, 900)
@@ -85,6 +90,14 @@ class Fenetre(QMainWindow):
             self.params["maj_derniere"] = aujourd_hui
             self.params.enregistrer()
             self.verifier_maj(silencieux=True)
+        # nouveau PC : proposer de recuperer tampons et signatures sauvegardes sur le Drive
+        nouv = self.biblio.nouveautes_drive()
+        if nouv and not self.params.get("drive_restaure"):
+            self.params["drive_restaure"] = True
+            self.params.enregistrer()
+            if question(self, "Drive", f"{len(nouv)} tampon(s) / signature(s) sauvegardés sur votre Drive ne sont pas sur ce PC. "
+                        "Les récupérer ?", [("Récupérer", QMessageBox.AcceptRole), ("Plus tard", QMessageBox.RejectRole)]) == 0:
+                self.biblio.restaurer_drive()
 
     # ------------------------------------------------------------ menus
     def _menus(self):
@@ -108,13 +121,16 @@ class Fenetre(QMainWindow):
         act(sm, "Page vierge", lambda: self.creer("vierge"))
         act(sm, "A partir d'images...", lambda: self.creer("images"))
         act(sm, "A partir de plusieurs fichiers (combiner)...", lambda: self.lancer_outil("combiner"))
+        act(sm, "Depuis le scanner...", lambda: self.lancer_outil("numeriser"))
         m.addSeparator()
         act(m, "Enregistrer", lambda: self.enregistrer(), "Ctrl+S", "enregistrer")
         act(m, "Enregistrer sous...", lambda: self.enregistrer(sous=True), "Shift+Ctrl+S")
         act(m, "Enregistrer une copie allégée...", lambda: self.lancer_outil("alleger"))
         sm = m.addMenu("Exporter vers")
+        act(sm, "Word (.docx)...", lambda: self.exporter("docx"))
+        act(sm, "Images JPG...", lambda: self.exporter("jpg"))
         act(sm, "Images PNG...", lambda: self.exporter("png"))
-        act(sm, "Texte...", lambda: self.exporter("txt"))
+        act(sm, "Texte (.txt)...", lambda: self.exporter("txt"))
         m.addSeparator()
         act(m, "Imprimer...", lambda: self.lancer_outil("imprimer"), "Ctrl+P", "imprimer")
         act(m, "Imprimer plusieurs documents...", self.imprimer_plusieurs)
@@ -126,9 +142,18 @@ class Fenetre(QMainWindow):
         act(m, "Quitter", self.close, "Ctrl+Q")
 
         m = mb.addMenu("&Edition")
-        act(m, "Annuler", lambda: self.doc_courant() and self.doc_courant().annuler(), "Ctrl+Z", "annuler")
+        d = lambda nom: (lambda: getattr(self.doc_courant(), nom)() if self.doc_courant() else None)
+        act(m, "Annuler", d("annuler"), "Ctrl+Z", "annuler")
+        act(m, "Rétablir", d("retablir"), "Shift+Ctrl+Z")
         m.addSeparator()
-        act(m, "Copier", lambda: self.doc_courant() and self.doc_courant().copier(), "Ctrl+C", "copier")
+        act(m, "Couper", d("couper"), "Ctrl+X")
+        act(m, "Copier", d("copier"), "Ctrl+C", "copier")
+        act(m, "Coller", d("coller"), "Ctrl+V")
+        act(m, "Supprimer", d("supprimer"), "Del")
+        m.addSeparator()
+        act(m, "Sélectionner tout", d("tout_selectionner"), "Ctrl+A")
+        act(m, "Désélectionner tout", lambda: self.doc_courant() and (setattr(self.doc_courant(), "selection", None),
+                                                                     self.doc_courant().choisir_objet(None)), "Shift+Ctrl+A")
         m.addSeparator()
         act(m, "Modifier le texte et les images", lambda: self.lancer_outil("modifier"), None, "modifier")
         act(m, "Rechercher et remplacer...", lambda: self.lancer_outil("remplacer"), "Ctrl+F", "rechercher")
@@ -155,6 +180,8 @@ class Fenetre(QMainWindow):
 
         m = mb.addMenu("&Aide")
         act(m, "Raccourcis clavier", self.raccourcis, "F1")
+        act(m, "Mes tampons...", lambda: self.lancer_outil("tampons"))
+        act(m, "Mes signatures...", lambda: self.lancer_outil("remplir_signer"))
         act(m, "Rechercher les mises à jour...", lambda: self.verifier_maj(silencieux=False))
         act(m, "A propos de PhilPDF", self.a_propos)
 
@@ -174,8 +201,13 @@ class Fenetre(QMainWindow):
 
     # ------------------------------------------------------------ onglets
     def doc_courant(self):
+        """Document affiche, ou le dernier consulte si l'on est sur Accueil / Outils."""
         w = self.onglets.currentWidget()
-        return w if isinstance(w, OngletDocument) else None
+        if isinstance(w, OngletDocument):
+            return w
+        if self.dernier_doc is not None and self.onglets.indexOf(self.dernier_doc) >= 0:
+            return self.dernier_doc
+        return None
 
     def documents(self):
         return [self.onglets.widget(i) for i in range(self.onglets.count()) if isinstance(self.onglets.widget(i), OngletDocument)]
@@ -199,7 +231,10 @@ class Fenetre(QMainWindow):
             self.setWindowTitle(f"{o.nom}{' *' if o.modifie else ''} – PhilPDF Editeur PDF")
 
     def _onglet_change(self, i):
-        o = self.doc_courant()
+        w = self.onglets.widget(i)
+        if isinstance(w, OngletDocument):
+            self.dernier_doc = w
+        o = w if isinstance(w, OngletDocument) else None
         if o:
             self._maj_titre(o)
         else:
@@ -228,7 +263,7 @@ class Fenetre(QMainWindow):
             QMessageBox.warning(self, "PhilPDF", f"Fichier introuvable sur ce PC :\n{chemin}")
             return None
         try:
-            o = OngletDocument(self.params, chemin)
+            o = OngletDocument(self.params, chemin, biblio=self.biblio)
         except Exception as e:
             QMessageBox.warning(self, "PhilPDF", f"Impossible d'ouvrir ce fichier :\n{e}")
             return None
@@ -250,13 +285,17 @@ class Fenetre(QMainWindow):
         if not isinstance(w, OngletDocument):
             return
         if w.modifie:
-            r = QMessageBox.question(self, "PhilPDF", f"Enregistrer les modifications de « {w.nom} » ?",
-                                     QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel)
-            if r == QMessageBox.Cancel or (r == QMessageBox.Save and not self.enregistrer(w)):
+            r = self._demander_enregistrer(w)
+            if r == 2 or (r == 0 and not self.enregistrer(w)):
                 return
         self.onglets.removeTab(i)
         w.deleteLater()
         self._session()
+
+    def _demander_enregistrer(self, o):
+        return question(self, "PhilPDF", f"Enregistrer les modifications de « {o.nom} » ?",
+                        [("Enregistrer", QMessageBox.AcceptRole), ("Ne pas enregistrer", QMessageBox.DestructiveRole),
+                         ("Annuler", QMessageBox.RejectRole)])
 
     def fermer_tout(self):
         for i in range(self.onglets.count() - 1, 1, -1):
@@ -266,9 +305,8 @@ class Fenetre(QMainWindow):
         for o in self.documents():
             if o.modifie:
                 self.onglets.setCurrentWidget(o)
-                r = QMessageBox.question(self, "PhilPDF", f"Enregistrer les modifications de « {o.nom} » ?",
-                                         QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel)
-                if r == QMessageBox.Cancel or (r == QMessageBox.Save and not self.enregistrer(o)):
+                r = self._demander_enregistrer(o)
+                if r == 2 or (r == 0 and not self.enregistrer(o)):
                     e.ignore()
                     return
         self._session()
@@ -335,8 +373,15 @@ class Fenetre(QMainWindow):
         if oid == "__outils__":
             self.onglets.setCurrentWidget(self.outils)
             return
+        if oid == "__epingles__":
+            self._epingles(self.params["outils_epingles"])
+            self.outils.maj_etoiles()
+            return
+        if oid == "numeriser":
+            self.numeriser()
+            return
         if oid == "__nouveau__" and o and getattr(o, "_extrait", None):
-            self.ajouter_onglet(OngletDocument(self.params, doc=o._extrait, nom="Extrait.pdf"))
+            self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=o._extrait, nom="Extrait.pdf"))
             return
         if oid == "enregistrer":
             self.enregistrer()
@@ -360,6 +405,8 @@ class Fenetre(QMainWindow):
             o = self.doc_courant()
             if not o:
                 return
+        if self.onglets.currentWidget() is not o:      # depuis la page Outils : retour au document
+            self.onglets.setCurrentWidget(o)
         if oid == "modifier":
             o.changer_mode("modifier")
         elif oid == "remplacer":
@@ -368,14 +415,19 @@ class Fenetre(QMainWindow):
             d.finished.connect(lambda _: (setattr(o, "resultats", []), o.rafraichir_pages()))
             d.show()
         elif oid == "organiser":
-            o.vignettes.setFocus()
-            self.statusBar().showMessage("Glissez les vignettes pour réordonner ; clic droit pour pivoter, extraire, supprimer.", 10000)
+            o.organiser(True)
+        elif oid == "tampons":
+            o.ouvrir_bibliotheque("tampons")
+        elif oid in ("filigrane", "entete", "fond"):
+            self.mise_en_page(o, oid)
         elif oid == "commentaires" or oid == "biffer":
             self.statusBar().showMessage("Sélectionnez du texte : la barre rapide apparaît au-dessus de la sélection.", 10000)
         elif oid == "remplir_signer":
-            self.signer(o)
+            o.ouvrir_bibliotheque("signatures")
         elif oid == "exporter":
-            self.exporter("png")
+            d = DialogueExporter(self)
+            if d.exec() == QDialog.Accepted:
+                self.exporter(["docx", "jpg", "png", "txt"][d.format.currentIndex()], int(d.dpi.currentText()), d.qualite.value())
         elif oid == "imprimer":
             self.imprimer([o])
         elif oid == "alleger":
@@ -397,7 +449,7 @@ class Fenetre(QMainWindow):
                 doc.insert_pdf(fitz.open("pdf", pdfbytes))
         else:
             doc.new_page(width=595, height=842)
-        self.ajouter_onglet(OngletDocument(self.params, doc=doc, nom="Nouveau.pdf"))
+        self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=doc, nom="Nouveau.pdf"))
 
     def combiner(self):
         d = QDialog(self)
@@ -422,7 +474,7 @@ class Fenetre(QMainWindow):
         h.addWidget(r)
         h.addStretch()
         v.addLayout(h)
-        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
         bb.button(QDialogButtonBox.Ok).setText("Combiner")
         bb.accepted.connect(d.accept)
         bb.rejected.connect(d.reject)
@@ -436,14 +488,14 @@ class Fenetre(QMainWindow):
             if not src.is_pdf:
                 src = fitz.open("pdf", src.convert_to_pdf())
             res.insert_pdf(src)
-        self.ajouter_onglet(OngletDocument(self.params, doc=res, nom="Combiné.pdf"))
+        self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=res, nom="Combiné.pdf"))
 
     def _item(self, f):
         it = QListWidgetItem(icone("creer", "#c9252d"), os.path.basename(f))
         it.setData(Qt.UserRole, f)
         return it
 
-    def exporter(self, genre):
+    def exporter(self, genre, dpi=150, qualite=85):
         o = self.doc_courant()
         if not o:
             return
@@ -453,12 +505,87 @@ class Fenetre(QMainWindow):
             if f:
                 with open(f, "w", encoding="utf-8") as fh:
                     fh.write("\n\f".join(p.get_text() for p in o.doc))
+        elif genre == "docx":
+            f, _ = QFileDialog.getSaveFileName(self, "Exporter en Word", base + ".docx", "Word (*.docx)")
+            if not f:
+                return
+            import tempfile, logging
+            from pdf2docx import Converter
+            logging.getLogger().setLevel(logging.ERROR)
+            src = os.path.join(tempfile.mkdtemp(), "source.pdf")
+            o.doc.save(src)
+            prog = QProgressDialog("Conversion en Word...", None, 0, 0, self)
+            prog.setWindowModality(Qt.WindowModal)
+            prog.show()
+            QApplication.processEvents()
+            try:
+                c = Converter(src)
+                c.convert(f)
+                c.close()
+                self.statusBar().showMessage(f"Exporté : {f}", 8000)
+            except Exception as e:
+                QMessageBox.warning(self, "Exporter", f"Conversion impossible :\n{e}")
+            prog.close()
         else:
             dossier = QFileDialog.getExistingDirectory(self, "Dossier des images", os.path.dirname(base))
             if dossier:
                 for n, p in enumerate(o.doc):
-                    p.get_pixmap(dpi=150).save(os.path.join(dossier, f"{os.path.basename(base)}_p{n + 1}.png"))
-                self.statusBar().showMessage(f"{len(o.doc)} images enregistrées dans {dossier}", 8000)
+                    pm = p.get_pixmap(dpi=dpi, alpha=False)
+                    cible = os.path.join(dossier, f"{os.path.basename(base)}_p{n + 1}.{genre}")
+                    if genre == "jpg":
+                        pm.save(cible, jpg_quality=qualite)
+                    else:
+                        pm.save(cible)
+                self.statusBar().showMessage(f"{len(o.doc)} images {genre.upper()} enregistrées dans {dossier}", 8000)
+
+    def mise_en_page(self, o, oid):
+        if oid == "filigrane":
+            d = DialogueFiligrane(self, self.params, len(o.doc), o.page_courante())
+            if d.exec() == QDialog.Accepted:
+                o.memoriser()
+                d.appliquer(o.doc)
+                o.apres_modif(["Filigrane ajouté."])
+        elif oid == "entete":
+            d = DialogueEntete(self)
+            if d.exec() == QDialog.Accepted:
+                o.memoriser()
+                d.appliquer(o.doc)
+                o.apres_modif(["En-tête et pied de page ajoutés."])
+        elif oid == "fond":
+            from PySide6.QtWidgets import QColorDialog
+            c = QColorDialog.getColor(Qt.white, self, "Couleur de fond des pages")
+            if c.isValid():
+                o.memoriser()
+                for p in o.doc:
+                    p.draw_rect(p.rect, color=None, fill=c.getRgbF()[:3], overlay=False)
+                o.apres_modif(["Arrière-plan appliqué."])
+
+    def numeriser(self):
+        from moteur.scanner import scanners
+        import sys as _s
+        if _s.platform != "win32" and not scanners():
+            QMessageBox.information(self, "Numériser", "Aucun scanner détecté sur ce PC.")
+            return
+        d = DialogueNumeriser(self)
+        if d.exec() != QDialog.Accepted:
+            return
+        prog = QProgressDialog("Numérisation en cours...", None, 0, 0, self)
+        prog.setWindowModality(Qt.WindowModal)
+        prog.show()
+        QApplication.processEvents()
+        try:
+            doc = d.numeriser()
+        except Exception as e:
+            prog.close()
+            QMessageBox.warning(self, "Numériser", f"La numérisation a échoué :\n{e}")
+            return
+        prog.close()
+        if len(doc) == 0:
+            QMessageBox.information(self, "Numériser", "Aucune page numérisée.")
+            return
+        o = self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=doc, nom="Numérisation.pdf"))
+        if d.ocr.isChecked():
+            self.statusBar().showMessage("Enregistrez la numérisation pour lancer la reconnaissance du texte.", 10000)
 
     def imprimer(self, onglets_ou_docs):
         pr = QPrinter(QPrinter.HighResolution)
@@ -515,7 +642,7 @@ class Fenetre(QMainWindow):
         f.addRow("Mot de passe des droits", prop)
         f.addRow(imp)
         f.addRow(cop)
-        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
         bb.accepted.connect(d.accept)
         bb.rejected.connect(d.reject)
         f.addRow(bb)
@@ -594,12 +721,27 @@ class Fenetre(QMainWindow):
         d.setMinimumWidth(520)
         f = QFormLayout(d)
         machine = QLineEdit(self.params["machine"])
-        synchro = QLineEdit(self.params["dossier_synchro"])
-        b = QPushButton("Choisir...")
-        b.clicked.connect(lambda: synchro.setText(QFileDialog.getExistingDirectory(d, "Dossier synchronisé") or synchro.text()))
+        auteur = QLineEdit(self.params.get("auteur", ""))
+        auteur.setPlaceholderText("Nom inscrit sur les tampons et commentaires")
+        drive = QComboBox()
+        drive.setEditable(True)
+        drive.addItem("(aucun)", "")
+        for nom, chemin in detecter_clouds():
+            drive.addItem(f"{nom} — {chemin}", chemin)
+        if self.params.get("drive") and drive.findData(self.params["drive"]) < 0:
+            drive.addItem(self.params["drive"], self.params["drive"])
+        drive.setCurrentIndex(max(0, drive.findData(self.params.get("drive", ""))))
+        b = QPushButton("Autre...")
+        b.clicked.connect(lambda: (lambda p: p and (drive.addItem(p, p), drive.setCurrentIndex(drive.count() - 1)))(
+            QFileDialog.getExistingDirectory(d, "Dossier du Drive sur ce PC")))
         hs = QHBoxLayout()
-        hs.addWidget(synchro)
+        hs.addWidget(drive, 1)
         hs.addWidget(b)
+        sauver = QPushButton("Sauvegarder maintenant")
+        sauver.clicked.connect(lambda: QMessageBox.information(d, "Drive", f"{self.biblio.sauvegarder_drive() or 0} élément(s) copiés sur le Drive."
+                                                               if self.params.get("drive") else "Choisissez d'abord votre Drive."))
+        fixer = QCheckBox("Fixer signatures et tampons dans la page à l'enregistrement (non déplaçables ensuite)")
+        fixer.setChecked(self.params.get("fixer_objets", False))
         moteur = QComboBox()
         moteur.addItems(["Claude", "Gemini", "Les deux (double avis)"])
         moteur.setCurrentIndex({"claude": 0, "gemini": 1, "deux": 2}.get(self.params["ia_moteur"], 0))
@@ -611,7 +753,15 @@ class Fenetre(QMainWindow):
         assoc.setChecked(self.params["association_pdf"])
         assoc.setEnabled(sys.platform == "win32" and not est_portable())
         f.addRow("Nom de cette machine", machine)
-        f.addRow("Dossier synchronisé (session, tampons, signature)", hs)
+        f.addRow("Votre nom", auteur)
+        f.addRow("Drive (Google Drive, OneDrive...)", hs)
+        expl = QLabel("Tampons et signatures restent sur ce PC ; le Drive en garde une sauvegarde (dossier PhilPDF) "
+                      "et la liste des fichiers ouverts, pour les retrouver sur vos autres machines.")
+        expl.setWordWrap(True)
+        expl.setStyleSheet("color:#555;font-size:12px")
+        f.addRow(expl)
+        f.addRow("", sauver)
+        f.addRow(fixer)
         f.addRow("Moteur IA", moteur)
         f.addRow("Clef API Claude", kc)
         f.addRow("Clef API Gemini", kg)
@@ -628,13 +778,15 @@ class Fenetre(QMainWindow):
         f.addRow("Mises à jour depuis", majs)
         f.addRow(maja)
         f.addRow(QLabel(f"Données : {dossier_donnees()}" + (" (version portable)" if est_portable() else "")))
-        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
         bb.accepted.connect(d.accept)
         bb.rejected.connect(d.reject)
         f.addRow(bb)
         if d.exec() != QDialog.Accepted:
             return
-        self.params.update(machine=machine.text().strip() or self.params["machine"], dossier_synchro=synchro.text().strip(),
+        self.params.update(machine=machine.text().strip() or self.params["machine"],
+                           drive=drive.currentData() if drive.currentData() is not None else drive.currentText().strip(),
+                           auteur=auteur.text().strip(), fixer_objets=fixer.isChecked(),
                            ia_moteur=["claude", "gemini", "deux"][moteur.currentIndex()],
                            clef_claude=kc.text().strip(), clef_gemini=kg.text().strip(),
                            maj_source=["github", "dossier"][majs.currentIndex()], maj_auto=maja.isChecked())

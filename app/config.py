@@ -7,7 +7,7 @@ et rien n'est ecrit ailleurs sur le PC ni dans le registre.
 import json, os, platform, sys
 
 APP = "PhilPDF"
-VERSION = "0.1"
+VERSION = "0.2"
 
 
 def dossier_programme():
@@ -37,7 +37,8 @@ DEFAUTS = {
     "outils_epingles": ["modifier", "combiner", "remplir_signer", "imprimer", "alleger"],
     "zoom": 1.25,
     "theme": "clair",
-    "dossier_synchro": "",          # dossier Google Drive pour session, tampons, signature
+    "drive": "",                    # racine du Drive sur ce PC (ex. G:\\Mon Drive) : sauvegarde + session
+    "drive_restaure": False,
     "ia_moteur": "claude",
     "clef_claude": "",
     "clef_gemini": "",
@@ -58,6 +59,8 @@ class Parametres(dict):
                 self.update(json.load(f))
         except (OSError, ValueError):
             pass
+        if self.get("dossier_synchro") and not self.get("drive"):   # ancienne 0.1
+            self["drive"] = self.pop("dossier_synchro")
 
     def enregistrer(self):
         try:
@@ -73,8 +76,13 @@ class Parametres(dict):
 
     # ---- session partagee (version 0.1 : fichiers ouverts de cette machine)
     def chemin_session(self):
-        base = self["dossier_synchro"] or dossier_donnees()
-        return os.path.join(base, "session.json")
+        """La session (emplacements des fichiers ouverts, pas les fichiers) vit sur le Drive."""
+        racine = self.get("drive") or ""
+        if racine and os.path.isdir(racine):
+            d = os.path.join(racine, "PhilPDF")
+            os.makedirs(d, exist_ok=True)
+            return os.path.join(d, "session.json")
+        return os.path.join(dossier_donnees(), "session.json")
 
     def ecrire_session(self, fichiers):
         try:

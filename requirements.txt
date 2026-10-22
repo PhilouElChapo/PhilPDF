@@ -3,3 +3,5 @@ PyMuPDF>=1.24.10
 numpy
 opencv-python-headless
 Pillow
+pdf2docx
+pywin32; sys_platform == "win32"
