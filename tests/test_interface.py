@@ -201,6 +201,10 @@ d.modele.setCurrentText("CONFIDENTIEL")
 o.memoriser()
 d.appliquer(o.doc)
 verif("CONFIDENTIEL" in o.doc[1].get_text(), "filigrane sur toutes les pages")
+reponse_question[0] = 1
+w.mise_en_page(o, "filigrane")
+verif("CONFIDENTIEL" not in o.doc[1].get_text(), "filigrane retiré")
+reponse_question[0] = 0
 d = G.DialogueEntete(None)
 d.appliquer(o.doc)
 verif("Page 2 / 3" in o.doc[1].get_text(), "pied de page numéroté")

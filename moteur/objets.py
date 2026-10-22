@@ -156,11 +156,64 @@ def deplacer(doc, num_page, xref, nouveau_rect):
 
 
 # ------------------------------------------------------------------ filigranes
+def _marquer_filigrane(doc, page, avant):
+    """Encadre le flux ajoute comme filigrane (meme marquage qu'Acrobat) : retirable ensuite."""
+    for x in page.get_contents():
+        if x not in avant:
+            doc.update_stream(x, b"/Artifact <</Subtype /Watermark /Type /Pagination >>BDC\n"
+                              + doc.xref_stream(x) + b"\nEMC\n")
+
+
+def retirer_filigranes(doc):
+    """Retire les filigranes marques (Acrobat, PhilPDF et logiciels qui suivent la norme).
+    Renvoie le nombre de pages nettoyees."""
+    import re
+    motif = re.compile(rb"/Artifact\s*<<[^>]*?/Watermark[^>]*?>>\s*BDC.*?EMC", re.S)
+    n = 0
+    for page in doc:
+        touche = False
+        for x in page.get_contents():
+            flux = doc.xref_stream(x)
+            nouveau = motif.sub(b"", flux)
+            if nouveau != flux:
+                doc.update_stream(x, nouveau)
+                touche = True
+        n += touche
+    return n
+
+
+def filigranes_texte_probables(doc):
+    """Textes penches repetes sur la plupart des pages (filigranes non marques)."""
+    compte = {}
+    for page in doc:
+        vus = set()
+        for b in page.get_text("dict")["blocks"]:
+            for l in b.get("lines", []):
+                dx, dy = l["dir"]
+                t = "".join(s["text"] for s in l["spans"]).strip()
+                if t and abs(dy) > 0.2 and t not in vus:
+                    vus.add(t)
+                    compte[t] = compte.get(t, 0) + 1
+    return [t for t, c in compte.items() if c >= max(1, len(doc) // 2)]
+
+
+def retirer_texte_penche(doc, texte):
+    """Efface un texte penche donne sur toutes les pages (biffage sans rectangle)."""
+    for page in doc:
+        for b in page.get_text("dict")["blocks"]:
+            for l in b.get("lines", []):
+                if abs(l["dir"][1]) > 0.2 and "".join(s["text"] for s in l["spans"]).strip() == texte:
+                    page.add_redact_annot(fitz.Rect(l["bbox"]), fill=False)
+        page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE)
+
+
 def appliquer_filigrane(doc, pages, texte=None, image=None, couleur=(0.6, 0.6, 0.6), opacite=0.25,
                         angle=45, taille=None, position="centre", dessous=False):
     """Filigrane texte ou image sur les pages donnees (liste d'indices)."""
     for n in pages:
         page = doc[n]
+        page.wrap_contents()
+        avant = set(page.get_contents())
         R = page.rect
         if texte:
             font = fitz.Font("hebo")
@@ -183,3 +236,4 @@ def appliquer_filigrane(doc, pages, texte=None, image=None, couleur=(0.6, 0.6, 0
             c = R.tl + (R.width / 2, R.height / 2)
             page.insert_image(fitz.Rect(c.x - w / 2, c.y - h / 2, c.x + w / 2, c.y + h / 2),
                               stream=buf.getvalue(), overlay=not dessous)
+        _marquer_filigrane(doc, page, avant)

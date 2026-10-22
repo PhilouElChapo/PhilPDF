@@ -540,6 +540,28 @@ class Fenetre(QMainWindow):
 
     def mise_en_page(self, o, oid):
         if oid == "filigrane":
+            choix = question(self, "Filigrane", "Que voulez-vous faire ?",
+                             [("Ajouter un filigrane", QMessageBox.AcceptRole), ("Retirer un filigrane", QMessageBox.AcceptRole),
+                              ("Annuler", QMessageBox.RejectRole)])
+            if choix == 1:
+                from moteur import objets
+                o.memoriser()
+                n = objets.retirer_filigranes(o.doc)
+                if not n:
+                    cand = objets.filigranes_texte_probables(o.doc)
+                    if cand:
+                        t, ok = QInputDialog.getItem(self, "Retirer un filigrane", "Filigrane trouvé :", cand, 0, False)
+                        if ok:
+                            objets.retirer_texte_penche(o.doc, t)
+                            n = len(o.doc)
+                if n:
+                    o.apres_modif([f"Filigrane retiré ({n} page{'s' if n > 1 else ''})."], reconstruire=True)
+                else:
+                    o.annulations.pop()
+                    QMessageBox.information(self, "Filigrane", "Aucun filigrane reconnu dans ce document.")
+                return
+            if choix != 0:
+                return
             d = DialogueFiligrane(self, self.params, len(o.doc), o.page_courante())
             if d.exec() == QDialog.Accepted:
                 o.memoriser()

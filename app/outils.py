@@ -30,7 +30,7 @@ OUTILS = [
     ("entete", "modifier", "entete", "En-tête et pied de page", "Numéros de page, dates",
      "Ajouter numéros de page, date ou numérotation Bates.", True),
     ("filigrane", "modifier", "filigrane", "Filigrane et fond", "Modèles prêts ou les vôtres, synchronisés",
-     "Copie, Confidentiel, Brouillon, Payé, date automatique, ou vos propres modèles.", True),
+     "Ajouter (Copie, Confidentiel, Brouillon, Payé, date automatique, vos modèles texte ou image) ou retirer un filigrane.", True),
     ("commentaires", "annoter", "commentaire", "Commentaires", "Notes, surligner, barrer",
      "Sélectionnez du texte : la barre rapide propose surligner, souligner, barrer, note.", True),
     ("tampons", "annoter", "tampon", "Tampons", "\"Reçu le\", \"Payé\", vos tampons",
