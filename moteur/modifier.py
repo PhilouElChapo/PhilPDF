@@ -23,6 +23,15 @@ FONT_DIR = os.path.join(_BASE, "fonts")
 def _candidats():
     """Polices de remplacement : Nunito fournie + polices courantes du systeme."""
     c = [(f"Nunito {w}", os.path.join(FONT_DIR, f"Nunito-{w}.ttf")) for w in (300, 400, 500, 600, 700, 800)]
+    # polices libres "jumelles" (memes largeurs de lettres que les polices commerciales), fournies
+    for nom, fichier in [("Liberation Sans", "LiberationSans-Regular"), ("Liberation Sans Bold", "LiberationSans-Bold"),
+                         ("Liberation Sans Italic", "LiberationSans-Italic"), ("Liberation Sans Bold Italic", "LiberationSans-BoldItalic"),
+                         ("Liberation Serif", "LiberationSerif-Regular"), ("Liberation Serif Bold", "LiberationSerif-Bold"),
+                         ("Liberation Serif Italic", "LiberationSerif-Italic"), ("Liberation Serif Bold Italic", "LiberationSerif-BoldItalic"),
+                         ("Liberation Mono", "LiberationMono-Regular"), ("Liberation Mono Bold", "LiberationMono-Bold"),
+                         ("Carlito", "Carlito-Regular"), ("Carlito Bold", "Carlito-Bold"), ("Carlito Italic", "Carlito-Italic"),
+                         ("Carlito Bold Italic", "Carlito-BoldItalic"), ("Caladea", "Caladea-Regular"), ("Caladea Bold", "Caladea-Bold")]:
+        c.append((nom, os.path.join(FONT_DIR, fichier + ".ttf")))
     dossiers = [os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts"),
                 "/usr/share/fonts/truetype/liberation", "/usr/share/fonts/truetype/dejavu",
                 os.path.expanduser("~/.local/share/fonts")]
@@ -30,8 +39,7 @@ def _candidats():
                ("Calibri Bold", "calibrib.ttf"), ("Verdana", "verdana.ttf"), ("Tahoma", "tahoma.ttf"),
                ("Segoe UI", "segoeui.ttf"), ("Times New Roman", "times.ttf"),
                ("Microsoft Sans Serif", "micross.ttf"),
-               ("Liberation Sans", "LiberationSans-Regular.ttf"), ("Liberation Sans Bold", "LiberationSans-Bold.ttf"),
-               ("Liberation Serif", "LiberationSerif-Regular.ttf"),
+               ("Courier New", "cour.ttf"), ("Cambria", "cambria.ttc"),
                ("DejaVu Sans", "DejaVuSans.ttf"), ("DejaVu Sans Bold", "DejaVuSans-Bold.ttf")]
     for nom, fichier in systeme:
         for d in dossiers:
@@ -273,7 +281,12 @@ class Editeur:
         gras = poids >= 600 or "Bold" in nom
         equivalents = {"Helvetica": ["Arial", "Liberation Sans"], "Arial": ["Arial", "Liberation Sans"],
                        "ArialMT": ["Arial", "Liberation Sans"], "Times": ["Times New Roman", "Liberation Serif"],
-                       "TimesNewRoman": ["Times New Roman", "Liberation Serif"], "Nunito": ["Nunito"]}
+                       "TimesNewRoman": ["Times New Roman", "Liberation Serif"],
+                       "TimesNewRomanPSMT": ["Times New Roman", "Liberation Serif"],
+                       "Courier": ["Courier New", "Liberation Mono"], "CourierNew": ["Courier New", "Liberation Mono"],
+                       "Calibri": ["Calibri", "Carlito"], "Cambria": ["Cambria", "Caladea"],
+                       "Microsoft Sans Serif": ["Microsoft Sans Serif", "Arial", "Liberation Sans"],
+                       "Nunito": ["Nunito"]}
         voulus = [f"{fam} {poids}"]
         for f in equivalents.get(fam, [fam]):
             voulus.append(f"{f} Bold" if gras else f)
