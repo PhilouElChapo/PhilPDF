@@ -1,0 +1,123 @@
+"""Parametres de PhilPDF.
+
+Mode portable : si un fichier 'portable.txt' est a cote de l'executable, tout
+(parametres, session, tampons) est range dans le dossier 'donnees' a cote,
+et rien n'est ecrit ailleurs sur le PC ni dans le registre.
+"""
+import json, os, platform, sys
+
+APP = "PhilPDF"
+VERSION = "0.1"
+
+
+def dossier_programme():
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def est_portable():
+    return os.path.exists(os.path.join(dossier_programme(), "portable.txt"))
+
+
+def dossier_donnees():
+    if est_portable():
+        d = os.path.join(dossier_programme(), "donnees")
+    elif sys.platform == "win32":
+        d = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), APP)
+    else:
+        d = os.path.join(os.path.expanduser("~/.config"), APP.lower())
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+DEFAUTS = {
+    "machine": platform.node() or "Ce PC",
+    "recents": [],
+    "outils_epingles": ["modifier", "combiner", "remplir_signer", "imprimer", "alleger"],
+    "zoom": 1.25,
+    "theme": "clair",
+    "dossier_synchro": "",          # dossier Google Drive pour session, tampons, signature
+    "ia_moteur": "claude",
+    "clef_claude": "",
+    "clef_gemini": "",
+    "association_pdf": False,
+    "barre_rapide": True,
+    "maj_source": "github",         # "github" ou "dossier" (dossier synchronise)
+    "maj_auto": True,               # verifier au demarrage (une fois par jour)
+    "maj_derniere": "",
+}
+
+
+class Parametres(dict):
+    def __init__(self):
+        super().__init__(DEFAUTS)
+        self.chemin = os.path.join(dossier_donnees(), "parametres.json")
+        try:
+            with open(self.chemin, encoding="utf-8") as f:
+                self.update(json.load(f))
+        except (OSError, ValueError):
+            pass
+
+    def enregistrer(self):
+        try:
+            with open(self.chemin, "w", encoding="utf-8") as f:
+                json.dump(self, f, ensure_ascii=False, indent=2)
+        except OSError:
+            pass
+
+    def ajouter_recent(self, chemin):
+        r = [p for p in self["recents"] if os.path.normcase(p) != os.path.normcase(chemin)]
+        self["recents"] = [chemin] + r[:29]
+        self.enregistrer()
+
+    # ---- session partagee (version 0.1 : fichiers ouverts de cette machine)
+    def chemin_session(self):
+        base = self["dossier_synchro"] or dossier_donnees()
+        return os.path.join(base, "session.json")
+
+    def ecrire_session(self, fichiers):
+        try:
+            data = {}
+            p = self.chemin_session()
+            if os.path.exists(p):
+                with open(p, encoding="utf-8") as f:
+                    data = json.load(f)
+            data[self["machine"]] = fichiers
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except (OSError, ValueError):
+            pass
+
+    def lire_session(self):
+        try:
+            with open(self.chemin_session(), encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return {}
+
+
+def associer_pdf(activer):
+    """Association .pdf -> PhilPDF pour l'utilisateur courant (Windows), reversible."""
+    if sys.platform != "win32":
+        return False
+    import winreg
+    exe = sys.executable if getattr(sys, "frozen", False) else f'"{sys.executable}" "{os.path.abspath(sys.argv[0])}"'
+    cle = r"Software\Classes\PhilPDF.Document"
+    if activer:
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, cle + r"\shell\open\command") as k:
+            winreg.SetValue(k, "", winreg.REG_SZ, f'{exe} "%1"' if getattr(sys, "frozen", False) else f'{exe} "%1"')
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\.pdf\OpenWithProgids") as k:
+            winreg.SetValueEx(k, "PhilPDF.Document", 0, winreg.REG_NONE, b"")
+    else:
+        for c in (cle + r"\shell\open\command", cle + r"\shell\open", cle + r"\shell", cle):
+            try:
+                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, c)
+            except OSError:
+                pass
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\.pdf\OpenWithProgids", 0, winreg.KEY_SET_VALUE) as k:
+                winreg.DeleteValue(k, "PhilPDF.Document")
+        except OSError:
+            pass
+    return True

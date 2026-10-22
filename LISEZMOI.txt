@@ -1,0 +1,93 @@
+PhilPDF - Editeur PDF
+=====================
+
+Usage personnel et familial. Windows d'abord, Linux (Zorin OS) ensuite.
+
+
+1. TOUT EN UN
+-------------
+
+PhilPDF est livre en un seul paquet autonome. Il embarque tout ce dont il a
+besoin : Python, l'interface Qt, le moteur PDF, la reconnaissance de texte
+(Tesseract) avec le francais, et la police de remplacement Nunito.
+Rien a installer a cote, rien a telecharger ailleurs.
+
+Deux formes, au choix :
+
+  PhilPDF_portable.zip
+    A decompresser ou l'on veut (disque, cle USB). Lancer PhilPDF.exe.
+    Le fichier portable.txt a cote de l'exe indique le mode portable :
+    parametres, session et signature sont ranges dans le dossier "donnees"
+    a cote. Rien n'est ecrit ailleurs sur le PC, ni dans le registre.
+
+  PhilPDF_Setup.exe
+    Installation classique pour l'utilisateur courant, sans droits
+    administrateur, dans %LOCALAPPDATA%\Programs\PhilPDF.
+    Raccourci dans le menu Demarrer. Desinstallation depuis Windows.
+    Parametres dans %APPDATA%\PhilPDF.
+
+Dans les deux cas, PhilPDF ne touche pas a l'ouverture des PDF : Acrobat
+reste le lecteur par defaut, sauf si vous cochez l'option dans
+Edition > Preferences (version installee). Decocher l'annule.
+
+
+2. MISES A JOUR
+---------------
+
+Au demarrage (une fois par jour), PhilPDF regarde si une version plus
+recente existe et propose de l'installer. Il se ferme, se met a jour et se
+relance. En version portable, le dossier "donnees" est conserve.
+
+Source des mises a jour (Edition > Preferences) :
+  - GitHub : la derniere version publiee ;
+  - Dossier synchronise : un fichier PhilPDF_version.json depose dans votre
+    dossier Google Drive, pour mettre a jour toutes vos machines d'un coup.
+
+Verification manuelle : Aide > Rechercher les mises a jour.
+
+
+3. CE QUE FAIT LA VERSION 0.1
+-----------------------------
+
+  Oui   Accueil, fichiers recents, onglets, menus
+  Oui   Page Outils par familles, recherche, bulles d'aide, etoiles
+  Oui   Visionneuse : defilement, zoom, vignettes, plein ecran
+  Oui   Pivoter, avec la question "conserver dans le fichier ?"
+  Oui   Organiser : glisser les vignettes, pivoter, extraire, supprimer
+  Oui   Barre rapide sur selection : surligner, souligner, barrer, note,
+        copier, modifier, biffer
+  Oui   Mode Modifier : corriger une ligne avec la police d'origine, + Texte
+  Oui   Rechercher et remplacer : compteur, casse, accents, un ou tout
+  Oui   Combiner, creer, exporter en PNG ou en texte
+  Oui   Imprimer un ou plusieurs documents
+  Oui   Alleger, mot de passe (AES 256), signature manuscrite (image)
+  Oui   Reconnaissance de texte avec redressement et nettoyage
+  Oui   Annuler (30 etapes), session ecrite dans le dossier synchronise
+  Plus tard : tampons, filigranes, en-tete, signature numerique,
+        formulaires, comparer, IA, numeriser
+
+
+4. RACCOURCIS
+-------------
+
+  Ctrl+O  ouvrir                 Ctrl+S  enregistrer
+  Ctrl+P  imprimer               Ctrl+Z  annuler
+  Ctrl+F  rechercher/remplacer   Ctrl+W  fermer le fichier
+  Ctrl++  zoom avant             Ctrl+-  zoom arriere
+  Ctrl+2  ajuster a la largeur   F11     plein ecran
+
+
+5. COMPOSANTS LIBRES EMBARQUES
+------------------------------
+
+  PyMuPDF (AGPL), Qt / PySide6 (LGPL), Tesseract (Apache 2.0),
+  OpenCV (Apache 2.0), police Nunito (SIL Open Font License).
+
+
+6. POUR LES DEVELOPPEURS
+------------------------
+
+Le paquet est fabrique automatiquement par GitHub (fichier
+.github/workflows/fabriquer.yml), qui verifie aussi le moteur et l'OCR
+avant de publier. Pour fabriquer soi-meme : construire_windows.bat
+(necessite Python sur le PC de fabrication uniquement).
