@@ -134,6 +134,8 @@ verif(o.images_page(0) and o.images_page(0)[0][1].y0 > 400, "image déplacée")
 o.changer_mode(None)
 
 # --- tampon pret a l'emploi : poser, deplacer, redimensionner, supprimer
+from app import dialogues as _dlg
+_dlg.DialogueDateTampon.exec = lambda self: _dlg.QDialog.Accepted     # date du jour, sans fenetre
 o.ouvrir_bibliotheque("tampons")
 o._choisir_biblio(o.liste_biblio.item(0))
 o.poser_objet(0, fitz.Point(300, 300))

@@ -23,8 +23,11 @@ TYPES = {
     "ftp": "FTP / FTPS",
     "gdrive": "Google Drive",
     "onedrive": "OneDrive",
+    "dropbox": "Dropbox",
+    "box": "Box",
 }
 DELAI = 20
+NUAGES = ("gdrive", "onedrive", "dropbox", "box")       # Drives « en direct », autorises par OAuth
 
 
 class ErreurDistant(Exception):
@@ -463,29 +466,35 @@ DRIVE_ENVOI = "https://www.googleapis.com/upload/drive/v3"
 DOSSIER_MIME = "application/vnd.google-apps.folder"
 
 
-class GoogleDrive(_Http):
-    """Google Drive en direct (autorisation drive.file : PhilPDF ne voit que les fichiers qu'il a crees ou
-    ouverts). Les chemins /Dossier/Fichier.pdf sont resolus par nom a partir de la racine du Drive."""
+class _DriveOAuth(_Http):
+    """Base des Drives autorises par OAuth : jeton d'acces renouvele a partir du jeton durable du coffre."""
+    RACINE_ID = None
 
     def __init__(self, compte, mot_de_passe=None, code=None):
         super().__init__(compte, mot_de_passe, code)
-        self.jeton, self.expire, self._ids = None, 0, {"/": "root"}
+        self.jeton, self.expire, self._ids = None, 0, {"/": self.RACINE_ID}
 
-    # --- jetons
     def _acces(self):
         from . import oauth
         if self.jeton and time.time() < self.expire:
             return self.jeton
+        nom = TYPES[self.c["type"]]
         rt = coffre.lire(self.c["id"] + ".jeton")
         if not rt:
-            raise ErreurDistant(_("Google Drive n'est pas encore autorisé : cliquez sur « Autoriser l'accès » dans le compte."))
+            raise ErreurDistant(_("{nom} n'est pas encore autorisé : cliquez sur « Autoriser l'accès » dans le compte.", nom=nom))
         try:
-            j = oauth.rafraichir("gdrive", rt, self.log)
+            j = oauth.rafraichir(self.c["type"], rt, self.log)
         except oauth.ErreurAutorisation as e:
-            raise ErreurDistant(_("L'autorisation Google Drive a expiré ou a été retirée ({raison}) : autorisez à nouveau.",
-                                  raison=e))
+            raise ErreurDistant(_("L'autorisation {nom} a expiré ou a été retirée ({raison}) : autorisez à nouveau.",
+                                  nom=nom, raison=e))
+        if j.get("refresh_token") and j["refresh_token"] != rt:      # Box (et parfois Microsoft) renouvellent le jeton durable
+            coffre.enregistrer(self.c["id"] + ".jeton", j["refresh_token"])
         self.jeton, self.expire = j["access_token"], j["expire"]
         return self.jeton
+
+    @staticmethod
+    def _cle(chemin):
+        return "/" + "/".join(p for p in chemin.split("/") if p)
 
     def _appel(self, methode, url, donnees=None, entetes=None, brut=False):
         for essai in range(2):
@@ -506,6 +515,12 @@ class GoogleDrive(_Http):
         if brut:
             return contenu
         return json.loads(contenu or b"{}")
+
+
+class GoogleDrive(_DriveOAuth):
+    """Google Drive en direct (autorisation drive.file : PhilPDF ne voit que les fichiers qu'il a crees ou
+    ouverts). Les chemins /Dossier/Fichier.pdf sont resolus par nom a partir de la racine du Drive."""
+    RACINE_ID = "root"
 
     def _q(self, q):
         return f"{DRIVE_API}/files?" + urllib.parse.urlencode({
@@ -592,7 +607,205 @@ class GoogleDrive(_Http):
         return _("Connexion réussie au Google Drive de {qui} : {n} élément(s) créé(s) ou ouvert(s) par PhilPDF.", qui=qui, n=n)
 
 
-CLASSES = {"reseau": Reseau, "synology": Synology, "webdav": WebDAV, "ftp": FTP, "gdrive": GoogleDrive, "onedrive": EnAttente}
+# ---------------------------------------------------------------------------------- OneDrive (Microsoft Graph)
+GRAPH = "https://graph.microsoft.com/v1.0"
+
+
+class OneDrive(_DriveOAuth):
+    def _url(self, chemin, suite=""):
+        c = self._cle(chemin)
+        if c == "/":
+            return f"{GRAPH}/me/drive/root" + (f"/{suite}" if suite else "")
+        return f"{GRAPH}/me/drive/root:" + urllib.parse.quote(c) + (f":/{suite}" if suite else "")
+
+    def _enfants(self, dossier):
+        url = self._url(dossier, "children") + "?$top=1000&$select=name,size,folder,lastModifiedDateTime"
+        out = []
+        while url:
+            d = self._appel("GET", url)
+            out += d.get("value", [])
+            url = d.get("@odata.nextLink")
+        return out
+
+    def lister(self, dossier):
+        return sorted((Element(f["name"], _joindre(dossier, f["name"]), "folder" in f, int(f.get("size") or 0))
+                       for f in self._enfants(dossier)), key=lambda e: (not e.dossier, e.nom.lower()))
+
+    def modifies(self, dossier):
+        try:
+            return {f["name"]: (int(f.get("size") or 0), f.get("lastModifiedDateTime", ""), "folder" in f)
+                    for f in self._enfants(dossier)}
+        except ErreurDistant:
+            if self.dernier_code == 404:
+                return {}
+            raise
+
+    def telecharger(self, chemin, local):
+        with open(local, "wb") as g:
+            g.write(self._appel("GET", self._url(chemin, "content"), brut=True))
+
+    def envoyer(self, local, chemin):
+        with open(local, "rb") as f:
+            contenu = f.read()
+        if len(contenu) < 4_000_000:          # envoi simple ; les dossiers manquants sont crees par OneDrive
+            self._appel("PUT", self._url(chemin, "content"), contenu, {"Content-Type": "application/octet-stream"})
+            return
+        s = self._appel("POST", self._url(chemin, "createUploadSession"),
+                        json.dumps({"item": {"@microsoft.graph.conflictBehavior": "replace"}}).encode(),
+                        {"Content-Type": "application/json"})
+        url, pas = s["uploadUrl"], 5 * 327680
+        for debut in range(0, len(contenu), pas):
+            bout = contenu[debut:debut + pas]
+            r = urllib.request.Request(url, data=bout, method="PUT")
+            r.add_header("Content-Range", f"bytes {debut}-{debut + len(bout) - 1}/{len(contenu)}")
+            self._ouvrir(r).close()
+
+    def qui(self):
+        u = self._appel("GET", f"{GRAPH}/me?$select=userPrincipalName,mail,displayName")
+        return u.get("mail") or u.get("userPrincipalName") or u.get("displayName") or "?"
+
+    def tester(self):
+        return _("Connexion réussie au OneDrive de {qui} : {n} élément(s) à la racine.", qui=self.qui(), n=len(self.lister("/")))
+
+
+# ---------------------------------------------------------------------------------- Dropbox
+DROPBOX_API = "https://api.dropboxapi.com/2"
+DROPBOX_CONTENU = "https://content.dropboxapi.com/2"
+
+
+class Dropbox(_DriveOAuth):
+    def _json(self, url, corps):
+        return self._appel("POST", url, json.dumps(corps).encode(), {"Content-Type": "application/json"})
+
+    def _entrees(self, dossier):
+        c = self._cle(dossier)
+        try:
+            d = self._json(f"{DROPBOX_API}/files/list_folder", {"path": "" if c == "/" else c, "limit": 2000})
+        except ErreurDistant:
+            if self.dernier_code == 409:          # dossier inexistant
+                return None
+            raise
+        out = d.get("entries", [])
+        while d.get("has_more"):
+            d = self._json(f"{DROPBOX_API}/files/list_folder/continue", {"cursor": d["cursor"]})
+            out += d.get("entries", [])
+        return out
+
+    def lister(self, dossier):
+        e = self._entrees(dossier)
+        if e is None:
+            raise ErreurDistant(_("Dossier inaccessible : {dossier}", dossier=dossier))
+        return sorted((Element(x["name"], _joindre(dossier, x["name"]), x[".tag"] == "folder", int(x.get("size") or 0))
+                       for x in e if x[".tag"] in ("file", "folder")), key=lambda e: (not e.dossier, e.nom.lower()))
+
+    def modifies(self, dossier):
+        return {x["name"]: (int(x.get("size") or 0), x.get("server_modified", ""), x[".tag"] == "folder")
+                for x in (self._entrees(dossier) or []) if x[".tag"] in ("file", "folder")}
+
+    def telecharger(self, chemin, local):
+        arg = json.dumps({"path": self._cle(chemin)}, ensure_ascii=True)
+        with open(local, "wb") as g:
+            g.write(self._appel("POST", f"{DROPBOX_CONTENU}/files/download", b"", {"Dropbox-API-Arg": arg}, brut=True))
+
+    def envoyer(self, local, chemin):
+        arg = json.dumps({"path": self._cle(chemin), "mode": "overwrite", "mute": True}, ensure_ascii=True)
+        with open(local, "rb") as f:
+            self._appel("POST", f"{DROPBOX_CONTENU}/files/upload", f.read(),
+                        {"Dropbox-API-Arg": arg, "Content-Type": "application/octet-stream"})
+
+    def qui(self):
+        u = self._appel("POST", f"{DROPBOX_API}/users/get_current_account", None)
+        return u.get("email") or (u.get("name") or {}).get("display_name") or "?"
+
+    def tester(self):
+        return _("Connexion réussie au Dropbox de {qui} : {n} élément(s) à la racine.", qui=self.qui(), n=len(self.lister("/")))
+
+
+# ---------------------------------------------------------------------------------- Box
+BOX_API = "https://api.box.com/2.0"
+BOX_ENVOI = "https://upload.box.com/api/2.0"
+
+
+class Box(_DriveOAuth):
+    RACINE_ID = "0"
+
+    def _items(self, ident):
+        out, decal = [], 0
+        while True:
+            d = self._appel("GET", f"{BOX_API}/folders/{ident}/items?fields=name,type,size,modified_at&limit=1000&offset={decal}")
+            out += d.get("entries", [])
+            decal += len(d.get("entries", []))
+            if decal >= int(d.get("total_count", 0)) or not d.get("entries"):
+                return out
+
+    def _id(self, chemin, creer=False, type_=None):
+        c = self._cle(chemin)
+        if c in self._ids:
+            return self._ids[c]
+        parent_c, nom = posixpath.split(c)
+        parent = self._id(parent_c, creer, "folder")
+        if parent is None:
+            return None
+        for x in self._items(parent):
+            self._ids[_joindre(parent_c, x["name"])] = x["id"]
+            if x["name"] == nom and (type_ is None or x["type"] == type_):
+                return x["id"]
+        if not creer:
+            return None
+        d = self._appel("POST", f"{BOX_API}/folders", json.dumps({"name": nom, "parent": {"id": parent}}).encode(),
+                        {"Content-Type": "application/json"})
+        self._ids[c] = d["id"]
+        return d["id"]
+
+    def lister(self, dossier):
+        i = self._id(dossier)
+        if i is None:
+            raise ErreurDistant(_("Dossier inaccessible : {dossier}", dossier=dossier))
+        out = []
+        for x in self._items(i):
+            self._ids[self._cle(_joindre(dossier, x["name"]))] = x["id"]
+            out.append(Element(x["name"], _joindre(dossier, x["name"]), x["type"] == "folder", int(x.get("size") or 0)))
+        return sorted(out, key=lambda e: (not e.dossier, e.nom.lower()))
+
+    def modifies(self, dossier):
+        i = self._id(dossier)
+        if i is None:
+            return {}
+        return {x["name"]: (int(x.get("size") or 0), x.get("modified_at", ""), x["type"] == "folder") for x in self._items(i)}
+
+    def telecharger(self, chemin, local):
+        i = self._id(chemin, type_="file")
+        if i is None:
+            raise ErreurDistant(_("Fichier ou dossier introuvable sur le Drive : {chemin}", chemin=chemin))
+        with open(local, "wb") as g:
+            g.write(self._appel("GET", f"{BOX_API}/files/{i}/content", brut=True))
+
+    def envoyer(self, local, chemin):
+        dossier, nom = posixpath.split(self._cle(chemin))
+        parent = self._id(dossier, creer=True, type_="folder")
+        existant = self._id(chemin, type_="file")
+        with open(local, "rb") as f:
+            contenu = f.read()
+        bord = "PhilPDF" + uuid.uuid4().hex
+        attributs = json.dumps({"name": nom} if existant else {"name": nom, "parent": {"id": parent}}).encode()
+        corps = (f'--{bord}\r\nContent-Disposition: form-data; name="attributes"\r\n\r\n'.encode() + attributs +
+                 f'\r\n--{bord}\r\nContent-Disposition: form-data; name="file"; filename="{nom}"\r\n'
+                 f'Content-Type: application/octet-stream\r\n\r\n'.encode() + contenu + f"\r\n--{bord}--\r\n".encode())
+        url = f"{BOX_ENVOI}/files/{existant}/content" if existant else f"{BOX_ENVOI}/files/content"
+        d = self._appel("POST", url, corps, {"Content-Type": f"multipart/form-data; boundary={bord}"})
+        for x in d.get("entries", []):
+            self._ids[self._cle(chemin)] = x["id"]
+
+    def qui(self):
+        u = self._appel("GET", f"{BOX_API}/users/me?fields=login,name")
+        return u.get("login") or u.get("name") or "?"
+
+    def tester(self):
+        return _("Connexion réussie au Box de {qui} : {n} élément(s) à la racine.", qui=self.qui(), n=len(self.lister("/")))
+
+
+CLASSES = {"reseau": Reseau, "synology": Synology, "webdav": WebDAV, "ftp": FTP, "gdrive": GoogleDrive,
+           "onedrive": OneDrive, "dropbox": Dropbox, "box": Box}
 
 
 def emplacement(compte, mot_de_passe=None, code=None):

@@ -52,32 +52,63 @@ def nettoyer(gris):
     return nb
 
 
-def traiter(entree, sortie, dpi_source=None):
+def image_de_page(d, p, dpi_defaut=300):
+    """(image en gris, dpi) d'une page : l'image scannee d'origine si la page n'est qu'un scan droit,
+    sinon un rendu de la page (pages sans image, plusieurs images, page tournee ou recadree)."""
+    imgs = p.get_images(full=True)
+    if len(imgs) == 1 and p.rotation == 0:
+        try:
+            r = p.get_image_rects(imgs[0][0])
+            if r and r[0].width >= p.rect.width * 0.9 and r[0].height >= p.rect.height * 0.9:
+                info = d.extract_image(imgs[0][0])
+                gris = cv2.imdecode(np.frombuffer(info["image"], np.uint8), cv2.IMREAD_GRAYSCALE)
+                if gris is not None and gris.shape[1] > 300:
+                    return gris, max(72, round(gris.shape[1] / (p.rect.width / 72)))
+        except Exception:
+            pass
+    pm = p.get_pixmap(dpi=dpi_defaut, colorspace=fitz.csGRAY, alpha=False)
+    gris = np.frombuffer(pm.samples, np.uint8).reshape(pm.height, pm.width).copy()
+    return gris, dpi_defaut
+
+
+def a_du_texte(p):
+    return len(p.get_text("text").strip()) > 30
+
+
+def traiter(entree, sortie, dpi_source=None, progression=None):
+    """Reconnait le texte des pages scannees ; les pages qui ont deja du texte restent telles quelles.
+    Renvoie [(page, angle, dpi ou None si gardee)]."""
     d = fitz.open(entree)
-    rapport, pages_pdf = [], []
+    if d.needs_pass:
+        raise ValueError("document protégé par mot de passe")
+    rapport, morceaux = [], []
     tmp = tempfile.mkdtemp()
     for i, p in enumerate(d):
-        x = p.get_images()[0][0]
-        info = d.extract_image(x)
-        gris = cv2.imdecode(np.frombuffer(info["image"], np.uint8), cv2.IMREAD_GRAYSCALE)
-        dpi = round(gris.shape[1] / (p.rect.width / 72))
+        if progression:
+            progression(i, len(d))
+        if a_du_texte(p):
+            morceaux.append(("garder", i))
+            rapport.append((i + 1, 0.0, None))
+            continue
+        gris, dpi = image_de_page(d, p)
         a = angle_inclinaison(gris)
         nb = nettoyer(redresser(gris, a) if abs(a) > 0.05 else gris)
         tif = os.path.join(tmp, f"p{i:03d}.tif")
         Image.fromarray(nb).convert("1").save(tif, compression="group4", dpi=(dpi, dpi))
         base = os.path.join(tmp, f"p{i:03d}")
-        subprocess.run([tesseract_exe() or "tesseract", tif, base, "-l", "fra", "--dpi", str(dpi), "pdf"],
-                       env={**os.environ, "TESSDATA_PREFIX": TESS},
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
-                       creationflags=0x08000000 if sys.platform == "win32" else 0)
-        pages_pdf.append(base + ".pdf")
+        r = subprocess.run([tesseract_exe() or "tesseract", tif, base, "-l", "fra", "--dpi", str(dpi), "pdf"],
+                           env={**os.environ, "TESSDATA_PREFIX": TESS}, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.PIPE, creationflags=0x08000000 if sys.platform == "win32" else 0)
+        if r.returncode != 0 or not os.path.exists(base + ".pdf"):
+            raise RuntimeError(f"Tesseract, page {i + 1} : " + r.stderr.decode("utf-8", "replace")[-300:])
+        morceaux.append(("ocr", base + ".pdf"))
         rapport.append((i + 1, a, dpi))
     out = fitz.open()
-    for f in pages_pdf:
-        out.insert_pdf(fitz.open(f))
-    # format A4 exact, comme l'original
-    for pg, src in zip(out, d):
-        pg.set_mediabox(pg.mediabox)  # tesseract produit deja la taille physique
-    out.set_metadata({"producer": "PhilPDF (preuve de concept)", "title": os.path.basename(entree)})
+    for genre, x in morceaux:
+        if genre == "garder":
+            out.insert_pdf(d, from_page=x, to_page=x)
+        else:
+            out.insert_pdf(fitz.open(x))
+    out.set_metadata({"producer": "PhilPDF", "title": os.path.basename(entree)})
     out.save(sortie, garbage=3, deflate=True)
     return rapport

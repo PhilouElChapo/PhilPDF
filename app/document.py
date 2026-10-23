@@ -3,7 +3,7 @@ mode Modifier facon Acrobat (deplacer, editer dans la page), objets deplacables
 (tampons, signatures, annotations), organisation des pages."""
 import os, sys
 import pymupdf as fitz
-from PySide6.QtCore import Qt, Signal, QRectF, QPointF, QTimer, QSize, QPoint
+from PySide6.QtCore import Qt, Signal, QRectF, QPointF, QTimer, QSize, QPoint, QRect
 from PySide6.QtGui import QImage, QPainter, QColor, QPen, QPixmap, QGuiApplication, QFont, QIcon
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QFrame, QLabel, QToolButton,
                                QListWidget, QListWidgetItem, QSplitter, QPushButton, QInputDialog, QMenu,
@@ -119,6 +119,11 @@ class PageWidget(QWidget):
             p.setBrush(QColor("#ffffff"))
             for c in self._poignees(r):
                 p.drawRect(c)
+        for (pg, r) in o.marques_biffage:
+            if pg == self.num:
+                p.setPen(QPen(QColor("#c9252d"), 2))
+                p.setBrush(QColor(0, 0, 0, 110))
+                p.drawRect(self.vers_ecran(r))
         if self.glisse and self.glisse.get("fantome") is not None:
             p.setPen(QPen(QColor("#1462c2"), 1.5, Qt.DashLine))
             p.setBrush(QColor(20, 98, 194, 30))
@@ -188,7 +193,7 @@ class PageWidget(QWidget):
             else:
                 o.ajouter_image_ici(self.num, hg)
             return
-        if o.mode in ("lien", "recadrer"):
+        if o.mode in ("lien", "recadrer", "biffer"):
             self.glisse = {"genre": "zone", "debut": pt, "fantome": fitz.Rect(pt, pt)}
             return
         poignee = self._sur_poignee(e.position())
@@ -244,7 +249,7 @@ class PageWidget(QWidget):
             self.setCursor(Qt.SizeFDiagCursor)
         elif o.objet_sous(self.num, pt, survol=True):
             self.setCursor(Qt.SizeAllCursor)
-        elif o.mode in ("poser", "ajout_texte", "ajout_image", "lien", "recadrer"):
+        elif o.mode in ("poser", "ajout_texte", "ajout_image", "lien", "recadrer", "biffer"):
             self.setCursor(Qt.CrossCursor)
         elif o.mode is None and o.mot_sous(self.num, pt) is not None:
             self.setCursor(Qt.IBeamCursor)
@@ -438,9 +443,21 @@ class BarreRapide(QFrame):
 
 
 # ================================================================ vignettes / organiser
+class Loupe(QLabel):
+    """Apercu agrandi d'une page au survol d'une vignette ; la molette zoome autour du pointeur."""
+
+    def __init__(self):
+        super().__init__(None, Qt.ToolTip | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setStyleSheet("QLabel{background:#fff;border:1px solid #9a9a9a;border-radius:4px}")
+        self.facteur = 1.0
+
+
 class GrillePages(QListWidget):
-    """Vignettes reordonnables par glisser-deposer (liste ou grille)."""
+    """Vignettes reordonnables par glisser-deposer (colonne ou grille), avec defilement automatique pres
+    des bords pendant le glisser, et loupe au survol (molette = zoom de la loupe)."""
     ordre_change = Signal(list)
+    HAUTEUR_LOUPE = 520
 
     def __init__(self, grille=False):
         super().__init__()
@@ -450,22 +467,150 @@ class GrillePages(QListWidget):
         self.setDropIndicatorShown(True)
         self.setDragDropMode(QAbstractItemView.InternalMove)
         self.setDefaultDropAction(Qt.MoveAction)
+        self.setAutoScroll(True)
+        self.setAutoScrollMargin(48)
+        self.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self.setViewMode(QListWidget.ListMode)          # le mode « icones » de Qt deplace les vignettes a sa facon
+        self.grille = grille
         if grille:
-            self.setViewMode(QListWidget.IconMode)
+            from PySide6.QtWidgets import QStyledItemDelegate, QStyleOptionViewItem
+
+            class Dessus(QStyledItemDelegate):           # numero de page sous la vignette
+                def initStyleOption(self, opt, index):
+                    super().initStyleOption(opt, index)
+                    opt.decorationPosition = QStyleOptionViewItem.Top
+                    opt.displayAlignment = Qt.AlignHCenter | Qt.AlignTop
+            self.setItemDelegate(Dessus(self))
             self.setFlow(QListWidget.LeftToRight)
             self.setWrapping(True)
             self.setResizeMode(QListWidget.Adjust)
-            self.setMovement(QListWidget.Snap)
             self.setIconSize(QSize(150, 200))
-            self.setGridSize(QSize(180, 240))
-            self.setSpacing(10)
+            self.setGridSize(QSize(176, 226))
+            self.setUniformItemSizes(True)
         else:
-            self.setViewMode(QListWidget.ListMode)
             self.setIconSize(QSize(96, 128))
             self.setSpacing(4)
+        self.rendu = None                  # rendu(n, hauteur_px) -> QImage, fourni par l'onglet
+        self.loupe = Loupe()
+        self._item_loupe, self._rel = None, (0.5, 0.5)
+        self._minuterie = QTimer(self)
+        self._minuterie.setSingleShot(True)
+        self._minuterie.timeout.connect(self._montrer_loupe)
+        self._defil = QTimer(self)
+        self._defil.timeout.connect(self._defiler)
+        self._vitesse = 0
+        self.setMouseTracking(True)
+        self.viewport().setMouseTracking(True)
+
+    # ---------------------------------------------------------------- loupe
+    def _cacher_loupe(self):
+        try:                              # a la fermeture, Qt peut avoir deja detruit la loupe
+            self._minuterie.stop()
+            self.loupe.hide()
+            self.loupe.facteur = 1.0
+        except RuntimeError:
+            pass
+
+    def mouseMoveEvent(self, e):
+        if e.buttons():
+            self._cacher_loupe()
+            return super().mouseMoveEvent(e)
+        it = self.itemAt(e.position().toPoint())
+        if it is not self._item_loupe:
+            self._cacher_loupe()
+            self._item_loupe = it
+            if it is not None and self.rendu:
+                self._minuterie.start(350)
+        if it is not None:
+            r = self.visualItemRect(it)
+            ic = QRect(r.topLeft(), self.iconSize()) if not self.grille else r
+            self._rel = (min(1, max(0, (e.position().x() - ic.x()) / max(1, ic.width()))),
+                         min(1, max(0, (e.position().y() - ic.y()) / max(1, ic.height()))))
+            if self.loupe.isVisible():
+                self._montrer_loupe()
+        super().mouseMoveEvent(e)
+
+    def leaveEvent(self, e):
+        self._cacher_loupe()
+        self._item_loupe = None
+        super().leaveEvent(e)
+
+    def hideEvent(self, e):
+        self._cacher_loupe()
+        super().hideEvent(e)
+
+    def wheelEvent(self, e):
+        if self.loupe.isVisible():
+            k = 1.25 ** (e.angleDelta().y() / 120)
+            self.loupe.facteur = min(5.0, max(1.0, self.loupe.facteur * k))
+            self._montrer_loupe()
+            e.accept()
+            return
+        super().wheelEvent(e)
+
+    def _montrer_loupe(self):
+        it = self._item_loupe
+        if it is None or not self.rendu:
+            return
+        n = it.data(Qt.UserRole)
+        H = self.HAUTEUR_LOUPE
+        f = self.loupe.facteur
+        img = self.rendu(n, int(H * f))
+        if img is None:
+            return
+        if f > 1.0:                                   # zoom : on recadre autour du pointeur
+            w, h = int(img.width() / f), int(img.height() / f)
+            x = int(self._rel[0] * img.width() - w / 2)
+            y = int(self._rel[1] * img.height() - h / 2)
+            x, y = max(0, min(img.width() - w, x)), max(0, min(img.height() - h, y))
+            img = img.copy(x, y, w, h)
+        self.loupe.setPixmap(QPixmap.fromImage(img))
+        self.loupe.adjustSize()
+        from PySide6.QtGui import QCursor
+        pos = QCursor.pos() + QPoint(28, -self.loupe.height() // 3)
+        ecran = self.screen().availableGeometry() if self.screen() else None
+        if ecran is not None:
+            if pos.x() + self.loupe.width() > ecran.right():
+                pos.setX(QCursor.pos().x() - self.loupe.width() - 28)
+            pos.setY(max(ecran.top(), min(pos.y(), ecran.bottom() - self.loupe.height())))
+        self.loupe.move(pos)
+        self.loupe.show()
+
+    # ---------------------------------------------------------------- glisser : defilement automatique
+    def dragMoveEvent(self, ev):
+        super().dragMoveEvent(ev)
+        p = ev.position().toPoint()
+        zone = 60
+        h = self.viewport().height()
+        if p.y() < zone:
+            self._vitesse = -max(4, (zone - p.y()) // 2)
+        elif p.y() > h - zone:
+            self._vitesse = max(4, (p.y() - (h - zone)) // 2)
+        else:
+            self._vitesse = 0
+        if self._vitesse and not self._defil.isActive():
+            self._defil.start(30)
+        elif not self._vitesse:
+            self._defil.stop()
+        ev.setDropAction(Qt.MoveAction)
+        ev.accept()
+
+    def dragEnterEvent(self, ev):
+        self._cacher_loupe()
+        super().dragEnterEvent(ev)
+        ev.accept()
+
+    def dragLeaveEvent(self, ev):
+        self._defil.stop()
+        super().dragLeaveEvent(ev)
+
+    def _defiler(self):
+        b = self.verticalScrollBar()
+        b.setValue(b.value() + self._vitesse)
 
     def dropEvent(self, ev):
-        # reordonnancement fait a la main : fiable en liste comme en grille
+        self._defil.stop()
+        # reordonnancement fait a la main : fiable en colonne comme en grille
         cible = self.indexAt(ev.position().toPoint()).row()
         choisis = sorted(self.row(i) for i in self.selectedItems())
         if not choisis:
@@ -476,7 +621,7 @@ class GrillePages(QListWidget):
         else:
             r = self.visualItemRect(self.item(cible))
             p = ev.position().toPoint()
-            apres = p.x() > r.center().x() if self.viewMode() == QListWidget.IconMode else p.y() > r.center().y()
+            apres = p.x() > r.center().x() if self.grille else p.y() > r.center().y()
             cible += 1 if apres else 0
         bouges = [ordre[i] for i in choisis]
         reste = [x for i, x in enumerate(ordre) if i not in choisis]
@@ -535,6 +680,27 @@ class OngletDocument(QWidget):
         self.bandeau_simple.setStyleSheet("background:#f1ebfc;color:#3f2380;padding:8px 16px;border-bottom:1px solid #ddd0f6")
         self.bandeau_simple.hide()
         v.addWidget(self.bandeau_simple)
+        self.bandeau_biffer = QFrame()
+        self.bandeau_biffer.setObjectName("bandeaubiffer")
+        self.bandeau_biffer.setStyleSheet("QFrame#bandeaubiffer{background:#2b2b2b;border-bottom:1px solid #111}"
+                                          "QLabel{color:#fff} QPushButton{padding:4px 12px}")
+        hb = QHBoxLayout(self.bandeau_biffer)
+        hb.setContentsMargins(16, 6, 16, 6)
+        self.lbl_biffer = QLabel()
+        hb.addWidget(self.lbl_biffer, 1)
+        self.b_appliquer_biffage = QPushButton(_("Appliquer le biffage"))
+        self.b_appliquer_biffage.setProperty("primaire", True)
+        self.b_appliquer_biffage.clicked.connect(self.appliquer_biffage)
+        hb.addWidget(self.b_appliquer_biffage)
+        b = QPushButton(_("Effacer les marques"))
+        b.clicked.connect(lambda: (self.marques_biffage.clear(), self._maj_biffer()))
+        hb.addWidget(b)
+        b = QPushButton(_("Fermer"))
+        b.clicked.connect(lambda: self.changer_mode(None))
+        hb.addWidget(b)
+        self.bandeau_biffer.hide()
+        v.addWidget(self.bandeau_biffer)
+        self.marques_biffage = []          # [(page, rect)] a biffer
         self.sp = QSplitter()
         self.sp.setChildrenCollapsible(True)
         self.vignettes = GrillePages()
@@ -544,6 +710,7 @@ class OngletDocument(QWidget):
         self.vignettes.setContextMenuPolicy(Qt.CustomContextMenu)
         self.vignettes.customContextMenuRequested.connect(lambda p: self._menu_pages(self.vignettes, p))
         self.vignettes.ordre_change.connect(self.reordonner)
+        self.vignettes.rendu = self._rendu_loupe
         self.sp.addWidget(self.vignettes)
         self.centre = QStackedWidget()
         self.zone = QScrollArea()
@@ -738,7 +905,8 @@ class OngletDocument(QWidget):
         v = QVBoxLayout(w)
         v.setContentsMargins(16, 10, 16, 10)
         h = QHBoxLayout()
-        t = QLabel(_("<b>Organiser les pages</b> — glissez pour réordonner, clic droit pour plus d'actions"))
+        t = QLabel(_("<b>Organiser les pages</b> — glissez pour réordonner, clic droit pour plus d'actions ; "
+                     "survolez une page pour la loupe, molette pour zoomer"))
         h.addWidget(t)
         h.addStretch()
         for txt, f in [(_('Pivoter ↺'), lambda: self._sel_grille(lambda p: self.pivoter(p, -90, demander=False))),
@@ -757,6 +925,7 @@ class OngletDocument(QWidget):
         self.grille = GrillePages(grille=True)
         self.grille.setStyleSheet("QListWidget{background:#ececec;border:none}")
         self.grille.ordre_change.connect(self.reordonner)
+        self.grille.rendu = self._rendu_loupe
         self.grille.setContextMenuPolicy(Qt.CustomContextMenu)
         self.grille.customContextMenuRequested.connect(lambda p: self._menu_pages(self.grille, p))
         v.addWidget(self.grille, 1)
@@ -1005,7 +1174,7 @@ class OngletDocument(QWidget):
             for nom, t, c in objets.PREDEFINIS:
                 pdf = objets.tampon_predefini(t, c, self.params.get("auteur", ""))
                 self._ajout_item_biblio(nom, pdf, {"nom": nom, "dynamique": True, "texte": t, "couleur": list(c)},
-                                        _('Tampon à la date du jour'))
+                                        _('Tampon daté : la date est choisie au moment de le poser'))
         for e in self.biblio.elements(genre):
             self._ajout_item_biblio(e["nom"], None, e)
         self.pile_volet.setCurrentIndex(2)
@@ -1024,8 +1193,13 @@ class OngletDocument(QWidget):
 
     def _choisir_biblio(self, it):
         e = it.data(Qt.UserRole)
-        pdf = (objets.tampon_predefini(e["texte"], tuple(e["couleur"]), self.params.get("auteur", ""))
-               if e.get("dynamique") else self.biblio.lire(e))
+        if e.get("dynamique"):
+            from .dialogues import tampon_a_poser
+            pdf = tampon_a_poser(self, e, self.params.get("auteur", ""))
+            if not pdf:
+                return
+        else:
+            pdf = self.biblio.lire(e)
         self.a_poser = (pdf, e["nom"], "signature" if self.genre_biblio == "signatures" else "tampon")
         self.mode = "poser"
         self.bandeau_simple.setText(_('<b>{nom}</b> — cliquez sur la page pour le poser.', nom=e['nom']))
@@ -1072,6 +1246,7 @@ class OngletDocument(QWidget):
         self.maj_info()
 
     def _vider_caches(self):
+        self.__dict__.get("_cache_loupe", {}).clear()
         self._cache_lignes.clear()
         self._cache_mots.clear()
         self._cache_images.clear()
@@ -1091,6 +1266,21 @@ class OngletDocument(QWidget):
             self.vignettes.addItem(it)
         if self.centre.currentIndex() == 1:
             self._remplir_grille()
+
+    def _rendu_loupe(self, n, hauteur):
+        """Image de la page n, hauteur en pixels (loupe des vignettes), avec un petit cache."""
+        if not (0 <= n < len(self.doc)):
+            return None
+        cle = (n, hauteur, self.rotation_vue.get(n, 0))
+        cache = self.__dict__.setdefault("_cache_loupe", {})
+        if cle not in cache:
+            if len(cache) > 12:
+                cache.clear()
+            page = self.doc[n]
+            k = hauteur / max(page.rect.height, 1)
+            pm = page.get_pixmap(matrix=fitz.Matrix(k, k).prerotate(self.rotation_vue.get(n, 0)), alpha=False)
+            cache[cle] = QImage(pm.samples, pm.width, pm.height, pm.stride, QImage.Format_RGB888).copy()
+        return cache[cle]
 
     def _remplir_grille(self):
         self.grille.clear()
@@ -1429,19 +1619,37 @@ class OngletDocument(QWidget):
         self.apres_modif()
 
     def biffer(self):
-        s = self.selection
-        if not s:
+        """Barre rapide : le texte selectionne est marque, puis on propose d'appliquer."""
+        self.changer_mode("biffer")
+        if self.marques_biffage:
+            self.appliquer_biffage()
+
+    def _maj_biffer(self):
+        n = len(self.marques_biffage)
+        self.lbl_biffer.setText(_("<b>Biffer</b> — tracez un rectangle sur ce qui doit disparaître (texte, image, "
+                                  "signature...). {n} zone(s) marquée(s).", n=n))
+        self.b_appliquer_biffage.setEnabled(n > 0)
+        self.rafraichir_pages()
+
+    def appliquer_biffage(self):
+        if not self.marques_biffage:
             return
-        if question(self, _('Biffer'), _('Le texte sélectionné sera supprimé définitivement du fichier et remplacé par un rectangle noir. Continuer ?'),
+        if question(self, _('Biffer'), _("Les {n} zone(s) marquée(s) seront supprimées définitivement du fichier (texte, images "
+                                         "et dessins) et remplacées par un rectangle noir. Continuer ?",
+                                         n=len(self.marques_biffage)),
                     [(_('Biffer'), QMessageBox.AcceptRole), (_('Annuler'), QMessageBox.RejectRole)]) != 0:
             return
-        self.memoriser()
-        page = self.doc[s["page"]]
-        for r in s["lignes"]:
-            page.add_redact_annot(r, fill=(0, 0, 0))
-        page.apply_redactions()
-        self.selection = None
-        self.apres_modif([_("Passage biffé : le texte n'existe plus dans le fichier.")])
+        self.memoriser(_("Biffage"))
+        pages = sorted({n for n, _r in self.marques_biffage})
+        for n, r in self.marques_biffage:
+            self.doc[n].add_redact_annot(r, fill=(0, 0, 0))
+        for n in pages:
+            self.doc[n].apply_redactions(images=fitz.PDF_REDACT_IMAGE_PIXELS,
+                                         graphics=getattr(fitz, "PDF_REDACT_LINE_ART_REMOVE_IF_TOUCHED", 2))
+        nb = len(self.marques_biffage)
+        self.marques_biffage.clear()
+        self.changer_mode(None)
+        self.apres_modif([_("{n} zone(s) biffée(s) : leur contenu n'existe plus dans le fichier.", n=nb)])
 
     def modifier_selection(self):
         s = self.selection
@@ -1500,6 +1708,10 @@ class OngletDocument(QWidget):
 
     def zone_tracee(self, n, r):
         page = self.doc[n]
+        if self.mode == "biffer":
+            self.marques_biffage.append((n, fitz.Rect(r)))
+            self._maj_biffer()
+            return
         if self.mode == "lien":
             choix = question(self, _('Lien'), _('Ce lien mène vers :'), [(_('Un site Internet'), QMessageBox.AcceptRole),
                                                                   (_('Une page du document'), QMessageBox.AcceptRole),
@@ -1588,8 +1800,15 @@ class OngletDocument(QWidget):
             self.a_poser = None if mode is None else self.a_poser
         self.mode = mode
         self.barre_rapide.hide()
+        if mode == "biffer" and self.selection:          # le texte deja selectionne devient une marque
+            self.marques_biffage += [(self.selection["page"], fitz.Rect(r)) for r in self.selection["lignes"]]
+        if mode != "biffer":
+            self.marques_biffage.clear()
         self.selection = None
         self.bandeau_simple.hide()
+        self.bandeau_biffer.setVisible(mode == "biffer")
+        if mode == "biffer":
+            self._maj_biffer()
         modif = mode in ("modifier", "ajout_texte", "ajout_image", "lien", "recadrer")
         self.bandeau.setVisible(modif)
         for cle, b in self.boutons_modif.items():

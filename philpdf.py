@@ -68,7 +68,8 @@ def verifier(sortie):
         lignes.append(f"coffre: {ex}")
     try:
         from app import oauth
-        lignes.append(f"google drive: {'identifiant present' if oauth.disponible('gdrive') else 'identifiant absent'}")
+        for t, n in (("gdrive", "google drive"), ("onedrive", "onedrive"), ("dropbox", "dropbox"), ("box", "box")):
+            lignes.append(f"{n}: {'identifiant present' if oauth.disponible(t) else 'identifiant absent'}")
     except Exception as ex:
         lignes.append(f"google drive: {ex}")
     from app.langue import disponibles

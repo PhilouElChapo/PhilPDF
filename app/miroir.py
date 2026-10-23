@@ -16,7 +16,7 @@ RACINE_DISTANTE = "/PhilPDF"
 
 def compte_drive(params):
     cid = params.get("drive_compte")
-    return next((c for c in params.get("comptes", []) if c["id"] == cid and c["type"] in ("gdrive", "onedrive")), None)
+    return next((c for c in params.get("comptes", []) if c["id"] == cid and c["type"] in distant.NUAGES), None)
 
 
 def dossier_miroir(compte):

@@ -49,6 +49,20 @@ Verification manuelle : Aide > Rechercher les mises a jour.
 3. CE QUE FAIT LA VERSION 0.3
 -----------------------------
 
+  Nouveau en 0.4.1 :
+    - OneDrive, Dropbox et Box en direct, comme Google Drive (actifs des
+      que l'auteur aura enregistre PhilPDF chez chacun) ;
+    - Reconnaitre le texte : plus d'erreur sur les PDF sans image ; les
+      pages qui ont deja du texte sont gardees telles quelles ;
+    - Biffer : tracer des zones, puis "Appliquer le biffage" les efface
+      definitivement du fichier (texte, images, dessins) ;
+    - vignettes et Organiser : glisser-deposer qui fait defiler la liste,
+      loupe au survol d'une page, molette pour zoomer dans la loupe ;
+    - tampons : date facultative ; a la pose, date du jour, autre date ou
+      sans date ;
+    - Accueil, clic droit sur un fichier : ouvrir son emplacement, copier
+      le chemin, OCR, resume IA, filigrane, en-tete, alleger.
+
   Nouveau en 0.4 :
     - Google Drive en direct, sans l'application de bureau : Preferences >
       Drive et dossiers > "Google Drive en direct : ajouter et autoriser" ;

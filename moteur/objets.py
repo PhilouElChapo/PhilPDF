@@ -34,13 +34,17 @@ FILIGRANES = [_('COPIE'), _('CONFIDENTIEL'), _('BROUILLON'), _('ORIGINAL'), _('D
 
 # ------------------------------------------------------------------ fabrication des objets
 def tampon_predefini(texte, couleur, auteur="", date=True):
-    """Tampon vectoriel : cadre arrondi, texte en gras, ligne de date dynamique."""
+    """Tampon vectoriel : cadre arrondi, texte en gras, ligne de date.
+    date : True = date du jour, une date (datetime.date) = cette date, None / False = sans date."""
     font = fitz.Font("hebo")
     taille = 22
     larg = max(font.text_length(texte, fontsize=taille), 90) + 34
     ligne2 = ""
     if date:
-        ligne2 = "le " + datetime.date.today().strftime("%d/%m/%Y") + (f"  par {auteur}" if auteur else "")
+        jour = datetime.date.today() if date is True else date
+        ligne2 = _("le {date}", date=jour.strftime("%d/%m/%Y")) + (_("  par {auteur}", auteur=auteur) if auteur else "")
+    elif auteur and date is None:
+        ligne2 = ""
     haut = 44 + (16 if ligne2 else 0)
     larg = max(larg, fitz.Font("helv").text_length(ligne2, fontsize=10) + 30)
     d = fitz.open()

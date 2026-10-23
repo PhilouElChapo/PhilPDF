@@ -13,6 +13,8 @@ Les identifiants d'application (client_id, secret) ne sont pas dans le code sour
 import base64, hashlib, html, http.server, json, os, secrets, socket, threading, time, urllib.parse, urllib.request, webbrowser
 from .langue import _
 
+PORTS_FIXES = [53682, 53683, 53684]      # a declarer chez Dropbox (qui exige le port exact)
+
 FOURNISSEURS = {
     "gdrive": {
         "nom": "Google Drive",
@@ -21,6 +23,36 @@ FOURNISSEURS = {
         "portee": "https://www.googleapis.com/auth/drive.file",
         "extra": {"access_type": "offline", "prompt": "consent"},
         "env": ("PHILPDF_GOOGLE_ID", "PHILPDF_GOOGLE_SECRET"),
+        "retour": "http://127.0.0.1:{port}",
+    },
+    "onedrive": {
+        "nom": "OneDrive",
+        "auth": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+        "jeton": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+        "portee": "Files.ReadWrite offline_access User.Read",
+        "extra": {"prompt": "select_account"},
+        "env": ("PHILPDF_ONEDRIVE_ID", "PHILPDF_ONEDRIVE_SECRET"),
+        "retour": "http://localhost:{port}",          # Microsoft : « http://localhost » declare, port libre
+    },
+    "dropbox": {
+        "nom": "Dropbox",
+        "auth": "https://www.dropbox.com/oauth2/authorize",
+        "jeton": "https://api.dropboxapi.com/oauth2/token",
+        "portee": "",
+        "extra": {"token_access_type": "offline"},
+        "env": ("PHILPDF_DROPBOX_ID", "PHILPDF_DROPBOX_SECRET"),
+        "retour": "http://localhost:{port}/",          # Dropbox : adresse exacte, port compris
+        "ports": PORTS_FIXES,
+    },
+    "box": {
+        "nom": "Box",
+        "auth": "https://account.box.com/api/oauth2/authorize",
+        "jeton": "https://api.box.com/oauth2/token",
+        "portee": "",
+        "extra": {},
+        "env": ("PHILPDF_BOX_ID", "PHILPDF_BOX_SECRET"),
+        "retour": "http://localhost:{port}/",
+        "ports": PORTS_FIXES,
     },
 }
 
@@ -121,11 +153,22 @@ def autoriser(fournisseur, ouvrir=webbrowser.open, delai=300, arret=lambda: Fals
             self.end_headers()
             self.wfile.write(corps)
 
-    serveur = http.server.HTTPServer(("127.0.0.1", 0), Retour)
+    serveur = None
+    for port in f.get("ports") or [0]:
+        try:
+            serveur = http.server.HTTPServer(("127.0.0.1", port), Retour)
+            break
+        except OSError:
+            continue
+    if serveur is None:
+        raise ErreurAutorisation(_("Les ports {ports} sont occupés : fermez l'application qui les utilise.",
+                                   ports=", ".join(map(str, f.get("ports", [])))))
     serveur.timeout = 0.5
-    redirection = f"http://127.0.0.1:{serveur.server_port}"
-    params = {"client_id": cid, "redirect_uri": redirection, "response_type": "code", "scope": f["portee"],
+    redirection = f.get("retour", "http://127.0.0.1:{port}").format(port=serveur.server_port)
+    params = {"client_id": cid, "redirect_uri": redirection, "response_type": "code",
               "code_challenge": defi, "code_challenge_method": "S256", "state": etat, **f["extra"]}
+    if f["portee"]:
+        params["scope"] = f["portee"]
     url = f["auth"] + "?" + urllib.parse.urlencode(params)
     if journal:
         journal(f"→ navigateur : {f['auth']} (retour sur {redirection})")

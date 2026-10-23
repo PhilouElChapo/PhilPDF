@@ -8,7 +8,8 @@ from .langue import _
 from .icones import icone
 from . import distant, coffre
 
-ICONES = {"reseau": "ouvrir", "synology": "archiver", "webdav": "lot", "ftp": "exporter", "gdrive": "synchro", "onedrive": "synchro"}
+ICONES = {"reseau": "ouvrir", "synology": "archiver", "webdav": "lot", "ftp": "exporter", "gdrive": "synchro",
+          "onedrive": "synchro", "dropbox": "synchro", "box": "synchro"}
 AIDE = {
     "reseau": _("Un dossier partagé déjà accessible depuis ce PC : \\\\NAS\\partage, une lettre de lecteur (Z:\\) ou /mnt/nas."),
     "synology": _("L'adresse de votre Synology dans le navigateur : http://nas:5000, https://nas:5001 ou une adresse "
@@ -19,8 +20,10 @@ AIDE = {
     "ftp": _("Nom ou adresse du serveur (ftp.exemple.fr, 192.168.1.20). Chiffrement conseillé ; « aucun » = FTP en clair."),
     "gdrive": _("Google Drive en direct, sans l'application de bureau : votre navigateur s'ouvre, vous autorisez PhilPDF, "
                 "c'est tout. PhilPDF ne voit que les fichiers qu'il crée ou que vous ouvrez avec lui."),
-    "onedrive": _("OneDrive en direct, par autorisation dans le navigateur : arrive dès que l'identifiant d'application "
-                "de PhilPDF sera enregistré."),
+    "onedrive": _("OneDrive en direct, sans l'application de bureau : votre navigateur s'ouvre, vous autorisez PhilPDF, "
+                  "c'est tout."),
+    "dropbox": _("Dropbox en direct : votre navigateur s'ouvre, vous autorisez PhilPDF, c'est tout."),
+    "box": _("Box en direct : votre navigateur s'ouvre, vous autorisez PhilPDF, c'est tout."),
 }
 
 
@@ -278,17 +281,17 @@ class DialogueCompte(QDialog):
         self.aide.setText(AIDE[t])
         self.adresse.setPlaceholderText(EXEMPLES.get(t, ""))
         serveur = t in ("synology", "webdav", "ftp")
-        for w, vis in ((self.adresse.parentWidget(), t not in ("gdrive", "onedrive")), (self.port, serveur),
+        for w, vis in ((self.adresse.parentWidget(), t not in distant.NUAGES), (self.port, serveur),
                        (self.utilisateur, serveur), (self.mdp, serveur), (self.chiffrement, t == "ftp"),
                        (self.dossier, serveur), (self.libre, serveur), (self.note, serveur),
-                       (self.b_autoriser.parentWidget(), t in ("gdrive", "onedrive"))):
+                       (self.b_autoriser.parentWidget(), t in distant.NUAGES)):
             self.f.setRowVisible(w, vis)
-        if t in ("gdrive", "onedrive"):
+        if t in distant.NUAGES:
             self._maj_auth()
         self.b_choisir.setVisible(t == "reseau")
         self.port.setToolTip(PORTS.get(t, ""))
         from . import oauth
-        self.b_test.setEnabled(t not in ("gdrive", "onedrive") or bool(coffre.lire(self.c["id"] + ".jeton")))
+        self.b_test.setEnabled(t not in distant.NUAGES or bool(coffre.lire(self.c["id"] + ".jeton")))
         self._maj_port()
         self.adjustSize()
 

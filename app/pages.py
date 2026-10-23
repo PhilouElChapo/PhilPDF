@@ -246,6 +246,7 @@ class PageAccueil(QWidget):
     ouvrir = Signal(str)
     ouvrir_dialogue = Signal()
     ouvrir_distant = Signal()
+    action_fichier = Signal(str, str)     # chemin, action (menu clic droit des fichiers recents)
     reprendre = Signal()          # reprendre la session proposee (remplace les fichiers ouverts)
     synchroniser = Signal()       # fenetre de synchronisation manuelle
 
@@ -330,6 +331,8 @@ class PageAccueil(QWidget):
                                  "QListWidget::item{padding:10px;border-bottom:1px solid #f0f0f0}"
                                  "QListWidget::item:hover{background:#f4f7fb}")
         self.liste.itemActivated.connect(lambda it: self.ouvrir.emit(it.data(Qt.UserRole)))
+        self.liste.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.liste.customContextMenuRequested.connect(self._menu_fichier)
         self.liste.itemClicked.connect(lambda it: self.ouvrir.emit(it.data(Qt.UserRole)))
         v.addWidget(self.liste, 1)
         self.rafraichir()
@@ -347,6 +350,33 @@ class PageAccueil(QWidget):
         self.bandeau.setText(_('Poste : <b>{machine}</b>. ', machine=self.params['machine']) + (
                 _('Drive : ') + self.params["drive"] if self.params.get("drive") else
             _('Indiquez votre Drive dans Edition › Préférences pour retrouver vos fichiers ouverts et vos tampons sur vos autres PC.')))
+
+    def _menu_fichier(self, pos):
+        it = self.liste.itemAt(pos)
+        if not it:
+            return
+        chemin = it.data(Qt.UserRole)
+        existe = os.path.exists(chemin)
+        from PySide6.QtWidgets import QMenu
+        m = QMenu(self)
+
+        def act(ic, texte, action, actif=True):
+            a = m.addAction(icone(ic, "#444444"), texte)
+            a.setEnabled(actif)
+            a.triggered.connect(lambda: self.action_fichier.emit(chemin, action))
+        act("ouvrir", _("Ouvrir"), "ouvrir", existe)
+        act("archiver", _("Ouvrir l'emplacement du fichier"), "emplacement", existe)
+        m.addSeparator()
+        act("ocr", _("Reconnaître le texte (OCR)..."), "ocr", existe)
+        act("ia", _("Résumer avec l'IA..."), "resume", existe)
+        act("filigrane", _("Ajouter un filigrane..."), "filigrane", existe)
+        act("entete", _("En-tête et pied de page..."), "entete", existe)
+        act("alleger", _("Alléger le fichier..."), "alleger", existe)
+        act("imprimer", _("Imprimer..."), "imprimer", existe)
+        m.addSeparator()
+        act("copier", _("Copier le chemin"), "copier_chemin")
+        act("fermer", _("Retirer de la liste"), "retirer")
+        m.exec(self.liste.viewport().mapToGlobal(pos))
 
     def montrer_synchro(self, machine, date, fichiers, resultats):
         from .session import date_fr, nb_fichiers

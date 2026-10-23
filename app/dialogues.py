@@ -280,12 +280,12 @@ class PanneauBibliotheque(QWidget):
             self.rafraichir(e)
 
     def texte_perso(self):
-        t, ok = QInputDialog.getText(self, _('Tampon personnalisé'), _('Texte du tampon :'))
-        if ok and t.strip():
-            c = QColorDialog.getColor(QColor("#c9252d"), self, _('Couleur du tampon'))
-            rgb = c.getRgbF()[:3] if c.isValid() else (0.79, 0.15, 0.18)
-            e = self.b.ajouter("tampons", t.strip(), objets.tampon_predefini(t.strip().upper(), rgb, self.auteur),
-                               dynamique=True, texte=t.strip().upper(), couleur=list(rgb))
+        d = DialogueTamponTexte(self, self.auteur)
+        if d.exec() == QDialog.Accepted and d.texte.text().strip():
+            t = d.texte.text().strip().upper()
+            rgb = d.couleur.getRgbF()[:3]
+            e = self.b.ajouter("tampons", d.texte.text().strip(), objets.tampon_predefini(t, rgb, self.auteur, d.date.isChecked()),
+                               dynamique=True, texte=t, couleur=list(rgb), date=d.date.isChecked())
             self.rafraichir(e)
 
     def dessiner(self):
@@ -340,8 +340,117 @@ class PanneauBibliotheque(QWidget):
         if not e:
             return None, None
         if e.get("dynamique"):
-            return e, objets.tampon_predefini(e["texte"], tuple(e["couleur"]), self.auteur)
+            pdf = tampon_a_poser(self, e, self.auteur)
+            return (e, pdf) if pdf else (None, None)
         return e, self.b.lire(e)
+
+
+def tampon_a_poser(parent, e, auteur=""):
+    """PDF du tampon a poser. Tampon date : on demande la date (du jour, autre, ou aucune). None si abandon."""
+    if not e.get("date", True):
+        return objets.tampon_predefini(e["texte"], tuple(e["couleur"]), auteur, False)
+    d = DialogueDateTampon(parent, e, auteur)
+    if d.exec() != QDialog.Accepted:
+        return None
+    return objets.tampon_predefini(e["texte"], tuple(e["couleur"]), auteur, d.date_choisie())
+
+
+class DialogueDateTampon(QDialog):
+    """Au moment de poser un tampon date : date du jour (par defaut), autre date ou sans date ; apercu."""
+    memoire = "jour"
+
+    def __init__(self, parent, e, auteur=""):
+        super().__init__(parent)
+        from PySide6.QtWidgets import QDateEdit
+        from PySide6.QtCore import QDate
+        self.e, self.auteur = e, auteur
+        self.setWindowTitle(_("Date du tampon « {nom} »", nom=e.get("nom", "")))
+        self.setMinimumWidth(380)
+        v = QVBoxLayout(self)
+        self.r_jour = QRadioButton(_("Date du jour ({date})", date=datetime.date.today().strftime("%d/%m/%Y")))
+        self.r_autre = QRadioButton(_("Autre date :"))
+        self.r_sans = QRadioButton(_("Sans date"))
+        self.quand = QDateEdit(QDate.currentDate())
+        self.quand.setCalendarPopup(True)
+        self.quand.setDisplayFormat("dd/MM/yyyy")
+        v.addWidget(self.r_jour)
+        h = QHBoxLayout()
+        h.addWidget(self.r_autre)
+        h.addWidget(self.quand)
+        h.addStretch()
+        v.addLayout(h)
+        v.addWidget(self.r_sans)
+        {"jour": self.r_jour, "autre": self.r_autre, "sans": self.r_sans}[DialogueDateTampon.memoire].setChecked(True)
+        self.apercu = QLabel()
+        self.apercu.setAlignment(Qt.AlignCenter)
+        self.apercu.setMinimumHeight(90)
+        self.apercu.setStyleSheet("background:#fff;border:1px solid #e5e5e5;border-radius:6px")
+        v.addWidget(self.apercu)
+        bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
+        bb.button(QDialogButtonBox.Ok).setText(_("Poser"))
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        v.addWidget(bb)
+        for r in (self.r_jour, self.r_autre, self.r_sans):
+            r.toggled.connect(self._maj)
+        self.quand.dateChanged.connect(lambda *_a: (self.r_autre.setChecked(True), self._maj()))
+        self._maj()
+
+    def date_choisie(self):
+        if self.r_sans.isChecked():
+            return None
+        if self.r_autre.isChecked():
+            q = self.quand.date()
+            return datetime.date(q.year(), q.month(), q.day())
+        return True
+
+    def _maj(self, *_a):
+        DialogueDateTampon.memoire = "sans" if self.r_sans.isChecked() else "autre" if self.r_autre.isChecked() else "jour"
+        pdf = objets.tampon_predefini(self.e["texte"], tuple(self.e["couleur"]), self.auteur, self.date_choisie())
+        self.apercu.setPixmap(_pix_depuis_png(objets.apercu(pdf, 70), 70))
+
+
+class DialogueTamponTexte(QDialog):
+    """Nouveau tampon texte : texte, couleur, et date en option (choisie a la pose)."""
+
+    def __init__(self, parent, auteur=""):
+        super().__init__(parent)
+        self.auteur = auteur
+        self.setWindowTitle(_('Tampon personnalisé'))
+        f = QFormLayout(self)
+        self.texte = QLineEdit()
+        self.texte.setPlaceholderText(_("ex. SAISI, A TRAITER, TRANSMIS"))
+        f.addRow(_('Texte du tampon :'), self.texte)
+        self.couleur = QColor("#c9252d")
+        self.b_coul = QPushButton()
+        self.b_coul.clicked.connect(self._coul)
+        f.addRow(_('Couleur'), self.b_coul)
+        self.date = QCheckBox(_("Tampon daté (la date est choisie au moment de le poser)"))
+        f.addRow(self.date)
+        self.apercu = QLabel()
+        self.apercu.setAlignment(Qt.AlignCenter)
+        self.apercu.setMinimumHeight(90)
+        self.apercu.setStyleSheet("background:#fff;border:1px solid #e5e5e5;border-radius:6px")
+        f.addRow(self.apercu)
+        bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        f.addRow(bb)
+        self.texte.textChanged.connect(self._maj)
+        self.date.toggled.connect(self._maj)
+        self._maj()
+
+    def _coul(self):
+        c = QColorDialog.getColor(self.couleur, self, _('Couleur du tampon'))
+        if c.isValid():
+            self.couleur = c
+            self._maj()
+
+    def _maj(self, *_a):
+        self.b_coul.setStyleSheet(f"background:{self.couleur.name()};min-height:22px;border:1px solid #999;border-radius:4px")
+        t = self.texte.text().strip().upper() or _("TAMPON")
+        pdf = objets.tampon_predefini(t, self.couleur.getRgbF()[:3], self.auteur, self.date.isChecked())
+        self.apercu.setPixmap(_pix_depuis_png(objets.apercu(pdf, 70), 70))
 
 
 class DialogueBibliotheque(QDialog):

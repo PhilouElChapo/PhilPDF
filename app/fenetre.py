@@ -34,7 +34,14 @@ class TacheScan(QThread):
     def run(self):
         try:
             from moteur.scan import traiter
-            traiter(self.entree, self.sortie)
+            r = traiter(self.entree, self.sortie)
+            if all(x[2] is None for x in r):          # aucune page scannee : rien a reconnaitre
+                try:
+                    os.remove(self.sortie)
+                except OSError:
+                    pass
+                self.fini.emit("", "__deja__")
+                return
             self.fini.emit(self.sortie, "")
         except Exception as e:
             self.fini.emit("", str(e))
@@ -50,6 +57,24 @@ class TacheMaj(QThread):
     def run(self):
         from .mise_a_jour import chercher
         self.trouve.emit(chercher(self.params))
+
+
+def montrer_dans_explorateur(chemin):
+    """Ouvre le gestionnaire de fichiers sur le dossier du fichier, le fichier selectionne."""
+    import subprocess
+    chemin = os.path.normpath(chemin)
+    try:
+        if sys.platform == "win32":
+            subprocess.Popen(f'explorer /select,"{chemin}"')
+            return
+        try:                                     # Linux : gestionnaire de fichiers standard (Nautilus, Dolphin...)
+            subprocess.run(["dbus-send", "--session", "--dest=org.freedesktop.FileManager1", "--type=method_call",
+                            "/org/freedesktop/FileManager1", "org.freedesktop.FileManager1.ShowItems",
+                            f"array:string:file://{chemin}", "string:"], check=True, timeout=5)
+        except (OSError, subprocess.SubprocessError):
+            subprocess.Popen(["xdg-open", os.path.dirname(chemin)])
+    except OSError:
+        pass
 
 
 class TacheTelechargement(QThread):
@@ -161,6 +186,7 @@ class Fenetre(QMainWindow):
         self.accueil.ouvrir.connect(self.ouvrir)
         self.accueil.ouvrir_dialogue.connect(self.dialogue_ouvrir)
         self.accueil.ouvrir_distant.connect(lambda: self.ouvrir_distant())
+        self.accueil.action_fichier.connect(self.action_fichier)
         self.accueil.reprendre.connect(self.reprendre_proposee)
         self.accueil.synchroniser.connect(self.synchroniser)
         self.synchro = None              # (machine, date, fichiers, resultats) trouve au demarrage
@@ -409,6 +435,22 @@ class Fenetre(QMainWindow):
     def dialogue_ouvrir(self):
         for f in QFileDialog.getOpenFileNames(self, _('Ouvrir'), self.dossier_depart(), FILTRE)[0]:
             self.ouvrir(f)
+
+    def action_fichier(self, chemin, action):
+        """Menu clic droit d'un fichier recent de l'Accueil."""
+        if action == "emplacement":
+            montrer_dans_explorateur(chemin)
+        elif action == "copier_chemin":
+            QApplication.clipboard().setText(chemin)
+            self.statusBar().showMessage(_("Chemin copié : {chemin}", chemin=chemin), 5000)
+        elif action == "retirer":
+            self.params["recents"] = [p for p in self.params["recents"] if p != chemin]
+            self.params.enregistrer()
+            self.accueil.rafraichir()
+        else:
+            o = self.ouvrir(chemin)
+            if o and action != "ouvrir":
+                self.lancer_outil({"resume": "ia_resume"}.get(action, action))
 
     def dossier_depart(self):
         """Dernier dossier ouvert ; a defaut Documents ; a defaut le dossier utilisateur."""
@@ -719,7 +761,9 @@ class Fenetre(QMainWindow):
             o.ouvrir_bibliotheque("tampons")
         elif oid in ("filigrane", "entete", "fond"):
             self.mise_en_page(o, oid)
-        elif oid == "commentaires" or oid == "biffer":
+        elif oid == "biffer":
+            o.changer_mode("biffer")
+        elif oid == "commentaires":
             self.statusBar().showMessage(_('Sélectionnez du texte : la barre rapide apparaît au-dessus de la sélection.'), 10000)
         elif oid == "remplir_signer":
             o.ouvrir_bibliotheque("signatures")
@@ -1008,8 +1052,12 @@ class Fenetre(QMainWindow):
 
         def fin(chemin, err):
             prog.close()
-            if err:
-                QMessageBox.warning(self, _('Reconnaître le texte'), err)
+            if err == "__deja__":
+                QMessageBox.information(self, _('Reconnaître le texte'),
+                                        _("Ce document contient déjà du texte sur toutes ses pages : il n'y a rien à "
+                                          "reconnaître. (La reconnaissance sert aux scans et aux photos de documents.)"))
+            elif err:
+                QMessageBox.warning(self, _('Reconnaître le texte'), _("La reconnaissance a échoué :\n{e}", e=err))
             else:
                 self.ouvrir(chemin)
                 self.statusBar().showMessage(_('Texte reconnu : {nom}', nom=os.path.basename(chemin)), 10000)
@@ -1094,21 +1142,24 @@ class Fenetre(QMainWindow):
         drive = QComboBox()
         drive.addItem(_('(aucun)'), "")
         for c in self.params.get("comptes", []):
-            if c["type"] in ("gdrive", "onedrive"):
+            if c["type"] in distant.NUAGES:
                 drive.addItem(icone("synchro", "#0f6cbd"), _("{nom} — en direct", nom=distant.libelle(c)), "compte:" + c["id"])
         for nom, chemin in detecter_clouds():
             drive.addItem(icone("ouvrir", "#c8a000"), _("{nom} — dossier de l'application de bureau ({chemin})", nom=nom, chemin=chemin), chemin)
         if self.params.get("drive") and not self.params.get("drive_compte") and drive.findData(self.params["drive"]) < 0:
             drive.addItem(self.params["drive"], self.params["drive"])
-        drive.addItem(icone("plus", "#0f6cbd"), _("Google Drive en direct : ajouter et autoriser..."), "nouveau:gdrive")
+        from . import oauth
+        for t in distant.NUAGES:
+            if oauth.disponible(t):
+                drive.addItem(icone("plus", "#0f6cbd"), _("{nom} en direct : ajouter et autoriser...", nom=distant.TYPES[t]), "nouveau:" + t)
         actuel = "compte:" + self.params["drive_compte"] if self.params.get("drive_compte") else self.params.get("drive", "")
         drive.setCurrentIndex(max(0, drive.findData(actuel)))
 
         def drive_choisi(i):
-            if drive.itemData(i) != "nouveau:gdrive":
+            if not (drive.itemData(i) or "").startswith("nouveau:"):
                 return
             from .dialogues_distant import DialogueCompte
-            dc = DialogueCompte(d, distant.nouveau_compte("gdrive"))
+            dc = DialogueCompte(d, distant.nouveau_compte(drive.itemData(i)[8:]))
             if dc.exec() == QDialog.Accepted:
                 c = dc.compte()
                 self.params["comptes"] = [x for x in self.params.get("comptes", []) if x["id"] != c["id"]] + [c]

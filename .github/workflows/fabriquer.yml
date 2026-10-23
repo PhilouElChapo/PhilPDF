@@ -48,6 +48,9 @@ jobs:
       - name: Test de Google Drive (Google simule)
         run: python tests/test_gdrive.py
 
+      - name: Tests OneDrive, Dropbox, Box
+        run: python tests/test_nuages.py
+
       - name: Test des preferences (export, import)
         run: python tests/test_reglages.py
 
@@ -73,12 +76,20 @@ jobs:
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          ONEDRIVE_CLIENT_ID: ${{ secrets.ONEDRIVE_CLIENT_ID }}
+          DROPBOX_CLIENT_ID: ${{ secrets.DROPBOX_CLIENT_ID }}
+          BOX_CLIENT_ID: ${{ secrets.BOX_CLIENT_ID }}
+          BOX_CLIENT_SECRET: ${{ secrets.BOX_CLIENT_SECRET }}
         run: |
           import os
-          g = {"id": os.environ.get("GOOGLE_CLIENT_ID", ""), "secret": os.environ.get("GOOGLE_CLIENT_SECRET", "")}
+          ids = {}
+          for cle, env in (("gdrive", "GOOGLE"), ("onedrive", "ONEDRIVE"), ("dropbox", "DROPBOX"), ("box", "BOX")):
+              i = os.environ.get(env + "_CLIENT_ID", "")
+              if i:
+                  ids[cle] = {"id": i, "secret": os.environ.get(env + "_CLIENT_SECRET", "") or None}
+              print(cle, ":", "identifiant present" if i else "secret " + env + "_CLIENT_ID absent")
           with open("app/identifiants.py", "w") as f:
-              f.write("IDENTIFIANTS = " + repr({"gdrive": g} if g["id"] else {}) + "\n")
-          print("Google Drive :", "identifiant present" if g["id"] else "secret GOOGLE_CLIENT_ID absent")
+              f.write("IDENTIFIANTS = " + repr(ids) + "\n")
 
       - name: PhilPDF.exe
         run: >
