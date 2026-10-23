@@ -1,4 +1,5 @@
-"""Boite aux lettres de PhilPDF sur un Drive « en direct » (sans l'application de bureau du Drive).
+"""Boite aux lettres de PhilPDF sur un emplacement de synchronisation : Drive « en direct » (sans l'application de
+bureau), NAS (Synology, WebDAV), FTP ou dossier reseau. Le dossier PhilPDF est cree dans le dossier du compte.
 
 Le dossier PhilPDF du Drive (session, correspondances, preferences, sauvegarde des tampons et signatures)
 est recopie dans un dossier miroir local ; le reste de PhilPDF lit et ecrit ce miroir comme un dossier
@@ -14,9 +15,18 @@ from . import distant
 RACINE_DISTANTE = "/PhilPDF"
 
 
+def racine_distante(compte):
+    return posixpath.join(compte.get("dossier") or "/", "PhilPDF")
+
+
+def libelle_compte(c):
+    return distant.libelle(c)
+
+
 def compte_drive(params):
+    """Compte choisi comme emplacement de synchronisation (Drive en direct, NAS, FTP...), ou None."""
     cid = params.get("drive_compte")
-    return next((c for c in params.get("comptes", []) if c["id"] == cid and c["type"] in distant.NUAGES), None)
+    return next((c for c in params.get("comptes", []) if c["id"] == cid and c["type"] in distant.TYPES), None)
 
 
 def dossier_miroir(compte):
@@ -81,6 +91,7 @@ def synchroniser(params, compte=None, emplacement=None):
     except (OSError, ValueError):
         etat = {}
     nouvel_etat, recus, envoyes = {}, 0, 0
+    RACINE_DISTANTE = racine_distante(compte)
 
     def local_de(rel):
         return os.path.join(local_racine, *rel.split("/"))

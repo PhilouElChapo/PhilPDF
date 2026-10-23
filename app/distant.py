@@ -99,6 +99,24 @@ class Emplacement:
     def fermer(self):
         pass
 
+    def modifies(self, dossier):
+        """{nom: (taille, repere de version, est_dossier)} pour la synchronisation ; {} si le dossier n'existe pas."""
+        try:
+            elems = self.lister(dossier)
+        except ErreurDistant:
+            d = dossier.rstrip("/")
+            if not d:
+                raise
+            parent = posixpath.dirname(d) or "/"
+            if posixpath.basename(d) not in self.modifies(parent):     # dossier absent (pas une panne) : rien
+                return {}
+            raise
+        return {e.nom: (e.taille, f"{e.date}|{e.taille}", e.dossier) for e in elems}
+
+    def creer_dossiers(self, chemin):
+        """Cree les dossiers parents de chemin s'ils manquent (avant un envoi)."""
+        pass
+
 
 # ---------------------------------------------------------------------------------- dossier reseau
 class Reseau(Emplacement):
@@ -132,6 +150,7 @@ class Reseau(Emplacement):
 
     def envoyer(self, local, chemin):
         import shutil
+        os.makedirs(os.path.dirname(self._local(chemin)), exist_ok=True)
         shutil.copy2(local, self._local(chemin))
 
 
@@ -224,7 +243,8 @@ class WebDAV(_Http):
                 continue
             est_dossier = rep.find(".//d:resourcetype/d:collection", ns) is not None
             taille = int(rep.findtext(".//d:getcontentlength", "0", ns) or 0)
-            out.append(Element(posixpath.basename(href.rstrip("/")), href.rstrip("/") or "/", est_dossier, taille))
+            date = rep.findtext(".//d:getlastmodified", "", ns) or ""
+            out.append(Element(posixpath.basename(href.rstrip("/")), href.rstrip("/") or "/", est_dossier, taille, date))
         return sorted(out, key=lambda e: (not e.dossier, e.nom.lower()))
 
     def telecharger(self, chemin, local):
@@ -232,8 +252,21 @@ class WebDAV(_Http):
             g.write(f.read())
 
     def envoyer(self, local, chemin):
+        self.creer_dossiers(chemin)
         with open(local, "rb") as f:
             self._req("PUT", chemin, f.read(), {"Content-Type": "application/pdf"}).close()
+
+    def creer_dossiers(self, chemin):
+        parties = [x for x in posixpath.dirname(chemin).split("/") if x]
+        for i in range(1, len(parties) + 1):
+            d = "/" + "/".join(parties[:i]) + "/"
+            if d in getattr(self, "_dossiers_vus", set()):
+                continue
+            try:
+                self._req("MKCOL", d).close()
+            except ErreurDistant:
+                pass                                   # deja la (405) : normal
+            self.__dict__.setdefault("_dossiers_vus", set()).add(d)
 
 
 # ---------------------------------------------------------------------------------- FTP / FTPS
@@ -290,14 +323,19 @@ class FTP(Emplacement):
                 for nom, faits in f.mlsd(dossier, facts=["type", "size", "modify"]):
                     if nom in (".", "..") or faits.get("type") in ("cdir", "pdir"):
                         continue
-                    out.append(Element(nom, _joindre(dossier, nom), faits.get("type") == "dir", int(faits.get("size") or 0)))
+                    out.append(Element(nom, _joindre(dossier, nom), faits.get("type") == "dir", int(faits.get("size") or 0),
+                                       faits.get("modify", "")))
             except ftplib.error_perm:
                 lignes = []
-                f.retrlines(f"LIST {dossier}", lignes.append)
+                try:
+                    f.retrlines(f"LIST {dossier}", lignes.append)
+                except ftplib.error_perm:
+                    raise ErreurDistant(_("Dossier inaccessible : {dossier}", dossier=dossier))
                 for l in lignes:
                     p = l.split(None, 8)
                     if len(p) == 9 and p[8] not in (".", ".."):
-                        out.append(Element(p[8], _joindre(dossier, p[8]), l.startswith("d"), int(p[4]) if p[4].isdigit() else 0))
+                        out.append(Element(p[8], _joindre(dossier, p[8]), l.startswith("d"), int(p[4]) if p[4].isdigit() else 0,
+                                           " ".join(p[5:8])))
             return sorted(out, key=lambda e: (not e.dossier, e.nom.lower()))
         finally:
             f.close()
@@ -313,6 +351,12 @@ class FTP(Emplacement):
     def _envoyer(self, local, chemin):
         f = self._connexion()
         try:
+            parties = [x for x in posixpath.dirname(chemin).split("/") if x]
+            for i in range(1, len(parties) + 1):
+                try:
+                    f.mkd("/" + "/".join(parties[:i]))
+                except ftplib.error_perm:
+                    pass                               # deja la
             with open(local, "rb") as g:
                 f.storbinary(f"STOR {chemin}", g)
         finally:
@@ -420,7 +464,8 @@ class Synology(_Http):
             d = self._api({"api": "SYNO.FileStation.List", "version": "2", "method": "list", "folder_path": dossier,
                            "additional": '["size","time"]'})
             elems = d.get("files", [])
-        out = [Element(e["name"], e["path"], bool(e.get("isdir")), (e.get("additional") or {}).get("size", 0))
+        out = [Element(e["name"], e["path"], bool(e.get("isdir")), (e.get("additional") or {}).get("size", 0),
+                       ((e.get("additional") or {}).get("time") or {}).get("mtime", 0))
                for e in elems]
         return sorted(out, key=lambda e: (not e.dossier, e.nom.lower()))
 

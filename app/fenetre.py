@@ -211,8 +211,9 @@ class Fenetre(QMainWindow):
             self.params.enregistrer()
             self.verifier_maj(silencieux=True)
         from PySide6.QtCore import QTimer
-        if getattr(self.params, "nouveau", False):
-            QTimer.singleShot(600, self.proposer_reglages_drive)
+        if getattr(self.params, "nouveau", False) or not (self.params.get("bienvenue_vue") or self.params.get("drive")
+                                                          or self.params.get("drive_compte")):
+            QTimer.singleShot(600, self.bienvenue)
         if miroir.compte_drive(self.params):
             QTimer.singleShot(800, lambda: self.synchro_miroir(au_demarrage=True))
         elif self.params.get("synchro", True):
@@ -516,7 +517,7 @@ class Fenetre(QMainWindow):
 
         def fini(res, err):
             if err:
-                self.statusBar().showMessage(_("Drive injoignable : {raison}", raison=err[:120]), 8000)
+                self.statusBar().showMessage(_("Emplacement de synchronisation injoignable : {raison}", raison=err[:120]), 8000)
             if au_demarrage:
                 self._synchro_biblio()
                 if self.params.get("synchro", True):
@@ -551,9 +552,12 @@ class Fenetre(QMainWindow):
             self.reprendre(ouvrir, remplacer=True)
 
     def synchroniser(self):
+        if not (self.params.get("drive") or miroir.compte_drive(self.params)):
+            self.bienvenue(seulement_synchro=True)
+            return
         s = session_de(self.params)
         if not s.autres_machines():
-            QMessageBox.information(self, _('Synchroniser'), _("Aucun autre poste n'a encore de session. Indiquez le même Drive dans Edition › Préférences sur chacun de vos PC."))
+            QMessageBox.information(self, _('Synchroniser'), _("Aucun autre poste n'a encore de session. Choisissez le même emplacement de synchronisation dans Edition › Préférences sur chacun de vos PC."))
             return
         m, res = (self.synchro[0], self.synchro[3]) if self.synchro else (None, None)
         d = DialogueSynchro(self, s, m, res, len(self.documents()))
@@ -1139,44 +1143,12 @@ class Fenetre(QMainWindow):
 
         # ---------------- Drive et dossiers
         f = page(_('Drive et dossiers'))
-        drive = QComboBox()
-        drive.addItem(_('(aucun)'), "")
-        for c in self.params.get("comptes", []):
-            if c["type"] in distant.NUAGES:
-                drive.addItem(icone("synchro", "#0f6cbd"), _("{nom} — en direct", nom=distant.libelle(c)), "compte:" + c["id"])
-        for nom, chemin in detecter_clouds():
-            drive.addItem(icone("ouvrir", "#c8a000"), _("{nom} — dossier de l'application de bureau ({chemin})", nom=nom, chemin=chemin), chemin)
-        if self.params.get("drive") and not self.params.get("drive_compte") and drive.findData(self.params["drive"]) < 0:
-            drive.addItem(self.params["drive"], self.params["drive"])
-        from . import oauth
-        for t in distant.NUAGES:
-            if oauth.disponible(t):
-                drive.addItem(icone("plus", "#0f6cbd"), _("{nom} en direct : ajouter et autoriser...", nom=distant.TYPES[t]), "nouveau:" + t)
-        actuel = "compte:" + self.params["drive_compte"] if self.params.get("drive_compte") else self.params.get("drive", "")
-        drive.setCurrentIndex(max(0, drive.findData(actuel)))
-
-        def drive_choisi(i):
-            if not (drive.itemData(i) or "").startswith("nouveau:"):
-                return
-            from .dialogues_distant import DialogueCompte
-            dc = DialogueCompte(d, distant.nouveau_compte(drive.itemData(i)[8:]))
-            if dc.exec() == QDialog.Accepted:
-                c = dc.compte()
-                self.params["comptes"] = [x for x in self.params.get("comptes", []) if x["id"] != c["id"]] + [c]
-                self.params.enregistrer()
-                drive.insertItem(1, icone("synchro", "#0f6cbd"), _("{nom} — en direct", nom=distant.libelle(c)), "compte:" + c["id"])
-                drive.setCurrentIndex(1)
-            else:
-                drive.setCurrentIndex(0)
-        drive.currentIndexChanged.connect(drive_choisi)
-        b = QPushButton(_('Autre...'))
-        b.clicked.connect(lambda: (lambda p: p and (drive.addItem(p, p), drive.setCurrentIndex(drive.count() - 1)))(
-            QFileDialog.getExistingDirectory(d, _('Dossier du Drive sur ce PC'))))
+        from .synchro_choix import combo_emplacements
+        drive = combo_emplacements(d, self.params)
         hs = QHBoxLayout()
         hs.addWidget(drive, 1)
-        hs.addWidget(b)
-        f.addRow(_('Drive (Google Drive, OneDrive...)'), hs)
-        note(f, _('Le Drive sert de boîte aux lettres à PhilPDF : sauvegarde des tampons et signatures, et liste des fichiers ouverts sur chaque poste (leurs emplacements, jamais les PDF eux-mêmes).'))
+        f.addRow(_('Synchronisation entre vos postes'), hs)
+        note(f, _("Cet emplacement (Drive, NAS, FTP ou dossier partagé) sert de boîte aux lettres à PhilPDF entre vos postes : préférences, tampons et signatures, apprentissages, et liste des fichiers ouverts sur chaque poste (leurs emplacements, jamais les PDF eux-mêmes). Choisissez le même sur chaque poste."))
         connus = dossiers_connus()
         for clef, lib in (("documents", _('Documents')), ("telechargements", _('Téléchargements')), ("bureau", _('Bureau'))):
             lb = QLabel(connus.get(clef, _('(non trouvé)')))
@@ -1294,9 +1266,9 @@ class Fenetre(QMainWindow):
         if d.exec() != QDialog.Accepted:
             return
         ancienne_langue = self.params.get("langue", "auto")
+        from .synchro_choix import valeurs as synchro_valeurs
         self.params.update(machine=machine.text().strip() or self.params["machine"],
-                           drive=self._chemin_drive(drive.currentData()),
-                           drive_compte=(drive.currentData() or "")[7:] if (drive.currentData() or "").startswith("compte:") else "",
+                           drive=synchro_valeurs(drive, self.params)[0], drive_compte=synchro_valeurs(drive, self.params)[1],
                            auteur=auteur.text().strip(), fixer_objets=fixer.isChecked(),
                            nas=nas.text().strip(), synchro=sync.isChecked(), langue=langue.currentData(),
                            racines=[racines.item(i).text() for i in range(racines.count())],
@@ -1408,11 +1380,50 @@ class Fenetre(QMainWindow):
                     [(_("Redémarrer"), QMessageBox.AcceptRole), (_("Plus tard"), QMessageBox.RejectRole)]) == 0:
             self.redemarrer()
 
-    def proposer_reglages_drive(self):
-        """Nouvelle installation : des preferences PhilPDF existent sur un Drive de ce PC -> proposer de les reprendre."""
-        trouves = reglages.trouver_sur_drives()
-        if not trouves:
+    def bienvenue(self, seulement_synchro=False):
+        """Assistant : langue, nom, poste et emplacement de synchronisation ; puis reprise des preferences trouvees."""
+        from .bienvenue import DialogueBienvenue
+        nouveau = getattr(self.params, "nouveau", False)
+        dl = DialogueBienvenue(self, self.params, seulement_synchro)
+        if dl.exec() != QDialog.Accepted:
+            self.params["bienvenue_vue"] = True
+            self.params.enregistrer()
             return
+        langue_changee = dl.appliquer()
+        c = miroir.compte_drive(self.params)
+        if c:                                        # premiere synchro tout de suite, pour trouver l'existant
+            from PySide6.QtWidgets import QApplication
+            from PySide6.QtGui import QCursor
+            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+            try:
+                miroir.synchroniser(self.params, c)
+            except distant.ErreurDistant as ex:
+                QApplication.restoreOverrideCursor()
+                erreur_distant(self, _("Synchronisation"), ex)
+            else:
+                QApplication.restoreOverrideCursor()
+        trouve = None
+        p = reglages.chemin_drive(self.params)
+        if p:
+            d = reglages.lire_drive(p)
+            if d.get("communs") and (nouveau or d["communs"].get("par") != self.params.get("machine")):
+                trouve = (miroir.libelle_compte(c) if c else os.path.dirname(os.path.dirname(p)), os.path.dirname(os.path.dirname(p)), d)
+        if trouve:
+            if self.proposer_reglages_drive(trouve):
+                return
+        reglages.ecrire_drive(self.params)
+        if langue_changee:
+            self.redemarrer()
+        elif c:
+            self.synchro_miroir(au_demarrage=True)
+        else:
+            self._synchro_biblio()
+
+    def proposer_reglages_drive(self, trouve=None):
+        """Des preferences PhilPDF existent sur l'emplacement de synchronisation -> proposer de les reprendre."""
+        trouves = [trouve] if trouve else reglages.trouver_sur_drives()
+        if not trouves:
+            return False
         nom, racine, d = trouves[0]
         postes = sorted(d.get("postes", {}).items(), key=lambda kv: kv[1].get("maj", ""), reverse=True)
         if question(self, _("Bienvenue dans PhilPDF"),
@@ -1420,7 +1431,7 @@ class Fenetre(QMainWindow):
                       "Les reprendre sur ce poste ?", drive=nom, poste=d["communs"].get("par", "?"),
                       date=date_fr(d["communs"].get("maj", ""))),
                     [(_("Reprendre"), QMessageBox.AcceptRole), (_("Non merci"), QMessageBox.RejectRole)]) != 0:
-            return
+            return False
         donnees = {"philpdf": 1, "date": d["communs"].get("maj", ""), "communs": d["communs"], "poste": {}}
         if postes:
             libs = [_("Nouveau poste (garder le nom « {nom} »)", nom=self.params["machine"])] + \
@@ -1431,8 +1442,10 @@ class Fenetre(QMainWindow):
         reglages.appliquer(self.params, donnees, True, bool(donnees["poste"]), False)
         if not self.params.get("drive") or not os.path.isdir(self.params.get("drive", "")):
             self.params["drive"] = racine
-            self.params.enregistrer()
+        self.params["bienvenue_vue"] = True
+        self.params.enregistrer()
         self.redemarrer()
+        return True
 
     def _chemin_drive(self, donnee):
         """Dossier « Drive » utilise par PhilPDF : dossier de l'application de bureau, ou miroir local d'un Drive en direct."""

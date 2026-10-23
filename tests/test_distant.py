@@ -140,6 +140,36 @@ verifie([x.nom for x in e.lister("/")] == ["Factures"], "Synology : dossiers par
 verifie(coffre.lire(c["id"] + ".appareil") == "APPAREIL", "Synology : appareil mémorisé (plus de code ensuite)")
 scenario("Synology", distant.emplacement(c, "secret"))
 
+# --- synchronisation entre deux postes par un NAS, un FTP ou un dossier reseau (sans Drive)
+from app import miroir
+def miroir_scenario(nom, compte, mdp):
+    def poste(n):
+        os.environ["HOME"] = os.environ["APPDATA"] = os.path.join(base, nom.replace(" ", "_"), n)
+        os.makedirs(os.environ["HOME"], exist_ok=True)
+        return dict(machine=n, comptes=[compte], drive_compte=compte["id"]), os.path.join(miroir.dossier_miroir(compte), "PhilPDF")
+    def ecrire(d, rel, contenu):
+        q = os.path.join(d, *rel.split("/")); os.makedirs(os.path.dirname(q), exist_ok=True)
+        with open(q, "w", encoding="utf-8") as f: json.dump(contenu, f)
+    pa, la = poste("A")
+    ecrire(la, "session.json", {"A": {"maj": "2026-10-24T10:00", "fichiers": ["a.pdf"]}})
+    ecrire(la, "sauvegarde/tampons/t1.json", {"t": 1})
+    verifie(miroir.synchroniser(pa, emplacement=distant.emplacement(compte, mdp))[1] == 2, f"{nom} : poste A envoie sa session et un tampon")
+    pb, lb = poste("B")
+    miroir.synchroniser(pb, emplacement=distant.emplacement(compte, mdp))
+    with open(os.path.join(lb, "sauvegarde", "tampons", "t1.json"), encoding="utf-8") as f:
+        verifie(json.load(f) == {"t": 1}, f"{nom} : poste B les reçoit (dossiers créés sur le serveur)")
+    verifie(miroir.synchroniser(pb, emplacement=distant.emplacement(compte, mdp)) == (0, 0), f"{nom} : plus rien à faire ensuite")
+    os.environ["HOME"] = os.environ["APPDATA"] = base
+
+cr = distant.nouveau_compte("reseau"); cr["adresse"] = os.path.join(base, "partage"); os.makedirs(cr["adresse"])
+miroir_scenario("Dossier réseau", cr, "")
+cf = distant.nouveau_compte("ftp"); cf.update(adresse="127.0.0.1", port=pf, utilisateur="phil", chiffrement="", dossier="/Factures")
+miroir_scenario("FTP", cf, "secret")
+cw = distant.nouveau_compte("webdav"); cw.update(adresse=f"http://127.0.0.1:{pw}", utilisateur="phil", dossier="/")
+miroir_scenario("WebDAV", cw, "secret")
+verifie(os.path.isfile(os.path.join(racine, "PhilPDF", "session.json")) and os.path.isfile(os.path.join(racine, "Factures", "PhilPDF", "session.json")),
+        "dossier PhilPDF créé dans le dossier choisi du compte")
+
 # --- comptes identiques sur deux postes (session)
 c2 = dict(c, id="autre", nom="Mon NAS")
 verifie(distant.cle_compte(c) == distant.cle_compte(c2), "même compte reconnu sur un autre poste")

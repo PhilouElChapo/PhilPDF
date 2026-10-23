@@ -7,7 +7,7 @@ et rien n'est ecrit ailleurs sur le PC ni dans le registre.
 import json, os, platform, sys
 
 APP = "PhilPDF"
-VERSION = "0.4.1"
+VERSION = "0.4.2"
 
 
 def dossier_programme():
@@ -51,6 +51,7 @@ DEFAUTS = {
     "nas": "",                      # dossier du NAS sur ce poste
     "synchro": True,                # synchroniser les fichiers ouverts entre postes
     "dernier_dossier": "",
+    "bienvenue_vue": False,         # assistant de premiere installation deja montre
     "drive_compte": "",             # Drive « en direct » (compte Google...) au lieu du dossier de l'appli de bureau
 }
 

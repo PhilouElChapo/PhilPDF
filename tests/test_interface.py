@@ -70,9 +70,35 @@ QMessageBox.warning = staticmethod(lambda *a, **k: print("AVERTISSEMENT", a[2] i
 QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
 QInputDialog.getMultiLineText = staticmethod(lambda *a, **k: ("Note de test", True))
 
+import app.bienvenue as BV
+vu_bienvenue = []
+BV.DialogueBienvenue.exec = lambda self: (vu_bienvenue.append(1), QDialog.Rejected)[1]
+
 w = Fenetre()
 w.resize(1440, 900)
 w.show()
+QTest.qWait(900)
+verif(vu_bienvenue == [1], "première installation : assistant de bienvenue montré")
+
+# --- assistant : emplacement de synchronisation = un dossier partagé (compte « dossier réseau »)
+from app import distant as _dist, miroir as _mir
+partage = tempfile.mkdtemp()
+cr = _dist.nouveau_compte("reseau"); cr.update(adresse=partage, nom="Partage maison")
+w.params["comptes"] = [cr]
+dlg = BV.DialogueBienvenue(w, w.params)
+types_proposes = [dlg.emplacement.itemData(i) for i in range(dlg.emplacement.count())]
+verif(all("nouveau:" + t in types_proposes for t in ("synology", "webdav", "ftp", "reseau")),
+      "assistant : NAS, WebDAV, FTP et dossier réseau proposés")
+dlg.emplacement.setCurrentIndex(dlg.emplacement.findData("compte:" + cr["id"]))
+dlg.machine.setText("Pharmacie")
+dlg.show(); capture(dlg, "00_bienvenue.png")
+dlg.appliquer(); dlg.close()
+verif(w.params["drive_compte"] == cr["id"] and w.params["machine"] == "Pharmacie" and w.params["bienvenue_vue"],
+      "assistant : choix enregistrés")
+open(os.path.join(w.params["drive"], "PhilPDF", "essai.json"), "w").write("{}") if os.makedirs(os.path.join(w.params["drive"], "PhilPDF"), exist_ok=True) is None else None
+_mir.synchroniser(w.params)
+verif(os.path.isfile(os.path.join(partage, "PhilPDF", "essai.json")), "synchronisation par le dossier partagé")
+w.params.update(drive="", drive_compte="", comptes=[])
 w.onglets.setCurrentWidget(w.outils)
 capture(w, "01_outils.png")
 
