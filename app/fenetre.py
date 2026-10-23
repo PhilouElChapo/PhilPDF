@@ -16,9 +16,10 @@ from .outils import outil
 from .bibliotheque import Bibliotheque, detecter_clouds
 from .session import session_de, date_fr, nb_fichiers, dossiers_connus, DELAI_SILENCIEUX
 from .dialogues import (boutons_fr, DialogueFiligrane, DialogueEntete, DialogueNumeriser, DialogueExporter,
-                        DialogueBibliotheque, DialogueSynchro)
+                        DialogueBibliotheque, DialogueSynchro, DialogueFond)
+from .langue import _
 
-FILTRE = "Documents PDF (*.pdf *.PDF)"
+FILTRE = _('Documents PDF (*.pdf *.PDF)')
 
 
 class TacheScan(QThread):
@@ -132,13 +133,13 @@ class Fenetre(QMainWindow):
         self.outils = PageOutils(self.params)
         self.outils.outil_choisi.connect(self.lancer_outil)
         self.outils.epingles_changes.connect(self._epingles)
-        self.onglets.addTab(self.accueil, "Accueil")
-        self.onglets.addTab(self.outils, "Outils")
+        self.onglets.addTab(self.accueil, _('Accueil'))
+        self.onglets.addTab(self.outils, _('Outils'))
         for i in (0, 1):
             self.onglets.tabBar().setTabButton(i, self.onglets.tabBar().ButtonPosition.RightSide, None)
         self.setCentralWidget(self.onglets)
         self._menus()
-        self.statusBar().showMessage(f"PhilPDF {VERSION}" + (" · version portable" if est_portable() else ""))
+        self.statusBar().showMessage(_('PhilPDF {VERSION}', VERSION=VERSION) + (_(' · version portable') if est_portable() else ""))
         self.taches = []
         for f in fichiers:
             self.ouvrir(f)
@@ -154,21 +155,23 @@ class Fenetre(QMainWindow):
         self._minuterie = QTimer(self)
         self._minuterie.timeout.connect(self._session)
         self._minuterie.start(60000)       # page courante memorisee chaque minute
-        # nouveau PC : proposer de recuperer tampons et signatures sauvegardes sur le Drive
-        nouv = self.biblio.nouveautes_drive()
-        if nouv and not self.params.get("drive_restaure"):
-            self.params["drive_restaure"] = True
-            self.params.enregistrer()
-            if question(self, "Drive", f"{len(nouv)} tampon(s) / signature(s) sauvegardés sur votre Drive ne sont pas sur ce PC. "
-                        "Les récupérer ?", [("Récupérer", QMessageBox.AcceptRole), ("Plus tard", QMessageBox.RejectRole)]) == 0:
-                self.biblio.restaurer_drive()
+        # tampons et signatures : synchronisation silencieuse avec le Drive au demarrage
+        QTimer.singleShot(1200, self._synchro_biblio)
+
+    def _synchro_biblio(self):
+        try:
+            r = self.biblio.synchroniser_drive()
+        except OSError:
+            r = None
+        if r and r[0]:
+            self.statusBar().showMessage(_('{x} tampon(s) / signature(s) reçu(s) de vos autres postes.', x=r[0]), 8000)
 
     # ------------------------------------------------------------ menus
     def _menus(self):
         mb = self.menuBar()
 
         def act(menu, texte, f, raccourci=None, ic=None, actif=True):
-            a = QAction(icone(ic) if ic else QAction().icon(), texte, self) if ic else QAction(texte, self)
+            a = QAction(icone(ic, "#444444"), texte, self) if ic else QAction(texte, self)
             if raccourci:
                 a.setShortcut(QKeySequence(raccourci))
             a.triggered.connect(f)
@@ -176,78 +179,84 @@ class Fenetre(QMainWindow):
             menu.addAction(a)
             return a
 
-        m = mb.addMenu("&Fichier")
-        act(m, "Ouvrir...", self.dialogue_ouvrir, "Ctrl+O", "ouvrir")
-        self.menu_recents = m.addMenu("Ouvrir un fichier récent")
+        m = mb.addMenu(_('&Fichier'))
+        act(m, _('Ouvrir...'), self.dialogue_ouvrir, "Ctrl+O", "ouvrir")
+        self.menu_recents = m.addMenu(icone("recent"), _('Ouvrir un fichier récent'))
         self.menu_recents.aboutToShow.connect(self._remplir_recents)
-        act(m, "Synchroniser avec les autres postes...", self.synchroniser, None, "synchro")
-        sm = m.addMenu(icone("creer"), "Créer un PDF")
-        act(sm, "Page vierge", lambda: self.creer("vierge"))
-        act(sm, "A partir d'images...", lambda: self.creer("images"))
-        act(sm, "A partir de plusieurs fichiers (combiner)...", lambda: self.lancer_outil("combiner"))
-        act(sm, "Depuis le scanner...", lambda: self.lancer_outil("numeriser"))
+        act(m, _('Synchroniser avec les autres postes...'), self.synchroniser, None, "synchro")
+        sm = m.addMenu(icone("creer"), _('Créer un PDF'))
+        act(sm, _('Page vierge'), lambda: self.creer("vierge"), None, "creer")
+        act(sm, _("A partir d'images..."), lambda: self.creer("images"), None, "exporter")
+        act(sm, _('A partir de plusieurs fichiers (combiner)...'), lambda: self.lancer_outil("combiner"), None, "combiner")
+        act(sm, _('Depuis le scanner...'), lambda: self.lancer_outil("numeriser"), None, "numeriser")
         m.addSeparator()
-        act(m, "Enregistrer", lambda: self.enregistrer(), "Ctrl+S", "enregistrer")
-        act(m, "Enregistrer sous...", lambda: self.enregistrer(sous=True), "Shift+Ctrl+S")
-        act(m, "Enregistrer une copie allégée...", lambda: self.lancer_outil("alleger"))
-        sm = m.addMenu("Exporter vers")
-        act(sm, "Word (.docx)...", lambda: self.exporter("docx"))
-        act(sm, "Images JPG...", lambda: self.exporter("jpg"))
-        act(sm, "Images PNG...", lambda: self.exporter("png"))
-        act(sm, "Texte (.txt)...", lambda: self.exporter("txt"))
+        act(m, _('Enregistrer'), lambda: self.enregistrer(), "Ctrl+S", "enregistrer")
+        act(m, _('Enregistrer sous...'), lambda: self.enregistrer(sous=True), "Shift+Ctrl+S", "enregistrer_sous")
+        act(m, _('Enregistrer une copie allégée...'), lambda: self.lancer_outil("alleger"), None, "alleger")
+        sm = m.addMenu(icone("exporter"), _('Exporter vers'))
+        act(sm, _('Word (.docx)...'), lambda: self.exporter("docx"))
+        act(sm, _('Images JPG...'), lambda: self.exporter("jpg"))
+        act(sm, _('Images PNG...'), lambda: self.exporter("png"))
+        act(sm, _('Texte (.txt)...'), lambda: self.exporter("txt"))
         m.addSeparator()
-        act(m, "Imprimer...", lambda: self.lancer_outil("imprimer"), "Ctrl+P", "imprimer")
-        act(m, "Imprimer plusieurs documents...", self.imprimer_plusieurs)
+        act(m, _('Imprimer...'), lambda: self.lancer_outil("imprimer"), "Ctrl+P", "imprimer")
+        act(m, _('Imprimer plusieurs documents...'), self.imprimer_plusieurs, None, "lot")
         m.addSeparator()
-        act(m, "Protéger à l'aide d'un mot de passe...", lambda: self.lancer_outil("motdepasse"))
-        act(m, "Propriétés...", self.proprietes, "Ctrl+D")
+        act(m, _("Protéger à l'aide d'un mot de passe..."), lambda: self.lancer_outil("motdepasse"), None, "motdepasse")
+        act(m, _('Propriétés...'), self.proprietes, "Ctrl+D", "info")
         m.addSeparator()
-        act(m, "Fermer le fichier", lambda: self.fermer_onglet(self.onglets.currentIndex()), "Ctrl+W")
-        act(m, "Quitter", self.close, "Ctrl+Q")
+        act(m, _('Fermer le fichier'), lambda: self.fermer_onglet(self.onglets.currentIndex()), "Ctrl+W", "fermer_doc")
+        act(m, _('Quitter'), self.close, "Ctrl+Q", "quitter")
 
-        m = mb.addMenu("&Edition")
+        m = mb.addMenu(_('&Edition'))
         d = lambda nom: (lambda: getattr(self.doc_courant(), nom)() if self.doc_courant() else None)
-        act(m, "Annuler", d("annuler"), "Ctrl+Z", "annuler")
-        act(m, "Rétablir", d("retablir"), "Shift+Ctrl+Z")
+        act(m, _('Annuler|action'), d("annuler"), "Ctrl+Z", "annuler")
+        act(m, _('Rétablir'), d("retablir"), "Shift+Ctrl+Z", "retablir")
         m.addSeparator()
-        act(m, "Couper", d("couper"), "Ctrl+X")
-        act(m, "Copier", d("copier"), "Ctrl+C", "copier")
-        act(m, "Coller", d("coller"), "Ctrl+V")
-        act(m, "Supprimer", d("supprimer"), "Del")
+        act(m, _('Couper'), d("couper"), "Ctrl+X", "couper")
+        act(m, _('Copier'), d("copier"), "Ctrl+C", "copier")
+        act(m, _('Coller'), d("coller"), "Ctrl+V", "coller")
+        act(m, _('Supprimer'), d("supprimer"), "Del", "supprimer")
         m.addSeparator()
-        act(m, "Sélectionner tout", d("tout_selectionner"), "Ctrl+A")
-        act(m, "Désélectionner tout", lambda: self.doc_courant() and (setattr(self.doc_courant(), "selection", None),
-                                                                     self.doc_courant().choisir_objet(None)), "Shift+Ctrl+A")
+        act(m, _('Sélectionner tout'), d("tout_selectionner"), "Ctrl+A", "tout")
+        act(m, _('Désélectionner tout'), lambda: self.doc_courant() and (setattr(self.doc_courant(), "selection", None),
+                                                                     self.doc_courant().choisir_objet(None)), "Shift+Ctrl+A", "aucun")
         m.addSeparator()
-        act(m, "Modifier le texte et les images", lambda: self.lancer_outil("modifier"), None, "modifier")
-        act(m, "Rechercher et remplacer...", lambda: self.lancer_outil("remplacer"), "Ctrl+F", "rechercher")
+        act(m, _('Modifier le texte et les images'), lambda: self.lancer_outil("modifier"), None, "modifier")
+        act(m, _('Rechercher et remplacer...'), lambda: self.lancer_outil("remplacer"), "Ctrl+F", "rechercher")
         m.addSeparator()
-        act(m, "Préférences...", self.preferences, "Ctrl+K", "parametres")
+        act(m, _('Préférences...'), self.preferences, "Ctrl+K", "parametres")
 
-        m = mb.addMenu("&Affichage")
-        act(m, "Pivoter la page (90°)", lambda: self.doc_courant() and self.doc_courant().pivoter_courante(), "Shift+Ctrl++", "pivoter")
-        act(m, "Zoom avant", lambda: self.doc_courant() and self.doc_courant().changer_zoom(self.doc_courant().zoom * 1.2), "Ctrl++")
-        act(m, "Zoom arrière", lambda: self.doc_courant() and self.doc_courant().changer_zoom(self.doc_courant().zoom / 1.2), "Ctrl+-")
-        act(m, "Taille réelle", lambda: self.doc_courant() and self.doc_courant().changer_zoom(1.0), "Ctrl+1")
-        act(m, "Ajuster à la largeur", self.ajuster_largeur, "Ctrl+2")
+        m = mb.addMenu(_('&Affichage'))
+        act(m, _('Pivoter la page (90°)'), lambda: self.doc_courant() and self.doc_courant().pivoter_courante(), "Shift+Ctrl++", "pivoter")
+        act(m, _('Zoom avant'), lambda: self.doc_courant() and self.doc_courant().changer_zoom(self.doc_courant().zoom * 1.2), "Ctrl++", "zoom_plus")
+        act(m, _('Zoom arrière'), lambda: self.doc_courant() and self.doc_courant().changer_zoom(self.doc_courant().zoom / 1.2), "Ctrl+-", "zoom_moins")
+        act(m, _('Taille réelle'), lambda: self.doc_courant() and self.doc_courant().changer_zoom(1.0), "Ctrl+1", "taille_reelle")
+        act(m, _('Ajuster à la largeur'), self.ajuster_largeur, "Ctrl+2", "largeur")
         m.addSeparator()
-        a = act(m, "Barre d'actions rapides sur sélection", self._basculer_barre)
+        act(m, _('Vignettes des pages'), lambda: self.doc_courant() and self.doc_courant().basculer_vignettes(), "F4", "volet_gauche")
+        sm = m.addMenu(icone("volet_droit", "#444444"), _('Volet de droite'))
+        for lib, mode in ((_('Complet'), "complet"), (_('Icônes seules'), "icones"), (_('Masqué'), "masque")):
+            act(sm, lib, lambda _x=False, md=mode: [o.mode_volet(md) for o in self.documents()])
+        act(m, _('Changer le volet de droite'), lambda: self.doc_courant() and self.doc_courant().basculer_volet(), "Shift+F4")
+        m.addSeparator()
+        a = act(m, _("Barre d'actions rapides sur sélection"), self._basculer_barre, None, "barre")
         a.setCheckable(True)
         a.setChecked(self.params.get("barre_rapide", True))
-        act(m, "Plein écran", lambda: self.showNormal() if self.isFullScreen() else self.showFullScreen(), "F11")
+        act(m, _('Plein écran'), lambda: self.showNormal() if self.isFullScreen() else self.showFullScreen(), "F11", "plein_ecran")
 
-        m = mb.addMenu("Fe&nêtre")
-        act(m, "Onglet suivant", lambda: self.onglets.setCurrentIndex((self.onglets.currentIndex() + 1) % self.onglets.count()), "Ctrl+Tab")
-        act(m, "Fermer tous les onglets", self.fermer_tout)
-        self.menu_fen = m.addMenu("Fichiers ouverts")
+        m = mb.addMenu(_('Fe&nêtre'))
+        act(m, _('Onglet suivant'), lambda: self.onglets.setCurrentIndex((self.onglets.currentIndex() + 1) % self.onglets.count()), "Ctrl+Tab", "onglet")
+        act(m, _('Fermer tous les onglets'), self.fermer_tout, None, "fermer")
+        self.menu_fen = m.addMenu(_('Fichiers ouverts'))
         self.menu_fen.aboutToShow.connect(self._remplir_fenetres)
 
-        m = mb.addMenu("&Aide")
-        act(m, "Raccourcis clavier", self.raccourcis, "F1")
-        act(m, "Mes tampons...", lambda: self.lancer_outil("tampons"))
-        act(m, "Mes signatures...", lambda: self.lancer_outil("remplir_signer"))
-        act(m, "Rechercher les mises à jour...", lambda: self.verifier_maj(silencieux=False))
-        act(m, "A propos de PhilPDF", self.a_propos)
+        m = mb.addMenu(_('&Aide'))
+        act(m, _('Raccourcis clavier'), self.raccourcis, "F1", "clavier")
+        act(m, _('Mes tampons...'), lambda: self.lancer_outil("tampons"), None, "tampon")
+        act(m, _('Mes signatures...'), lambda: self.lancer_outil("remplir_signer"), None, "signer")
+        act(m, _('Rechercher les mises à jour...'), lambda: self.verifier_maj(silencieux=False), None, "mise_a_jour")
+        act(m, _('A propos de PhilPDF'), self.a_propos, None, "aide")
 
     def _remplir_recents(self):
         self.menu_recents.clear()
@@ -255,13 +264,13 @@ class Fenetre(QMainWindow):
             a = self.menu_recents.addAction(os.path.basename(p))
             a.setToolTip(p)
             a.setEnabled(os.path.exists(p))
-            a.triggered.connect(lambda _=False, x=p: self.ouvrir(x))
+            a.triggered.connect(lambda _x=False, x=p: self.ouvrir(x))
 
     def _remplir_fenetres(self):
         self.menu_fen.clear()
         for i in range(2, self.onglets.count()):
             a = self.menu_fen.addAction(self.onglets.tabText(i))
-            a.triggered.connect(lambda _=False, k=i: self.onglets.setCurrentIndex(k))
+            a.triggered.connect(lambda _x=False, k=i: self.onglets.setCurrentIndex(k))
 
     # ------------------------------------------------------------ onglets
     def doc_courant(self):
@@ -290,9 +299,9 @@ class Fenetre(QMainWindow):
         i = self.onglets.indexOf(o)
         if i >= 0:
             self.onglets.setTabText(i, o.nom + (" *" if o.modifie else ""))
-            self.onglets.setTabToolTip(i, o.chemin or "Non enregistré")
+            self.onglets.setTabToolTip(i, o.chemin or _('Non enregistré'))
         if o is self.doc_courant():
-            self.setWindowTitle(f"{o.nom}{' *' if o.modifie else ''} – PhilPDF Editeur PDF")
+            self.setWindowTitle(_('{nom}{x} – PhilPDF Editeur PDF', nom=o.nom, x=' *' if o.modifie else ''))
 
     def _onglet_change(self, i):
         w = self.onglets.widget(i)
@@ -302,7 +311,7 @@ class Fenetre(QMainWindow):
         if o:
             self._maj_titre(o)
         else:
-            self.setWindowTitle("PhilPDF – Editeur PDF")
+            self.setWindowTitle(_('PhilPDF – Editeur PDF'))
             if i == 0:
                 self.accueil.rafraichir()
 
@@ -330,15 +339,15 @@ class Fenetre(QMainWindow):
                 self.onglets.setCurrentWidget(o)
                 return o
         if not os.path.exists(chemin):
-            QMessageBox.warning(self, "PhilPDF", f"Fichier introuvable sur ce PC :\n{chemin}")
+            QMessageBox.warning(self, "PhilPDF", _('Fichier introuvable sur ce PC :\n{chemin}', chemin=chemin))
             return None
         try:
             o = OngletDocument(self.params, chemin, biblio=self.biblio)
         except Exception as e:
-            QMessageBox.warning(self, "PhilPDF", f"Impossible d'ouvrir ce fichier :\n{e}")
+            QMessageBox.warning(self, "PhilPDF", _("Impossible d'ouvrir ce fichier :\n{e}", e=e))
             return None
         if o.doc.needs_pass:
-            mdp, ok = QInputDialog.getText(self, "Mot de passe", "Ce PDF est protégé. Mot de passe :", QLineEdit.Password)
+            mdp, ok = QInputDialog.getText(self, _('Mot de passe'), _('Ce PDF est protégé. Mot de passe :'), QLineEdit.Password)
             if not ok or not o.doc.authenticate(mdp):
                 return None
             o.construire_pages()
@@ -348,7 +357,7 @@ class Fenetre(QMainWindow):
         return self.ajouter_onglet(o)
 
     def dialogue_ouvrir(self):
-        for f in QFileDialog.getOpenFileNames(self, "Ouvrir", self.dossier_depart(), FILTRE)[0]:
+        for f in QFileDialog.getOpenFileNames(self, _('Ouvrir'), self.dossier_depart(), FILTRE)[0]:
             self.ouvrir(f)
 
     def dossier_depart(self):
@@ -371,9 +380,9 @@ class Fenetre(QMainWindow):
         self._session(toucher=True)
 
     def _demander_enregistrer(self, o):
-        return question(self, "PhilPDF", f"Enregistrer les modifications de « {o.nom} » ?",
-                        [("Enregistrer", QMessageBox.AcceptRole), ("Ne pas enregistrer", QMessageBox.DestructiveRole),
-                         ("Annuler", QMessageBox.RejectRole)])
+        return question(self, "PhilPDF", _('Enregistrer les modifications de « {nom} » ?', nom=o.nom),
+                        [(_('Enregistrer'), QMessageBox.AcceptRole), (_('Ne pas enregistrer'), QMessageBox.DestructiveRole),
+                         (_('Annuler'), QMessageBox.RejectRole)])
 
     def fermer_tout(self):
         for i in range(self.onglets.count() - 1, 1, -1):
@@ -406,9 +415,8 @@ class Fenetre(QMainWindow):
         self.synchro = r
         m, date, fichiers, res = r
         self.accueil.montrer_synchro(m, date, fichiers, res)
-        n = sum(1 for c, _ in res if c)
-        Notification(self, f"Session plus récente sur {m} ({date_fr(date)}) : {nb_fichiers(len(fichiers))}, "
-                           f"{n} retrouvé{'s' if n > 1 else ''} ici.", "Voir",
+        n = sum(1 for c, _x in res if c)
+        Notification(self, _('Session plus récente sur {m} ({date}) : {nb}, {n} retrouvé{x} ici.', m=m, date=date_fr(date), nb=nb_fichiers(len(fichiers)), n=n, x='s' if n > 1 else ''), _('Voir'),
                      lambda: self.onglets.setCurrentWidget(self.accueil))
 
     def reprendre_proposee(self):
@@ -416,7 +424,7 @@ class Fenetre(QMainWindow):
             m, date, fichiers, res = self.synchro
             session = session_de(self.params)
             ouvrir = []
-            for e, (c, _) in zip(fichiers, res):
+            for e, (c, _x) in zip(fichiers, res):
                 if c:
                     session.apprendre_depuis(m, e, c)
                     ouvrir.append((c, e.get("page", 0), e.get("zoom")))
@@ -425,8 +433,7 @@ class Fenetre(QMainWindow):
     def synchroniser(self):
         s = session_de(self.params)
         if not s.autres_machines():
-            QMessageBox.information(self, "Synchroniser", "Aucun autre poste n'a encore de session. Indiquez le même Drive "
-                                    "dans Edition › Préférences sur chacun de vos PC.")
+            QMessageBox.information(self, _('Synchroniser'), _("Aucun autre poste n'a encore de session. Indiquez le même Drive dans Edition › Préférences sur chacun de vos PC."))
             return
         m, res = (self.synchro[0], self.synchro[3]) if self.synchro else (None, None)
         d = DialogueSynchro(self, s, m, res, len(self.documents()))
@@ -438,7 +445,7 @@ class Fenetre(QMainWindow):
         if not fichiers:
             return
         if remplacer:
-            garder = {os.path.normcase(c) for c, _, _ in fichiers}
+            garder = {os.path.normcase(c) for c, _x, _x in fichiers}
             for i in range(self.onglets.count() - 1, -1, -1):
                 w = self.onglets.widget(i)
                 if isinstance(w, OngletDocument) and (not w.chemin or os.path.normcase(w.chemin) not in garder):
@@ -467,7 +474,7 @@ class Fenetre(QMainWindow):
             return False
         chemin = o.chemin
         if sous or not chemin:
-            chemin, _ = QFileDialog.getSaveFileName(self, "Enregistrer sous", chemin or o.nom, FILTRE)
+            chemin, _x = QFileDialog.getSaveFileName(self, _('Enregistrer sous'), chemin or o.nom, FILTRE)
             if not chemin:
                 return False
             if not chemin.lower().endswith(".pdf"):
@@ -475,10 +482,10 @@ class Fenetre(QMainWindow):
         try:
             o.enregistrer(chemin)
         except Exception as e:
-            QMessageBox.warning(self, "PhilPDF", f"Enregistrement impossible :\n{e}")
+            QMessageBox.warning(self, "PhilPDF", _('Enregistrement impossible :\n{e}', e=e))
             return False
         self.params.ajouter_recent(chemin)
-        self.statusBar().showMessage(f"Enregistré : {chemin} ({os.path.getsize(chemin) // 1024} Ko)", 8000)
+        self.statusBar().showMessage(_('Enregistré : {chemin} ({x} Ko)', chemin=chemin, x=os.path.getsize(chemin) // 1024), 8000)
         self._session()
         return True
 
@@ -512,10 +519,10 @@ class Fenetre(QMainWindow):
             return
         info = outil(oid)
         if info and not info[6]:
-            QMessageBox.information(self, info[3], f"{info[5]}\n\nCet outil est prévu dans une prochaine version de PhilPDF.")
+            QMessageBox.information(self, info[3], _('{x}\n\nCet outil est prévu dans une prochaine version de PhilPDF.', x=info[5]))
             return
         if not o:
-            QMessageBox.information(self, "PhilPDF", "Ouvrez d'abord un fichier PDF.")
+            QMessageBox.information(self, "PhilPDF", _("Ouvrez d'abord un fichier PDF."))
             self.dialogue_ouvrir()
             o = self.doc_courant()
             if not o:
@@ -527,7 +534,7 @@ class Fenetre(QMainWindow):
         elif oid == "remplacer":
             texte = o.selection["texte"].split("\n")[0] if o.selection else ""
             d = DialogueRemplacer(o, texte)
-            d.finished.connect(lambda _: (setattr(o, "resultats", []), o.rafraichir_pages()))
+            d.finished.connect(lambda _x: (setattr(o, "resultats", []), o.rafraichir_pages()))
             d.show()
         elif oid == "organiser":
             o.organiser(True)
@@ -536,7 +543,7 @@ class Fenetre(QMainWindow):
         elif oid in ("filigrane", "entete", "fond"):
             self.mise_en_page(o, oid)
         elif oid == "commentaires" or oid == "biffer":
-            self.statusBar().showMessage("Sélectionnez du texte : la barre rapide apparaît au-dessus de la sélection.", 10000)
+            self.statusBar().showMessage(_('Sélectionnez du texte : la barre rapide apparaît au-dessus de la sélection.'), 10000)
         elif oid == "remplir_signer":
             o.ouvrir_bibliotheque("signatures")
         elif oid == "exporter":
@@ -555,7 +562,7 @@ class Fenetre(QMainWindow):
     def creer(self, genre):
         doc = fitz.open()
         if genre == "images":
-            fs = QFileDialog.getOpenFileNames(self, "Images", self.dossier_depart(), "Images (*.png *.jpg *.jpeg *.tif *.tiff *.bmp)")[0]
+            fs = QFileDialog.getOpenFileNames(self, _('Images'), self.dossier_depart(), _('Images (*.png *.jpg *.jpeg *.tif *.tiff *.bmp)'))[0]
             if not fs:
                 return
             for f in fs:
@@ -568,10 +575,10 @@ class Fenetre(QMainWindow):
 
     def combiner(self):
         d = QDialog(self)
-        d.setWindowTitle("Combiner des fichiers")
+        d.setWindowTitle(_('Combiner des fichiers'))
         d.resize(560, 420)
         v = QVBoxLayout(d)
-        v.addWidget(QLabel("Glissez pour changer l'ordre. Les fichiers seront assemblés de haut en bas."))
+        v.addWidget(QLabel(_("Glissez pour changer l'ordre. Les fichiers seront assemblés de haut en bas.")))
         lst = QListWidget()
         lst.setDragDropMode(QListWidget.InternalMove)
         v.addWidget(lst, 1)
@@ -581,16 +588,16 @@ class Fenetre(QMainWindow):
                 it.setData(Qt.UserRole, o.chemin)
                 lst.addItem(it)
         h = QHBoxLayout()
-        b = QPushButton("Ajouter des fichiers...")
-        b.clicked.connect(lambda: [lst.addItem(self._item(f)) for f in QFileDialog.getOpenFileNames(d, "Ajouter", self.dossier_depart(), "PDF et images (*.pdf *.png *.jpg *.jpeg *.tif)")[0]])
+        b = QPushButton(_('Ajouter des fichiers...'))
+        b.clicked.connect(lambda: [lst.addItem(self._item(f)) for f in QFileDialog.getOpenFileNames(d, _('Ajouter'), self.dossier_depart(), _('PDF et images (*.pdf *.png *.jpg *.jpeg *.tif)'))[0]])
         h.addWidget(b)
-        r = QPushButton("Retirer")
+        r = QPushButton(_('Retirer'))
         r.clicked.connect(lambda: [lst.takeItem(lst.row(i)) for i in lst.selectedItems()])
         h.addWidget(r)
         h.addStretch()
         v.addLayout(h)
         bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
-        bb.button(QDialogButtonBox.Ok).setText("Combiner")
+        bb.button(QDialogButtonBox.Ok).setText(_('Combiner'))
         bb.accepted.connect(d.accept)
         bb.rejected.connect(d.reject)
         v.addWidget(bb)
@@ -616,12 +623,12 @@ class Fenetre(QMainWindow):
             return
         base = os.path.splitext(o.chemin or o.nom)[0]
         if genre == "txt":
-            f, _ = QFileDialog.getSaveFileName(self, "Exporter en texte", base + ".txt", "Texte (*.txt)")
+            f, _x = QFileDialog.getSaveFileName(self, _('Exporter en texte'), base + ".txt", _('Texte (*.txt)'))
             if f:
                 with open(f, "w", encoding="utf-8") as fh:
                     fh.write("\n\f".join(p.get_text() for p in o.doc))
         elif genre == "docx":
-            f, _ = QFileDialog.getSaveFileName(self, "Exporter en Word", base + ".docx", "Word (*.docx)")
+            f, _x = QFileDialog.getSaveFileName(self, _('Exporter en Word'), base + ".docx", _('Word (*.docx)'))
             if not f:
                 return
             import tempfile, logging
@@ -629,7 +636,7 @@ class Fenetre(QMainWindow):
             logging.getLogger().setLevel(logging.ERROR)
             src = os.path.join(tempfile.mkdtemp(), "source.pdf")
             o.doc.save(src)
-            prog = QProgressDialog("Conversion en Word...", None, 0, 0, self)
+            prog = QProgressDialog(_('Conversion en Word...'), None, 0, 0, self)
             prog.setWindowModality(Qt.WindowModal)
             prog.show()
             QApplication.processEvents()
@@ -637,12 +644,12 @@ class Fenetre(QMainWindow):
                 c = Converter(src)
                 c.convert(f)
                 c.close()
-                self.statusBar().showMessage(f"Exporté : {f}", 8000)
+                self.statusBar().showMessage(_('Exporté : {f}', f=f), 8000)
             except Exception as e:
-                QMessageBox.warning(self, "Exporter", f"Conversion impossible :\n{e}")
+                QMessageBox.warning(self, _('Exporter'), _('Conversion impossible :\n{e}', e=e))
             prog.close()
         else:
-            dossier = QFileDialog.getExistingDirectory(self, "Dossier des images", os.path.dirname(base))
+            dossier = QFileDialog.getExistingDirectory(self, _('Dossier des images'), os.path.dirname(base))
             if dossier:
                 for n, p in enumerate(o.doc):
                     pm = p.get_pixmap(dpi=dpi, alpha=False)
@@ -651,62 +658,61 @@ class Fenetre(QMainWindow):
                         pm.save(cible, jpg_quality=qualite)
                     else:
                         pm.save(cible)
-                self.statusBar().showMessage(f"{len(o.doc)} images {genre.upper()} enregistrées dans {dossier}", 8000)
+                self.statusBar().showMessage(_('{n} images {upper} enregistrées dans {dossier}', n=len(o.doc), upper=genre.upper(), dossier=dossier), 8000)
 
     def mise_en_page(self, o, oid):
         if oid == "filigrane":
-            choix = question(self, "Filigrane", "Que voulez-vous faire ?",
-                             [("Ajouter un filigrane", QMessageBox.AcceptRole), ("Retirer un filigrane", QMessageBox.AcceptRole),
-                              ("Annuler", QMessageBox.RejectRole)])
+            choix = question(self, _('Filigrane'), _('Que voulez-vous faire ?'),
+                             [(_('Ajouter un filigrane'), QMessageBox.AcceptRole), (_('Retirer un filigrane'), QMessageBox.AcceptRole),
+                              (_('Annuler'), QMessageBox.RejectRole)])
             if choix == 1:
                 from moteur import objets
-                o.memoriser()
+                o.memoriser(_('Retrait du filigrane'))
                 n = objets.retirer_filigranes(o.doc)
                 if not n:
                     cand = objets.filigranes_texte_probables(o.doc)
                     if cand:
-                        t, ok = QInputDialog.getItem(self, "Retirer un filigrane", "Filigrane trouvé :", cand, 0, False)
+                        t, ok = QInputDialog.getItem(self, _('Retirer un filigrane'), _('Filigrane trouvé :'), cand, 0, False)
                         if ok:
                             objets.retirer_texte_penche(o.doc, t)
                             n = len(o.doc)
                 if n:
-                    o.apres_modif([f"Filigrane retiré ({n} page{'s' if n > 1 else ''})."], reconstruire=True)
+                    o.apres_modif([_("Filigrane retiré ({n} page{s}).", n=n, s='s' if n > 1 else '')], reconstruire=True)
                 else:
                     o.annulations.pop()
-                    QMessageBox.information(self, "Filigrane", "Aucun filigrane reconnu dans ce document.")
+                    o.maj_historique()
+                    QMessageBox.information(self, _('Filigrane'), _('Aucun filigrane reconnu dans ce document.'))
                 return
             if choix != 0:
                 return
-            d = DialogueFiligrane(self, self.params, len(o.doc), o.page_courante())
+            d = DialogueFiligrane(self, self.params, len(o.doc), o.page_courante(), o.doc)
             if d.exec() == QDialog.Accepted:
-                o.memoriser()
+                o.memoriser(_("Ajout d'un filigrane"))
                 d.appliquer(o.doc)
-                o.apres_modif(["Filigrane ajouté."])
+                o.apres_modif([_('Filigrane ajouté.')])
         elif oid == "entete":
-            d = DialogueEntete(self)
+            d = DialogueEntete(self, o.doc, o.page_courante())
             if d.exec() == QDialog.Accepted:
-                o.memoriser()
+                o.memoriser(_('En-tête et pied de page'))
                 d.appliquer(o.doc)
-                o.apres_modif(["En-tête et pied de page ajoutés."])
+                o.apres_modif([_('En-tête et pied de page ajoutés.')])
         elif oid == "fond":
-            from PySide6.QtWidgets import QColorDialog
-            c = QColorDialog.getColor(Qt.white, self, "Couleur de fond des pages")
-            if c.isValid():
-                o.memoriser()
-                for p in o.doc:
-                    p.draw_rect(p.rect, color=None, fill=c.getRgbF()[:3], overlay=False)
-                o.apres_modif(["Arrière-plan appliqué."])
+            d = DialogueFond(self, o.doc, o.page_courante())
+            if d.exec() == QDialog.Accepted:
+                o.memoriser(_('Arrière-plan'))
+                d.appliquer(o.doc)
+                o.apres_modif([_('Arrière-plan appliqué.')])
 
     def numeriser(self):
         from moteur.scanner import scanners
         import sys as _s
         if _s.platform != "win32" and not scanners():
-            QMessageBox.information(self, "Numériser", "Aucun scanner détecté sur ce PC.")
+            QMessageBox.information(self, _('Numériser'), _('Aucun scanner détecté sur ce PC.'))
             return
         d = DialogueNumeriser(self)
         if d.exec() != QDialog.Accepted:
             return
-        prog = QProgressDialog("Numérisation en cours...", None, 0, 0, self)
+        prog = QProgressDialog(_('Numérisation en cours...'), None, 0, 0, self)
         prog.setWindowModality(Qt.WindowModal)
         prog.show()
         QApplication.processEvents()
@@ -714,15 +720,15 @@ class Fenetre(QMainWindow):
             doc = d.numeriser()
         except Exception as e:
             prog.close()
-            QMessageBox.warning(self, "Numériser", f"La numérisation a échoué :\n{e}")
+            QMessageBox.warning(self, _('Numériser'), _('La numérisation a échoué :\n{e}', e=e))
             return
         prog.close()
         if len(doc) == 0:
-            QMessageBox.information(self, "Numériser", "Aucune page numérisée.")
+            QMessageBox.information(self, _('Numériser'), _('Aucune page numérisée.'))
             return
         o = self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=doc, nom="Numérisation.pdf"))
         if d.ocr.isChecked():
-            self.statusBar().showMessage("Enregistrez la numérisation pour lancer la reconnaissance du texte.", 10000)
+            self.statusBar().showMessage(_('Enregistrez la numérisation pour lancer la reconnaissance du texte.'), 10000)
 
     def imprimer(self, onglets_ou_docs):
         pr = QPrinter(QPrinter.HighResolution)
@@ -747,7 +753,7 @@ class Fenetre(QMainWindow):
         p.end()
 
     def imprimer_plusieurs(self):
-        fs = QFileDialog.getOpenFileNames(self, "Documents à imprimer", self.dossier_depart(), FILTRE)[0]
+        fs = QFileDialog.getOpenFileNames(self, _('Documents à imprimer'), self.dossier_depart(), FILTRE)[0]
         if fs:
             self.imprimer(fs)
 
@@ -761,22 +767,21 @@ class Fenetre(QMainWindow):
         o.doc.subset_fonts()
         apres = len(o.doc.tobytes(garbage=4, deflate=True, deflate_fonts=True))
         o.apres_modif()
-        QMessageBox.information(self, "Alléger le fichier",
-                                f"Poids estimé : {avant // 1024} Ko → {apres // 1024} Ko ({100 - apres * 100 // max(1, avant)} % de moins).\n"
-                                "Enregistrez pour appliquer (Enregistrer sous pour garder l'original).")
+        QMessageBox.information(self, _('Alléger le fichier'),
+                                _("Poids estimé : {x} Ko → {x2} Ko ({x3} % de moins).\nEnregistrez pour appliquer (Enregistrer sous pour garder l'original).", x=avant // 1024, x2=apres // 1024, x3=100 - apres * 100 // max(1, avant)))
 
     def mot_de_passe(self, o):
         d = QDialog(self)
-        d.setWindowTitle("Protéger par mot de passe")
+        d.setWindowTitle(_('Protéger par mot de passe'))
         f = QFormLayout(d)
         ouv = QLineEdit()
         ouv.setEchoMode(QLineEdit.Password)
         prop = QLineEdit()
         prop.setEchoMode(QLineEdit.Password)
-        imp = QCheckBox("Interdire l'impression")
-        cop = QCheckBox("Interdire la copie du texte")
-        f.addRow("Mot de passe d'ouverture (facultatif)", ouv)
-        f.addRow("Mot de passe des droits", prop)
+        imp = QCheckBox(_("Interdire l'impression"))
+        cop = QCheckBox(_('Interdire la copie du texte'))
+        f.addRow(_("Mot de passe d'ouverture (facultatif)"), ouv)
+        f.addRow(_('Mot de passe des droits'), prop)
         f.addRow(imp)
         f.addRow(cop)
         bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
@@ -794,31 +799,30 @@ class Fenetre(QMainWindow):
                              owner_pw=prop.text() or ouv.text() or os.urandom(8).hex(), permissions=perm)
         o.modifie = True
         o.titre_change.emit()
-        self.statusBar().showMessage("Protection appliquée à l'enregistrement (AES 256).", 8000)
+        self.statusBar().showMessage(_("Protection appliquée à l'enregistrement (AES 256)."), 8000)
 
     def signer(self, o):
         img = os.path.join(o.params_dossier(), "signature.png")
         if not os.path.exists(img):
-            f, _ = QFileDialog.getOpenFileName(self, "Image de votre signature (fond transparent de préférence)", "",
-                                               "Images (*.png *.jpg *.jpeg)")
+            f, _x = QFileDialog.getOpenFileName(self, _('Image de votre signature (fond transparent de préférence)'), "",
+                                               _('Images (*.png *.jpg *.jpeg)'))
             if not f:
                 return
             fitz.Pixmap(f).save(img)
-            self.statusBar().showMessage("Signature enregistrée : elle sera proposée sur toutes vos machines synchronisées.", 8000)
+            self.statusBar().showMessage(_('Signature enregistrée : elle sera proposée sur toutes vos machines synchronisées.'), 8000)
         o.changer_mode("signature")
 
     def ocr(self, o):
         from moteur.scan import tesseract_exe
         if not tesseract_exe():
-            QMessageBox.information(self, "Reconnaître le texte",
-                                    "Le module de reconnaissance de texte est absent de ce paquet PhilPDF.\n"
-                                    "Téléchargez la version complète (elle l'embarque).")
+            QMessageBox.information(self, _('Reconnaître le texte'),
+                                    _("Le module de reconnaissance de texte est absent de ce paquet PhilPDF.\nTéléchargez la version complète (elle l'embarque)."))
             return
         if not o.chemin or o.modifie:
-            QMessageBox.information(self, "Reconnaître le texte", "Enregistrez d'abord le document.")
+            QMessageBox.information(self, _('Reconnaître le texte'), _("Enregistrez d'abord le document."))
             return
         sortie = os.path.splitext(o.chemin)[0] + "_OCR.pdf"
-        prog = QProgressDialog("Redressement, nettoyage et reconnaissance du texte...", None, 0, 0, self)
+        prog = QProgressDialog(_('Redressement, nettoyage et reconnaissance du texte...'), None, 0, 0, self)
         prog.setWindowTitle("PhilPDF")
         prog.setWindowModality(Qt.WindowModal)
         prog.show()
@@ -828,10 +832,10 @@ class Fenetre(QMainWindow):
         def fin(chemin, err):
             prog.close()
             if err:
-                QMessageBox.warning(self, "Reconnaître le texte", err)
+                QMessageBox.warning(self, _('Reconnaître le texte'), err)
             else:
                 self.ouvrir(chemin)
-                self.statusBar().showMessage(f"Texte reconnu : {os.path.basename(chemin)}", 10000)
+                self.statusBar().showMessage(_('Texte reconnu : {nom}', nom=os.path.basename(chemin)), 10000)
         t.fini.connect(fin)
         t.start()
 
@@ -848,14 +852,12 @@ class Fenetre(QMainWindow):
             return
         m = o.doc.metadata or {}
         polices = sorted({f[3] for p in o.doc for f in p.get_fonts()})
-        QMessageBox.information(self, "Propriétés", f"Fichier : {o.chemin or o.nom}\nPages : {len(o.doc)}\n"
-                                f"Créé par : {m.get('creator') or '-'}\nProduit par : {m.get('producer') or '-'}\n"
-                                f"Polices : {', '.join(polices[:12]) or 'aucune (scan)'}")
+        QMessageBox.information(self, _('Propriétés'), _('Fichier : {x}\nPages : {n}\nCréé par : {x2}\nProduit par : {x3}\nPolices : {x4}', x=o.chemin or o.nom, n=len(o.doc), x2=m.get('creator') or '-', x3=m.get('producer') or '-', x4=', '.join(polices[:12]) or 'aucune (scan)'))
 
     def preferences(self):
         d = QDialog(self)
-        d.setWindowTitle("Préférences")
-        d.setMinimumWidth(620)
+        d.setWindowTitle(_('Préférences'))
+        d.setMinimumWidth(760)
         vd = QVBoxLayout(d)
         tabs = QTabWidget()
         vd.addWidget(tabs)
@@ -878,111 +880,141 @@ class Fenetre(QMainWindow):
                 champ.setText(p)
 
         # ---------------- Général
-        f = page("Général")
+        f = page(_('Général'))
         machine = QLineEdit(self.params["machine"])
         auteur = QLineEdit(self.params.get("auteur", ""))
-        auteur.setPlaceholderText("Nom inscrit sur les tampons et commentaires")
-        f.addRow("Nom de ce poste (alias)", machine)
-        note(f, "Par exemple « Pharmacie », « Maison », « Portable » : c'est le nom affiché sur vos autres postes.")
-        f.addRow("Votre nom", auteur)
-        fixer = QCheckBox("Fixer signatures et tampons dans la page à l'enregistrement (non déplaçables ensuite)")
-        fixer.setChecked(self.params.get("fixer_objets", False))
-        f.addRow(fixer)
-        assoc = QCheckBox("Ouvrir les fichiers PDF avec PhilPDF (proposé dans « Ouvrir avec »)")
+        auteur.setPlaceholderText(_('Nom inscrit sur les tampons et commentaires'))
+        f.addRow(_('Nom de ce poste (alias)'), machine)
+        note(f, _("Par exemple « Pharmacie », « Maison », « Portable » : c'est le nom affiché sur vos autres postes."))
+        f.addRow(_('Votre nom'), auteur)
+        from .langue import disponibles, LANGUE
+        langue = QComboBox()
+        langue.addItem(_("Automatique (langue du système)"), "auto")
+        for code, nom in disponibles():
+            langue.addItem(nom, code)
+        langue.setCurrentIndex(max(0, langue.findData(self.params.get("langue", "auto"))))
+        f.addRow(_("Langue"), langue)
+        note(f, _("Le changement de langue s'applique au prochain démarrage de PhilPDF. Pour ajouter une langue : "
+                  "copier langues/en.json, le traduire et le renommer (es.json, de.json...)."))
+        assoc = QCheckBox(_('Ouvrir les fichiers PDF avec PhilPDF (proposé dans « Ouvrir avec »)'))
         assoc.setChecked(self.params["association_pdf"])
         assoc.setEnabled(sys.platform == "win32" and not est_portable())
         f.addRow(assoc)
 
         # ---------------- Drive et dossiers
-        f = page("Drive et dossiers")
+        f = page(_('Drive et dossiers'))
         drive = QComboBox()
         drive.setEditable(True)
-        drive.addItem("(aucun)", "")
+        drive.addItem(_('(aucun)'), "")
         for nom, chemin in detecter_clouds():
             drive.addItem(f"{nom} — {chemin}", chemin)
         if self.params.get("drive") and drive.findData(self.params["drive"]) < 0:
             drive.addItem(self.params["drive"], self.params["drive"])
         drive.setCurrentIndex(max(0, drive.findData(self.params.get("drive", ""))))
-        b = QPushButton("Autre...")
+        b = QPushButton(_('Autre...'))
         b.clicked.connect(lambda: (lambda p: p and (drive.addItem(p, p), drive.setCurrentIndex(drive.count() - 1)))(
-            QFileDialog.getExistingDirectory(d, "Dossier du Drive sur ce PC")))
+            QFileDialog.getExistingDirectory(d, _('Dossier du Drive sur ce PC'))))
         hs = QHBoxLayout()
         hs.addWidget(drive, 1)
         hs.addWidget(b)
-        f.addRow("Drive (Google Drive, OneDrive...)", hs)
-        note(f, "Le Drive sert de boîte aux lettres à PhilPDF : sauvegarde des tampons et signatures, et liste des "
-                "fichiers ouverts sur chaque poste (leurs emplacements, jamais les PDF eux-mêmes).")
-        sauver = QPushButton("Sauvegarder tampons et signatures maintenant")
-        sauver.clicked.connect(lambda: QMessageBox.information(d, "Drive", f"{self.biblio.sauvegarder_drive() or 0} élément(s) copiés sur le Drive."
-                                                               if self.params.get("drive") else "Choisissez d'abord votre Drive."))
-        f.addRow("", sauver)
+        f.addRow(_('Drive (Google Drive, OneDrive...)'), hs)
+        note(f, _('Le Drive sert de boîte aux lettres à PhilPDF : sauvegarde des tampons et signatures, et liste des fichiers ouverts sur chaque poste (leurs emplacements, jamais les PDF eux-mêmes).'))
         connus = dossiers_connus()
-        for clef, lib in (("documents", "Documents"), ("telechargements", "Téléchargements"), ("bureau", "Bureau")):
-            lb = QLabel(connus.get(clef, "(non trouvé)"))
+        for clef, lib in (("documents", _('Documents')), ("telechargements", _('Téléchargements')), ("bureau", _('Bureau'))):
+            lb = QLabel(connus.get(clef, _('(non trouvé)')))
             lb.setStyleSheet("color:#333")
             f.addRow(lib, lb)
         nas = QLineEdit(self.params.get("nas", ""))
-        nas.setPlaceholderText(r"ex. \\NAS\Partage, Z:\ ou /mnt/nas")
-        bn = QPushButton("Choisir...")
-        bn.clicked.connect(lambda: choisir_dossier(nas, "Dossier du NAS sur ce poste"))
+        nas.setPlaceholderText(_('ex. \\\\NAS\\Partage, Z:\\ ou /mnt/nas'))
+        bn = QPushButton(_('Choisir...'))
+        bn.clicked.connect(lambda: choisir_dossier(nas, _('Dossier du NAS sur ce poste')))
         hn = QHBoxLayout()
         hn.addWidget(nas, 1)
         hn.addWidget(bn)
         f.addRow("NAS", hn)
-        note(f, "Documents, Téléchargements et Bureau sont détectés automatiquement, sous Windows comme sous Linux "
-                "(%USERPROFILE%\\Documents ↔ ~/Documents). A l'ouverture, PhilPDF part du dernier dossier utilisé.")
+        note(f, _("Documents, Téléchargements et Bureau sont détectés automatiquement, sous Windows comme sous Linux (%USERPROFILE%\\Documents ↔ ~/Documents). A l'ouverture, PhilPDF part du dernier dossier utilisé."))
+
+        # ---------------- Tampons et signatures
+        from .dialogues import PanneauBibliotheque
+        w = QWidget()
+        vt = QVBoxLayout(w)
+        tabs.addTab(w, _('Tampons et signatures'))
+        panneaux = []
+        for genre, titre in (("tampons", _('Mes tampons')), ("signatures", _('Mes signatures'))):
+            t = QLabel(titre)
+            t.setStyleSheet("font-weight:600;color:#616161")
+            vt.addWidget(t)
+            pb = PanneauBibliotheque(w, self.biblio, genre, self.params.get("auteur", ""), compact=True)
+            pb.setMinimumHeight(215)
+            vt.addWidget(pb, 1)
+            panneaux.append(pb)
+        hb = QHBoxLayout()
+        bsync = QPushButton(_(' Synchroniser avec le Drive maintenant'))
+        bsync.setIcon(icone("synchro", "#0f6cbd"))
+        bsync.clicked.connect(lambda: (panneaux[0].synchroniser(), panneaux[1].rafraichir()))
+        hb.addWidget(bsync)
+        ls = QLabel(_('Chaque ajout, renommage ou suppression est envoyé tout seul au Drive ; vos autres postes les reçoivent à leur démarrage.'))
+        ls.setWordWrap(True)
+        ls.setStyleSheet("color:#555;font-size:12px")
+        hb.addWidget(ls, 1)
+        vt.addLayout(hb)
+        fixer = QCheckBox(_("Incruster tampons et signatures dans la page à l'enregistrement"))
+        fixer.setChecked(self.params.get("fixer_objets", False))
+        vt.addWidget(fixer)
+        lf = QLabel(_("Incrustés, ils font partie de la page : personne ne peut plus les déplacer ni les retirer, ni dans PhilPDF ni dans Acrobat. Sinon, ils restent des objets que l'on peut déplacer, agrandir ou supprimer."))
+        lf.setWordWrap(True)
+        lf.setStyleSheet("color:#555;font-size:12px")
+        vt.addWidget(lf)
 
         # ---------------- Synchronisation (avancé)
-        f = page("Synchronisation (avancé)")
-        sync = QCheckBox("Synchroniser les fichiers ouverts sur mes différents postes")
+        f = page(_('Synchronisation (avancé)'))
+        sync = QCheckBox(_('Synchroniser les fichiers ouverts sur mes différents postes'))
         sync.setChecked(self.params.get("synchro", True))
         f.addRow(sync)
-        note(f, "Au démarrage, PhilPDF vérifie en silence si un autre poste a une session plus récente ; si oui, il "
-                "cherche ses fichiers ici quelques secondes, prévient par une bulle et laisse la proposition sur "
-                "l'Accueil. Bouton de synchronisation manuelle sur l'Accueil et dans le menu Fichier.")
+        note(f, _("Au démarrage, PhilPDF vérifie en silence si un autre poste a une session plus récente ; si oui, il cherche ses fichiers ici quelques secondes, prévient par une bulle et laisse la proposition sur l'Accueil. Bouton de synchronisation manuelle sur l'Accueil et dans le menu Fichier."))
         racines = QListWidget()
         racines.setMaximumHeight(90)
         for r in self.params.get("racines", []):
             racines.addItem(r)
         hr = QHBoxLayout()
-        br = QPushButton("Ajouter un emplacement...")
-        br.clicked.connect(lambda: (lambda p: p and racines.addItem(p))(QFileDialog.getExistingDirectory(d, "Emplacement de vos documents")))
+        br = QPushButton(_('Ajouter un emplacement...'))
+        br.clicked.connect(lambda: (lambda p: p and racines.addItem(p))(QFileDialog.getExistingDirectory(d, _('Emplacement de vos documents'))))
         hr.addWidget(br)
-        bs = QPushButton("Retirer")
+        bs = QPushButton(_('Retirer'))
         bs.clicked.connect(lambda: [racines.takeItem(racines.row(i)) for i in racines.selectedItems()])
         hr.addWidget(bs)
         hr.addStretch()
-        f.addRow("Autres emplacements à fouiller", racines)
+        f.addRow(_('Autres emplacements à fouiller'), racines)
         f.addRow("", hr)
-        bc = QPushButton(" Correspondances apprises et synchronisation...")
+        bc = QPushButton(_(' Correspondances apprises et synchronisation...'))
         bc.setIcon(icone("synchro", "#2b6cb0"))
         bc.clicked.connect(self.synchroniser)
         f.addRow("", bc)
 
         # ---------------- IA
-        f = page("IA")
+        f = page(_("IA"))
         moteur = QComboBox()
-        moteur.addItems(["Claude", "Gemini", "Les deux (double avis)"])
+        moteur.addItems(["Claude", "Gemini", _('Les deux (double avis)')])
         moteur.setCurrentIndex({"claude": 0, "gemini": 1, "deux": 2}.get(self.params["ia_moteur"], 0))
         kc = QLineEdit(self.params["clef_claude"])
         kc.setEchoMode(QLineEdit.Password)
         kg = QLineEdit(self.params["clef_gemini"])
         kg.setEchoMode(QLineEdit.Password)
-        f.addRow("Moteur IA", moteur)
-        f.addRow("Clef API Claude", kc)
-        f.addRow("Clef API Gemini", kg)
-        note(f, "Gemini en offre gratuite : Google peut réutiliser les documents envoyés. A éviter pour les documents sensibles.", "#a35c00")
+        f.addRow(_('Moteur IA'), moteur)
+        f.addRow(_('Clef API Claude'), kc)
+        f.addRow(_('Clef API Gemini'), kg)
+        note(f, _('Gemini en offre gratuite : Google peut réutiliser les documents envoyés. A éviter pour les documents sensibles.'), "#a35c00")
 
         # ---------------- Mises à jour
-        f = page("Mises à jour")
+        f = page(_('Mises à jour'))
         majs = QComboBox()
-        majs.addItems(["GitHub (Internet)", "Dossier synchronisé"])
+        majs.addItems([_('GitHub (Internet)'), _('Dossier synchronisé')])
         majs.setCurrentIndex(1 if self.params.get("maj_source") == "dossier" else 0)
-        maja = QCheckBox("Vérifier les mises à jour au démarrage (une fois par jour)")
+        maja = QCheckBox(_('Vérifier les mises à jour au démarrage (une fois par jour)'))
         maja.setChecked(self.params.get("maj_auto", True))
-        f.addRow("Mises à jour depuis", majs)
+        f.addRow(_('Mises à jour depuis'), majs)
         f.addRow(maja)
-        f.addRow(QLabel(f"Version {VERSION}. Données : {dossier_donnees()}" + (" (version portable)" if est_portable() else "")))
+        f.addRow(QLabel(_('Version {VERSION}. Données : {dossier_donnees}', VERSION=VERSION, dossier_donnees=dossier_donnees()) + (_(' (version portable)') if est_portable() else "")))
 
         bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
         bb.accepted.connect(d.accept)
@@ -993,7 +1025,7 @@ class Fenetre(QMainWindow):
         self.params.update(machine=machine.text().strip() or self.params["machine"],
                            drive=drive.currentData() if drive.currentData() is not None else drive.currentText().strip(),
                            auteur=auteur.text().strip(), fixer_objets=fixer.isChecked(),
-                           nas=nas.text().strip(), synchro=sync.isChecked(),
+                           nas=nas.text().strip(), synchro=sync.isChecked(), langue=langue.currentData(),
                            racines=[racines.item(i).text() for i in range(racines.count())],
                            ia_moteur=["claude", "gemini", "deux"][moteur.currentIndex()],
                            clef_claude=kc.text().strip(), clef_gemini=kg.text().strip(),
@@ -1014,34 +1046,34 @@ class Fenetre(QMainWindow):
     def _maj_trouvee(self, res, silencieux):
         if not res:
             if not silencieux:
-                QMessageBox.information(self, "Mises à jour", f"PhilPDF {VERSION} est à jour.")
+                QMessageBox.information(self, _('Mises à jour'), _('PhilPDF {VERSION} est à jour.', VERSION=VERSION))
             return
         version, paquet, notes = res
-        r = QMessageBox.question(self, "Mise à jour disponible",
-                                 f"PhilPDF {version} est disponible (vous avez {VERSION}).\n\n{notes[:600]}\n\n"
-                                 "Installer maintenant ? PhilPDF se fermera puis se relancera.")
+        r = QMessageBox.question(self, _('Mise à jour disponible'),
+                                 _('PhilPDF {version} est disponible (vous avez {VERSION}).\n\n{x}\n\nInstaller maintenant ? PhilPDF se fermera puis se relancera.', version=version, VERSION=VERSION, x=notes[:600]))
         if r != QMessageBox.Yes:
             return
         from .mise_a_jour import appliquer
         try:
             lance = appliquer(paquet)
         except Exception as e:
-            QMessageBox.warning(self, "Mise à jour", f"Echec du téléchargement :\n{e}")
+            QMessageBox.warning(self, _('Mise à jour'), _('Echec du téléchargement :\n{e}', e=e))
             return
         if lance:
             self.close()
         else:
-            QMessageBox.information(self, "Mise à jour", f"Téléchargez la nouvelle version ici :\n{paquet}")
+            QMessageBox.information(self, _('Mise à jour'), _('Téléchargez la nouvelle version ici :\n{paquet}', paquet=paquet))
 
     def raccourcis(self):
-        QMessageBox.information(self, "Raccourcis clavier",
-                                "Ctrl+O  Ouvrir\nCtrl+S  Enregistrer\nShift+Ctrl+S  Enregistrer sous\nCtrl+P  Imprimer\n"
-                                "Ctrl+Z  Annuler\nCtrl+C  Copier la sélection\nCtrl+F  Rechercher et remplacer\n"
-                                "Ctrl+ +/-  Zoom\nCtrl+1  Taille réelle\nCtrl+2  Ajuster à la largeur\n"
-                                "Shift+Ctrl++  Pivoter\nCtrl+W  Fermer le fichier\nF11  Plein écran")
+        QMessageBox.information(self, _('Raccourcis clavier'),
+                                _("Ctrl+O  Ouvrir\nCtrl+S  Enregistrer\nShift+Ctrl+S  Enregistrer sous\nCtrl+P  Imprimer\n"
+                                  "Ctrl+Z  Annuler\nShift+Ctrl+Z  Rétablir\nCtrl+C  Copier la sélection\nCtrl+F  Rechercher et remplacer\n"
+                                  "Ctrl+ +/-  Zoom\nCtrl+1  Taille réelle\nCtrl+2  Ajuster à la largeur\n"
+                                  "Shift+Ctrl++  Pivoter\nCtrl+W  Fermer le fichier\nF4  Vignettes\nShift+F4  Volet de droite\n"
+                                  "F11  Plein écran"))
 
     def a_propos(self):
-        QMessageBox.about(self, "A propos de PhilPDF",
-                          f"<b>PhilPDF {VERSION}</b> – Editeur PDF<br>Usage personnel et familial.<br><br>"
-                          "Moteur PDF : PyMuPDF (AGPL). Interface : Qt / PySide6 (LGPL). OCR : Tesseract (Apache 2.0).<br>"
-                          "Police de remplacement fournie : Nunito (SIL Open Font License).")
+        QMessageBox.about(self, _('A propos de PhilPDF'),
+                          _("<b>PhilPDF {version}</b> – Editeur PDF<br>Usage personnel et familial.<br><br>"
+                            "Moteur PDF : PyMuPDF (AGPL). Interface : Qt / PySide6 (LGPL). OCR : Tesseract (Apache 2.0).<br>"
+                            "Police de remplacement fournie : Nunito (SIL Open Font License).", version=VERSION))

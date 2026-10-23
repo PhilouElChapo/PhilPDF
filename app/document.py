@@ -1,7 +1,7 @@
 """Onglet d'un fichier ouvert : visionneuse, vignettes, selection, barre rapide,
 mode Modifier facon Acrobat (deplacer, editer dans la page), objets deplacables
 (tampons, signatures, annotations), organisation des pages."""
-import os
+import os, sys
 import pymupdf as fitz
 from PySide6.QtCore import Qt, Signal, QRectF, QPointF, QTimer, QSize, QPoint
 from PySide6.QtGui import QImage, QPainter, QColor, QPen, QPixmap, QGuiApplication, QFont, QIcon
@@ -15,6 +15,7 @@ from .outils import outil, famille
 from .dialogues import boutons_fr, DialogueBibliotheque
 from moteur.modifier import Editeur, CANDIDATS
 from moteur import objets
+from .langue import _
 
 ECRAN = 96 / 72                 # points PDF -> pixels a 100 %
 POIGNEE = 8                      # taille des poignees (pixels)
@@ -122,7 +123,33 @@ class PageWidget(QWidget):
             p.setPen(QPen(QColor("#1462c2"), 1.5, Qt.DashLine))
             p.setBrush(QColor(20, 98, 194, 30))
             p.drawRect(self.vers_ecran(self.glisse["fantome"]))
+        # apercu de ce qui va etre pose : coin haut gauche sous la souris
+        if self.survol is not None and not self.editeur and not self.glisse:
+            f = o.fantome(self.num, self.survol)
+            if f:
+                r, pix, texte, taille = f
+                re = self.vers_ecran(r)
+                if pix is not None:
+                    p.setOpacity(0.55)
+                    p.drawPixmap(re.toRect(), pix)
+                    p.setOpacity(1.0)
+                p.setPen(QPen(QColor("#1462c2"), 1.2, Qt.DashLine))
+                p.setBrush(QColor(20, 98, 194, 22))
+                p.drawRect(re)
+                if texte:
+                    fo = QFont()
+                    fo.setPixelSize(max(8, int(taille * self.echelle() * 0.95)))
+                    p.setFont(fo)
+                    p.setPen(QColor(31, 31, 31, 120))
+                    p.drawText(re.adjusted(3, 0, 0, 0), Qt.AlignLeft | Qt.AlignVCenter, texte)
+                p.setPen(Qt.NoPen)
+                p.setBrush(QColor("#1462c2"))
+                p.drawEllipse(re.topLeft(), 3, 3)
         p.end()
+
+    def leaveEvent(self, e):
+        self.survol = None
+        self.update()
 
     def _poignees(self, r):
         h = POIGNEE / 2
@@ -150,14 +177,16 @@ class PageWidget(QWidget):
             return
         if e.button() != Qt.LeftButton:
             return
-        if o.mode == "poser":
-            o.poser_objet(self.num, pt)
-            return
-        if o.mode == "ajout_texte":
-            self.ouvrir_editeur(None, pt)
-            return
-        if o.mode == "ajout_image":
-            o.ajouter_image_ici(self.num, pt)
+        if o.mode in ("poser", "ajout_texte", "ajout_image"):
+            f = o.fantome(self.num, pt)
+            hg = f[0].tl if f else pt
+            self.survol = None
+            if o.mode == "poser":
+                o.poser_objet(self.num, hg)
+            elif o.mode == "ajout_texte":
+                self.ouvrir_editeur(None, hg)
+            else:
+                o.ajouter_image_ici(self.num, hg)
             return
         if o.mode in ("lien", "recadrer"):
             self.glisse = {"genre": "zone", "debut": pt, "fantome": fitz.Rect(pt, pt)}
@@ -221,7 +250,7 @@ class PageWidget(QWidget):
             self.setCursor(Qt.IBeamCursor)
         else:
             self.setCursor(Qt.ArrowCursor)
-        if o.mode == "modifier":
+        if o.mode in ("modifier", "poser", "ajout_texte", "ajout_image"):
             self.update()
 
     def mouseReleaseEvent(self, e):
@@ -283,7 +312,7 @@ class EditeurEnLigne(QWidget):
         else:
             taille_px = max(9, self.taille * e * 0.95)
             p = fitz.Point(pt) * pw._mat_texte()
-            x, y, w, hh = p.x, p.y - taille_px * 1.15, 360, taille_px * 1.6
+            x, y, w, hh = p.x, p.y - taille_px * 0.15, 360, taille_px * 1.6
         f = QFont()
         f.setPixelSize(int(taille_px))
         self.champ.setFont(f)
@@ -291,7 +320,7 @@ class EditeurEnLigne(QWidget):
         h.addWidget(self.champ, 1)
         plus = QToolButton()
         plus.setText("…")
-        plus.setToolTip("Ouvrir la boîte de dialogue (texte, taille, couleur)")
+        plus.setToolTip(_('Ouvrir la boîte de dialogue (texte, taille, couleur)'))
         plus.clicked.connect(self.dialogue)
         h.addWidget(plus)
         self.setGeometry(int(x - 3), int(y - 3), int(w + 30), int(hh))
@@ -334,32 +363,34 @@ class EditeurEnLigne(QWidget):
             if texte.rstrip() != self.initial or taille or couleur:
                 o.modifier_ligne_texte(self.pw.num, self.rect, texte, taille, couleur)
         elif texte.strip():
-            o.ajouter_texte(self.pw.num, self.pt, texte, taille or self.taille, couleur, police)
+            t = taille or self.taille
+            # self.pt est le coin haut gauche ; le moteur attend la ligne de base
+            o.ajouter_texte(self.pw.num, fitz.Point(self.pt.x, self.pt.y + t * 0.8), texte, t, couleur, police)
         self.pw.update()
 
 
 class DialogueTexte(QDialog):
     def __init__(self, parent, texte, onglet):
         super().__init__(parent)
-        self.setWindowTitle("Texte")
+        self.setWindowTitle(_('Texte'))
         f = QFormLayout(self)
         self.texte = QLineEdit(texte)
         self.texte.setMinimumWidth(420)
-        f.addRow("Texte", self.texte)
+        f.addRow(_('Texte'), self.texte)
         self.taille = QDoubleSpinBox()
         self.taille.setRange(4, 96)
         self.taille.setValue(onglet.format_taille.value())
         self.taille.setSuffix(" pt")
-        f.addRow("Taille", self.taille)
+        f.addRow(_('Taille'), self.taille)
         self.couleur, self.couleur_modifiee = QColor("#000000"), False
-        b = QPushButton("Choisir...")
+        b = QPushButton(_('Choisir...'))
         b.clicked.connect(self._coul)
-        f.addRow("Couleur", b)
+        f.addRow(_('Couleur'), b)
         self.combo = QComboBox()
-        self.combo.addItem("Police du document (automatique)", None)
+        self.combo.addItem(_('Police du document (automatique)'), None)
         for n, fichier in CANDIDATS:
             self.combo.addItem(n, fichier)
-        f.addRow("Police", self.combo)
+        f.addRow(_('Police'), self.combo)
         bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -387,13 +418,13 @@ class BarreRapide(QFrame):
         h = QHBoxLayout(self)
         h.setContentsMargins(6, 4, 6, 4)
         h.setSpacing(2)
-        for ic, txt, f in [("surligner", "Surligner", lambda: self.o.annoter("surligner")),
-                           ("souligner", "Souligner", lambda: self.o.annoter("souligner")),
-                           ("barrer", "Barrer", lambda: self.o.annoter("barrer")),
-                           ("commentaire", "Note", lambda: self.o.annoter("note")),
-                           ("copier", "Copier", self.o.copier),
-                           ("modifier", "Modifier le texte", self.o.modifier_selection),
-                           ("biffer", "Biffer (effacer pour de vrai)", self.o.biffer)]:
+        for ic, txt, f in [("surligner", _('Surligner'), lambda: self.o.annoter("surligner")),
+                           ("souligner", _('Souligner'), lambda: self.o.annoter("souligner")),
+                           ("barrer", _('Barrer'), lambda: self.o.annoter("barrer")),
+                           ("commentaire", _('Note'), lambda: self.o.annoter("note")),
+                           ("copier", _('Copier'), self.o.copier),
+                           ("modifier", _('Modifier le texte'), self.o.modifier_selection),
+                           ("biffer", _('Biffer (effacer pour de vrai)'), self.o.biffer)]:
             b = QToolButton()
             b.setIcon(icone(ic, "#ffffff", 40))
             b.setIconSize(QSize(18, 18))
@@ -475,7 +506,7 @@ class OngletDocument(QWidget):
         else:
             self.poids_initial = 0
         self.doc = doc
-        self.nom = nom or os.path.basename(chemin or "Sans titre.pdf")
+        self.nom = nom or os.path.basename(chemin or _('Sans titre.pdf'))
         self.modifie = chemin is None
         self.zoom = params.get("zoom", 1.25)
         self.rotation_vue = {}
@@ -489,6 +520,7 @@ class OngletDocument(QWidget):
         self._cache_lignes, self._cache_mots, self._cache_images = {}, {}, {}
         self.objets_pdf = {}       # xref annotation -> (pdf, nom, genre) pour copier/coller
         self._construire()
+        self.maj_historique()
 
     # ------------------------------------------------------------ interface
     def _construire(self):
@@ -534,6 +566,12 @@ class OngletDocument(QWidget):
         v.addWidget(self.sp, 1)
         self.barre_rapide = BarreRapide(self, self.zone.viewport())
         self.construire_pages()
+        self.vignettes.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.liste_outils.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.liste_outils.setTextElideMode(Qt.ElideRight)
+        if not self.params.get("vignettes", True):
+            self.vignettes.hide()
+        QTimer.singleShot(0, lambda: self.mode_volet(self.params.get("volet", "complet"), memoriser=False))
 
     def _bouton(self, ic, txt, f, coul="#333333", aide=None):
         b = QToolButton()
@@ -547,27 +585,72 @@ class OngletDocument(QWidget):
         b.clicked.connect(f)
         return b
 
+    def _petit(self, ic, aide, f, checkable=False):
+        b = QToolButton()
+        b.setIcon(icone(ic, "#444444"))
+        b.setIconSize(QSize(18, 18))
+        b.setToolTip(aide)
+        b.setAutoRaise(True)
+        b.setCheckable(checkable)
+        b.clicked.connect(f)
+        return b
+
+    def _aller_champ(self):
+        try:
+            n = int(self.champ_page.text()) - 1
+        except ValueError:
+            n = self.page_courante()
+        self.aller_a(max(0, min(len(self.doc) - 1, n)))
+
     def _barre_outils(self):
         w = QFrame()
-        w.setStyleSheet("QFrame{background:#fff;border-bottom:1px solid #e2e2e2} QToolButton{font-size:11px;color:#444}")
+        w.setObjectName("barre")
+        w.setStyleSheet("QFrame#barre{background:#fff;border-bottom:1px solid #e2e2e2} QToolButton{font-size:11px;color:#444}")
         h = QHBoxLayout(w)
         h.setContentsMargins(10, 2, 10, 2)
         h.setSpacing(2)
-        h.addWidget(self._bouton("enregistrer", "Enregistrer", lambda: self.outil_demande.emit("enregistrer"), aide="Enregistrer (Ctrl+S)"))
-        h.addWidget(self._bouton("imprimer", "Imprimer", lambda: self.outil_demande.emit("imprimer"), aide="Imprimer (Ctrl+P)"))
-        h.addWidget(self._bouton("rechercher", "Rechercher", lambda: self.outil_demande.emit("remplacer"), aide="Rechercher et remplacer (Ctrl+F)"))
-        h.addWidget(self._bouton("annuler", "Annuler", self.annuler, aide="Annuler (Ctrl+Z)"))
-        h.addSpacing(8)
+        self.b_vignettes = self._petit("volet_gauche", _('Afficher / masquer les vignettes des pages'), self.basculer_vignettes, True)
+        self.b_vignettes.setChecked(self.params.get("vignettes", True))
+        h.addWidget(self.b_vignettes)
+        h.addSpacing(4)
+        h.addWidget(self._bouton("enregistrer", _('Enregistrer'), lambda: self.outil_demande.emit("enregistrer"), aide=_('Enregistrer (Ctrl+S)')))
+        h.addWidget(self._bouton("imprimer", _('Imprimer'), lambda: self.outil_demande.emit("imprimer"), aide=_('Imprimer (Ctrl+P)')))
+        h.addWidget(self._bouton("rechercher", _('Rechercher'), lambda: self.outil_demande.emit("remplacer"), aide=_('Rechercher et remplacer (Ctrl+F)')))
+        for attr, ic, txt, f in (("b_annuler", "annuler", _("Annuler|action"), lambda: self.annuler()),
+                                 ("b_retablir", "retablir", _('Rétablir'), lambda: self.retablir())):
+            b = self._bouton(ic, txt, f)
+            b.setPopupMode(QToolButton.MenuButtonPopup)
+            b.setMenu(QMenu(b))
+            b.setMinimumWidth(70)
+            setattr(self, attr, b)
+            h.addWidget(b)
+        h.addSpacing(6)
+        nav = QHBoxLayout()
+        nav.setSpacing(0)
+        for ic, aide, f in (("premiere", _('Première page (Début)'), lambda: self.aller_a(0)),
+                            ("precedente", _('Page précédente (Page préc.)'), lambda: self.aller_a(max(0, self.page_courante() - 1)))):
+            nav.addWidget(self._petit(ic, aide, f))
+        self.champ_page = QLineEdit()
+        self.champ_page.setFixedWidth(42)
+        self.champ_page.setAlignment(Qt.AlignCenter)
+        self.champ_page.setToolTip(_('Tapez un numéro de page puis Entrée'))
+        self.champ_page.returnPressed.connect(self._aller_champ)
+        nav.addWidget(self.champ_page)
         self.lbl_page = QLabel()
-        h.addWidget(self.lbl_page)
-        h.addSpacing(8)
-        h.addWidget(self._bouton("zoom_moins", "Zoom −", lambda: self.changer_zoom(self.zoom / 1.2)))
+        self.lbl_page.setStyleSheet("color:#555;padding:0 4px")
+        nav.addWidget(self.lbl_page)
+        for ic, aide, f in (("suivante", _('Page suivante (Page suiv.)'), lambda: self.aller_a(min(len(self.doc) - 1, self.page_courante() + 1))),
+                            ("derniere", _('Dernière page (Fin)'), lambda: self.aller_a(len(self.doc) - 1))):
+            nav.addWidget(self._petit(ic, aide, f))
+        h.addLayout(nav)
+        h.addSpacing(6)
+        h.addWidget(self._bouton("zoom_moins", _('Zoom −'), lambda: self.changer_zoom(self.zoom / 1.2)))
         self.lbl_zoom = QLabel()
         self.lbl_zoom.setMinimumWidth(44)
         self.lbl_zoom.setAlignment(Qt.AlignCenter)
         h.addWidget(self.lbl_zoom)
-        h.addWidget(self._bouton("zoom_plus", "Zoom +", lambda: self.changer_zoom(self.zoom * 1.2)))
-        h.addWidget(self._bouton("pivoter", "Pivoter", self.pivoter_courante, aide="Pivoter la page affichée de 90°"))
+        h.addWidget(self._bouton("zoom_plus", _('Zoom +'), lambda: self.changer_zoom(self.zoom * 1.2)))
+        h.addWidget(self._bouton("pivoter", _('Pivoter'), self.pivoter_courante, aide=_('Pivoter la page affichée de 90°')))
         sep = QFrame()
         sep.setFrameShape(QFrame.VLine)
         sep.setStyleSheet("color:#e2e2e2")
@@ -576,7 +659,8 @@ class OngletDocument(QWidget):
         self.zone_favoris.setSpacing(2)
         h.addLayout(self.zone_favoris)
         h.addStretch()
-        self.b_volet = self._bouton("organiser", "Volet", self.basculer_volet, aide="Afficher / masquer le volet de droite")
+        self.b_volet = self._bouton("volet_droit", _('Volet'), self.basculer_volet,
+                                    aide=_('Volet de droite : complet → icônes seules → masqué'))
         h.addWidget(self.b_volet)
         self.remplir_favoris()
         return w
@@ -590,32 +674,33 @@ class OngletDocument(QWidget):
                 it.widget().setParent(None)
         for oid in self.params["outils_epingles"]:
             o = outil(oid)
-            if o:
-                _, _, coul, _ = famille(o[1])
+            if o and oid not in ("imprimer", "remplacer", "enregistrer"):
+                _x, _x, coul, _x = famille(o[1])
                 b = self._bouton(o[2], o[3].split(" ")[0] if len(o[3]) > 12 else o[3],
-                                 lambda _=False, x=oid: self.outil_demande.emit(x), coul, o[3] + " — " + o[5])
+                                 lambda _x=False, x=oid: self.outil_demande.emit(x), coul, o[3] + " — " + o[5])
                 self.zone_favoris.addWidget(b)
 
     def _bandeau_modifier(self):
         self.bandeau = QFrame()
-        self.bandeau.setStyleSheet("QFrame{background:#fbe8f2;border-bottom:1px solid #efc7dc}"
+        self.bandeau.setObjectName("bandeau")
+        self.bandeau.setStyleSheet("QFrame#bandeau{background:#fbe8f2;border-bottom:1px solid #efc7dc}"
                                    "QToolButton{color:#6b0f41;font-size:11px;padding:2px 6px;border-radius:6px}"
                                    "QToolButton:checked{background:#f3c9df} QToolButton:hover{background:#f6d6e7}")
         h = QHBoxLayout(self.bandeau)
         h.setContentsMargins(12, 2, 12, 2)
         h.setSpacing(2)
-        lbl = QLabel("<b>Modifier le PDF</b>")
+        lbl = QLabel(_('<b>Modifier le PDF</b>'))
         lbl.setStyleSheet("color:#6b0f41;margin-right:10px")
         h.addWidget(lbl)
         self.boutons_modif = {}
-        for cle, ic, txt, aide in [("modifier", "modifier", "Modifier", "Cliquer : sélectionner et déplacer ; double-clic : corriger dans la page"),
-                                   ("ajout_texte", "creer", "Ajouter du texte", "Cliquez où écrire"),
-                                   ("ajout_image", "exporter", "Ajouter une image", "Choisissez une image puis cliquez où la placer"),
-                                   ("lien", "remplacer", "Lien", "Tracez la zone du lien"),
-                                   ("recadrer", "organiser", "Recadrer les pages", "Tracez la zone à garder"),
-                                   ("entete", "entete", "En-tête et pied de page", None),
-                                   ("filigrane", "filigrane", "Filigrane", None),
-                                   ("fond", "nettoyer", "Arrière-plan", "Couleur de fond des pages")]:
+        for cle, ic, txt, aide in [("modifier", "modifier", _('Modifier'), "Cliquer : sélectionner et déplacer ; double-clic : corriger dans la page"),
+                                   ("ajout_texte", "creer", _('Ajouter du texte'), _('Cliquez où écrire')),
+                                   ("ajout_image", "exporter", _('Ajouter une image'), _('Choisissez une image puis cliquez où la placer')),
+                                   ("lien", "remplacer", _('Lien'), _('Tracez la zone du lien')),
+                                   ("recadrer", "organiser", _('Recadrer les pages'), _('Tracez la zone à garder')),
+                                   ("entete", "entete", _('En-tête et pied de page'), None),
+                                   ("filigrane", "filigrane", _('Filigrane'), None),
+                                   ("fond", "nettoyer", _('Arrière-plan'), _('Couleur de fond des pages'))]:
             b = QToolButton()
             b.setIcon(icone(ic, "#b0186b"))
             b.setIconSize(QSize(18, 18))
@@ -623,11 +708,11 @@ class OngletDocument(QWidget):
             b.setToolTip(aide or txt)
             b.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
             b.setCheckable(cle in ("modifier", "ajout_texte", "ajout_image", "lien", "recadrer"))
-            b.clicked.connect(lambda _=False, c=cle: self._action_modifier(c))
+            b.clicked.connect(lambda _x=False, c=cle: self._action_modifier(c))
             self.boutons_modif[cle] = b
             h.addWidget(b)
         h.addStretch()
-        fin = QPushButton("Terminer")
+        fin = QPushButton(_('Terminer'))
         fin.setStyleSheet("QPushButton{background:#b0186b;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-weight:600}")
         fin.clicked.connect(lambda: self.changer_mode(None))
         h.addWidget(fin)
@@ -638,7 +723,7 @@ class OngletDocument(QWidget):
         if cle in ("modifier", "ajout_texte", "lien", "recadrer"):
             self.changer_mode(cle)
         elif cle == "ajout_image":
-            f, _ = QFileDialog.getOpenFileName(self, "Image à ajouter", "", "Images (*.png *.jpg *.jpeg *.bmp *.tif *.gif)")
+            f, _x = QFileDialog.getOpenFileName(self, _('Image à ajouter'), "", _('Images (*.png *.jpg *.jpeg *.bmp *.tif *.gif)'))
             if f:
                 self.image_a_ajouter = f
                 self.changer_mode("ajout_image")
@@ -652,18 +737,18 @@ class OngletDocument(QWidget):
         v = QVBoxLayout(w)
         v.setContentsMargins(16, 10, 16, 10)
         h = QHBoxLayout()
-        t = QLabel("<b>Organiser les pages</b> — glissez pour réordonner, clic droit pour plus d'actions")
+        t = QLabel(_("<b>Organiser les pages</b> — glissez pour réordonner, clic droit pour plus d'actions"))
         h.addWidget(t)
         h.addStretch()
-        for txt, f in [("Pivoter ↺", lambda: self._sel_grille(lambda p: self.pivoter(p, -90, demander=False))),
-                       ("Pivoter ↻", lambda: self._sel_grille(lambda p: self.pivoter(p, 90, demander=False))),
-                       ("Supprimer", lambda: self._sel_grille(self.supprimer_pages)),
-                       ("Extraire", lambda: self._sel_grille(self.extraire)),
-                       ("Insérer un fichier...", self.inserer_fichier)]:
+        for txt, f in [(_('Pivoter ↺'), lambda: self._sel_grille(lambda p: self.pivoter(p, -90, demander=False))),
+                       (_('Pivoter ↻'), lambda: self._sel_grille(lambda p: self.pivoter(p, 90, demander=False))),
+                       (_('Supprimer'), lambda: self._sel_grille(self.supprimer_pages)),
+                       (_('Extraire'), lambda: self._sel_grille(self.extraire)),
+                       (_('Insérer un fichier...'), self.inserer_fichier)]:
             b = QPushButton(txt)
             b.clicked.connect(f)
             h.addWidget(b)
-        fin = QPushButton("Terminer")
+        fin = QPushButton(_('Terminer'))
         fin.setStyleSheet("QPushButton{background:#c9252d;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-weight:600}")
         fin.clicked.connect(lambda: self.organiser(False))
         h.addWidget(fin)
@@ -681,7 +766,7 @@ class OngletDocument(QWidget):
         if pages:
             f(pages)
         else:
-            self.message("Sélectionnez d'abord des pages.")
+            self.message(_("Sélectionnez d'abord des pages."))
 
     def organiser(self, actif=True):
         if actif:
@@ -697,30 +782,97 @@ class OngletDocument(QWidget):
         w.setStyleSheet("QFrame#volet{background:#fff;border-left:1px solid #e2e2e2}")
         v = QVBoxLayout(w)
         v.setContentsMargins(0, 0, 0, 0)
+        self.modes_volet = QStackedWidget()
+        v.addWidget(self.modes_volet)
         self.pile_volet = QStackedWidget()
-        v.addWidget(self.pile_volet)
+        self.modes_volet.addWidget(self.pile_volet)
         self.pile_volet.addWidget(self._volet_outils())
         self.pile_volet.addWidget(self._volet_format())
         self.pile_volet.addWidget(self._volet_bibliotheque())
+        self.icones_volet = QWidget()
+        self.icones_layout = QVBoxLayout(self.icones_volet)
+        self.icones_layout.setContentsMargins(4, 10, 4, 10)
+        self.icones_layout.setSpacing(4)
+        self.modes_volet.addWidget(self.icones_volet)
+        self.remplir_icones_volet()
         return w
 
-    def basculer_volet(self):
+    def remplir_icones_volet(self):
+        while self.icones_layout.count():
+            it = self.icones_layout.takeAt(0)
+            if it.widget():
+                it.widget().hide()
+                it.widget().setParent(None)
+        for oid in self.params["outils_epingles"]:
+            o = outil(oid)
+            if o:
+                b = QToolButton()
+                b.setIcon(icone(o[2], famille(o[1])[2]))
+                b.setIconSize(QSize(22, 22))
+                b.setToolTip(f"{o[3]} — {o[5]}")
+                b.setAutoRaise(True)
+                b.clicked.connect(lambda _x=False, x=oid: self.outil_demande.emit(x))
+                self.icones_layout.addWidget(b, 0, Qt.AlignHCenter)
+        b = QToolButton()
+        b.setIcon(icone("plus", "#555555"))
+        b.setIconSize(QSize(20, 20))
+        b.setToolTip(_('Tous les outils'))
+        b.setAutoRaise(True)
+        b.clicked.connect(lambda: self.outil_demande.emit("__outils__"))
+        self.icones_layout.addWidget(b, 0, Qt.AlignHCenter)
+        self.icones_layout.addStretch()
+        b = QToolButton()
+        b.setIcon(icone("volet_droit", "#555555"))
+        b.setToolTip(_('Volet complet'))
+        b.setAutoRaise(True)
+        b.clicked.connect(lambda: self.mode_volet("complet"))
+        self.icones_layout.addWidget(b, 0, Qt.AlignHCenter)
+
+    def mode_volet(self, mode, memoriser=True):
+        """'complet', 'icones' ou 'masque' (memorise pour tous les documents)."""
         tailles = self.sp.sizes()
-        if tailles[2] > 0:
+        total = tailles[1] + tailles[2]
+        if self.modes_volet.currentIndex() == 0 and tailles[2] > 60:
             self._taille_volet = tailles[2]
-            self.sp.setSizes([tailles[0], tailles[1] + tailles[2], 0])
+        if mode == "icones":
+            self.modes_volet.setCurrentIndex(1)
+            self.volet.setMinimumWidth(48)
+            self.volet.setMaximumWidth(56)
+            self.volet.show()
+            self.sp.setSizes([tailles[0], total - 52, 52])
+        elif mode == "masque":
+            self.volet.hide()
         else:
+            self.modes_volet.setCurrentIndex(0)
+            self.volet.setMaximumWidth(16777215)
+            self.volet.setMinimumWidth(200)
+            self.volet.show()
             t = getattr(self, "_taille_volet", 300)
-            self.sp.setSizes([tailles[0], max(200, tailles[1] - t), t])
+            self.sp.setSizes([tailles[0], max(300, total - t), t])
+        self._mode_volet = mode
+        if memoriser:
+            self.params["volet"] = mode
+            self.params.enregistrer()
+
+    def basculer_volet(self):
+        suivant = {"complet": "icones", "icones": "masque", "masque": "complet"}
+        self.mode_volet(suivant.get(getattr(self, "_mode_volet", "complet"), "complet"))
+
+    def basculer_vignettes(self, *_x):
+        visible = not self.vignettes.isVisible()
+        self.vignettes.setVisible(visible)
+        self.b_vignettes.setChecked(visible)
+        self.params["vignettes"] = visible
+        self.params.enregistrer()
 
     def _volet_outils(self):
         w = QWidget()
         l = QVBoxLayout(w)
         l.setContentsMargins(14, 16, 14, 16)
-        t = QLabel("MES OUTILS")
+        t = QLabel(_('MES OUTILS'))
         t.setStyleSheet("font-size:12px;font-weight:600;color:#555;letter-spacing:1px")
         l.addWidget(t)
-        aide = QLabel("Glissez pour changer l'ordre (barre du haut comprise).")
+        aide = QLabel(_("Glissez pour changer l'ordre (barre du haut comprise)."))
         aide.setStyleSheet("font-size:11px;color:#777")
         aide.setWordWrap(True)
         l.addWidget(aide)
@@ -732,12 +884,11 @@ class OngletDocument(QWidget):
         self.liste_outils.itemClicked.connect(lambda it: self.outil_demande.emit(it.data(Qt.UserRole)))
         self.liste_outils.model().rowsMoved.connect(self._ordre_outils)
         l.addWidget(self.liste_outils, 1)
-        tous = QPushButton("  +  Tous les outils")
+        tous = QPushButton(_('  +  Tous les outils'))
         tous.setStyleSheet("QPushButton{text-align:left;padding:9px 8px;border:1px dashed #cfcfcf;border-radius:8px;font-size:14px}")
         tous.clicked.connect(lambda: self.outil_demande.emit("__outils__"))
         l.addWidget(tous)
-        ia = QLabel("✦ <b>Assistant IA</b><br><span style='font-size:12px'>Prévu en V3 : résumé, points clefs, remise en page "
-                    "avec Claude ou Gemini. Rien n'est envoyé sans votre clic.</span>")
+        ia = QLabel(_("✦ <b>Assistant IA</b><br><span style='font-size:12px'>Prévu en V3 : résumé, points clefs, remise en page avec Claude ou Gemini. Rien n'est envoyé sans votre clic.</span>"))
         ia.setWordWrap(True)
         ia.setStyleSheet("background:#f2fafa;border:1px solid #cfe9ea;border-radius:10px;padding:10px;color:#0b5e63")
         l.addWidget(ia)
@@ -760,6 +911,8 @@ class OngletDocument(QWidget):
                 self.liste_outils.addItem(it)
         self.liste_outils.blockSignals(False)
         self.remplir_favoris()
+        if hasattr(self, "icones_layout"):
+            self.remplir_icones_volet()
         self.maj_info()
 
     def _ordre_outils(self, *a):
@@ -767,43 +920,43 @@ class OngletDocument(QWidget):
         self.params["outils_epingles"] = ordre
         self.params.enregistrer()
         self.remplir_favoris()
+        self.remplir_icones_volet()
         self.outil_demande.emit("__epingles__")
 
     def _volet_format(self):
         w = QWidget()
         f = QFormLayout(w)
         f.setContentsMargins(14, 16, 14, 16)
-        t = QLabel("FORMAT")
+        t = QLabel(_('FORMAT'))
         t.setStyleSheet("font-size:12px;font-weight:600;color:#555;letter-spacing:1px")
         f.addRow(t)
-        self.format_info = QLabel("Cliquez sur une ligne pour la sélectionner, glissez pour la déplacer, "
-                                  "double-cliquez pour corriger dans la page.")
+        self.format_info = QLabel(_('Cliquez sur une ligne pour la sélectionner, glissez pour la déplacer, double-cliquez pour corriger dans la page.'))
         self.format_info.setWordWrap(True)
         self.format_info.setStyleSheet("color:#555;font-size:12px")
         f.addRow(self.format_info)
         self.format_police = QComboBox()
-        self.format_police.addItem("Police du document (automatique)", None)
+        self.format_police.addItem(_('Police du document (automatique)'), None)
         for n, fichier in CANDIDATS:
             self.format_police.addItem(n, fichier)
-        f.addRow("Police", self.format_police)
+        f.addRow(_('Police'), self.format_police)
         self.format_taille = QDoubleSpinBox()
         self.format_taille.setRange(4, 96)
         self.format_taille.setValue(11)
         self.format_taille.setSuffix(" pt")
-        f.addRow("Taille", self.format_taille)
+        f.addRow(_('Taille'), self.format_taille)
         self.format_couleur = QColor("#000000")
         self.b_couleur = QPushButton()
         self._maj_b_couleur()
         self.b_couleur.clicked.connect(self._choisir_couleur)
-        f.addRow("Couleur", self.b_couleur)
-        self.b_appliquer = QPushButton("Appliquer à la ligne sélectionnée")
+        f.addRow(_('Couleur'), self.b_couleur)
+        self.b_appliquer = QPushButton(_('Appliquer à la ligne sélectionnée'))
         self.b_appliquer.clicked.connect(self.appliquer_format)
         f.addRow(self.b_appliquer)
-        t2 = QLabel("OBJETS")
+        t2 = QLabel(_('OBJETS'))
         t2.setStyleSheet("font-size:12px;font-weight:600;color:#555;letter-spacing:1px;margin-top:12px")
         f.addRow(t2)
-        for txt, fn in [("Supprimer l'objet sélectionné", self.supprimer),
-                        ("Remplacer l'image...", self.remplacer_image)]:
+        for txt, fn in [(_("Supprimer l'objet sélectionné"), self.supprimer),
+                        (_("Remplacer l'image..."), self.remplacer_image)]:
             b = QPushButton(txt)
             b.clicked.connect(fn)
             f.addRow(b)
@@ -825,8 +978,7 @@ class OngletDocument(QWidget):
         self.titre_biblio = QLabel()
         self.titre_biblio.setStyleSheet("font-size:12px;font-weight:600;color:#555;letter-spacing:1px")
         l.addWidget(self.titre_biblio)
-        aide = QLabel("Cliquez un élément, puis cliquez sur la page pour le poser. Il reste déplaçable "
-                      "et redimensionnable (poignées), Suppr pour l'enlever.")
+        aide = QLabel(_("Cliquez un élément, puis cliquez sur la page pour le poser. Il reste déplaçable et redimensionnable (poignées), Suppr pour l'enlever."))
         aide.setWordWrap(True)
         aide.setStyleSheet("color:#555;font-size:12px")
         l.addWidget(aide)
@@ -835,24 +987,24 @@ class OngletDocument(QWidget):
         self.liste_biblio.setSpacing(4)
         self.liste_biblio.itemClicked.connect(self._choisir_biblio)
         l.addWidget(self.liste_biblio, 1)
-        b = QPushButton("Gérer, importer, dessiner...")
+        b = QPushButton(_('Gérer, importer, dessiner...'))
         b.clicked.connect(self._gerer_biblio)
         l.addWidget(b)
-        b = QPushButton("Fermer")
+        b = QPushButton(_('Fermer'))
         b.clicked.connect(lambda: self.changer_mode(None))
         l.addWidget(b)
         return w
 
     def ouvrir_bibliotheque(self, genre):
         self.genre_biblio = genre
-        self.titre_biblio.setText("MES TAMPONS" if genre == "tampons" else "MES SIGNATURES")
+        self.titre_biblio.setText(_('MES TAMPONS') if genre == "tampons" else _('MES SIGNATURES'))
         self.liste_biblio.clear()
         auteur = self.params.get("machine", "")
         if genre == "tampons":
             for nom, t, c in objets.PREDEFINIS:
                 pdf = objets.tampon_predefini(t, c, self.params.get("auteur", ""))
                 self._ajout_item_biblio(nom, pdf, {"nom": nom, "dynamique": True, "texte": t, "couleur": list(c)},
-                                        "Tampon à la date du jour")
+                                        _('Tampon à la date du jour'))
         for e in self.biblio.elements(genre):
             self._ajout_item_biblio(e["nom"], None, e)
         self.pile_volet.setCurrentIndex(2)
@@ -875,7 +1027,7 @@ class OngletDocument(QWidget):
                if e.get("dynamique") else self.biblio.lire(e))
         self.a_poser = (pdf, e["nom"], "signature" if self.genre_biblio == "signatures" else "tampon")
         self.mode = "poser"
-        self.bandeau_simple.setText(f"<b>{e['nom']}</b> — cliquez sur la page pour le poser.")
+        self.bandeau_simple.setText(_('<b>{nom}</b> — cliquez sur la page pour le poser.', nom=e['nom']))
         self.bandeau_simple.show()
 
     def _gerer_biblio(self):
@@ -887,18 +1039,19 @@ class OngletDocument(QWidget):
             if pdf:
                 self.a_poser = (pdf, e["nom"], "signature" if self.genre_biblio == "signatures" else "tampon")
                 self.mode = "poser"
-                self.bandeau_simple.setText(f"<b>{e['nom']}</b> — cliquez sur la page pour le poser.")
+                self.bandeau_simple.setText(_('<b>{nom}</b> — cliquez sur la page pour le poser.', nom=e['nom']))
                 self.bandeau_simple.show()
 
     def _montrer_volet(self):
-        if self.sp.sizes()[2] == 0:
-            self.basculer_volet()
+        """Format ou bibliotheque demandes : le volet doit etre complet."""
+        if getattr(self, "_mode_volet", "complet") != "complet" or self.sp.sizes()[2] == 0:
+            self.mode_volet("complet", memoriser=False)
 
     def maj_info(self):
         if hasattr(self, "lbl_info"):
-            self.lbl_info.setText(f"{len(self.doc)} page{'s' if len(self.doc) > 1 else ''}"
-                                  + (f" · {self.poids_initial // 1024} Ko à l'ouverture" if self.poids_initial else "")
-                                  + (" · modifié, non enregistré" if self.modifie else ""))
+            self.lbl_info.setText(_('{n} page{x}', n=len(self.doc), x='s' if len(self.doc) > 1 else '')
+                                  + (_(" · {x} Ko à l'ouverture", x=self.poids_initial // 1024) if self.poids_initial else "")
+                                  + (_(' · modifié, non enregistré') if self.modifie else ""))
 
     # ------------------------------------------------------------ pages
     def construire_pages(self):
@@ -960,9 +1113,11 @@ class OngletDocument(QWidget):
                 return pw.num
         return len(self.page_widgets) - 1
 
-    def _page_visible(self, *_):
+    def _page_visible(self, *_x):
         if getattr(self, "page_widgets", None):
-            self.lbl_page.setText(f"Page {self.page_courante() + 1} sur {len(self.doc)}")
+            if not self.champ_page.hasFocus():
+                self.champ_page.setText(str(self.page_courante() + 1))
+            self.lbl_page.setText(f"/ {len(self.doc)}")
 
     def aller_a(self, n, rect=None):
         self.organiser(False) if self.centre.currentIndex() == 1 else None
@@ -1099,7 +1254,7 @@ class OngletDocument(QWidget):
                 self.format_taille.setValue(round(s["size"], 1))
                 self.format_couleur = QColor.fromRgbF(*fitz.sRGB_to_pdf(s["color"]))
                 self._maj_b_couleur()
-                self.format_info.setText(f"<b>{t.strip()[:40]}</b><br>{s['font']}, {s['size']:.1f} pt")
+                self.format_info.setText(_('<b>{x}</b><br>{font}, {size:.1f} pt', x=t.strip()[:40], font=s['font'], size=s['size']))
             except Exception:
                 pass
         self.rafraichir_pages()
@@ -1118,7 +1273,7 @@ class OngletDocument(QWidget):
                         if a.xref == obj["xref"]:
                             a.set_rect(nouveau)
                             a.update()
-                journal = ["Objet déplacé."]
+                journal = [_('Objet déplacé.')]
             elif obj["type"] == "ligne":
                 d = nouveau.tl - obj["rect"].tl
                 ed = Editeur(self.doc)
@@ -1129,8 +1284,8 @@ class OngletDocument(QWidget):
                 ed.deplacer_image(n, obj["xref"], nouveau)
                 journal = ed.journal
         except Exception as e:
-            self.annulations.pop()
-            self.message(f"Déplacement impossible : {e}")
+            (self.annulations.pop(), self.maj_historique())
+            self.message(_('Déplacement impossible : {e}', e=e))
             return
         obj["rect"] = fitz.Rect(nouveau)
         if obj["type"] in ("image",):
@@ -1157,24 +1312,24 @@ class OngletDocument(QWidget):
         elif obj["type"] == "image":
             Editeur(self.doc).supprimer_image(n, obj["xref"])
         self.objet = None
-        self.apres_modif(["Objet supprimé."])
+        self.apres_modif([_('Objet supprimé.')])
 
     def remplacer_image(self):
         obj = self.objet
         if not obj or obj["type"] != "image":
-            self.message("Sélectionnez d'abord une image (mode Modifier).")
+            self.message(_("Sélectionnez d'abord une image (mode Modifier)."))
             return
-        f, _ = QFileDialog.getOpenFileName(self, "Nouvelle image", "", "Images (*.png *.jpg *.jpeg *.bmp *.tif)")
+        f, _x = QFileDialog.getOpenFileName(self, _('Nouvelle image'), "", _('Images (*.png *.jpg *.jpeg *.bmp *.tif)'))
         if f:
             self.memoriser()
             Editeur(self.doc).remplacer_image(obj["page"], obj["xref"], obj["rect"], f)
             self.objet = None
-            self.apres_modif(["Image remplacée."])
+            self.apres_modif([_('Image remplacée.')])
 
     def editer_annotation(self, obj):
         for a in self.doc[obj["page"]].annots():
             if a.xref == obj["xref"] and not obj.get("philpdf"):
-                t, ok = QInputDialog.getMultiLineText(self, "Commentaire", "Texte :", a.info.get("content", ""))
+                t, ok = QInputDialog.getMultiLineText(self, _('Commentaire'), _('Texte :'), a.info.get("content", ""))
                 if ok:
                     self.memoriser()
                     a.set_info(content=t)
@@ -1187,16 +1342,16 @@ class OngletDocument(QWidget):
             self.choisir_objet(obj)
         m = QMenu(self)
         if self.objet:
-            m.addAction(icone("copier"), "Copier", self.copier)
-            m.addAction("Couper", self.couper)
-            m.addAction(icone("fermer", "#c9252d"), "Supprimer", self.supprimer)
+            m.addAction(icone("copier"), _('Copier'), self.copier)
+            m.addAction(_('Couper'), self.couper)
+            m.addAction(icone("fermer", "#c9252d"), _('Supprimer'), self.supprimer)
             if self.objet["type"] == "image":
-                m.addAction("Remplacer l'image...", self.remplacer_image)
+                m.addAction(_("Remplacer l'image..."), self.remplacer_image)
             if self.objet["type"] == "ligne":
-                m.addAction("Corriger dans la page", lambda: pw.ouvrir_editeur(self.objet["rect"], None, self.objet["texte"]))
+                m.addAction(_('Corriger dans la page'), lambda: pw.ouvrir_editeur(self.objet["rect"], None, self.objet["texte"]))
             m.addSeparator()
-        m.addAction("Coller", lambda: self.coller(pw.num, pt))
-        m.addAction("Ajouter du texte ici", lambda: pw.ouvrir_editeur(None, pt))
+        m.addAction(_('Coller'), lambda: self.coller(pw.num, pt))
+        m.addAction(_('Ajouter du texte ici'), lambda: pw.ouvrir_editeur(None, pt))
         m.exec(pos_globale)
 
     # ---- presse-papiers
@@ -1210,15 +1365,15 @@ class OngletDocument(QWidget):
                 if pdf is None:  # objet venu du fichier : on le recopie en image
                     page = self.doc[obj["page"]]
                     pm = page.get_pixmap(clip=obj["rect"], dpi=200, annots=True)
-                    pdf = (objets.pdf_depuis_image(pm.tobytes("png"), True), "Objet", "tampon")
+                    pdf = (objets.pdf_depuis_image(pm.tobytes("png"), True), _('Objet'), "tampon")
                 self.presse_objet = (pdf, fitz.Rect(obj["rect"]))
             elif obj["type"] == "image":
                 info = self.doc.extract_image(obj["xref"])
                 self.presse_objet = (("image", info["image"]), fitz.Rect(obj["rect"]))
-            self.message("Copié.")
+            self.message(_('Copié.'))
         elif self.selection:
             QGuiApplication.clipboard().setText(self.selection["texte"])
-            self.message("Texte copié.")
+            self.message(_('Texte copié.'))
 
     def couper(self):
         if self.objet:
@@ -1239,7 +1394,7 @@ class OngletDocument(QWidget):
                 pdf, nom, genre = data
                 x = objets.poser(self.doc, n, cible, pdf, nom, self.params.get("auteur", ""), genre)
                 self.objets_pdf[x] = data
-            self.apres_modif(["Collé."])
+            self.apres_modif([_('Collé.')])
             return
         t = QGuiApplication.clipboard().text()
         if t:
@@ -1261,9 +1416,9 @@ class OngletDocument(QWidget):
         elif genre == "barrer":
             a = page.add_strikeout_annot(s["lignes"])
         else:
-            txt, ok = QInputDialog.getMultiLineText(self, "Note", "Texte de la note :")
+            txt, ok = QInputDialog.getMultiLineText(self, _('Note'), _('Texte de la note :'))
             if not ok:
-                self.annulations.pop()
+                (self.annulations.pop(), self.maj_historique())
                 return
             r = s["lignes"][-1]
             a = page.add_text_annot(fitz.Point(r.x1 + 2, r.y0), txt, icon="Comment")
@@ -1276,9 +1431,8 @@ class OngletDocument(QWidget):
         s = self.selection
         if not s:
             return
-        if question(self, "Biffer", "Le texte sélectionné sera supprimé définitivement du fichier "
-                    "et remplacé par un rectangle noir. Continuer ?",
-                    [("Biffer", QMessageBox.AcceptRole), ("Annuler", QMessageBox.RejectRole)]) != 0:
+        if question(self, _('Biffer'), _('Le texte sélectionné sera supprimé définitivement du fichier et remplacé par un rectangle noir. Continuer ?'),
+                    [(_('Biffer'), QMessageBox.AcceptRole), (_('Annuler'), QMessageBox.RejectRole)]) != 0:
             return
         self.memoriser()
         page = self.doc[s["page"]]
@@ -1286,7 +1440,7 @@ class OngletDocument(QWidget):
             page.add_redact_annot(r, fill=(0, 0, 0))
         page.apply_redactions()
         self.selection = None
-        self.apres_modif(["Passage biffé : le texte n'existe plus dans le fichier."])
+        self.apres_modif([_("Passage biffé : le texte n'existe plus dans le fichier.")])
 
     def modifier_selection(self):
         s = self.selection
@@ -1307,16 +1461,16 @@ class OngletDocument(QWidget):
         try:
             ed.modifier_ligne(n, rect, texte, taille, couleur)
         except ValueError as e:
-            self.annulations.pop()
+            (self.annulations.pop(), self.maj_historique())
             self.message(str(e))
             return
         self.objet = None
-        self.apres_modif(ed.journal or ["Aucun changement."])
+        self.apres_modif(ed.journal or [_('Aucun changement.')])
 
     def appliquer_format(self):
         obj = self.objet
         if not obj or obj["type"] != "ligne":
-            self.message("Sélectionnez d'abord une ligne (mode Modifier).")
+            self.message(_("Sélectionnez d'abord une ligne (mode Modifier)."))
             return
         self.modifier_ligne_texte(obj["page"], obj["rect"], obj["texte"].rstrip(), self.format_taille.value(),
                                   self.format_couleur.getRgbF()[:3])
@@ -1340,37 +1494,37 @@ class OngletDocument(QWidget):
         h = w * pix.height / pix.width
         self.doc[n].insert_image(fitz.Rect(pt.x, pt.y, pt.x + w, pt.y + h), filename=f)
         self.image_a_ajouter = None
-        self.apres_modif(["Image ajoutée : sélectionnez-la pour la déplacer ou la redimensionner."])
+        self.apres_modif([_('Image ajoutée : sélectionnez-la pour la déplacer ou la redimensionner.')])
         self.changer_mode("modifier")
 
     def zone_tracee(self, n, r):
         page = self.doc[n]
         if self.mode == "lien":
-            choix = question(self, "Lien", "Ce lien mène vers :", [("Un site Internet", QMessageBox.AcceptRole),
-                                                                  ("Une page du document", QMessageBox.AcceptRole),
-                                                                  ("Annuler", QMessageBox.RejectRole)])
+            choix = question(self, _('Lien'), _('Ce lien mène vers :'), [(_('Un site Internet'), QMessageBox.AcceptRole),
+                                                                  (_('Une page du document'), QMessageBox.AcceptRole),
+                                                                  (_('Annuler'), QMessageBox.RejectRole)])
             if choix == 0:
-                url, ok = QInputDialog.getText(self, "Lien", "Adresse :", text="https://")
+                url, ok = QInputDialog.getText(self, _('Lien'), _('Adresse :'), text="https://")
                 if ok and url:
-                    self.memoriser()
+                    self.memoriser(_("Ajout d'un lien"))
                     page.insert_link({"kind": fitz.LINK_URI, "from": r, "uri": url})
-                    self.apres_modif(["Lien ajouté."])
+                    self.apres_modif([_('Lien ajouté.')])
             elif choix == 1:
-                num, ok = QInputDialog.getInt(self, "Lien", "Page :", 1, 1, len(self.doc))
+                num, ok = QInputDialog.getInt(self, _('Lien'), _('Page :'), 1, 1, len(self.doc))
                 if ok:
-                    self.memoriser()
+                    self.memoriser(_("Ajout d'un lien"))
                     page.insert_link({"kind": fitz.LINK_GOTO, "from": r, "page": num - 1, "to": fitz.Point(0, 0)})
-                    self.apres_modif(["Lien ajouté."])
+                    self.apres_modif([_('Lien ajouté.')])
         elif self.mode == "recadrer":
-            choix = question(self, "Recadrer", "Recadrer :", [("Cette page", QMessageBox.AcceptRole),
-                                                            ("Toutes les pages", QMessageBox.AcceptRole),
-                                                            ("Annuler", QMessageBox.RejectRole)])
+            choix = question(self, _('Recadrer'), _('Recadrer :'), [(_('Cette page'), QMessageBox.AcceptRole),
+                                                            (_('Toutes les pages'), QMessageBox.AcceptRole),
+                                                            (_('Annuler'), QMessageBox.RejectRole)])
             if choix in (0, 1):
-                self.memoriser()
+                self.memoriser(_('Recadrage'))
                 for p in ([page] if choix == 0 else list(self.doc)):
                     zone = (fitz.Rect(r) + (p.cropbox.x0, p.cropbox.y0, p.cropbox.x0, p.cropbox.y0)) & p.mediabox
                     p.set_cropbox(zone)
-                self.apres_modif(["Pages recadrées."], reconstruire=True)
+                self.apres_modif([_('Pages recadrées.')], reconstruire=True)
         self.changer_mode("modifier")
 
     # ---- poser tampon / signature
@@ -1378,21 +1532,55 @@ class OngletDocument(QWidget):
         if not self.a_poser:
             return
         pdf, nom, genre = self.a_poser
-        w, h = objets.taille_naturelle(pdf)
-        maxi = 220 if genre == "signature" else 180
-        k = min(1.0, maxi / max(w, 1))
-        w, h = w * k, h * k
-        self.memoriser()
-        r = fitz.Rect(pt.x - w / 2, pt.y - h / 2, pt.x + w / 2, pt.y + h / 2)
+        w, h = self._taille_objet()
+        self.memoriser(_("Pose de « {nom} »", nom=nom))
+        r = fitz.Rect(pt.x, pt.y, pt.x + w, pt.y + h)
         x = objets.poser(self.doc, n, r, pdf, nom, self.params.get("auteur", ""), genre)
         self.objets_pdf[x] = (pdf, nom, genre)
         self.mode = None
         self.bandeau_simple.hide()
-        self.apres_modif([f"« {nom} » est en place : glissez pour déplacer, poignées pour la taille, Suppr pour enlever."])
+        self.apres_modif([_("« {nom} » est en place : glissez pour déplacer, poignées pour la taille, Suppr pour enlever.", nom=nom)])
         for a in self.doc[n].annots():
             if a.xref == x:
                 self.choisir_objet({"type": "annot", "page": n, "xref": x, "rect": fitz.Rect(a.rect),
                                     "philpdf": True, "garder_proportions": True})
+
+    def _taille_objet(self):
+        pdf, nom, genre = self.a_poser
+        w, h = objets.taille_naturelle(pdf)
+        k = min(1.0, (220 if genre == "signature" else 180) / max(w, 1))
+        return w * k, h * k
+
+    def fantome(self, n, pt):
+        """(rect, pixmap, texte, taille) de ce qui sera pose en cliquant en pt, ou None.
+        Le coin haut gauche suit la souris ; le cadre reste dans la page."""
+        page = self.doc[n].rect
+        pix = texte = None
+        taille = 0
+        if self.mode == "poser" and self.a_poser:
+            w, h = self._taille_objet()
+            cle = id(self.a_poser[0])
+            if getattr(self, "_fantome_cle", None) != cle:
+                im = QPixmap()
+                im.loadFromData(objets.apercu(self.a_poser[0], hauteur=max(40, int(h * 2))))
+                self._fantome_cle, self._fantome_pix = cle, im
+            pix = self._fantome_pix
+        elif self.mode == "ajout_texte":
+            taille = self.format_taille.value()
+            texte = _('Votre texte')
+            w, h = taille * 5.6, taille * 1.25
+        elif self.mode == "ajout_image" and getattr(self, "image_a_ajouter", None):
+            cle = self.image_a_ajouter
+            if getattr(self, "_fantome_cle", None) != cle:
+                self._fantome_cle, self._fantome_pix = cle, QPixmap(cle)
+            pix = self._fantome_pix
+            w = min(200, page.width / 3)
+            h = w * pix.height() / max(1, pix.width())
+        else:
+            return None
+        x = max(page.x0, min(pt.x, page.x1 - w))
+        y = max(page.y0, min(pt.y, page.y1 - h))
+        return fitz.Rect(x, y, x + w, y + h), pix, texte, taille
 
     def changer_mode(self, mode):
         if mode != "poser":
@@ -1422,10 +1610,9 @@ class OngletDocument(QWidget):
     def pivoter(self, pages, angle=90, demander=True):
         dans_fichier = True
         if demander:
-            dans_fichier = question(self, "Pivoter", "Conserver cette orientation dans le fichier ?\n\n"
-                                    "Oui : la page reste tournée à l'enregistrement.\nNon : seulement pour l'affichage.",
-                                    [("Oui, dans le fichier", QMessageBox.YesRole),
-                                     ("Seulement l'affichage", QMessageBox.NoRole)]) == 0
+            dans_fichier = question(self, _('Pivoter'), _("Conserver cette orientation dans le fichier ?\n\nOui : la page reste tournée à l'enregistrement.\nNon : seulement pour l'affichage."),
+                                    [(_('Oui, dans le fichier'), QMessageBox.YesRole),
+                                     (_("Seulement l'affichage"), QMessageBox.NoRole)]) == 0
         if dans_fichier:
             self.memoriser()
             for n in pages:
@@ -1442,33 +1629,33 @@ class OngletDocument(QWidget):
         if not pages:
             return
         m = QMenu(self)
-        m.addAction(icone("pivoter"), "Pivoter à droite (90°)", lambda: self.pivoter(pages, 90, demander=False))
-        m.addAction("Pivoter à gauche (90°)", lambda: self.pivoter(pages, -90, demander=False))
+        m.addAction(icone("pivoter"), _('Pivoter à droite (90°)'), lambda: self.pivoter(pages, 90, demander=False))
+        m.addAction(_('Pivoter à gauche (90°)'), lambda: self.pivoter(pages, -90, demander=False))
         m.addSeparator()
-        m.addAction("Déplacer au début", lambda: self.reordonner(pages + [i for i in range(len(self.doc)) if i not in pages]))
-        m.addAction("Déplacer à la fin", lambda: self.reordonner([i for i in range(len(self.doc)) if i not in pages] + pages))
-        m.addAction("Insérer des pages d'un fichier après...", lambda: self.inserer_fichier(pages[-1] + 1))
-        m.addAction("Remplacer par les pages d'un fichier...", lambda: self.remplacer_pages(pages))
-        m.addAction(icone("exporter"), "Extraire dans un nouveau PDF", lambda: self.extraire(pages))
+        m.addAction(_('Déplacer au début'), lambda: self.reordonner(pages + [i for i in range(len(self.doc)) if i not in pages]))
+        m.addAction(_('Déplacer à la fin'), lambda: self.reordonner([i for i in range(len(self.doc)) if i not in pages] + pages))
+        m.addAction(_("Insérer des pages d'un fichier après..."), lambda: self.inserer_fichier(pages[-1] + 1))
+        m.addAction(_("Remplacer par les pages d'un fichier..."), lambda: self.remplacer_pages(pages))
+        m.addAction(icone("exporter"), _('Extraire dans un nouveau PDF'), lambda: self.extraire(pages))
         m.addSeparator()
-        m.addAction(icone("fermer", "#c9252d"), "Supprimer", lambda: self.supprimer_pages(pages))
+        m.addAction(icone("fermer", "#c9252d"), _('Supprimer'), lambda: self.supprimer_pages(pages))
         m.exec(liste.mapToGlobal(pos))
 
     def reordonner(self, ordre):
         self.memoriser()
         self.doc.select(ordre)
-        self.apres_modif(["Pages réordonnées."], reconstruire=True)
+        self.apres_modif([_('Pages réordonnées.')], reconstruire=True)
 
     def supprimer_pages(self, pages):
         if len(pages) >= len(self.doc):
-            self.message("Impossible de supprimer toutes les pages.")
+            self.message(_('Impossible de supprimer toutes les pages.'))
             return
         self.memoriser()
         self.doc.delete_pages(pages)
         self.apres_modif(reconstruire=True)
 
     def inserer_fichier(self, apres=None):
-        f, _ = QFileDialog.getOpenFileName(self, "Insérer des pages", "", "PDF et images (*.pdf *.png *.jpg *.jpeg *.tif)")
+        f, _x = QFileDialog.getOpenFileName(self, _('Insérer des pages'), "", _('PDF et images (*.pdf *.png *.jpg *.jpeg *.tif)'))
         if not f:
             return
         src = fitz.open(f)
@@ -1476,10 +1663,10 @@ class OngletDocument(QWidget):
             src = fitz.open("pdf", src.convert_to_pdf())
         self.memoriser()
         self.doc.insert_pdf(src, start_at=len(self.doc) if apres is None else apres)
-        self.apres_modif(["Pages insérées."], reconstruire=True)
+        self.apres_modif([_('Pages insérées.')], reconstruire=True)
 
     def remplacer_pages(self, pages):
-        f, _ = QFileDialog.getOpenFileName(self, "Pages de remplacement", "", "PDF (*.pdf)")
+        f, _x = QFileDialog.getOpenFileName(self, _('Pages de remplacement'), "", _('PDF (*.pdf)'))
         if not f:
             return
         src = fitz.open(f)
@@ -1487,7 +1674,7 @@ class OngletDocument(QWidget):
         debut = pages[0]
         self.doc.delete_pages(pages)
         self.doc.insert_pdf(src, from_page=0, to_page=min(len(pages), len(src)) - 1, start_at=debut)
-        self.apres_modif(["Pages remplacées."], reconstruire=True)
+        self.apres_modif([_('Pages remplacées.')], reconstruire=True)
 
     def extraire(self, pages):
         nd = fitz.open()
@@ -1497,10 +1684,25 @@ class OngletDocument(QWidget):
         self.outil_demande.emit("__nouveau__")
 
     # ------------------------------------------------------------ historique
-    def memoriser(self):
-        self.annulations.append(self.doc.tobytes())
+    LIBELLES = {
+        "appliquer_deplacement": _('Déplacement'), "supprimer": _('Suppression'), "remplacer_image": _("Remplacement d'image"),
+        "editer_annotation": _("Modification d'un commentaire"), "coller": _('Coller'), "annoter": _('Annotation'),
+        "biffer": _('Biffage'), "modifier_ligne_texte": _('Modification du texte'), "ajouter_texte": _('Ajout de texte'),
+        "ajouter_image_ici": _("Ajout d'une image"), "poser_objet": _("Pose d'un tampon ou d'une signature"),
+        "pivoter": _('Rotation des pages'), "reordonner": _('Nouvel ordre des pages'), "supprimer_pages": _('Suppression de pages'),
+        "inserer_fichier": _('Insertion de pages'), "remplacer_pages": _('Remplacement de pages'),
+        "remplacer_un": _('Remplacer'), "remplacer_tout": _('Remplacer tout'), "mise_en_page": _('Mise en page'),
+        "alleger": _('Allègement du fichier'),
+    }
+
+    def memoriser(self, libelle=None):
+        """Photographie le document avant une modification, avec son nom pour l'historique."""
+        if libelle is None:
+            libelle = self.LIBELLES.get(sys._getframe(1).f_code.co_name, _('Modification'))
+        self.annulations.append((libelle, self.doc.tobytes()))
         self.annulations = self.annulations[-30:]
         self.retablissements.clear()
+        self.maj_historique()
 
     def _recharger(self, octets):
         self.doc = fitz.open(stream=octets, filetype="pdf")
@@ -1508,20 +1710,44 @@ class OngletDocument(QWidget):
         self.modifie = True
         self.construire_pages()
         self.titre_change.emit()
+        self.maj_historique()
 
-    def annuler(self):
+    def annuler(self, fois=1):
         if not self.annulations:
-            self.message("Rien à annuler.")
+            self.message(_('Rien à annuler.'))
             return
-        self.retablissements.append(self.doc.tobytes())
-        self._recharger(self.annulations.pop())
+        for _x in range(min(fois, len(self.annulations))):
+            lib, avant = self.annulations.pop()
+            self.retablissements.append((lib, self.doc.tobytes()))
+            self.doc = fitz.open(stream=avant, filetype="pdf")
+        self._recharger(self.doc.tobytes())
+        self.message(_('Annulé : {lib}', lib=lib) + (_(' (et {x} autre{x2})', x=fois - 1, x2='s' if fois > 2 else '') if fois > 1 else ""))
 
-    def retablir(self):
+    def retablir(self, fois=1):
         if not self.retablissements:
-            self.message("Rien à rétablir.")
+            self.message(_('Rien à rétablir.'))
             return
-        self.annulations.append(self.doc.tobytes())
-        self._recharger(self.retablissements.pop())
+        for _x in range(min(fois, len(self.retablissements))):
+            lib, apres = self.retablissements.pop()
+            self.annulations.append((lib, self.doc.tobytes()))
+            self.doc = fitz.open(stream=apres, filetype="pdf")
+        self._recharger(self.doc.tobytes())
+        self.message(_('Rétabli : {lib}', lib=lib))
+
+    def maj_historique(self):
+        """Etat des boutons Annuler / Retablir et de leurs listes deroulantes."""
+        if not hasattr(self, "b_annuler"):
+            return
+        for b, pile, f, verbe in ((self.b_annuler, self.annulations, self.annuler, _("Annuler|action")),
+                                  (self.b_retablir, self.retablissements, self.retablir, _('Rétablir'))):
+            b.setEnabled(bool(pile))
+            b.setToolTip(f"{verbe} : {pile[-1][0]}" if pile else _('Rien à {lower}', lower=verbe.lower()))
+            m = b.menu()
+            m.clear()
+            for k, (lib, _x) in enumerate(reversed(pile)):
+                a = m.addAction(_("{verbe} : {action}", verbe=verbe, action=lib) if k == 0 else
+                                _("{verbe} jusqu'à : {action}  ({n} actions)", verbe=verbe, action=lib, n=k + 1))
+                a.triggered.connect(lambda _x=False, f=f, n=k + 1: f(n))
 
     def apres_modif(self, journal=None, reconstruire=False):
         self.modifie = True
@@ -1566,29 +1792,29 @@ class DialogueRemplacer(QDialog):
     def __init__(self, onglet, texte=""):
         super().__init__(onglet)
         self.o = onglet
-        self.setWindowTitle("Rechercher et remplacer")
+        self.setWindowTitle(_('Rechercher et remplacer'))
         self.setMinimumWidth(480)
         f = QFormLayout(self)
         self.rech = QLineEdit(texte)
         self.remp = QLineEdit()
         self.compte = QLabel()
         self.compte.setStyleSheet("color:#1462c2;font-weight:600")
-        f.addRow("Rechercher", self.rech)
+        f.addRow(_('Rechercher'), self.rech)
         f.addRow("", self.compte)
-        f.addRow("Remplacer par", self.remp)
-        self.casse = QCheckBox("Respecter la casse (Dupont ≠ DUPONT)")
-        self.accents = QCheckBox("Ignorer les accents (e = é = è = ê)")
+        f.addRow(_('Remplacer par'), self.remp)
+        self.casse = QCheckBox(_('Respecter la casse (Dupont ≠ DUPONT)'))
+        self.accents = QCheckBox(_('Ignorer les accents (e = é = è = ê)'))
         self.accents.setChecked(True)
         f.addRow(self.casse)
         f.addRow(self.accents)
-        info = QLabel("La police et la mise en forme d'origine sont conservées.")
+        info = QLabel(_("La police et la mise en forme d'origine sont conservées."))
         info.setStyleSheet("color:#555")
         f.addRow(info)
         bb = QDialogButtonBox()
-        self.b_suiv = bb.addButton("Suivant ›", QDialogButtonBox.ActionRole)
-        self.b_un = bb.addButton("Remplacer", QDialogButtonBox.ActionRole)
-        self.b_tout = bb.addButton("Remplacer tout", QDialogButtonBox.ActionRole)
-        bb.addButton("Fermer", QDialogButtonBox.RejectRole)
+        self.b_suiv = bb.addButton(_('Suivant ›'), QDialogButtonBox.ActionRole)
+        self.b_un = bb.addButton(_('Remplacer'), QDialogButtonBox.ActionRole)
+        self.b_tout = bb.addButton(_('Remplacer tout'), QDialogButtonBox.ActionRole)
+        bb.addButton(_('Fermer'), QDialogButtonBox.RejectRole)
         f.addRow(bb)
         self.rech.textChanged.connect(self.compter)
         self.casse.toggled.connect(self.compter)
@@ -1609,7 +1835,7 @@ class DialogueRemplacer(QDialog):
         for n in range(len(self.o.doc)):
             for chars, d, f in ed.occurrences(n, t, self.casse.isChecked(), not self.accents.isChecked()):
                 r = fitz.Rect()
-                for c, _ in chars[d:f]:
+                for c, _x in chars[d:f]:
                     r |= fitz.Rect(c["bbox"])
                 out.append((n, r))
         return out
@@ -1617,8 +1843,8 @@ class DialogueRemplacer(QDialog):
     def compter(self):
         occ = self._occ()
         self.o.resultats = occ
-        self.compte.setText(f"{len(occ)} occurrence{'s' if len(occ) > 1 else ''}" if self.rech.text() else "")
-        self.b_tout.setText(f"Remplacer tout ({len(occ)})")
+        self.compte.setText(_('{n} occurrence{x}', n=len(occ), x='s' if len(occ) > 1 else '') if self.rech.text() else "")
+        self.b_tout.setText(_('Remplacer tout ({n})', n=len(occ)))
         self.idx = -1
         self.o.rafraichir_pages()
 
@@ -1648,5 +1874,5 @@ class DialogueRemplacer(QDialog):
         ed = Editeur(self.o.doc)
         n = ed.remplacer_tout(self.rech.text(), self.remp.text(), self.casse.isChecked(), not self.accents.isChecked())
         self.o.apres_modif(ed.journal)
-        self.o.message(f"{n} remplacement{'s' if n > 1 else ''} effectué{'s' if n > 1 else ''}.")
+        self.o.message(_('{n} remplacement{x} effectué{x}.', n=n, x='s' if n > 1 else ''))
         self.compter()

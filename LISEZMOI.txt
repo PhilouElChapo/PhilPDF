@@ -46,8 +46,25 @@ Source des mises a jour (Edition > Preferences) :
 Verification manuelle : Aide > Rechercher les mises a jour.
 
 
-3. CE QUE FAIT LA VERSION 0.2
+3. CE QUE FAIT LA VERSION 0.3
 -----------------------------
+
+  Nouveau en 0.3 :
+    - look plat facon Windows 10/11 (boutons, champs, onglets, menus) ;
+    - icones dans les menus ; Retablir a cote d'Annuler, avec la liste
+      des dernieres actions (fleche a droite du bouton) ;
+    - fleches premiere / precedente / suivante / derniere page et numero
+      de page a taper ;
+    - vignettes masquables (F4) ; volet de droite complet, icones seules
+      ou masque (bouton Volet ou Maj+F4) ;
+    - ajouter du texte, une image, un tampon ou une signature : un apercu
+      suit la souris, le clic pose le coin HAUT GAUCHE ;
+    - filigrane, en-tete / pied de page, arriere-plan : apercu en direct
+      avant de valider ;
+    - Preferences > Tampons et signatures : gerer, importer, dessiner ;
+      synchronisation avec le Drive dans les deux sens (ajouts et
+      suppressions), automatique ;
+    - multilingue : francais, anglais ; langue du systeme par defaut.
 
   Lecture   Onglets, vignettes, zoom, plein ecran, recherche
   Outils    Page Outils par familles, bulles d'aide ; les etoiles epinglent
@@ -99,7 +116,20 @@ Verification manuelle : Aide > Rechercher les mises a jour.
   Plus tard : signature numerique (certificat), formulaires, comparer, IA
 
 
-4. RACCOURCIS
+4. LANGUES
+----------
+
+PhilPDF est ecrit en francais. Les traductions sont des fichiers texte dans
+le dossier "langues" : en.json pour l'anglais. Chaque ligne associe le texte
+francais a sa traduction ; il faut garder les {noms} entre accolades.
+Pour une nouvelle langue : copier en.json en es.json, de.json..., traduire
+les valeurs, relancer PhilPDF. Choix de la langue : Edition > Preferences
+> General (automatique = langue du systeme, francais a defaut).
+Pour les developpeurs : python outils_dev/i18n.py extraire met les fichiers
+a jour avec les nouveaux textes.
+
+
+5. RACCOURCIS
 -------------
 
   Ctrl+O  ouvrir                 Ctrl+S  enregistrer
@@ -107,9 +137,11 @@ Verification manuelle : Aide > Rechercher les mises a jour.
   Ctrl+F  rechercher/remplacer   Ctrl+W  fermer le fichier
   Ctrl++  zoom avant             Ctrl+-  zoom arriere
   Ctrl+2  ajuster a la largeur   F11     plein ecran
+  Maj+Ctrl+Z  retablir           F4      vignettes
+  Maj+F4  volet de droite
 
 
-5. COMPOSANTS LIBRES EMBARQUES
+6. COMPOSANTS LIBRES EMBARQUES
 ------------------------------
 
   PyMuPDF (AGPL), Qt / PySide6 (LGPL), Tesseract (Apache 2.0),

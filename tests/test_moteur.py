@@ -1,6 +1,7 @@
 """Test du moteur Modifier sur un PDF fabrique a la volee (aucun fichier personnel)."""
 import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+os.environ["PHILPDF_LANGUE"] = "fr"       # les tests verifient les textes francais
 import pymupdf as fitz
 from moteur.modifier import Editeur
 

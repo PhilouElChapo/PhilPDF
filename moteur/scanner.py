@@ -13,6 +13,7 @@ Modes (reprend la maquette validee) :
 import io, os, shutil, subprocess, sys, tempfile
 import numpy as np
 import pymupdf as fitz
+from app.langue import _
 
 # taille estimee par page A4, en Ko, selon mode et resolution (mesuree sur de vrais scans)
 ESTIMATION = {"auto": 100, "nb": 60, "gris": 200, "couleur": 400}
@@ -70,7 +71,7 @@ def _numeriser_windows(device_id, mode, dpi, source):
         if dm.DeviceInfos.Item(i).DeviceID == device_id:
             dev = dm.DeviceInfos.Item(i).Connect()
     if dev is None:
-        raise RuntimeError("Scanner introuvable")
+        raise RuntimeError(_('Scanner introuvable'))
     # 3088 : selection chargeur (1) / vitre (2) / recto-verso (4|1)
     _prop(dev.Properties, 3088, {"vitre": 2, "chargeur": 1, "recto_verso": 5}[source])
     _prop(dev.Properties, 3096, 1)   # une page a la fois

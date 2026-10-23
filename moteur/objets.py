@@ -7,28 +7,29 @@ redimensionnable et supprimable, dans PhilPDF comme dans Acrobat.
 """
 import datetime, io, os
 import pymupdf as fitz
+from app.langue import _
 
 SUJET = "PhilPDF"   # marque nos objets (champ Subject de l'annotation)
 
 PREDEFINIS = [
     # (nom, texte, couleur RVB 0-1)
-    ("Reçu", "REÇU", (0.08, 0.38, 0.76)),
-    ("Validé", "VALIDÉ", (0.10, 0.48, 0.18)),
-    ("Approuvé", "APPROUVÉ", (0.10, 0.48, 0.18)),
-    ("Rejeté", "REJETÉ", (0.79, 0.15, 0.18)),
-    ("Payé", "PAYÉ", (0.10, 0.48, 0.18)),
-    ("A payer", "A PAYER", (0.64, 0.36, 0.0)),
-    ("Urgent", "URGENT", (0.79, 0.15, 0.18)),
-    ("Confidentiel", "CONFIDENTIEL", (0.79, 0.15, 0.18)),
-    ("Copie", "COPIE", (0.35, 0.35, 0.35)),
-    ("Original", "ORIGINAL", (0.08, 0.38, 0.76)),
-    ("Brouillon", "BROUILLON", (0.35, 0.35, 0.35)),
-    ("Pour accord", "POUR ACCORD", (0.43, 0.25, 0.78)),
-    ("Vu", "VU", (0.08, 0.38, 0.76)),
-    ("Classé", "CLASSÉ", (0.35, 0.35, 0.35)),
+    (_('Reçu'), _('REÇU'), (0.08, 0.38, 0.76)),
+    (_('Validé'), _('VALIDÉ'), (0.10, 0.48, 0.18)),
+    (_('Approuvé'), _('APPROUVÉ'), (0.10, 0.48, 0.18)),
+    (_('Rejeté'), _('REJETÉ'), (0.79, 0.15, 0.18)),
+    (_('Payé'), _('PAYÉ'), (0.10, 0.48, 0.18)),
+    (_('A payer'), _('A PAYER'), (0.64, 0.36, 0.0)),
+    (_('Urgent'), _('URGENT'), (0.79, 0.15, 0.18)),
+    (_('Confidentiel'), _('CONFIDENTIEL'), (0.79, 0.15, 0.18)),
+    (_('Copie'), _('COPIE'), (0.35, 0.35, 0.35)),
+    (_('Original'), _('ORIGINAL'), (0.08, 0.38, 0.76)),
+    (_('Brouillon'), _('BROUILLON'), (0.35, 0.35, 0.35)),
+    (_('Pour accord'), _('POUR ACCORD'), (0.43, 0.25, 0.78)),
+    (_('Vu'), _('VU'), (0.08, 0.38, 0.76)),
+    (_('Classé'), _('CLASSÉ'), (0.35, 0.35, 0.35)),
 ]
 
-FILIGRANES = ["COPIE", "CONFIDENTIEL", "BROUILLON", "ORIGINAL", "DUPLICATA", "PAYÉ", "ANNULÉ", "NE PAS DIFFUSER"]
+FILIGRANES = [_('COPIE'), _('CONFIDENTIEL'), _('BROUILLON'), _('ORIGINAL'), _('DUPLICATA'), _('PAYÉ'), _('ANNULÉ'), _('NE PAS DIFFUSER')]
 
 
 # ------------------------------------------------------------------ fabrication des objets
@@ -91,7 +92,7 @@ def tampons_du_pdf(chemin):
     out = []
     for p in d:
         for a in p.annots(types=[fitz.PDF_ANNOT_STAMP]):
-            out.append((p.number, fitz.Rect(a.rect), a.info.get("subject") or a.info.get("content") or "Tampon"))
+            out.append((p.number, fitz.Rect(a.rect), a.info.get("subject") or a.info.get("content") or _('Tampon')))
     return out
 
 
@@ -123,7 +124,7 @@ def taille_naturelle(pdf_octets):
 
 
 # ------------------------------------------------------------------ pose sur une page
-def poser(doc, num_page, rect, pdf_octets, nom="Tampon", auteur="", genre="tampon"):
+def poser(doc, num_page, rect, pdf_octets, nom=_('Tampon'), auteur="", genre="tampon"):
     """Pose l'objet comme annotation Stamp a l'apparence personnalisee. Renvoie son xref."""
     src = fitz.open("pdf", pdf_octets)
     tmp = doc.new_page(width=src[0].rect.width, height=src[0].rect.height)
@@ -140,6 +141,10 @@ def poser(doc, num_page, rect, pdf_octets, nom="Tampon", auteur="", genre="tampo
     a.update()
     doc.xref_set_key(a.xref, "AP/N", f"{form} 0 R")
     doc.xref_set_key(a.xref, "Name", f"/PhilPDF_{genre}")
+    # PyMuPDF reajuste le cadre aux proportions de ses tampons standard : on impose le notre
+    r = fitz.Rect(rect) * page.transformation_matrix
+    r.normalize()
+    doc.xref_set_key(a.xref, "Rect", f"[{r.x0:.2f} {r.y0:.2f} {r.x1:.2f} {r.y1:.2f}]")
     return a.xref
 
 

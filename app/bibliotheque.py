@@ -68,7 +68,6 @@ class Bibliotheque:
     def _ecrire(self):
         with open(self.index_chemin, "w", encoding="utf-8") as f:
             json.dump(self.index, f, ensure_ascii=False, indent=1)
-        self.sauvegarder_drive(silencieux=True)
 
     def elements(self, genre):
         return [e for e in self.index if e["genre"] == genre and os.path.exists(self.fichier(e))]
@@ -91,11 +90,13 @@ class Bibliotheque:
             f.write(octets)
         self.index.append(e)
         self._ecrire()
+        self._auto()
         return e
 
     def renommer(self, e, nom):
         e["nom"] = nom
         self._ecrire()
+        self._auto()
 
     def supprimer(self, e):
         try:
@@ -105,6 +106,10 @@ class Bibliotheque:
         self.index = [x for x in self.index if x["id"] != e["id"]]
         e["supprime"] = True
         self._ecrire()
+        if e.get("hash"):
+            self.params["biblio_supprimes"] = sorted(self._supprimes_ici() | {e["hash"]})
+            self.params.enregistrer()
+        self._auto()
 
     def par_defaut(self, genre, e=None):
         cle = f"defaut_{genre}"
@@ -115,47 +120,86 @@ class Bibliotheque:
         el = self.elements(genre)
         return next((x for x in el if x["id"] == ident), el[0] if el else None)
 
-    # ---- sauvegarde / restauration sur le Drive
-    def sauvegarder_drive(self, silencieux=False):
+    # ---- synchronisation avec le Drive (dans les deux sens)
+    def _distant(self):
+        """(elements, supprimes) de la sauvegarde du Drive. Ancien format : simple liste."""
+        d = dossier_philpdf_drive(self.params)
+        try:
+            with open(os.path.join(d, "sauvegarde", "index.json"), encoding="utf-8") as f:
+                x = json.load(f)
+        except (OSError, ValueError, TypeError):
+            return [], set()
+        if isinstance(x, list):
+            return x, set()
+        return x.get("elements", []), set(x.get("supprimes", []))
+
+    def _supprimes_ici(self):
+        return set(self.params.get("biblio_supprimes", []))
+
+    def nouveautes_drive(self):
+        """Elements presents dans la sauvegarde du Drive mais pas ici (et pas supprimes)."""
+        if not dossier_philpdf_drive(self.params):
+            return []
+        distant, supp = self._distant()
+        ici = {e.get("hash") for e in self.index}
+        supp |= self._supprimes_ici()
+        return [e for e in distant if e.get("hash") not in ici and e.get("hash") not in supp]
+
+    def synchroniser_drive(self):
+        """Recupere ce que les autres postes ont ajoute, applique leurs suppressions, puis envoie
+        ce qui manque sur le Drive. Renvoie (recus, envoyes) ou None sans Drive."""
         d = dossier_philpdf_drive(self.params)
         if not d:
-            return 0 if silencieux else None
+            return None
         cible = os.path.join(d, "sauvegarde")
-        n = 0
         for g in GENRES:
             os.makedirs(os.path.join(cible, g), exist_ok=True)
+        distant, supp = self._distant()
+        supp |= self._supprimes_ici()
+        recus = envoyes = 0
+        # suppressions faites ailleurs
+        avant = len(self.index)
+        for e in [x for x in self.index if x.get("hash") in supp]:
+            try:
+                os.remove(self.fichier(e))
+            except OSError:
+                pass
+        self.index = [x for x in self.index if x.get("hash") not in supp]
+        # ajouts faits ailleurs
+        ici = {e.get("hash") for e in self.index}
+        for e in distant:
+            if e.get("hash") in ici or e.get("hash") in supp:
+                continue
+            src = os.path.join(cible, e["genre"], e["id"] + e.get("ext", ".pdf"))
+            if os.path.exists(src):
+                shutil.copy2(src, self.fichier(e))
+                self.index.append(e)
+                ici.add(e.get("hash"))
+                recus += 1
+        # envoi de ce qui manque
         for e in self.index:
             dst = os.path.join(cible, e["genre"], e["id"] + e.get("ext", ".pdf"))
             if not os.path.exists(dst):
                 shutil.copy2(self.fichier(e), dst)
-                n += 1
+                envoyes += 1
         with open(os.path.join(cible, "index.json"), "w", encoding="utf-8") as f:
-            json.dump(self.index, f, ensure_ascii=False, indent=1)
-        return n
+            json.dump({"elements": self.index, "supprimes": sorted(supp)}, f, ensure_ascii=False, indent=1)
+        if recus or len(self.index) != avant:
+            self._ecrire()
+        return recus, envoyes
 
-    def nouveautes_drive(self):
-        """Elements presents dans la sauvegarde du Drive mais pas ici."""
-        d = dossier_philpdf_drive(self.params)
-        if not d:
-            return []
-        try:
-            with open(os.path.join(d, "sauvegarde", "index.json"), encoding="utf-8") as f:
-                distant = json.load(f)
-        except (OSError, ValueError):
-            return []
-        ici = {e.get("hash") for e in self.index}
-        return [e for e in distant if e.get("hash") not in ici]
+    def _auto(self):
+        if self.params.get("drive"):
+            try:
+                self.synchroniser_drive()
+            except OSError:
+                pass
+
+    # anciens noms
+    def sauvegarder_drive(self, silencieux=False):
+        r = self.synchroniser_drive()
+        return (0 if silencieux else None) if r is None else r[1]
 
     def restaurer_drive(self):
-        d = dossier_philpdf_drive(self.params)
-        n = 0
-        for e in self.nouveautes_drive():
-            src = os.path.join(d, "sauvegarde", e["genre"], e["id"] + e.get("ext", ".pdf"))
-            if os.path.exists(src):
-                shutil.copy2(src, self.fichier(e))
-                self.index.append(e)
-                n += 1
-        if n:
-            with open(self.index_chemin, "w", encoding="utf-8") as f:
-                json.dump(self.index, f, ensure_ascii=False, indent=1)
-        return n
+        r = self.synchroniser_drive()
+        return 0 if r is None else r[0]

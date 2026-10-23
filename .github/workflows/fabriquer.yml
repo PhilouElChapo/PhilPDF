@@ -36,6 +36,12 @@ jobs:
       - name: Test de la session partagee
         run: python tests/test_session.py
 
+      - name: Test des tampons et signatures synchronises
+        run: python tests/test_bibliotheque.py
+
+      - name: Test des traductions
+        run: python tests/test_langues.py
+
       - name: Tesseract (embarque dans le paquet)
         shell: pwsh
         run: |
@@ -56,7 +62,7 @@ jobs:
       - name: PhilPDF.exe
         run: >
           pyinstaller --noconfirm --clean --windowed --name PhilPDF --icon philpdf.ico
-          --add-data "fonts;fonts" --add-data "tessdata;tessdata" --add-data "tesseract;tesseract"
+          --add-data "fonts;fonts" --add-data "langues;langues" --add-data "tessdata;tessdata" --add-data "tesseract;tesseract"
           --hidden-import moteur.modifier --hidden-import moteur.scan --hidden-import moteur.objets
           --hidden-import moteur.scanner --hidden-import win32com.client --collect-submodules pdf2docx
           --exclude-module scipy --exclude-module onnxruntime --exclude-module pymupdf_layout

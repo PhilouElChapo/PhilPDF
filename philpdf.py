@@ -56,6 +56,10 @@ def verifier(sortie):
         lignes.append(f"ocr: {'OK' if bon else 'ECHEC'} ({texte.strip()[:60]!r})")
     else:
         ok = False
+    from app.langue import disponibles
+    langues = [c for c, _n in disponibles()]
+    ok &= "en" in langues
+    lignes.append(f"langues: {', '.join(langues)}")
     lignes.append("RESULTAT: " + ("OK" if ok else "ECHEC"))
     with open(sortie, "w", encoding="utf-8") as f:
         f.write("\n".join(lignes))
@@ -66,12 +70,22 @@ def main():
     if "--verifier" in sys.argv:
         sys.exit(verifier(sys.argv[sys.argv.index("--verifier") + 1]))
     app = QApplication(sys.argv)
+    preparer(app)
+    fichiers = [a for a in sys.argv[1:] if a.lower().endswith(".pdf") and os.path.exists(a)]
+    w = Fenetre(fichiers)
+    w.show()
+    sys.exit(app.exec())
+
+
+def preparer(app):
+    """Traduction, style plat, police : commun a l'appli et aux captures de test."""
     from PySide6.QtCore import QTranslator, QLibraryInfo, QLocale
-    QLocale.setDefault(QLocale(QLocale.French, QLocale.France))
+    from app.langue import LANGUE
+    QLocale.setDefault(QLocale(LANGUE))
     trad = QTranslator(app)
     for dossier in (QLibraryInfo.path(QLibraryInfo.TranslationsPath),
                     os.path.join(getattr(sys, "_MEIPASS", ""), "PySide6", "Qt", "translations")):
-        if trad.load("qtbase_fr", dossier):
+        if LANGUE != "en" and trad.load(f"qtbase_{LANGUE}", dossier):
             app.installTranslator(trad)
             break
     app.setApplicationName("PhilPDF")
@@ -80,19 +94,14 @@ def main():
     pal = app.palette()
     pal.setColor(QPalette.Window, QColor("#f3f3f3"))
     pal.setColor(QPalette.Base, QColor("#ffffff"))
-    pal.setColor(QPalette.Highlight, QColor("#1462c2"))
+    pal.setColor(QPalette.Highlight, QColor("#0f6cbd"))
     pal.setColor(QPalette.ToolTipBase, QColor("#1f1f1f"))
     pal.setColor(QPalette.ToolTipText, QColor("#ffffff"))
     app.setPalette(pal)
     app.setFont(QFont("Segoe UI" if sys.platform == "win32" else "Inter", 10))
-    app.setStyleSheet("QToolTip{background:#1f1f1f;color:#fff;border:none;padding:8px;border-radius:6px}"
-                      "QMenuBar{background:#fff;border-bottom:1px solid #e2e2e2}QMenuBar::item{padding:6px 10px}"
-                      "QMenu{background:#fff;border:1px solid #d0d0d0}QMenu::item{padding:6px 28px 6px 28px}"
-                      "QMenu::item:selected{background:#e6f0fc;color:#1f1f1f}")
-    fichiers = [a for a in sys.argv[1:] if a.lower().endswith(".pdf") and os.path.exists(a)]
-    w = Fenetre(fichiers)
-    w.show()
-    sys.exit(app.exec())
+    from app.theme import feuille
+    from app.config import dossier_donnees
+    app.setStyleSheet(feuille(dossier_donnees()))
 
 
 if __name__ == "__main__":

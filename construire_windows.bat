@@ -21,7 +21,7 @@ python tests\test_moteur.py || goto erreur
 
 echo Construction de PhilPDF.exe...
 pyinstaller --noconfirm --clean --windowed --name PhilPDF --icon philpdf.ico ^
-  --add-data "fonts;fonts" --add-data "tessdata;tessdata" ^
+  --add-data "fonts;fonts" --add-data "langues;langues" --add-data "tessdata;tessdata" ^
   --hidden-import moteur.modifier --hidden-import moteur.scan --hidden-import moteur.objets --hidden-import moteur.scanner --hidden-import win32com.client --collect-submodules pdf2docx ^
   --exclude-module scipy --exclude-module onnxruntime --exclude-module pymupdf.layout --exclude-module pymupdf_layout --exclude-module pymupdf4llm --exclude-module matplotlib --exclude-module pandas --exclude-module tkinter ^
   philpdf.py || goto erreur

@@ -20,13 +20,14 @@ Toute correspondance trouvee est APPRISE (dossier source -> dossier ici) et part
 la fois suivante, c'est immediat.
 """
 import datetime, hashlib, json, os, subprocess, sys, time
+from .langue import _
 
 LIMITE_FICHIERS = 30_000           # recherche rapide et silencieuse : quelques secondes au plus
 DELAI_SILENCIEUX = 8               # secondes, verification au demarrage
 IGNORES = {"AppData", "node_modules", "Windows", "Program Files", "Program Files (x86)", "ProgramData",
            "__pycache__", "System Volume Information", "Library", "snap"}
-CONNUS = (("documents", "Documents"), ("telechargements", "Téléchargements"), ("bureau", "Bureau"),
-          ("nas", "NAS"), ("maison", "Dossier utilisateur"))
+CONNUS = (("documents", _('Documents')), ("telechargements", _('Téléchargements')), ("bureau", _('Bureau')),
+          ("nas", "NAS"), ("maison", _('Dossier utilisateur')))
 
 
 def _dossier_windows(guid):
@@ -196,7 +197,7 @@ class Session:
         autres = self.autres_machines()
         if not autres:
             return None
-        m, date, _ = autres[0]
+        m, date, _x = autres[0]
         if date <= self.ma_date():
             return None
         fichiers = self.lire()[m]["fichiers"]
@@ -229,7 +230,7 @@ class Session:
         """[(machine_source, dossier_source, dossier_ici)] apprises pour cette machine."""
         out = []
         for cle, d in self._corresp().items():
-            src, _, ici = cle.partition(" -> ")
+            src, _x, ici = cle.partition(" -> ")
             if ici == self.params["machine"]:
                 out += [(src, a, b) for a, b in d.items()]
         return sorted(out)
@@ -256,27 +257,27 @@ class Session:
             if src.lower().startswith(d_src.lower().rstrip("/") + "/"):
                 cand = os.path.join(d_ici, *_decouper(src[len(d_src.rstrip("/")) + 1:]))
                 if self._confirme(cand, e):
-                    return cand, "dossier déjà appris"
+                    return cand, _("dossier déjà appris")
         # 2. chemin exact
         if self._confirme(e["chemin"], e):
-            return e["chemin"], "même emplacement"
+            return e["chemin"], _("même emplacement")
         # 3. meme dossier par defaut ici (Documents, Telechargements, NAS... meme d'un systeme a l'autre)
         connus = dossiers_connus(self.params)
         if e.get("connu") in connus:
             cand = os.path.join(connus[e["connu"]], *_decouper(e["relatif_connu"]))
             if self._confirme(cand, e):
-                return cand, dict(CONNUS).get(e["connu"], e["connu"]) + " de ce PC"
+                return cand, _("{dossier} de ce PC", dossier=dict(CONNUS).get(e["connu"], e["connu"]))
         # 4. dossier utilisateur transpose (C:\Users\A -> C:\Users\B ou /home/b)
         if e.get("relatif_maison"):
             cand = os.path.join(os.path.expanduser("~"), *_decouper(e["relatif_maison"]))
             if self._confirme(cand, e):
-                return cand, "dossier utilisateur de ce PC"
+                return cand, _("dossier utilisateur de ce PC")
         # 5. emplacements ajoutes en mode avance
         if e.get("relatif_racine"):
             for r in self.params.get("racines", []):
                 cand = os.path.join(r, *_decouper(e["relatif_racine"]))
                 if self._confirme(cand, e):
-                    return cand, f"sous {r}"
+                    return cand, _("sous {dossier}", dossier=r)
         return None, None
 
     def retrouver_tous(self, machine, fichiers, arret=lambda: False, delai=None, progression=None):
@@ -285,10 +286,10 @@ class Session:
         sinon par la taille puis l'empreinte (fichier renomme). Limite : LIMITE_FICHIERS et `delai`.
         Renvoie [(chemin ou None, comment)] dans l'ordre des fichiers."""
         res = [self.retrouver_direct(machine, e) for e in fichiers]
-        manquants = [i for i, (c, _) in enumerate(res) if not c]
+        manquants = [i for i, (c, _x) in enumerate(res) if not c]
         if progression:
             for i, (c, cm) in enumerate(res):
-                progression(i, c, cm or "recherche...")
+                progression(i, c, cm or "")
         if not manquants:
             return res
         par_nom, par_taille = {}, {}
@@ -313,7 +314,7 @@ class Session:
                         p = os.path.join(base, f)
                         for i in list(par_nom[fl]):
                             if not res[i][0] and self._confirme(p, fichiers[i]):
-                                res[i] = (p, "retrouvé par son nom")
+                                res[i] = (p, _("retrouvé par son nom"))
                                 par_nom[fl].remove(i)
                                 progression and progression(i, p, res[i][1])
                     if par_taille and fl.endswith(".pdf"):
@@ -324,7 +325,7 @@ class Session:
                             continue
                         for i in par_taille.get(t, []):
                             if not res[i][0] and empreinte(p) == fichiers[i]["empreinte"]:
-                                res[i] = (p, "renommé, retrouvé par son contenu")
+                                res[i] = (p, _("renommé, retrouvé par son contenu"))
                                 progression and progression(i, p, res[i][1])
                 if all(res[i][0] for i in manquants):
                     return res
@@ -335,7 +336,7 @@ class Session:
                 break
         for i in manquants:
             if not res[i][0]:
-                res[i] = (None, "introuvable" if complet else "introuvable (recherche limitée)")
+                res[i] = (None, _("introuvable") if complet else _("introuvable (recherche limitée)"))
                 progression and progression(i, None, res[i][1])
         return res
 
@@ -355,7 +356,7 @@ class Session:
             k += 1
         if k:
             pa, pb = d_src, d_ici
-            for _ in range(k):
+            for _x in range(k):
                 pa, pb = pa.rsplit("/", 1)[0], os.path.dirname(pb)
             if pa and pb and _norm(pa) != _norm(pb):
                 self.apprendre(machine, pa, pb)
@@ -366,13 +367,15 @@ def date_fr(iso):
     try:
         d = datetime.datetime.fromisoformat(iso)
     except (TypeError, ValueError):
-        return "date inconnue"
-    a = "" if d.year == datetime.date.today().year else f"/{d.year}"
-    return f"{d.day:02d}/{d.month:02d}{a} à {d.hour}h{d.minute:02d}"
+        return _('date inconnue')
+    if d.year == datetime.date.today().year:
+        return _("{jour:02d}/{mois:02d} à {heure}h{minute:02d}", jour=d.day, mois=d.month, heure=d.hour, minute=d.minute)
+    return _("{jour:02d}/{mois:02d}/{annee} à {heure}h{minute:02d}", jour=d.day, mois=d.month, annee=d.year,
+             heure=d.hour, minute=d.minute)
 
 
 def nb_fichiers(n):
-    return f"{n} fichier" + ("s" if n > 1 else "")
+    return _("{n} fichier", n=n) if n <= 1 else _("{n} fichiers", n=n)
 
 
 def session_de(params):

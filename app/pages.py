@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineE
                                QToolButton)
 from .icones import icone, logo
 from .outils import FAMILLES, OUTILS, famille
+from .langue import _
 
 
 class FlowLayout(QLayout):
@@ -71,12 +72,12 @@ class Tuile(QFrame):
     def __init__(self, o, epinglee):
         super().__init__()
         oid, fam, ic, titre, sous, aide, dispo = o
-        _, _, coul, fond = famille(fam)
+        _x, _x, coul, fond = famille(fam)
         self.oid, self.titre, self.texte = oid, titre, (titre + " " + sous + " " + aide).lower()
         self.setObjectName("tuile")
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedSize(236, 148)
-        self.setToolTip(f"<b>{titre}</b><br>{aide}" + ("" if dispo else "<br><i>Prévu dans une prochaine version.</i>"))
+        self.setToolTip(_('<b>{titre}</b><br>{aide}', titre=titre, aide=aide) + ("" if dispo else _('<br><i>Prévu dans une prochaine version.</i>')))
         self.setStyleSheet(f"#tuile{{background:#fff;border:1px solid #e2e2e2;border-radius:12px}}"
                            f"#tuile:hover{{border:2px solid {coul}}}"
                            "QLabel{background:transparent} QToolButton{background:transparent;border:none}")
@@ -92,15 +93,15 @@ class Tuile(QFrame):
         h.addWidget(ico)
         h.addStretch()
         if not dispo:
-            b = QLabel("Bientôt")
+            b = QLabel(_('Bientôt'))
             b.setStyleSheet("color:#666;background:#f1f1f1;border-radius:8px;padding:2px 8px;font-size:11px")
             h.addWidget(b, 0, Qt.AlignTop)
         self.etoile = QToolButton()
         self.etoile.setAutoRaise(True)
         self.etoile.setCheckable(True)
         self.etoile.setChecked(epinglee)
-        self.etoile.setToolTip("Epingler dans le volet de droite des fichiers ouverts")
-        self.etoile.setAccessibleName("Epingler " + titre)
+        self.etoile.setToolTip(_('Epingler dans le volet de droite des fichiers ouverts'))
+        self.etoile.setAccessibleName(_("Epingler {outil}", outil=titre))
         self._maj_etoile()
         self.etoile.toggled.connect(lambda c: (self._maj_etoile(), self.epingle.emit(self.oid, c)))
         h.addWidget(self.etoile, 0, Qt.AlignTop)
@@ -139,11 +140,11 @@ class PageOutils(QScrollArea):
         v = QVBoxLayout(w)
         v.setContentsMargins(32, 24, 32, 40)
         v.setSpacing(26)
-        q = QLabel("Que voulez-vous faire ?")
+        q = QLabel(_('Que voulez-vous faire ?'))
         q.setStyleSheet("font-size:26px;font-weight:600")
         v.addWidget(q)
         self.recherche = QLineEdit()
-        self.recherche.setPlaceholderText("Rechercher un outil : signer, alléger, OCR...")
+        self.recherche.setPlaceholderText(_('Rechercher un outil : signer, alléger, OCR...'))
         self.recherche.setClearButtonEnabled(True)
         self.recherche.setMaximumWidth(620)
         self.recherche.setStyleSheet("QLineEdit{background:#fff;border:1px solid #cfcfcf;border-radius:10px;padding:10px 12px;font-size:15px}")
@@ -152,7 +153,7 @@ class PageOutils(QScrollArea):
         filtres = QHBoxLayout()
         filtres.setSpacing(8)
         self.boutons_fam = {}
-        tout = QPushButton("Tous")
+        tout = QPushButton(_('Tous'))
         tout.setCheckable(True)
         tout.setChecked(True)
         tout.clicked.connect(lambda: self._choisir_famille(None))
@@ -162,7 +163,7 @@ class PageOutils(QScrollArea):
             b = QPushButton("● " + nom)
             b.setCheckable(True)
             b.setProperty("coul", coul)
-            b.clicked.connect(lambda _=False, f=fid: self._choisir_famille(f))
+            b.clicked.connect(lambda _x=False, f=fid: self._choisir_famille(f))
             self.boutons_fam[fid] = b
             filtres.addWidget(b)
         filtres.addStretch()
@@ -190,7 +191,7 @@ class PageOutils(QScrollArea):
             sv.addWidget(grille)
             self.sections[fid] = sec
             v.addWidget(sec)
-        aide = QLabel("L'étoile épingle un outil dans le volet de droite des fichiers ouverts. Survolez un outil pour sa bulle d'aide.")
+        aide = QLabel(_("L'étoile épingle un outil dans le volet de droite des fichiers ouverts. Survolez un outil pour sa bulle d'aide."))
         aide.setStyleSheet("color:#555;font-size:13px")
         v.addWidget(aide)
         v.addStretch()
@@ -226,7 +227,7 @@ class PageOutils(QScrollArea):
             sec.updateGeometry()
 
     def maj_etoiles(self):
-        for t, _ in self.tuiles:
+        for t, _x in self.tuiles:
             t.etoile.blockSignals(True)
             t.etoile.setChecked(t.oid in self.params["outils_epingles"])
             t._maj_etoile()
@@ -264,7 +265,7 @@ class PageAccueil(QWidget):
                    '<br><span style="color:#555">Editeur PDF · éditez, signez, allégez en toute liberté</span>')
         h.addWidget(t)
         h.addStretch()
-        b = QPushButton("  Ouvrir un fichier...")
+        b = QPushButton(_('  Ouvrir un fichier...'))
         b.setIcon(icone("ouvrir", "#ffffff"))
         b.setStyleSheet("QPushButton{background:#c9252d;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:600}"
                         "QPushButton:hover{background:#a81e25}")
@@ -285,17 +286,17 @@ class PageAccueil(QWidget):
         self.carte_liste.setMaximumHeight(130)
         vc.addWidget(self.carte_liste)
         hb = QHBoxLayout()
-        self.b_reprendre = QPushButton("Reprendre ces fichiers")
-        self.b_reprendre.setToolTip("Ferme les fichiers ouverts ici et ouvre ceux de l'autre poste, à la même page")
+        self.b_reprendre = QPushButton(_('Reprendre ces fichiers'))
+        self.b_reprendre.setToolTip(_("Ferme les fichiers ouverts ici et ouvre ceux de l'autre poste, à la même page"))
         self.b_reprendre.setStyleSheet("QPushButton{background:#2b6cb0;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-weight:600}")
         self.b_reprendre.clicked.connect(self.reprendre)
         hb.addWidget(self.b_reprendre)
-        b2 = QPushButton(" Synchroniser...")
+        b2 = QPushButton(_(' Synchroniser...'))
         b2.setIcon(icone("synchro", "#2b6cb0"))
         b2.clicked.connect(self.synchroniser)
         hb.addWidget(b2)
         hb.addStretch()
-        b3 = QPushButton("Ignorer")
+        b3 = QPushButton(_('Ignorer'))
         b3.setFlat(True)
         b3.clicked.connect(self.cacher_synchro)
         hb.addWidget(b3)
@@ -309,12 +310,12 @@ class PageAccueil(QWidget):
         hl.addWidget(self.bandeau, 1)
         bs = QPushButton()
         bs.setIcon(icone("synchro", "#2b6cb0"))
-        bs.setToolTip("Synchroniser les fichiers ouverts avec vos autres postes")
+        bs.setToolTip(_('Synchroniser les fichiers ouverts avec vos autres postes'))
         bs.setFlat(True)
         bs.clicked.connect(self.synchroniser)
         hl.addWidget(bs)
         v.addLayout(hl)
-        r = QLabel("Récents")
+        r = QLabel(_('Récents'))
         r.setStyleSheet("font-size:18px;font-weight:600")
         v.addWidget(r)
         self.liste = QListWidget()
@@ -331,24 +332,23 @@ class PageAccueil(QWidget):
         for p in self.params["recents"]:
             existe = os.path.exists(p)
             it = QListWidgetItem(icone("creer", "#c9252d" if existe else "#bbbbbb"),
-                                 f"{os.path.basename(p)}\n{os.path.dirname(p)}" + ("" if existe else "   (introuvable sur ce PC)"))
+                                 f"{os.path.basename(p)}\n{os.path.dirname(p)}" + ("" if existe else _('   (introuvable sur ce PC)')))
             it.setData(Qt.UserRole, p)
             if not existe:
                 it.setForeground(Qt.gray)
             self.liste.addItem(it)
-        self.bandeau.setText(f"Poste : <b>{self.params['machine']}</b>. " + (
-                "Drive : " + self.params["drive"] if self.params.get("drive") else
-            "Indiquez votre Drive dans Edition › Préférences pour retrouver vos fichiers ouverts et vos tampons sur vos autres PC."))
+        self.bandeau.setText(_('Poste : <b>{machine}</b>. ', machine=self.params['machine']) + (
+                _('Drive : ') + self.params["drive"] if self.params.get("drive") else
+            _('Indiquez votre Drive dans Edition › Préférences pour retrouver vos fichiers ouverts et vos tampons sur vos autres PC.')))
 
     def montrer_synchro(self, machine, date, fichiers, resultats):
         from .session import date_fr, nb_fichiers
-        n = sum(1 for c, _ in resultats if c)
-        self.carte_titre.setText(f"<b>Session plus récente sur {machine}</b> (le {date_fr(date)}) : "
-                                 f"{nb_fichiers(len(fichiers))}, {n} retrouvé{'s' if n > 1 else ''} sur ce poste.")
+        n = sum(1 for c, _x in resultats if c)
+        self.carte_titre.setText(_('<b>Session plus récente sur {machine}</b> (le {date}) : {nb}, {n} retrouvé{x} sur ce poste.', machine=machine, date=date_fr(date), nb=nb_fichiers(len(fichiers)), n=n, x='s' if n > 1 else ''))
         self.carte_liste.clear()
         for e, (c, cm) in zip(fichiers, resultats):
             it = QListWidgetItem(f"{e['nom']}  —  {c}" if c else
-                                 f"{e['nom']}  —  introuvable sur {self.params['machine']} (ouvert sur {machine} le {date_fr(date)})")
+                                 _('{nom}  —  introuvable sur {machine} (ouvert sur {machine2} le {date})', nom=e['nom'], machine=self.params['machine'], machine2=machine, date=date_fr(date)))
             it.setToolTip(cm)
             if not c:
                 it.setForeground(Qt.gray)
