@@ -1,0 +1,63 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PhilPDF – Confidentialité</title><style>
+:root{--rouge:#c9252d;--texte:#1f1f1f;--gris:#5f6368;--fond:#f6f6f4;--carte:#fff;--bord:#e4e4e0}
+@media (prefers-color-scheme: dark){:root{--texte:#ececec;--gris:#a8a8a8;--fond:#161616;--carte:#202020;--bord:#333}}
+*{box-sizing:border-box}body{margin:0;background:var(--fond);color:var(--texte);font:16px/1.6 "Segoe UI",Inter,system-ui,sans-serif}
+main{max-width:760px;margin:0 auto;padding:40px 16px 64px}
+h1{font-size:34px;margin:0 0 4px}h1 span{color:var(--rouge)}h2{font-size:20px;margin:32px 0 8px}
+.sous{color:var(--gris);margin:0 0 28px}.carte{background:var(--carte);border:1px solid var(--bord);border-radius:12px;padding:20px 22px;margin:16px 0}
+ul{padding-left:20px}a{color:var(--rouge)}footer{color:var(--gris);font-size:14px;margin-top:40px}
+.bouton{display:inline-block;background:var(--rouge);color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600}
+.langue{float:right;font-size:14px}
+</style></head><body><main>
+<p class="langue"><a href="#en">English</a></p>
+<h1>Phil<span>PDF</span> · Règles de confidentialité</h1>
+<p class="sous">Mise à jour : 23 octobre 2026</p>
+<div class="carte">
+<h2>En bref</h2>
+<p>PhilPDF est un logiciel installé sur votre ordinateur. Son auteur ne reçoit, ne collecte et ne conserve <b>aucune</b> de vos données :
+il n'y a ni serveur PhilPDF, ni compte PhilPDF, ni statistique d'utilisation, ni publicité.</p>
+</div>
+<h2>Vos documents</h2>
+<p>Les PDF que vous ouvrez sont traités sur votre ordinateur. Ils ne sont envoyés nulle part, sauf là où vous choisissez vous-même
+de les enregistrer (votre NAS, votre serveur FTP, votre Drive).</p>
+<h2>Google Drive et OneDrive</h2>
+<ul>
+<li>L'accès n'est demandé que si vous cliquez sur « Google Drive » ou « OneDrive » dans PhilPDF, et vous pouvez le retirer à tout moment
+depuis votre compte Google ou Microsoft.</li>
+<li>Pour Google Drive, PhilPDF demande uniquement l'autorisation <code>drive.file</code> : il ne voit que les fichiers qu'il a créés ou que
+vous avez ouverts avec lui, jamais le reste de votre Drive.</li>
+<li>Usage : ouvrir et enregistrer vos PDF, et ranger dans un dossier « PhilPDF » la liste de vos fichiers ouverts, vos tampons et vos
+signatures, pour les retrouver sur vos autres ordinateurs.</li>
+<li>Les jetons d'accès restent sur votre ordinateur, dans le coffre du système (Gestionnaire d'identification de Windows, trousseau de Linux).
+Ils ne sont transmis qu'à Google ou Microsoft.</li>
+<li>Les données obtenues des API Google sont utilisées conformément à la
+<a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, y compris ses
+exigences d'usage limité (Limited Use). Elles ne sont ni vendues, ni partagées, ni utilisées pour de la publicité ou pour entraîner des modèles d'IA.</li>
+</ul>
+<h2>NAS, FTP, WebDAV</h2>
+<p>Les adresses de vos serveurs sont enregistrées sur votre ordinateur ; les mots de passe vont dans le coffre du système, jamais en clair.</p>
+<h2>Assistant IA (facultatif)</h2>
+<p>Si vous l'utilisez, le texte concerné est envoyé à Claude (Anthropic) ou Gemini (Google) avec <b>votre</b> clef API, uniquement
+quand vous cliquez, et selon les règles de ces services. Rien n'est envoyé sinon.</p>
+<h2>Mises à jour</h2>
+<p>Au démarrage, PhilPDF consulte la page publique des versions sur GitHub pour savoir s'il existe une version plus récente.
+Aucune information personnelle n'est transmise.</p>
+<h2>Contact</h2>
+<p>Questions : <a href="https://github.com/PhilouElChapo/PhilPDF/issues">page de contact du projet sur GitHub</a>.</p>
+
+<h2 id="en">English – Privacy policy</h2>
+<p>PhilPDF is software installed on your computer. Its author receives, collects and stores <b>no</b> data from you: there is no PhilPDF
+server, account, analytics or advertising. Documents are processed locally and only saved where you choose (your NAS, FTP server or Drive).</p>
+<p>Google Drive / OneDrive access is requested only when you choose it and can be revoked at any time from your Google or Microsoft account.
+For Google Drive, PhilPDF only requests the <code>drive.file</code> scope (files it created or that you opened with it). It is used to open
+and save your PDFs and to keep, in a "PhilPDF" folder, the list of your open files, your stamps and signatures, so you find them on your
+other computers. Access tokens stay on your computer, in the system vault, and are only sent to Google or Microsoft. PhilPDF's use and
+transfer of information received from Google APIs adheres to the
+<a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the
+Limited Use requirements; this data is never sold, shared, used for advertising or to train AI models.</p>
+<p>Server passwords (NAS, FTP, WebDAV) are kept in the system vault, never in plain text. The optional AI assistant sends text to Claude or
+Gemini with your own API key only when you click. Update checks read GitHub's public release page; no personal data is sent.
+Contact: <a href="https://github.com/PhilouElChapo/PhilPDF/issues">project contact page on GitHub</a>.</p>
+<footer><a href="index.html">PhilPDF</a></footer>
+</main></body></html>

@@ -52,6 +52,23 @@ class TacheMaj(QThread):
         self.trouve.emit(chercher(self.params))
 
 
+class TacheTelechargement(QThread):
+    avance = Signal(int, int)
+    fini = Signal(str, str)              # fichier, erreur
+
+    def __init__(self, paquet):
+        super().__init__()
+        self.paquet, self.stop = paquet, False
+
+    def run(self):
+        from .mise_a_jour import recuperer
+        try:
+            self.fini.emit(recuperer(self.paquet, lambda a, b: self.avance.emit(a // 1024, b // 1024),
+                                     lambda: self.stop), "")
+        except Exception as e:
+            self.fini.emit("", str(e))
+
+
 class TacheSynchro(QThread):
     """Verification silencieuse au demarrage : une autre machine a-t-elle une session plus recente
     et differente ? Si oui, recherche rapide (quelques secondes) de ses fichiers sur ce poste."""
@@ -148,7 +165,7 @@ class Fenetre(QMainWindow):
             self.ouvrir(f)
         import datetime
         aujourd_hui = datetime.date.today().isoformat()
-        if self.params.get("maj_auto", True) and self.params.get("maj_derniere") != aujourd_hui:
+        if self.params.get("maj_auto", True):
             self.params["maj_derniere"] = aujourd_hui
             self.params.enregistrer()
             self.verifier_maj(silencieux=True)
@@ -1130,7 +1147,7 @@ class Fenetre(QMainWindow):
         majs = QComboBox()
         majs.addItems([_('GitHub (Internet)'), _('Dossier synchronisé')])
         majs.setCurrentIndex(1 if self.params.get("maj_source") == "dossier" else 0)
-        maja = QCheckBox(_('Vérifier les mises à jour au démarrage (une fois par jour)'))
+        maja = QCheckBox(_('Vérifier les mises à jour à chaque démarrage'))
         maja.setChecked(self.params.get("maj_auto", True))
         f.addRow(_('Mises à jour depuis'), majs)
         f.addRow(maja)
@@ -1173,16 +1190,43 @@ class Fenetre(QMainWindow):
                                  _('PhilPDF {version} est disponible (vous avez {VERSION}).\n\n{x}\n\nInstaller maintenant ? PhilPDF se fermera puis se relancera.', version=version, VERSION=VERSION, x=notes[:600]))
         if r != QMessageBox.Yes:
             return
-        from .mise_a_jour import appliquer
-        try:
-            lance = appliquer(paquet)
-        except Exception as e:
-            QMessageBox.warning(self, _('Mise à jour'), _('Echec du téléchargement :\n{e}', e=e))
-            return
-        if lance:
-            self.close()
-        else:
+        from .mise_a_jour import possible
+        if not possible():
             QMessageBox.information(self, _('Mise à jour'), _('Téléchargez la nouvelle version ici :\n{paquet}', paquet=paquet))
+            return
+        # telechargement en arriere-plan : la fenetre reste utilisable, avec une barre de progression
+        dlg = QProgressDialog(_("Téléchargement de PhilPDF {version}...", version=version), _("Annuler"), 0, 100, self)
+        dlg.setWindowTitle(_('Mise à jour'))
+        dlg.setMinimumDuration(0)
+        dlg.setValue(0)
+        t = TacheTelechargement(paquet)
+        self.taches.append(t)
+
+        def avance(fait, total):
+            if total:
+                dlg.setValue(int(fait * 100 / total))
+                dlg.setLabelText(_("Téléchargement de PhilPDF {version}... {fait} / {total} Mo",
+                                   version=version, fait=fait // 1024, total=total // 1024))
+
+        def fini(fichier, erreur):
+            dlg.close()
+            if erreur:
+                if not t.stop:
+                    QMessageBox.warning(self, _('Mise à jour'), _('Echec du téléchargement :\n{e}', e=erreur))
+                return
+            from .mise_a_jour import appliquer
+            try:
+                lance = appliquer(fichier)
+            except Exception as e:
+                QMessageBox.warning(self, _('Mise à jour'), _("Installation impossible :\n{e}", e=e))
+                return
+            if lance:
+                self._maj_en_cours = True
+                self.close()
+        t.avance.connect(avance)
+        t.fini.connect(fini)
+        dlg.canceled.connect(lambda: setattr(t, "stop", True))
+        t.start()
 
     def raccourcis(self):
         QMessageBox.information(self, _('Raccourcis clavier'),

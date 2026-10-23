@@ -50,25 +50,65 @@ def chercher(params):
     return None
 
 
-def _recuperer(paquet):
+def recuperer(paquet, progression=None, arret=lambda: False):
+    """Telecharge le paquet (ou le prend dans le dossier synchronise). progression(fait, total)."""
     if os.path.exists(paquet):
         return paquet
     dest = os.path.join(tempfile.mkdtemp(), os.path.basename(paquet.split("?")[0]))
     req = urllib.request.Request(paquet, headers={"User-Agent": "PhilPDF"})
     with urllib.request.urlopen(req, timeout=60) as r, open(dest, "wb") as f:
+        total, fait = int(r.headers.get("Content-Length") or 0), 0
         while True:
+            if arret():
+                raise RuntimeError("annule")
             b = r.read(1 << 20)
             if not b:
                 break
             f.write(b)
-    return dest
+            fait += len(b)
+            if progression:
+                progression(fait, total)
+    if fichier_valide(dest):
+        return dest
+    raise RuntimeError("paquet incomplet")
 
 
-def appliquer(paquet):
-    """Prepare la mise a jour ; PhilPDF doit se fermer juste apres (renvoie True si lancee)."""
-    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+def fichier_valide(f):
+    if f.lower().endswith(".zip"):
+        try:
+            with zipfile.ZipFile(f) as z:
+                return "PhilPDF.exe" in z.namelist()
+        except zipfile.BadZipFile:
+            return False
+    return os.path.getsize(f) > 10_000_000
+
+
+def debloquer():
+    """Windows marque les fichiers sortis d'un zip telecharge (« Mark of the Web ») : d'ou l'avertissement
+    « L'editeur n'a pas pu etre verifie » a chaque lancement. PhilPDF ayant deja ete lance par
+    l'utilisateur, on retire cette marque de ses propres fichiers (comme Proprietes > Debloquer)."""
+    if not possible():
+        return 0
+    n = 0
+    for base, _d, fichiers in os.walk(dossier_programme()):
+        for f in fichiers:
+            if f.lower().endswith((".exe", ".dll", ".pyd")):
+                try:
+                    os.remove(os.path.join(base, f) + ":Zone.Identifier")
+                    n += 1
+                except OSError:
+                    pass
+    return n
+
+
+def possible():
+    return sys.platform == "win32" and getattr(sys, "frozen", False)
+
+
+def appliquer(fichier):
+    """Lance la mise a jour a partir du paquet deja telecharge ; PhilPDF doit se fermer juste apres."""
+    if not possible():
         return False
-    fichier = _recuperer(paquet)
     if fichier.lower().endswith(".exe"):
         subprocess.Popen([fichier, "/SILENT", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS"], close_fds=True)
         return True
@@ -81,7 +121,7 @@ def appliquer(paquet):
         f.write("@echo off\r\n"
                 f"echo Mise a jour de PhilPDF...\r\n"
                 f":attente\r\ntasklist /FI \"PID eq {os.getpid()}\" | find \"{os.getpid()}\" >nul && (timeout /t 1 >nul & goto attente)\r\n"
-                f'robocopy "{tmp}" "{prog}" /E /XD donnees /XF portable.txt maj_philpdf.bat >nul\r\n'
+                f'robocopy "{tmp}" "{prog}" /E /R:5 /W:1 /XD donnees /XF portable.txt maj_philpdf.bat >nul\r\n'
                 f'start "" "{os.path.join(prog, "PhilPDF.exe")}"\r\n')
     subprocess.Popen(["cmd", "/c", script], creationflags=0x08000000, close_fds=True)
     return True

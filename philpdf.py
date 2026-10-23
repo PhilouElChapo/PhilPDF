@@ -80,6 +80,11 @@ def main():
     if "--verifier" in sys.argv:
         sys.exit(verifier(sys.argv[sys.argv.index("--verifier") + 1]))
     app = QApplication(sys.argv)
+    try:
+        from app.mise_a_jour import debloquer
+        debloquer()
+    except Exception:
+        pass
     preparer(app)
     fichiers = [a for a in sys.argv[1:] if a.lower().endswith(".pdf") and os.path.exists(a)]
     w = Fenetre(fichiers)
