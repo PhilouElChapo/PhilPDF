@@ -7,7 +7,7 @@ et rien n'est ecrit ailleurs sur le PC ni dans le registre.
 import json, os, platform, sys
 
 APP = "PhilPDF"
-VERSION = "0.2.2"
+VERSION = "0.2.3"
 
 
 def dossier_programme():
@@ -47,7 +47,10 @@ DEFAUTS = {
     "maj_source": "github",         # "github" ou "dossier" (dossier synchronise)
     "maj_auto": True,               # verifier au demarrage (une fois par jour)
     "maj_derniere": "",
-    "racines": [],                  # emplacements de documents declares sur ce PC (session partagee)
+    "racines": [],                  # emplacements supplementaires a fouiller (mode avance)
+    "nas": "",                      # dossier du NAS sur ce poste
+    "synchro": True,                # synchroniser les fichiers ouverts entre postes
+    "dernier_dossier": "",
 }
 
 

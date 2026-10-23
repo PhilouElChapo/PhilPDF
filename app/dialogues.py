@@ -583,102 +583,186 @@ class DialogueExporter(QDialog):
         f.addRow(bb)
 
 
-# ------------------------------------------------------------------ reprise de session
+# ------------------------------------------------------------------ synchronisation des sessions
 from PySide6.QtCore import QThread
+from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
 
 
-class _Recherche(QThread):
+class TacheRecherche(QThread):
+    """Recherche en cascade en arriere-plan ; `etape` a chaque fichier resolu."""
     etape = Signal(int, str, str)          # indice, chemin trouve ("" si non), comment
+    fini = Signal(list)
 
-    def __init__(self, session, machine, fichiers):
+    def __init__(self, session, machine, fichiers, delai=None):
         super().__init__()
-        self.s, self.machine, self.fichiers, self.stop = session, machine, fichiers, False
+        self.s, self.machine, self.fichiers, self.delai, self.stop = session, machine, fichiers, delai, False
 
     def run(self):
-        restants = []
-        for i, e in enumerate(self.fichiers):
-            if self.stop:
-                return
-            c, comment = self.s.retrouver_rapide(self.machine, e)
-            if c:
-                self.etape.emit(i, c, comment)
-            else:
-                restants.append(i)
-                self.etape.emit(i, "", "recherche du fichier renommé...")
-        for i in restants:
-            if self.stop:
-                return
-            c = self.s.retrouver_par_empreinte(self.fichiers[i], lambda: self.stop)
-            self.etape.emit(i, c or "", "renommé, retrouvé par son empreinte" if c else "introuvable")
+        res = self.s.retrouver_tous(self.machine, self.fichiers, arret=lambda: self.stop, delai=self.delai,
+                                    progression=lambda i, c, cm: self.etape.emit(i, c or "", cm))
+        self.fini.emit(res)
 
 
-class DialogueReprise(QDialog):
-    """Reprise de la session d'une autre machine : chaque fichier est recherche en cascade."""
+class DialogueSynchro(QDialog):
+    """Synchronisation manuelle : etat de chaque fichier de l'autre poste, designation a la main des
+    introuvables (PhilPDF apprend), et table des correspondances de dossiers apprises."""
 
-    def __init__(self, parent, session, machine):
+    def __init__(self, parent, session, machine=None, resultats=None, fichiers_ouverts=0):
         super().__init__(parent)
-        self.s, self.machine = session, machine
-        info = session.lire().get(machine, {})
-        self.fichiers = info.get("fichiers", [])
         from .session import date_fr, nb_fichiers
-        date = date_fr(info.get("maj", ""))
-        ici = session.params["machine"]
-        self.date = date
-        self.setWindowTitle("Reprendre une session")
-        self.resize(780, 420)
+        self.s, self._df, self._nb = session, date_fr, nb_fichiers
+        self.setWindowTitle("Synchroniser les fichiers ouverts entre postes")
+        self.resize(900, 520)
         v = QVBoxLayout(self)
-        v.addWidget(QLabel(f"<b>Session de {machine}</b> ({nb_fichiers(len(self.fichiers))}, mise à jour le {date}) — "
-                           f"recherche des fichiers sur <b>{ici}</b>"))
-        self.liste = QListWidget()
-        v.addWidget(self.liste, 1)
-        for e in self.fichiers:
-            it = QListWidgetItem(f"{e['nom']}  —  recherche...")
-            it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
-            it.setCheckState(Qt.Unchecked)
-            it.setToolTip(e["chemin"])
-            self.liste.addItem(it)
-        self.trouves = {}
-        aide = QLabel("Ordre de recherche : dossiers déjà appris, même emplacement, dossier utilisateur, "
-                      "vos emplacements déclarés (Préférences), recherche par nom puis par empreinte.")
-        aide.setWordWrap(True)
-        aide.setStyleSheet("color:#555;font-size:12px")
-        v.addWidget(aide)
+        h = QHBoxLayout()
+        h.addWidget(QLabel(f"Ce poste : <b>{session.params['machine']}</b>.  Reprendre les fichiers de :"))
+        self.machines = QComboBox()
+        for m, d, n in session.autres_machines():
+            self.machines.addItem(f"{m} — {nb_fichiers(n)}, le {date_fr(d)}", m)
+        if machine:
+            self.machines.setCurrentIndex(max(0, self.machines.findData(machine)))
+        h.addWidget(self.machines, 1)
+        v.addLayout(h)
+        self.onglets = QTabWidget()
+        v.addWidget(self.onglets, 1)
+        # --- onglet fichiers
+        self.table = QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(["Fichier", "Emplacement sur ce poste", "Comment", ""])
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.table.setSelectionMode(QAbstractItemView.NoSelection)
+        self.table.verticalHeader().hide()
+        self.onglets.addTab(self.table, "Fichiers")
+        # --- onglet correspondances
+        w = QWidget()
+        vc = QVBoxLayout(w)
+        vc.setContentsMargins(0, 6, 0, 0)
+        expl = QLabel("Correspondances de dossiers apprises : quand un fichier de l'autre poste est retrouvé ailleurs ici, "
+                      "PhilPDF retient le lien entre les deux dossiers et leur racine commune (ex. C:\\Users\\Phil → C:\\Users\\Autre).")
+        expl.setWordWrap(True)
+        expl.setStyleSheet("color:#555")
+        vc.addWidget(expl)
+        self.corr = QTableWidget(0, 4)
+        self.corr.setHorizontalHeaderLabels(["Poste", "Dossier sur l'autre poste", "Dossier ici", ""])
+        self.corr.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.corr.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.corr.verticalHeader().hide()
+        vc.addWidget(self.corr, 1)
+        self.onglets.addTab(w, "Correspondances apprises")
+        # --- bas
+        self.remplacer = QCheckBox("Remplacer les fichiers ouverts ici")
+        self.remplacer.setChecked(True)
+        self.remplacer.setVisible(fichiers_ouverts > 0)
+        v.addWidget(self.remplacer)
         bb = QDialogButtonBox()
         self.b_ouvrir = bb.addButton("Ouvrir les fichiers cochés", QDialogButtonBox.AcceptRole)
-        bb.addButton("Annuler", QDialogButtonBox.RejectRole)
+        self.b_relancer = bb.addButton("Relancer la recherche", QDialogButtonBox.ActionRole)
+        bb.addButton("Fermer", QDialogButtonBox.RejectRole)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
+        self.b_relancer.clicked.connect(lambda: self.charger(None))
         v.addWidget(bb)
-        self.t = _Recherche(session, machine, self.fichiers)
-        self.t.etape.connect(self._etape)
-        self.t.start()
+        self.t = None
+        self.machines.currentIndexChanged.connect(lambda _: self.charger(None))
+        self.remplir_corr()
+        self.charger(resultats)
+
+    # ------------------------------------------------------------ fichiers
+    def machine(self):
+        return self.machines.currentData()
+
+    def charger(self, resultats):
+        self._arreter()
+        m = self.machine()
+        self.fichiers = self.s.lire().get(m, {}).get("fichiers", []) if m else []
+        self.date = self._df(self.s.lire().get(m, {}).get("maj", "")) if m else ""
+        self.trouves = {}
+        self.table.setRowCount(len(self.fichiers))
+        for i, e in enumerate(self.fichiers):
+            it = QTableWidgetItem(e["nom"])
+            it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+            it.setCheckState(Qt.Unchecked)
+            it.setToolTip(f"Sur {m} : {e['chemin']}")
+            self.table.setItem(i, 0, it)
+            self.table.setItem(i, 1, QTableWidgetItem("recherche..."))
+            self.table.setItem(i, 2, QTableWidgetItem(""))
+            b = QPushButton("Désigner...")
+            b.setToolTip("Indiquer à la main où est ce fichier sur ce poste ; PhilPDF retiendra le dossier")
+            b.clicked.connect(lambda _=False, i=i: self.designer(i))
+            self.table.setCellWidget(i, 3, b)
+        if resultats is not None and len(resultats) == len(self.fichiers):
+            for i, (c, cm) in enumerate(resultats):
+                self._etape(i, c or "", cm)
+        elif self.fichiers:
+            self.t = TacheRecherche(self.s, m, self.fichiers)
+            self.t.etape.connect(self._etape)
+            self.t.start()
+        self.table.resizeColumnToContents(0)
 
     def _etape(self, i, chemin, comment):
-        it = self.liste.item(i)
-        e = self.fichiers[i]
+        if i >= self.table.rowCount():
+            return
+        gris, vert = QColor("#999999"), QColor("#1d5a2b")
         if chemin:
             self.trouves[i] = chemin
-            it.setText(f"{e['nom']}  —  {chemin}   ({comment})")
-            it.setCheckState(Qt.Checked)
-            it.setForeground(QColor("#1d5a2b"))
-        elif comment == "introuvable":
-            it.setText(f"{e['nom']}  —  introuvable sur {self.s.params['machine']} (ouvert sur {self.machine} le {self.date})")
-            it.setForeground(QColor("#999999"))
-            it.setFlags(it.flags() & ~Qt.ItemIsUserCheckable)
+            self.table.item(i, 0).setCheckState(Qt.Checked)
+            self.table.item(i, 1).setText(chemin)
+            self.table.item(i, 2).setText(comment)
+            for c in (0, 1, 2):
+                self.table.item(i, c).setForeground(vert)
+        elif comment.startswith("introuvable"):
+            self.table.item(i, 1).setText(f"introuvable sur {self.s.params['machine']} "
+                                          f"(ouvert sur {self.machine()} le {self.date})")
+            self.table.item(i, 2).setText(comment.replace("introuvable", "").strip(" ()"))
+            for c in (0, 1, 2):
+                self.table.item(i, c).setForeground(gris)
         else:
-            it.setText(f"{e['nom']}  —  {comment}")
+            self.table.item(i, 1).setText(comment)
 
+    def designer(self, i):
+        from .session import empreinte
+        e = self.fichiers[i]
+        f, _ = QFileDialog.getOpenFileName(self, f"Où est « {e['nom']} » sur ce poste ?", "", "PDF (*.pdf);;Tous (*)")
+        if not f:
+            return
+        if e.get("empreinte") and empreinte(f) != e["empreinte"]:
+            if QMessageBox.question(self, "Synchroniser", "Ce fichier n'a pas le même contenu que celui ouvert sur "
+                                    f"{self.machine()}. L'utiliser quand même ?") != QMessageBox.Yes:
+                return
+        self.s.apprendre_depuis(self.machine(), e, f)
+        self._etape(i, f, "désigné à la main (appris)")
+        self.remplir_corr()
+
+    # ------------------------------------------------------------ correspondances
+    def remplir_corr(self):
+        lignes = self.s.correspondances()
+        self.corr.setRowCount(len(lignes))
+        for r, (m, a, b) in enumerate(lignes):
+            for c, t in enumerate((m, a, b)):
+                self.corr.setItem(r, c, QTableWidgetItem(t))
+            bo = QPushButton("Oublier")
+            bo.clicked.connect(lambda _=False, m=m, a=a: (self.s.oublier(m, a), self.remplir_corr()))
+            self.corr.setCellWidget(r, 3, bo)
+        self.corr.resizeColumnToContents(0)
+
+    # ------------------------------------------------------------ resultat
     def choisis(self):
         """[(chemin, page, zoom)] a ouvrir ; les correspondances trouvees sont apprises."""
         out = []
-        for i, c in self.trouves.items():
-            if self.liste.item(i).checkState() == Qt.Checked:
+        for i, c in sorted(self.trouves.items()):
+            if self.table.item(i, 0).checkState() == Qt.Checked:
                 e = self.fichiers[i]
-                self.s.apprendre_depuis(self.machine, e, c)
+                self.s.apprendre_depuis(self.machine(), e, c)
                 out.append((c, e.get("page", 0), e.get("zoom")))
         return out
 
+    def _arreter(self):
+        if self.t:
+            self.t.stop = True
+            self.t.wait(3000)
+            self.t = None
+
     def done(self, r):
-        self.t.stop = True
-        self.t.wait(3000)
+        self._arreter()
         super().done(r)

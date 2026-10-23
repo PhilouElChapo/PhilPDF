@@ -81,15 +81,21 @@ Verification manuelle : Aide > Rechercher les mises a jour.
   Drive     Tampons et signatures ranges sur ce PC et sauvegardes sur le
             Drive (Google Drive, OneDrive, Dropbox detectes)
   Session   Le Drive ne garde que les EMPLACEMENTS des fichiers ouverts
-            (jamais les PDF). Sur un autre PC : "Reprendre la session de
-            Pharmacie (5 fichiers) ?". Chaque fichier est cherche : dossier
-            deja appris, meme chemin, meme chemin sous votre dossier
-            utilisateur, sous vos emplacements declares (Preferences :
-            D:\Documents, NAS...), par son nom, puis par son contenu s'il a
-            ete renomme. Sinon : "introuvable sur Maison (ouvert sur
-            Pharmacie le ...)". Les correspondances de dossiers trouvees
-            sont retenues pour la fois suivante. La page affichee et le
-            zoom sont repris.
+            (jamais les PDF), mis a jour a l'ouverture, a la fermeture et
+            chaque minute. Au demarrage, PhilPDF verifie en silence si un
+            autre poste a une session plus recente : si oui, il cherche ses
+            fichiers ici quelques secondes, previent par une bulle et laisse
+            la proposition sur l'Accueil ("Reprendre ces fichiers" remplace
+            les fichiers ouverts). Bouton de synchronisation manuelle sur
+            l'Accueil et dans Fichier : etat de chaque fichier, "Designer..."
+            pour un fichier introuvable, correspondances apprises.
+            Ordre de recherche : dossier deja appris, meme chemin, meme
+            dossier par defaut (Documents, Telechargements, Bureau, NAS ;
+            Windows et Linux se repondent), dossier utilisateur, puis par
+            le nom et par le contenu (fichier renomme), 80 000 fichiers ou
+            8 secondes au plus, sans AppData ni dossiers systeme.
+            Reglages : Edition > Preferences > Drive et dossiers, et
+            Synchronisation (avance).
   Plus tard : signature numerique (certificat), formulaires, comparer, IA
 
 

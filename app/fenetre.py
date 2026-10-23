@@ -6,7 +6,7 @@ from PySide6.QtGui import QAction, QKeySequence, QImage, QPainter
 from PySide6.QtWidgets import (QMainWindow, QTabWidget, QFileDialog, QMessageBox, QDialog, QFormLayout,
                                QLineEdit, QCheckBox, QComboBox, QDialogButtonBox, QListWidget, QVBoxLayout,
                                QHBoxLayout, QPushButton, QLabel, QProgressDialog, QApplication, QInputDialog,
-                               QListWidgetItem, QWidget)
+                               QListWidgetItem, QWidget, QFrame, QGroupBox)
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from .config import Parametres, VERSION, est_portable, associer_pdf, dossier_donnees
 from .icones import icone, logo
@@ -14,9 +14,9 @@ from .pages import PageOutils, PageAccueil
 from .document import OngletDocument, DialogueRemplacer, question
 from .outils import outil
 from .bibliotheque import Bibliotheque, detecter_clouds
-from .session import session_de, date_fr, nb_fichiers
+from .session import session_de, date_fr, nb_fichiers, dossiers_connus, DELAI_SILENCIEUX
 from .dialogues import (boutons_fr, DialogueFiligrane, DialogueEntete, DialogueNumeriser, DialogueExporter,
-                        DialogueBibliotheque, DialogueReprise)
+                        DialogueBibliotheque, DialogueSynchro)
 
 FILTRE = "Documents PDF (*.pdf *.PDF)"
 
@@ -49,6 +49,60 @@ class TacheMaj(QThread):
         self.trouve.emit(chercher(self.params))
 
 
+class TacheSynchro(QThread):
+    """Verification silencieuse au demarrage : une autre machine a-t-elle une session plus recente
+    et differente ? Si oui, recherche rapide (quelques secondes) de ses fichiers sur ce poste."""
+    resultat = Signal(object)
+
+    def __init__(self, session, ouverts):
+        super().__init__()
+        self.s, self.ouverts, self.stop = session, ouverts, False
+
+    def run(self):
+        try:
+            d = self.s.discordance(self.ouverts)
+            if d:
+                m, date, fichiers = d
+                self.resultat.emit((m, date, fichiers, self.s.retrouver_tous(m, fichiers, arret=lambda: self.stop, delai=DELAI_SILENCIEUX)))
+        except Exception:
+            pass
+
+
+class Notification(QFrame):
+    """Petite bulle non bloquante en bas a droite de la fenetre, disparait seule."""
+
+    def __init__(self, parent, texte, bouton, action):
+        super().__init__(parent)
+        self.setObjectName("notif")
+        self.setStyleSheet("#notif{background:#1f2933;border-radius:10px} QLabel{color:#fff;font-size:13px}"
+                           "QPushButton{color:#9cc9ff;background:transparent;border:none;font-weight:600;padding:4px 8px}")
+        h = QHBoxLayout(self)
+        h.setContentsMargins(14, 10, 8, 10)
+        ic = QLabel()
+        ic.setPixmap(icone("synchro", "#9cc9ff").pixmap(22, 22))
+        h.addWidget(ic)
+        lb = QLabel(texte)
+        lb.setWordWrap(True)
+        lb.setMaximumWidth(360)
+        h.addWidget(lb)
+        b = QPushButton(bouton)
+        b.clicked.connect(lambda: (action(), self.close()))
+        h.addWidget(b)
+        x = QPushButton("✕")
+        x.clicked.connect(self.close)
+        h.addWidget(x)
+        self.adjustSize()
+        self.placer()
+        self.show()
+        self.raise_()
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(12000, self.close)
+
+    def placer(self):
+        p = self.parent()
+        self.move(p.width() - self.width() - 24, p.height() - self.height() - 40)
+
+
 class Fenetre(QMainWindow):
     def __init__(self, fichiers=()):
         super().__init__()
@@ -71,7 +125,10 @@ class Fenetre(QMainWindow):
         self.accueil = PageAccueil(self.params)
         self.accueil.ouvrir.connect(self.ouvrir)
         self.accueil.ouvrir_dialogue.connect(self.dialogue_ouvrir)
-        self.accueil.reprendre.connect(self.reprendre_session)
+        self.accueil.reprendre.connect(self.reprendre_proposee)
+        self.accueil.synchroniser.connect(self.synchroniser)
+        self.synchro = None              # (machine, date, fichiers, resultats) trouve au demarrage
+        self._session_touchee = False    # on n'ecrit la session que si des fichiers ont ete ouverts ou fermes
         self.outils = PageOutils(self.params)
         self.outils.outil_choisi.connect(self.lancer_outil)
         self.outils.epingles_changes.connect(self._epingles)
@@ -92,7 +149,8 @@ class Fenetre(QMainWindow):
             self.params.enregistrer()
             self.verifier_maj(silencieux=True)
         from PySide6.QtCore import QTimer
-        QTimer.singleShot(800, self.proposer_reprise)
+        if self.params.get("synchro", True):
+            QTimer.singleShot(1500, self.verifier_synchro)
         self._minuterie = QTimer(self)
         self._minuterie.timeout.connect(self._session)
         self._minuterie.start(60000)       # page courante memorisee chaque minute
@@ -122,7 +180,7 @@ class Fenetre(QMainWindow):
         act(m, "Ouvrir...", self.dialogue_ouvrir, "Ctrl+O", "ouvrir")
         self.menu_recents = m.addMenu("Ouvrir un fichier récent")
         self.menu_recents.aboutToShow.connect(self._remplir_recents)
-        act(m, "Reprendre la session d'une autre machine...", self.choisir_session)
+        act(m, "Synchroniser avec les autres postes...", self.synchroniser, None, "synchro")
         sm = m.addMenu(icone("creer"), "Créer un PDF")
         act(sm, "Page vierge", lambda: self.creer("vierge"))
         act(sm, "A partir d'images...", lambda: self.creer("images"))
@@ -256,8 +314,13 @@ class Fenetre(QMainWindow):
         self.params["barre_rapide"] = on
         self.params.enregistrer()
 
-    def _session(self):
-        """Ecrit les EMPLACEMENTS des fichiers ouverts (jamais les fichiers) dans la session du Drive."""
+    def _session(self, toucher=False):
+        """Ecrit les EMPLACEMENTS des fichiers ouverts (jamais les fichiers) dans la session du Drive.
+        Rien n'est ecrit tant qu'aucun fichier n'a ete ouvert ou ferme : lancer PhilPDF pour rien
+        n'efface pas la session de ce poste."""
+        self._session_touchee = self._session_touchee or toucher
+        if not self._session_touchee or not self.params.get("synchro", True):
+            return
         session_de(self.params).ecrire([(o.chemin, o.page_courante(), o.zoom) for o in self.documents() if o.chemin])
 
     def ouvrir(self, chemin):
@@ -280,12 +343,20 @@ class Fenetre(QMainWindow):
                 return None
             o.construire_pages()
         self.params.ajouter_recent(chemin)
+        self.params["dernier_dossier"] = os.path.dirname(chemin)
+        self._session_touchee = True
         return self.ajouter_onglet(o)
 
     def dialogue_ouvrir(self):
-        dep = os.path.dirname(self.params["recents"][0]) if self.params["recents"] else os.path.expanduser("~")
-        for f in QFileDialog.getOpenFileNames(self, "Ouvrir", dep, FILTRE)[0]:
+        for f in QFileDialog.getOpenFileNames(self, "Ouvrir", self.dossier_depart(), FILTRE)[0]:
             self.ouvrir(f)
+
+    def dossier_depart(self):
+        """Dernier dossier ouvert ; a defaut Documents ; a defaut le dossier utilisateur."""
+        d = self.params.get("dernier_dossier")
+        if d and os.path.isdir(d):
+            return d
+        return dossiers_connus().get("documents") or os.path.expanduser("~")
 
     def fermer_onglet(self, i):
         w = self.onglets.widget(i)
@@ -297,7 +368,7 @@ class Fenetre(QMainWindow):
                 return
         self.onglets.removeTab(i)
         w.deleteLater()
-        self._session()
+        self._session(toucher=True)
 
     def _demander_enregistrer(self, o):
         return question(self, "PhilPDF", f"Enregistrer les modifications de « {o.nom} » ?",
@@ -318,46 +389,76 @@ class Fenetre(QMainWindow):
                     return
         self._session()
         self.params.enregistrer()
+        for t in self.taches:
+            if isinstance(t, TacheSynchro):
+                t.stop = True
+                t.wait(2000)
         e.accept()
 
-    def reprendre_session(self, machine):
-        d = DialogueReprise(self, session_de(self.params), machine)
-        if d.exec() != QDialog.Accepted:
+    def verifier_synchro(self):
+        """Au demarrage, en silence : session plus recente et differente sur un autre poste ?"""
+        t = TacheSynchro(session_de(self.params), [o.chemin for o in self.documents() if o.chemin])
+        t.resultat.connect(self._synchro_trouvee)
+        self.taches.append(t)
+        t.start()
+
+    def _synchro_trouvee(self, r):
+        self.synchro = r
+        m, date, fichiers, res = r
+        self.accueil.montrer_synchro(m, date, fichiers, res)
+        n = sum(1 for c, _ in res if c)
+        Notification(self, f"Session plus récente sur {m} ({date_fr(date)}) : {nb_fichiers(len(fichiers))}, "
+                           f"{n} retrouvé{'s' if n > 1 else ''} ici.", "Voir",
+                     lambda: self.onglets.setCurrentWidget(self.accueil))
+
+    def reprendre_proposee(self):
+        if self.synchro:
+            m, date, fichiers, res = self.synchro
+            session = session_de(self.params)
+            ouvrir = []
+            for e, (c, _) in zip(fichiers, res):
+                if c:
+                    session.apprendre_depuis(m, e, c)
+                    ouvrir.append((c, e.get("page", 0), e.get("zoom")))
+            self.reprendre(ouvrir, remplacer=True)
+
+    def synchroniser(self):
+        s = session_de(self.params)
+        if not s.autres_machines():
+            QMessageBox.information(self, "Synchroniser", "Aucun autre poste n'a encore de session. Indiquez le même Drive "
+                                    "dans Edition › Préférences sur chacun de vos PC.")
             return
-        for chemin, page, zoom in d.choisis():
+        m, res = (self.synchro[0], self.synchro[3]) if self.synchro else (None, None)
+        d = DialogueSynchro(self, s, m, res, len(self.documents()))
+        if d.exec() == QDialog.Accepted:
+            self.reprendre(d.choisis(), remplacer=d.remplacer.isChecked())
+
+    def reprendre(self, fichiers, remplacer=True):
+        """Ouvre [(chemin, page, zoom)] ; par defaut, remplace les fichiers deja ouverts."""
+        if not fichiers:
+            return
+        if remplacer:
+            garder = {os.path.normcase(c) for c, _, _ in fichiers}
+            for i in range(self.onglets.count() - 1, -1, -1):
+                w = self.onglets.widget(i)
+                if isinstance(w, OngletDocument) and (not w.chemin or os.path.normcase(w.chemin) not in garder):
+                    self.fermer_onglet(i)
+        from PySide6.QtCore import QTimer
+        for chemin, page, zoom in fichiers:
             o = self.ouvrir(chemin)
             if o:
                 if zoom:
                     o.changer_zoom(zoom)
                 if page and page < len(o.doc):
-                    from PySide6.QtCore import QTimer
-                    QTimer.singleShot(200, lambda o=o, p=page: o.aller_a(p))
+                    QTimer.singleShot(300, lambda o=o, p=page: o.aller_a(p))
+        self.synchro = None
+        self.accueil.cacher_synchro()
+        self._session(toucher=True)
 
-    def choisir_session(self):
-        autres = session_de(self.params).autres_machines()
-        if not autres:
-            QMessageBox.information(self, "Session", "Aucune autre machine n'a encore de session. "
-                                    "Indiquez votre Drive dans Edition › Préférences, sur chaque PC.")
-            return
-        libs = [f"{m} ({nb_fichiers(n)}, le {date_fr(d)})" for m, d, n in autres]
-        m, ok = QInputDialog.getItem(self, "Reprendre une session", "Machine :", libs, 0, False)
-        if ok:
-            self.reprendre_session(autres[libs.index(m)][0])
-
-    def proposer_reprise(self):
-        """Au demarrage : une autre machine a une session plus recente que la notre -> proposer."""
-        s = session_de(self.params)
-        autres = s.autres_machines()
-        if not autres:
-            return
-        m, date, n = autres[0]
-        mienne = s.lire().get(self.params["machine"], {}).get("maj", "")
-        if date > mienne and date != self.params.get("reprise_vue"):
-            self.params["reprise_vue"] = date
-            self.params.enregistrer()
-            if question(self, "Session", f"Reprendre la session de {m} ({nb_fichiers(n)}, le {date_fr(date)}) ?",
-                        [("Reprendre", QMessageBox.AcceptRole), ("Non merci", QMessageBox.RejectRole)]) == 0:
-                self.reprendre_session(m)
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        for n in self.findChildren(Notification):
+            n.placer()
 
     # ------------------------------------------------------------ enregistrer
     def enregistrer(self, o=None, sous=False):
@@ -454,7 +555,7 @@ class Fenetre(QMainWindow):
     def creer(self, genre):
         doc = fitz.open()
         if genre == "images":
-            fs = QFileDialog.getOpenFileNames(self, "Images", "", "Images (*.png *.jpg *.jpeg *.tif *.tiff *.bmp)")[0]
+            fs = QFileDialog.getOpenFileNames(self, "Images", self.dossier_depart(), "Images (*.png *.jpg *.jpeg *.tif *.tiff *.bmp)")[0]
             if not fs:
                 return
             for f in fs:
@@ -481,7 +582,7 @@ class Fenetre(QMainWindow):
                 lst.addItem(it)
         h = QHBoxLayout()
         b = QPushButton("Ajouter des fichiers...")
-        b.clicked.connect(lambda: [lst.addItem(self._item(f)) for f in QFileDialog.getOpenFileNames(d, "Ajouter", "", "PDF et images (*.pdf *.png *.jpg *.jpeg *.tif)")[0]])
+        b.clicked.connect(lambda: [lst.addItem(self._item(f)) for f in QFileDialog.getOpenFileNames(d, "Ajouter", self.dossier_depart(), "PDF et images (*.pdf *.png *.jpg *.jpeg *.tif)")[0]])
         h.addWidget(b)
         r = QPushButton("Retirer")
         r.clicked.connect(lambda: [lst.takeItem(lst.row(i)) for i in lst.selectedItems()])
@@ -646,7 +747,7 @@ class Fenetre(QMainWindow):
         p.end()
 
     def imprimer_plusieurs(self):
-        fs = QFileDialog.getOpenFileNames(self, "Documents à imprimer", "", FILTRE)[0]
+        fs = QFileDialog.getOpenFileNames(self, "Documents à imprimer", self.dossier_depart(), FILTRE)[0]
         if fs:
             self.imprimer(fs)
 
@@ -754,11 +855,46 @@ class Fenetre(QMainWindow):
     def preferences(self):
         d = QDialog(self)
         d.setWindowTitle("Préférences")
-        d.setMinimumWidth(520)
-        f = QFormLayout(d)
+        d.setMinimumWidth(620)
+        vd = QVBoxLayout(d)
+        tabs = QTabWidget()
+        vd.addWidget(tabs)
+
+        def page(titre):
+            w = QWidget()
+            f = QFormLayout(w)
+            tabs.addTab(w, titre)
+            return f
+
+        def note(f, texte, couleur="#555"):
+            lb = QLabel(texte)
+            lb.setWordWrap(True)
+            lb.setStyleSheet(f"color:{couleur};font-size:12px")
+            f.addRow(lb)
+
+        def choisir_dossier(champ, titre):
+            p = QFileDialog.getExistingDirectory(d, titre, champ.text() or os.path.expanduser("~"))
+            if p:
+                champ.setText(p)
+
+        # ---------------- Général
+        f = page("Général")
         machine = QLineEdit(self.params["machine"])
         auteur = QLineEdit(self.params.get("auteur", ""))
         auteur.setPlaceholderText("Nom inscrit sur les tampons et commentaires")
+        f.addRow("Nom de ce poste (alias)", machine)
+        note(f, "Par exemple « Pharmacie », « Maison », « Portable » : c'est le nom affiché sur vos autres postes.")
+        f.addRow("Votre nom", auteur)
+        fixer = QCheckBox("Fixer signatures et tampons dans la page à l'enregistrement (non déplaçables ensuite)")
+        fixer.setChecked(self.params.get("fixer_objets", False))
+        f.addRow(fixer)
+        assoc = QCheckBox("Ouvrir les fichiers PDF avec PhilPDF (proposé dans « Ouvrir avec »)")
+        assoc.setChecked(self.params["association_pdf"])
+        assoc.setEnabled(sys.platform == "win32" and not est_portable())
+        f.addRow(assoc)
+
+        # ---------------- Drive et dossiers
+        f = page("Drive et dossiers")
         drive = QComboBox()
         drive.setEditable(True)
         drive.addItem("(aucun)", "")
@@ -773,12 +909,40 @@ class Fenetre(QMainWindow):
         hs = QHBoxLayout()
         hs.addWidget(drive, 1)
         hs.addWidget(b)
-        sauver = QPushButton("Sauvegarder maintenant")
+        f.addRow("Drive (Google Drive, OneDrive...)", hs)
+        note(f, "Le Drive sert de boîte aux lettres à PhilPDF : sauvegarde des tampons et signatures, et liste des "
+                "fichiers ouverts sur chaque poste (leurs emplacements, jamais les PDF eux-mêmes).")
+        sauver = QPushButton("Sauvegarder tampons et signatures maintenant")
         sauver.clicked.connect(lambda: QMessageBox.information(d, "Drive", f"{self.biblio.sauvegarder_drive() or 0} élément(s) copiés sur le Drive."
                                                                if self.params.get("drive") else "Choisissez d'abord votre Drive."))
+        f.addRow("", sauver)
+        connus = dossiers_connus()
+        for clef, lib in (("documents", "Documents"), ("telechargements", "Téléchargements"), ("bureau", "Bureau")):
+            lb = QLabel(connus.get(clef, "(non trouvé)"))
+            lb.setStyleSheet("color:#333")
+            f.addRow(lib, lb)
+        nas = QLineEdit(self.params.get("nas", ""))
+        nas.setPlaceholderText(r"ex. \\NAS\Partage, Z:\ ou /mnt/nas")
+        bn = QPushButton("Choisir...")
+        bn.clicked.connect(lambda: choisir_dossier(nas, "Dossier du NAS sur ce poste"))
+        hn = QHBoxLayout()
+        hn.addWidget(nas, 1)
+        hn.addWidget(bn)
+        f.addRow("NAS", hn)
+        note(f, "Documents, Téléchargements et Bureau sont détectés automatiquement, sous Windows comme sous Linux "
+                "(%USERPROFILE%\\Documents ↔ ~/Documents). A l'ouverture, PhilPDF part du dernier dossier utilisé.")
+
+        # ---------------- Synchronisation (avancé)
+        f = page("Synchronisation (avancé)")
+        sync = QCheckBox("Synchroniser les fichiers ouverts sur mes différents postes")
+        sync.setChecked(self.params.get("synchro", True))
+        f.addRow(sync)
+        note(f, "Au démarrage, PhilPDF vérifie en silence si un autre poste a une session plus récente ; si oui, il "
+                "cherche ses fichiers ici quelques secondes, prévient par une bulle et laisse la proposition sur "
+                "l'Accueil. Bouton de synchronisation manuelle sur l'Accueil et dans le menu Fichier.")
         racines = QListWidget()
         racines.setMaximumHeight(90)
-        for r in self.params.get("racines", []) or [os.path.expanduser("~")]:
+        for r in self.params.get("racines", []):
             racines.addItem(r)
         hr = QHBoxLayout()
         br = QPushButton("Ajouter un emplacement...")
@@ -788,8 +952,15 @@ class Fenetre(QMainWindow):
         bs.clicked.connect(lambda: [racines.takeItem(racines.row(i)) for i in racines.selectedItems()])
         hr.addWidget(bs)
         hr.addStretch()
-        fixer = QCheckBox("Fixer signatures et tampons dans la page à l'enregistrement (non déplaçables ensuite)")
-        fixer.setChecked(self.params.get("fixer_objets", False))
+        f.addRow("Autres emplacements à fouiller", racines)
+        f.addRow("", hr)
+        bc = QPushButton(" Correspondances apprises et synchronisation...")
+        bc.setIcon(icone("synchro", "#2b6cb0"))
+        bc.clicked.connect(self.synchroniser)
+        f.addRow("", bc)
+
+        # ---------------- IA
+        f = page("IA")
         moteur = QComboBox()
         moteur.addItems(["Claude", "Gemini", "Les deux (double avis)"])
         moteur.setCurrentIndex({"claude": 0, "gemini": 1, "deux": 2}.get(self.params["ia_moteur"], 0))
@@ -797,29 +968,13 @@ class Fenetre(QMainWindow):
         kc.setEchoMode(QLineEdit.Password)
         kg = QLineEdit(self.params["clef_gemini"])
         kg.setEchoMode(QLineEdit.Password)
-        assoc = QCheckBox("Ouvrir les fichiers PDF avec PhilPDF (proposé dans « Ouvrir avec »)")
-        assoc.setChecked(self.params["association_pdf"])
-        assoc.setEnabled(sys.platform == "win32" and not est_portable())
-        f.addRow("Nom de cette machine (alias)", machine)
-        f.addRow("Votre nom", auteur)
-        f.addRow("Drive (Google Drive, OneDrive...)", hs)
-        expl = QLabel("Tampons et signatures restent sur ce PC ; le Drive en garde une sauvegarde (dossier PhilPDF) "
-                      "et la liste des fichiers ouverts, pour les retrouver sur vos autres machines.")
-        expl.setWordWrap(True)
-        expl.setStyleSheet("color:#555;font-size:12px")
-        f.addRow(expl)
-        f.addRow("", sauver)
-        f.addRow("Emplacements de vos documents sur ce PC", racines)
-        f.addRow("", hr)
-        f.addRow(fixer)
         f.addRow("Moteur IA", moteur)
         f.addRow("Clef API Claude", kc)
         f.addRow("Clef API Gemini", kg)
-        av = QLabel("Gemini en offre gratuite : Google peut réutiliser les documents envoyés. A éviter pour les documents sensibles.")
-        av.setWordWrap(True)
-        av.setStyleSheet("color:#a35c00")
-        f.addRow(av)
-        f.addRow(assoc)
+        note(f, "Gemini en offre gratuite : Google peut réutiliser les documents envoyés. A éviter pour les documents sensibles.", "#a35c00")
+
+        # ---------------- Mises à jour
+        f = page("Mises à jour")
         majs = QComboBox()
         majs.addItems(["GitHub (Internet)", "Dossier synchronisé"])
         majs.setCurrentIndex(1 if self.params.get("maj_source") == "dossier" else 0)
@@ -827,16 +982,18 @@ class Fenetre(QMainWindow):
         maja.setChecked(self.params.get("maj_auto", True))
         f.addRow("Mises à jour depuis", majs)
         f.addRow(maja)
-        f.addRow(QLabel(f"Données : {dossier_donnees()}" + (" (version portable)" if est_portable() else "")))
+        f.addRow(QLabel(f"Version {VERSION}. Données : {dossier_donnees()}" + (" (version portable)" if est_portable() else "")))
+
         bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
         bb.accepted.connect(d.accept)
         bb.rejected.connect(d.reject)
-        f.addRow(bb)
+        vd.addWidget(bb)
         if d.exec() != QDialog.Accepted:
             return
         self.params.update(machine=machine.text().strip() or self.params["machine"],
                            drive=drive.currentData() if drive.currentData() is not None else drive.currentText().strip(),
                            auteur=auteur.text().strip(), fixer_objets=fixer.isChecked(),
+                           nas=nas.text().strip(), synchro=sync.isChecked(),
                            racines=[racines.item(i).text() for i in range(racines.count())],
                            ia_moteur=["claude", "gemini", "deux"][moteur.currentIndex()],
                            clef_claude=kc.text().strip(), clef_gemini=kg.text().strip(),

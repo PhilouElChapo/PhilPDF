@@ -244,7 +244,8 @@ class PageOutils(QScrollArea):
 class PageAccueil(QWidget):
     ouvrir = Signal(str)
     ouvrir_dialogue = Signal()
-    reprendre = Signal(str)
+    reprendre = Signal()          # reprendre la session proposee (remplace les fichiers ouverts)
+    synchroniser = Signal()       # fenetre de synchronisation manuelle
 
     def __init__(self, params):
         super().__init__()
@@ -270,11 +271,49 @@ class PageAccueil(QWidget):
         b.clicked.connect(self.ouvrir_dialogue)
         h.addWidget(b)
         v.addLayout(h)
+        # --- carte "session plus recente sur un autre poste" (reste la tant qu'elle n'est pas traitee)
+        self.carte = QFrame()
+        self.carte.setObjectName("carte")
+        self.carte.setStyleSheet("#carte{background:#fff;border:1px solid #e2e2e2;border-left:4px solid #2b6cb0;border-radius:10px}")
+        vc = QVBoxLayout(self.carte)
+        vc.setContentsMargins(14, 10, 14, 10)
+        self.carte_titre = QLabel()
+        self.carte_titre.setWordWrap(True)
+        vc.addWidget(self.carte_titre)
+        self.carte_liste = QListWidget()
+        self.carte_liste.setStyleSheet("QListWidget{border:none;font-size:13px}")
+        self.carte_liste.setMaximumHeight(130)
+        vc.addWidget(self.carte_liste)
+        hb = QHBoxLayout()
+        self.b_reprendre = QPushButton("Reprendre ces fichiers")
+        self.b_reprendre.setToolTip("Ferme les fichiers ouverts ici et ouvre ceux de l'autre poste, à la même page")
+        self.b_reprendre.setStyleSheet("QPushButton{background:#2b6cb0;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-weight:600}")
+        self.b_reprendre.clicked.connect(self.reprendre)
+        hb.addWidget(self.b_reprendre)
+        b2 = QPushButton(" Synchroniser...")
+        b2.setIcon(icone("synchro", "#2b6cb0"))
+        b2.clicked.connect(self.synchroniser)
+        hb.addWidget(b2)
+        hb.addStretch()
+        b3 = QPushButton("Ignorer")
+        b3.setFlat(True)
+        b3.clicked.connect(self.cacher_synchro)
+        hb.addWidget(b3)
+        vc.addLayout(hb)
+        self.carte.hide()
+        v.addWidget(self.carte)
+        hl = QHBoxLayout()
         self.bandeau = QLabel()
-        self.bandeau.setStyleSheet("background:#fff;border:1px solid #e2e2e2;border-radius:10px;padding:12px 14px")
-        self.bandeau.setTextInteractionFlags(Qt.LinksAccessibleByMouse)
-        self.bandeau.linkActivated.connect(self.reprendre)
-        v.addWidget(self.bandeau)
+        self.bandeau.setWordWrap(True)
+        self.bandeau.setStyleSheet("color:#555")
+        hl.addWidget(self.bandeau, 1)
+        bs = QPushButton()
+        bs.setIcon(icone("synchro", "#2b6cb0"))
+        bs.setToolTip("Synchroniser les fichiers ouverts avec vos autres postes")
+        bs.setFlat(True)
+        bs.clicked.connect(self.synchroniser)
+        hl.addWidget(bs)
+        v.addLayout(hl)
         r = QLabel("Récents")
         r.setStyleSheet("font-size:18px;font-weight:600")
         v.addWidget(r)
@@ -297,14 +336,26 @@ class PageAccueil(QWidget):
             if not existe:
                 it.setForeground(Qt.gray)
             self.liste.addItem(it)
-        from .session import session_de, date_fr, nb_fichiers
-        autres = session_de(self.params).autres_machines()
-        if autres:
-            liens = " · ".join(f'<a href="{m}">Reprendre la session de {m} ({nb_fichiers(n)}, le {date_fr(d)})</a>'
-                               for m, d, n in autres)
-            self.bandeau.setText(liens)
-            self.bandeau.show()
-        else:
-            self.bandeau.setText(f"Machine : <b>{self.params['machine']}</b>. " + (
+        self.bandeau.setText(f"Poste : <b>{self.params['machine']}</b>. " + (
                 "Drive : " + self.params["drive"] if self.params.get("drive") else
-                "Indiquez votre Drive dans Edition › Préférences pour retrouver vos fichiers ouverts et vos tampons sur vos autres PC."))
+            "Indiquez votre Drive dans Edition › Préférences pour retrouver vos fichiers ouverts et vos tampons sur vos autres PC."))
+
+    def montrer_synchro(self, machine, date, fichiers, resultats):
+        from .session import date_fr, nb_fichiers
+        n = sum(1 for c, _ in resultats if c)
+        self.carte_titre.setText(f"<b>Session plus récente sur {machine}</b> (le {date_fr(date)}) : "
+                                 f"{nb_fichiers(len(fichiers))}, {n} retrouvé{'s' if n > 1 else ''} sur ce poste.")
+        self.carte_liste.clear()
+        for e, (c, cm) in zip(fichiers, resultats):
+            it = QListWidgetItem(f"{e['nom']}  —  {c}" if c else
+                                 f"{e['nom']}  —  introuvable sur {self.params['machine']} (ouvert sur {machine} le {date_fr(date)})")
+            it.setToolTip(cm)
+            if not c:
+                it.setForeground(Qt.gray)
+            self.carte_liste.addItem(it)
+        self.carte_liste.setFixedHeight(min(150, self.carte_liste.sizeHintForRow(0) * len(fichiers) + 6))
+        self.b_reprendre.setEnabled(n > 0)
+        self.carte.show()
+
+    def cacher_synchro(self):
+        self.carte.hide()
