@@ -249,6 +249,7 @@ class PageAccueil(QWidget):
     action_fichier = Signal(str, str)     # chemin, action (menu clic droit des fichiers recents)
     reprendre = Signal()          # reprendre la session proposee (remplace les fichiers ouverts)
     synchroniser = Signal()       # fenetre de synchronisation manuelle
+    rechercher = Signal()         # rechercher dans tous mes PDF
 
     def __init__(self, params):
         super().__init__()
@@ -277,6 +278,11 @@ class PageAccueil(QWidget):
         bd.setToolTip(_("Ouvrir depuis un emplacement (NAS, FTP, Drive)..."))
         bd.setStyleSheet("QPushButton{padding:10px 16px;border-radius:8px;font-weight:600}")
         bd.clicked.connect(self.ouvrir_distant)
+        br = QPushButton(_("  Rechercher dans mes PDF"))
+        br.setIcon(icone("rechercher", "#0b5e63"))
+        br.setStyleSheet("QPushButton{padding:10px 16px;border-radius:8px;font-weight:600}")
+        br.clicked.connect(lambda: self.rechercher.emit())
+        h.addWidget(br)
         h.addWidget(bd)
         h.addWidget(b)
         v.addLayout(h)
@@ -311,6 +317,13 @@ class PageAccueil(QWidget):
         vc.addLayout(hb)
         self.carte.hide()
         v.addWidget(self.carte)
+        self.echeances = QLabel()
+        self.echeances.setWordWrap(True)
+        self.echeances.setTextFormat(Qt.RichText)
+        self.echeances.setStyleSheet("QLabel{background:#fff8e6;border:1px solid #f0d58c;border-left:4px solid #d69e00;"
+                                     "border-radius:10px;padding:8px 12px}")
+        self.echeances.hide()
+        v.addWidget(self.echeances)
         hl = QHBoxLayout()
         self.bandeau = QLabel()
         self.bandeau.setWordWrap(True)
@@ -348,8 +361,30 @@ class PageAccueil(QWidget):
                 it.setForeground(Qt.gray)
             self.liste.addItem(it)
         self.bandeau.setText(_('Poste : <b>{machine}</b>. ', machine=self.params['machine']) + (
-                _('Drive : ') + self.params["drive"] if self.params.get("drive") else
-            _('Indiquez votre Drive dans Edition › Préférences pour retrouver vos fichiers ouverts et vos tampons sur vos autres PC.')))
+                _('Synchronisation : ') + self._lieu_synchro() if (self.params.get("drive") or self.params.get("drive_compte")) else
+            _('Choisissez un emplacement de synchronisation (bouton à droite) pour retrouver vos fichiers ouverts, préférences et tampons sur vos autres PC.')))
+        try:
+            from .apprentissage import echeances_a_venir
+            import datetime
+            ech = echeances_a_venir(self.params, 45)
+        except Exception:
+            ech = []
+        if ech:
+            import html
+            lignes = [f"<b>{datetime.date.fromisoformat(e['date']).strftime('%d/%m/%Y')}</b> — {html.escape(e.get('libelle', ''))}"
+                      f" <span style='color:#777'>({html.escape(os.path.basename(e.get('fichier', '')))})</span>" for e in ech[:6]]
+            self.echeances.setText(_("<b>Echéances à venir</b>") + "<br>" + "<br>".join(lignes))
+            self.echeances.show()
+        else:
+            self.echeances.hide()
+
+    def _lieu_synchro(self):
+        cid = self.params.get("drive_compte")
+        c = next((x for x in self.params.get("comptes", []) if x["id"] == cid), None) if cid else None
+        if c:
+            from .synchro_choix import libelle_compte
+            return libelle_compte(c)
+        return self.params.get("drive", "")
 
     def _menu_fichier(self, pos):
         it = self.liste.itemAt(pos)
@@ -369,6 +404,7 @@ class PageAccueil(QWidget):
         m.addSeparator()
         act("ocr", _("Reconnaître le texte (OCR)..."), "ocr", existe)
         act("ia", _("Résumer avec l'IA..."), "resume", existe)
+        act("archiver", _("Renommer et classer avec l'IA..."), "classer", existe)
         act("filigrane", _("Ajouter un filigrane..."), "filigrane", existe)
         act("entete", _("En-tête et pied de page..."), "entete", existe)
         act("alleger", _("Alléger le fichier..."), "alleger", existe)

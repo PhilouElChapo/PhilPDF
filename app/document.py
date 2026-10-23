@@ -89,6 +89,19 @@ class PageWidget(QWidget):
             self.image, self.image_zoom = img, self.o.zoom
         p.drawImage(0, 0, self.image)
         o = self.o
+        champs = list(o.doc[self.num].widgets()) if o.mode in (None, "formulaire") else []
+        for w in champs:
+            choisi = o.mode == "formulaire" and o.champ_choisi == (self.num, w.xref)
+            p.setPen(QPen(QColor("#a35c00" if o.mode == "formulaire" else "#8fb4e3"), 2 if choisi else 1))
+            p.setBrush(QColor(255, 196, 120, 90) if choisi else QColor(200, 220, 255, 70))
+            p.drawRect(self.vers_ecran(w.rect))
+            if o.mode == "formulaire":
+                p.setPen(QColor("#a35c00"))
+                f = p.font()
+                f.setPointSize(7)
+                p.setFont(f)
+                r = self.vers_ecran(w.rect)
+                p.drawText(QPointF(r.x(), r.y() - 2), w.field_name or "")
         sel = o.selection
         if sel and sel["page"] == self.num:
             p.setPen(Qt.NoPen)
@@ -193,9 +206,21 @@ class PageWidget(QWidget):
             else:
                 o.ajouter_image_ici(self.num, hg)
             return
-        if o.mode in ("lien", "recadrer", "biffer"):
+        if o.mode == "formulaire":
+            w = o.champ_sous(self.num, pt)
+            if w:
+                o.champ_choisi = (self.num, w.xref)
+                o.rafraichir_pages()
+                return
+            o.champ_choisi = None
+        if o.mode in ("lien", "recadrer", "biffer", "formulaire"):
             self.glisse = {"genre": "zone", "debut": pt, "fantome": fitz.Rect(pt, pt)}
             return
+        if o.mode is None:
+            w = o.champ_sous(self.num, pt)
+            if w:
+                o.remplir_champ(self, w)
+                return
         poignee = self._sur_poignee(e.position())
         if poignee is not None:
             self.glisse = {"genre": "redim", "coin": poignee, "debut": pt, "rect0": fitz.Rect(o.objet["rect"]), "fantome": None}
@@ -247,9 +272,11 @@ class PageWidget(QWidget):
         self.survol = pt
         if self._sur_poignee(e.position()) is not None:
             self.setCursor(Qt.SizeFDiagCursor)
+        elif o.mode in (None, "formulaire") and o.champ_sous(self.num, pt):
+            self.setCursor(Qt.PointingHandCursor)
         elif o.objet_sous(self.num, pt, survol=True):
             self.setCursor(Qt.SizeAllCursor)
-        elif o.mode in ("poser", "ajout_texte", "ajout_image", "lien", "recadrer", "biffer"):
+        elif o.mode in ("poser", "ajout_texte", "ajout_image", "lien", "recadrer", "biffer", "formulaire"):
             self.setCursor(Qt.CrossCursor)
         elif o.mode is None and o.mot_sous(self.num, pt) is not None:
             self.setCursor(Qt.IBeamCursor)
@@ -274,6 +301,9 @@ class PageWidget(QWidget):
     def mouseDoubleClickEvent(self, e):
         pt = self.vers_pdf(e.position())
         o = self.o
+        if o.mode == "formulaire" and o.champ_sous(self.num, pt):
+            o.renommer_champ()
+            return
         if o.mode == "modifier":
             for r, t in o.lignes_page(self.num):
                 if fitz.Rect(r).contains(pt):
@@ -284,13 +314,48 @@ class PageWidget(QWidget):
             o.editer_annotation(obj)
 
     def keyPressEvent(self, e):
-        if e.key() in (Qt.Key_Delete, Qt.Key_Backspace) and self.o.objet:
+        if e.key() in (Qt.Key_Delete, Qt.Key_Backspace) and self.o.mode == "formulaire" and self.o.champ_choisi:
+            self.o.supprimer_champ()
+        elif e.key() in (Qt.Key_Delete, Qt.Key_Backspace) and self.o.objet:
             self.o.supprimer()
         elif e.key() == Qt.Key_Escape:
             self.o.choisir_objet(None)
             self.o.changer_mode(None if self.o.mode != "modifier" else "modifier")
         else:
             super().keyPressEvent(e)
+
+    def ouvrir_saisie_champ(self, w):
+        """Zone de saisie posee sur le champ ; Entree ou clic ailleurs : la valeur est ecrite dans le PDF."""
+        from PySide6.QtWidgets import QLineEdit, QPlainTextEdit, QComboBox
+        r = self.vers_ecran(w.rect).toRect()
+        n, xref = self.num, w.xref
+        multi = bool(w.field_flags & fitz.PDF_TX_FIELD_IS_MULTILINE) if w.field_type == fitz.PDF_WIDGET_TYPE_TEXT else False
+        if w.field_type in (fitz.PDF_WIDGET_TYPE_COMBOBOX, fitz.PDF_WIDGET_TYPE_LISTBOX):
+            ed = QComboBox(self)
+            ed.addItems([c if isinstance(c, str) else c[0] for c in (w.choice_values or [])])
+            ed.setCurrentText(w.field_value or "")
+            ed.activated.connect(lambda _i: (self.o.valeur_champ(n, xref, ed.currentText()), ed.deleteLater()))
+        elif multi:
+            ed = QPlainTextEdit(self)
+            ed.setPlainText(w.field_value or "")
+            ed.focusOutEvent = lambda ev: (self.o.valeur_champ(n, xref, ed.toPlainText()), ed.deleteLater())
+        else:
+            ed = QLineEdit(self)
+            ed.setText(w.field_value or "")
+            fini = []
+
+            def valider():
+                if not fini:
+                    fini.append(1)
+                    self.o.valeur_champ(n, xref, ed.text())
+                    ed.deleteLater()
+            ed.returnPressed.connect(valider)
+            ed.editingFinished.connect(valider)
+        ed.setGeometry(r.adjusted(-1, -1, 1, 1))
+        ed.setStyleSheet("background:#ffffff;border:1.5px solid #0f6cbd")
+        ed.show()
+        ed.setFocus()
+        self.saisie = ed
 
     # ---- edition directe dans la page (WYSIWYG)
     def ouvrir_editeur(self, rect, pt, texte=""):
@@ -700,6 +765,25 @@ class OngletDocument(QWidget):
         hb.addWidget(b)
         self.bandeau_biffer.hide()
         v.addWidget(self.bandeau_biffer)
+        self.bandeau_form = QFrame()
+        self.bandeau_form.setObjectName("bandeauform")
+        self.bandeau_form.setStyleSheet("QFrame#bandeauform{background:#fdf1e2;border-bottom:1px solid #f0d3a8}"
+                                        "QLabel{color:#5c3400} QPushButton{padding:4px 12px}")
+        hf = QHBoxLayout(self.bandeau_form)
+        hf.setContentsMargins(16, 6, 16, 6)
+        self.lbl_form = QLabel()
+        self.lbl_form.setWordWrap(True)
+        hf.addWidget(self.lbl_form, 1)
+        b = QPushButton(_("Détecter les champs"))
+        b.clicked.connect(self.detecter_champs)
+        hf.addWidget(b)
+        b = QPushButton(_("Terminer"))
+        b.setProperty("primaire", True)
+        b.clicked.connect(lambda: self.changer_mode(None))
+        hf.addWidget(b)
+        self.bandeau_form.hide()
+        v.addWidget(self.bandeau_form)
+        self.champ_choisi = None           # (page, xref) du champ choisi en mode formulaire
         self.marques_biffage = []          # [(page, rect)] a biffer
         self.sp = QSplitter()
         self.sp.setChildrenCollapsible(True)
@@ -1058,9 +1142,13 @@ class OngletDocument(QWidget):
         tous.setStyleSheet("QPushButton{text-align:left;padding:9px 8px;border:1px dashed #cfcfcf;border-radius:8px;font-size:14px}")
         tous.clicked.connect(lambda: self.outil_demande.emit("__outils__"))
         l.addWidget(tous)
-        ia = QLabel(_("✦ <b>Assistant IA</b><br><span style='font-size:12px'>Prévu en V3 : résumé, points clefs, remise en page avec Claude ou Gemini. Rien n'est envoyé sans votre clic.</span>"))
+        ia = QLabel(_("✦ <b>Assistant IA</b><br><span style='font-size:12px'>"
+                      "<a href='ia_resume'>Résumer</a> · <a href='ia_classer'>Renommer et classer</a> · "
+                      "<a href='ia_comparer'>Comparer</a> · <a href='ia_traduire'>Traduire</a><br>Rien n'est envoyé sans votre clic.</span>"))
         ia.setWordWrap(True)
-        ia.setStyleSheet("background:#f2fafa;border:1px solid #cfe9ea;border-radius:10px;padding:10px;color:#0b5e63")
+        ia.setTextFormat(Qt.RichText)
+        ia.linkActivated.connect(self.outil_demande.emit)
+        ia.setStyleSheet("QLabel{background:#f2fafa;border:1px solid #cfe9ea;border-radius:10px;padding:10px;color:#0b5e63}")
         l.addWidget(ia)
         self.lbl_info = QLabel()
         self.lbl_info.setWordWrap(True)
@@ -1708,6 +1796,9 @@ class OngletDocument(QWidget):
 
     def zone_tracee(self, n, r):
         page = self.doc[n]
+        if self.mode == "formulaire":
+            self.ajouter_champ(n, fitz.Rect(r))
+            return
         if self.mode == "biffer":
             self.marques_biffage.append((n, fitz.Rect(r)))
             self._maj_biffer()
@@ -1739,6 +1830,109 @@ class OngletDocument(QWidget):
                     p.set_cropbox(zone)
                 self.apres_modif([_('Pages recadrées.')], reconstruire=True)
         self.changer_mode("modifier")
+
+    # ---- formulaire : creer et remplir des champs
+    def champ_sous(self, n, pt):
+        page = self.doc[n]
+        for w in page.widgets():
+            if fitz.Rect(w.rect).contains(pt):
+                w._page_vivante = page                 # garde la page en vie tant qu'on utilise le champ
+                return w
+        return None
+
+    def nb_champs(self):
+        return sum(1 for p in self.doc for _w in p.widgets())
+
+    def _maj_form(self):
+        self.lbl_form.setText(_("<b>Formulaire</b> — {n} champ(s). Tracez un rectangle pour ajouter un champ (petit carré = "
+                                "case à cocher) ; cliquez sur un champ pour le choisir, double-clic pour le renommer, Suppr "
+                                "pour l'enlever.", n=self.nb_champs()))
+
+    def detecter_champs(self):
+        from moteur import formulaire as FO
+        trouves = {}
+        for i, p in enumerate(self.doc):
+            c = FO.detecter(p)
+            if c:
+                trouves[i] = c
+        tous = [c for l in trouves.values() for c in l]
+        if not tous:
+            QMessageBox.information(self, _("Formulaire"), _("Aucune zone à remplir détectée. Tracez les champs à la main."))
+            return
+        FO.noms_uniques(tous)
+        self.memoriser(_("Création d'un formulaire"))
+        n = FO.creer(self.doc, trouves)
+        self.apres_modif([_("{n} champ(s) créé(s) : vérifiez-les, renommez ou supprimez ceux qui ne conviennent pas.", n=n)])
+        self._maj_form()
+
+    def ajouter_champ(self, n, r):
+        from moteur import formulaire as FO
+        case = r.width <= 20 and r.height <= 20
+        if case:
+            cote = max(r.width, r.height)
+            r = fitz.Rect(r.x0, r.y0, r.x0 + cote, r.y0 + cote)
+        propose = FO._libelle(self.doc[n], r, self.doc[n].get_text("words"), case)
+        nom, ok = QInputDialog.getText(self, _("Nouveau champ"), _("Nom du champ :"), text=propose)
+        if not ok or not nom.strip():
+            return
+        self.memoriser(_("Ajout du champ « {nom} »", nom=nom.strip()))
+        FO.creer(self.doc, {n: [{"genre": "case" if case else "texte", "rect": r, "nom": nom.strip(), "lignes": r.height > 30}]})
+        self.apres_modif([_("Champ « {nom} » ajouté.", nom=nom.strip())])
+        self._maj_form()
+
+    def _widget(self, ref):
+        if not ref:
+            return None
+        n, x = ref
+        page = self.doc[n]
+        w = next((w for w in page.widgets() if w.xref == x), None)
+        if w is not None:
+            w._page_vivante = page
+        return w
+
+    def supprimer_champ(self):
+        w = self._widget(self.champ_choisi)
+        if not w:
+            return
+        self.memoriser(_("Suppression du champ « {nom} »", nom=w.field_name))
+        self.doc[self.champ_choisi[0]].delete_widget(w)
+        self.champ_choisi = None
+        self.apres_modif([_("Champ supprimé.")])
+        self._maj_form()
+
+    def renommer_champ(self):
+        w = self._widget(self.champ_choisi)
+        if not w:
+            return
+        nom, ok = QInputDialog.getText(self, _("Renommer le champ"), _("Nom du champ :"), text=w.field_name)
+        if ok and nom.strip() and nom.strip() != w.field_name:
+            self.memoriser(_("Renommage du champ « {nom} »", nom=w.field_name))
+            w.field_name = nom.strip()
+            w.field_label = nom.strip()
+            w.update()
+            self.apres_modif([_("Champ renommé.")])
+
+    def remplir_champ(self, pw, w):
+        """Clic sur un champ hors mode formulaire : case cochee/decochee, texte saisi sur place."""
+        w = self._widget((pw.num, w.xref)) or w
+        if w.field_type in (fitz.PDF_WIDGET_TYPE_CHECKBOX, fitz.PDF_WIDGET_TYPE_RADIOBUTTON):
+            self.memoriser(_("Remplissage du formulaire"))
+            on = w.on_state() if hasattr(w, "on_state") else True
+            w.field_value = False if w.field_value not in (False, "Off", "", None) else (on or True)
+            w.update()
+            self.apres_modif([])
+            return
+        if w.field_type in (fitz.PDF_WIDGET_TYPE_TEXT, fitz.PDF_WIDGET_TYPE_COMBOBOX, fitz.PDF_WIDGET_TYPE_LISTBOX):
+            pw.ouvrir_saisie_champ(w)
+
+    def valeur_champ(self, n, xref, valeur):
+        w = self._widget((n, xref))
+        if w is None or (w.field_value or "") == valeur:
+            return
+        self.memoriser(_("Remplissage du formulaire"))
+        w.field_value = valeur
+        w.update()
+        self.apres_modif([])
 
     # ---- poser tampon / signature
     def poser_objet(self, n, pt):
@@ -1809,6 +2003,10 @@ class OngletDocument(QWidget):
         self.bandeau_biffer.setVisible(mode == "biffer")
         if mode == "biffer":
             self._maj_biffer()
+        self.bandeau_form.setVisible(mode == "formulaire")
+        self.champ_choisi = None
+        if mode == "formulaire":
+            self._maj_form()
         modif = mode in ("modifier", "ajout_texte", "ajout_image", "lien", "recadrer")
         self.bandeau.setVisible(modif)
         for cle, b in self.boutons_modif.items():

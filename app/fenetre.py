@@ -27,14 +27,14 @@ FILTRE = _('Documents PDF (*.pdf *.PDF)')
 class TacheScan(QThread):
     fini = Signal(str, str)
 
-    def __init__(self, entree, sortie):
+    def __init__(self, entree, sortie, apprentissage=None):
         super().__init__()
-        self.entree, self.sortie = entree, sortie
+        self.entree, self.sortie, self.apprentissage = entree, sortie, apprentissage
 
     def run(self):
         try:
             from moteur.scan import traiter
-            r = traiter(self.entree, self.sortie)
+            r = traiter(self.entree, self.sortie, apprentissage=self.apprentissage)
             if all(x[2] is None for x in r):          # aucune page scannee : rien a reconnaitre
                 try:
                     os.remove(self.sortie)
@@ -186,6 +186,7 @@ class Fenetre(QMainWindow):
         self.accueil.ouvrir.connect(self.ouvrir)
         self.accueil.ouvrir_dialogue.connect(self.dialogue_ouvrir)
         self.accueil.ouvrir_distant.connect(lambda: self.ouvrir_distant())
+        self.accueil.rechercher.connect(lambda: self.lancer_outil("ia_recherche"))
         self.accueil.action_fichier.connect(self.action_fichier)
         self.accueil.reprendre.connect(self.reprendre_proposee)
         self.accueil.synchroniser.connect(self.synchroniser)
@@ -451,7 +452,7 @@ class Fenetre(QMainWindow):
         else:
             o = self.ouvrir(chemin)
             if o and action != "ouvrir":
-                self.lancer_outil({"resume": "ia_resume"}.get(action, action))
+                self.lancer_outil({"resume": "ia_resume", "classer": "ia_classer"}.get(action, action))
 
     def dossier_depart(self):
         """Dernier dossier ouvert ; a defaut Documents ; a defaut le dossier utilisateur."""
@@ -737,6 +738,15 @@ class Fenetre(QMainWindow):
         if oid == "combiner":
             self.combiner()
             return
+        if oid == "ia_recherche":
+            from .recherche import DialogueRecherche
+            self._recherche = DialogueRecherche(self)
+            self._recherche.show()
+            return
+        if oid in ("comparer", "ia_comparer"):
+            from .dialogues_ia import comparer
+            comparer(self, o, avec_ia=(oid == "ia_comparer"))
+            return
         if oid == "imprimer" and not o:
             self.imprimer_plusieurs()
             return
@@ -752,7 +762,19 @@ class Fenetre(QMainWindow):
                 return
         if self.onglets.currentWidget() is not o:      # depuis la page Outils : retour au document
             self.onglets.setCurrentWidget(o)
-        if oid == "modifier":
+        if oid == "ia_resume":
+            from .dialogues_ia import resumer
+            resumer(self, o)
+        elif oid == "ia_classer":
+            from .dialogues_ia import classer
+            classer(self, o)
+        elif oid == "ia_traduire":
+            from .dialogues_ia import traduire
+            traduire(self, o)
+        elif oid == "ocr_ia":
+            from .dialogues_ia import ocr_ia
+            ocr_ia(self, o)
+        elif oid == "modifier":
             o.changer_mode("modifier")
         elif oid == "remplacer":
             texte = o.selection["texte"].split("\n")[0] if o.selection else ""
@@ -765,6 +787,10 @@ class Fenetre(QMainWindow):
             o.ouvrir_bibliotheque("tampons")
         elif oid in ("filigrane", "entete", "fond"):
             self.mise_en_page(o, oid)
+        elif oid == "formulaire":
+            o.changer_mode("formulaire")
+            if not o.nb_champs():
+                o.detecter_champs()
         elif oid == "biffer":
             o.changer_mode("biffer")
         elif oid == "commentaires":
@@ -1051,7 +1077,8 @@ class Fenetre(QMainWindow):
         prog.setWindowTitle("PhilPDF")
         prog.setWindowModality(Qt.WindowModal)
         prog.show()
-        t = TacheScan(o.chemin, sortie)
+        from .apprentissage import ocr_appris
+        t = TacheScan(o.chemin, sortie, ocr_appris(self.params))
         self.taches.append(t)
 
         def fin(chemin, err):
@@ -1237,7 +1264,7 @@ class Fenetre(QMainWindow):
         # ---------------- IA
         f = page(_("IA"))
         moteur = QComboBox()
-        moteur.addItems(["Claude", "Gemini", _('Les deux (double avis)')])
+        moteur.addItems(["Claude", "Gemini", _("Claude, puis Gemini s'il ne répond pas")])
         moteur.setCurrentIndex({"claude": 0, "gemini": 1, "deux": 2}.get(self.params["ia_moteur"], 0))
         kc = QLineEdit(self.params["clef_claude"])
         kc.setEchoMode(QLineEdit.Password)
@@ -1246,6 +1273,29 @@ class Fenetre(QMainWindow):
         f.addRow(_('Moteur IA'), moteur)
         f.addRow(_('Clef API Claude'), kc)
         f.addRow(_('Clef API Gemini'), kg)
+        for k in (kc, kg):
+            oe = k.addAction(icone("oeil", "#555"), QLineEdit.TrailingPosition)
+            oe.triggered.connect(lambda _c=False, k=k: k.setEchoMode(QLineEdit.Normal if k.echoMode() == QLineEdit.Password else QLineEdit.Password))
+        bt = QPushButton(_("Tester les clefs"))
+
+        def tester_ia():
+            from . import ia
+            from .dialogues_ia import executer
+            essai = dict(clef_claude=kc.text().strip(), clef_gemini=kg.text().strip())
+            lignes = []
+            for m, nom in (("claude", "Claude"), ("gemini", "Gemini")):
+                if not essai["clef_" + m]:
+                    continue
+                p = {"ia_moteur": m, "clef_" + m: essai["clef_" + m]}
+                try:
+                    executer(d, _("Test de {nom}...", nom=nom), lambda p=p: ia.demander(p, "Réponds seulement : OK", "Test", max_jetons=20))
+                    lignes.append(_("{nom} : clef valide (modèle {modele})", nom=nom, modele=ia._modeles_trouves.get(m) or
+                                    (ia.MODELE_CLAUDE if m == "claude" else ia.MODELE_GEMINI)))
+                except Exception as ex:
+                    lignes.append(_("{nom} : {erreur}", nom=nom, erreur=ex))
+            QMessageBox.information(d, _("IA"), "\n".join(lignes) or _("Aucune clef renseignée."))
+        bt.clicked.connect(tester_ia)
+        f.addRow("", bt)
         note(f, _('Gemini en offre gratuite : Google peut réutiliser les documents envoyés. A éviter pour les documents sensibles.'), "#a35c00")
 
         # ---------------- Mises à jour

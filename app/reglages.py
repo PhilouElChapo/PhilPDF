@@ -20,7 +20,7 @@ from . import coffre
 COMMUNS = ["auteur", "langue", "outils_epingles", "zoom", "barre_rapide", "volet", "vignettes", "fixer_objets",
            "filigranes_perso", "ia_moteur", "maj_source", "maj_auto", "synchro", "comptes", "defaut_tampons",
            "defaut_signatures", "theme"]
-POSTE = ["machine", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf"]
+POSTE = ["machine", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
 CLEFS_IA = ["clef_claude", "clef_gemini"]
 FICHIER_DRIVE = "preferences.json"
 

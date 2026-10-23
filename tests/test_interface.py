@@ -273,6 +273,153 @@ o.enregistrer(chemin)
 re_ = fitz.open(chemin)
 verif("Dupontel" in re_[1].get_text() and len(list(re_[0].annots())) == 1, f"enregistré et relu ({os.path.getsize(chemin) // 1024} Ko)")
 
+# --- assistant IA (reponses simulees) : resume avec echeance, renommer et classer
+import app.ia as IA, app.dialogues_ia as DIA, app.apprentissage as AP
+w.params.update(clef_claude="CLEF", ia_moteur="claude")
+reponses = []
+IA.demander = lambda params, consignes, texte, **k: reponses.pop(0)
+import datetime as _dt
+dans_20 = (_dt.date.today() + _dt.timedelta(days=20)).isoformat()
+reponses.append({"resume": "Facture **Dupontel**.\n\n## Points clefs\n- montant", "echeances": [{"date": dans_20, "libelle": "payer la facture"}]})
+vus_dlg = []
+DIA.DialogueResume.exec = lambda self: (vus_dlg.append(self), capture(self, "30_resume_ia.png"), self.done(QDialog.Accepted))
+w.lancer_outil("ia_resume")
+verif(vus_dlg and "Dupontel" in vus_dlg[0].texte.toPlainText(), "IA : résumé affiché")
+w.accueil.rafraichir()
+verif(not w.accueil.echeances.isHidden() and "payer la facture" in w.accueil.echeances.text(), "IA : échéance rappelée sur l'Accueil")
+capture(w, "31_accueil_echeances.png") if w.onglets.setCurrentWidget(w.accueil) is None else None
+w.onglets.setCurrentWidget(o)
+rangement = os.path.join(TRAVAIL, "Classement", "Dupontel")
+reponses.append({"date": "2026-10-05", "expediteur": "Dupontel", "objet": "facture octobre", "type": "facture", "dossier": "", "echeances": []})
+def faux_classer(self):
+    self.dest.insertItem(0, rangement, rangement); self.dest.setCurrentIndex(0)
+    capture(self, "32_classer_ia.png")
+    return QDialog.Accepted
+DIA.DialogueClasser.exec = faux_classer
+ancien = o.chemin
+w.lancer_outil("ia_classer")
+attendu = os.path.join(rangement, "2026-10-05 Dupontel – facture octobre.pdf")
+verif(o.chemin == attendu and os.path.exists(attendu) and not os.path.exists(ancien), "IA : renommé et classé (fichier déplacé)")
+verif(AP.dossier_appris(w.params, "DUPONTEL") == rangement, "IA : dossier appris pour cet expéditeur")
+reponses.append({"date": "2026-11-05", "expediteur": "Dupontel", "objet": "facture novembre", "dossier": "", "echeances": []})
+DIA.DialogueClasser.exec = lambda self: (vus_dlg.append(self.dest.itemData(0)), QDialog.Rejected)[1]
+w.lancer_outil("ia_classer")
+verif(vus_dlg[-1] == rangement, "IA : la fois suivante, le dossier appris est proposé en premier")
+avertis = []
+import PySide6.QtWidgets as QW
+_avant = QW.QMessageBox.warning
+QW.QMessageBox.warning = staticmethod(lambda *a, **k: (avertis.append(a[2]), QW.QMessageBox.No)[1])
+verif(not IA.confirmer_envoi(w, "IBAN FR76 3000 6000 0112 3456 7890 189", "Claude") and "IBAN" in avertis[-1],
+      "IA : rappel avant envoi si données sensibles, l'utilisateur peut renoncer")
+QW.QMessageBox.warning = _avant
+
+# --- comparer deux versions, avec explication de l'IA (simulee)
+va, vb = os.path.join(TRAVAIL, "Bail_v1.pdf"), os.path.join(TRAVAIL, "Bail_v2.pdf")
+for chemin_v, delai, ajout in ((va, "30", ""), (vb, "15", " par virement")):
+    dv = fitz.open(); pv = dv.new_page()
+    pv.insert_text((72, 100), f"Le préavis est de {delai} jours à compter de la notification.", fontsize=11)
+    pv.insert_text((72, 130), f"Le loyer est payable le 5 du mois{ajout}.", fontsize=11); dv.save(chemin_v)
+def faux_comparer(self):
+    self.a.setText(va); self.b.setText(vb); capture(self, "33_comparer.png"); return QDialog.Accepted
+DIA.DialogueComparer.exec = faux_comparer
+reponses.append("```html\n<p>Le <b>préavis</b> passe de 30 à 15 jours (p. 1).</p>\n```")
+nb_avant = len(w.documents())
+w.lancer_outil("ia_comparer")
+oc = w.doc_courant()
+verif(len(w.documents()) == nb_avant + 1 and oc.nom.startswith("Comparaison Bail_v1 - Bail_v2") and len(oc.doc) == 2,
+      "comparer : résultat ouvert (synthèse + pages côte à côte)")
+verif("préavis passe de 30 à 15 jours" in oc.doc[0].get_text().replace("\n", " ") and "1 modification(s), 1 ajout(s)" in oc.doc[0].get_text().replace("\ufb01", "fi"),
+      "comparer : explication de l'IA et bilan sur la synthèse")
+capture(w, "34_comparaison.png")
+w.onglets.setCurrentWidget(o)
+
+# --- traduire (IA simulee : met en majuscules)
+import json as _json
+QInputDialog.getItem = staticmethod(lambda *a, **k: (a[3][0], True))
+_dem = IA.demander
+IA.demander = lambda params, consignes, texte, **k: {"textes": [t.upper() for t in _json.loads(texte)["textes"]]}
+ot = w.ouvrir(va)
+w.lancer_outil("ia_traduire")
+otr = w.doc_courant()
+verif(otr.nom == "Bail_v1 (EN).pdf" and "LE PRÉAVIS EST DE 30 JOURS" in otr.doc[0].get_text().replace("\n", " "),
+      "traduire : nouveau fichier, texte remplacé à sa place")
+IA.demander = _dem
+w.onglets.setCurrentWidget(o)
+
+# --- creer un formulaire puis le remplir dans PhilPDF
+vf = os.path.join(TRAVAIL, "Inscription.pdf")
+dv = fitz.open(); pv = dv.new_page()
+pv.insert_text((72, 100), "Nom : ______________________", fontsize=11)
+pv.insert_text((72, 130), "Prénom", fontsize=11); pv.draw_line((130, 132), (330, 132))
+pv.draw_rect((72, 180, 82, 190)); pv.insert_text((88, 189), "Je certifie sur l'honneur", fontsize=10)
+pv.insert_text((72, 215), "Observations :", fontsize=11); pv.draw_rect((72, 220, 500, 290)); dv.save(vf)
+of = w.ouvrir(vf)
+w.lancer_outil("formulaire")
+noms = sorted(x.field_name for x in of.doc[0].widgets())
+verif(noms == sorted(["Nom", "Prénom", "Je certifie sur l'honneur", "Observations"]), f"formulaire : champs détectés et nommés {noms}")
+capture(w, "35_formulaire.png")
+QInputDialog.getText = staticmethod(lambda *a, **k: ("Date", True))
+of.zone_tracee(0, fitz.Rect(350, 118, 480, 132))
+verif(any(x.field_name == "Date" for x in of.doc[0].widgets()), "formulaire : champ tracé à la main")
+of.changer_mode(None)
+pw0 = of.page_widgets[0]
+case = next(x for x in of.doc[0].widgets() if x.field_type == fitz.PDF_WIDGET_TYPE_CHECKBOX)
+of.remplir_champ(pw0, case)
+champ_nom = next(x for x in of.doc[0].widgets() if x.field_name == "Nom")
+of.remplir_champ(pw0, champ_nom)
+pw0.saisie.setText("Delaye"); pw0.saisie.returnPressed.emit()
+sortie_f = os.path.join(TRAVAIL, "Inscription_remplie.pdf"); of.enregistrer(sortie_f)
+rf = {x.field_name: x.field_value for x in fitz.open(sortie_f)[0].widgets()}
+verif(rf["Nom"] == "Delaye" and rf["Je certifie sur l'honneur"] not in (False, "Off", ""), f"formulaire : rempli dans PhilPDF et enregistré {rf}")
+w.onglets.setCurrentWidget(o)
+
+# --- OCR IA compare : deux lectures, choix, apprentissage
+from moteur import scan as SC
+if SC.tesseract_exe():
+    vs = os.path.join(TRAVAIL, "Scan_facture.pdf")
+    dt = fitz.open(); pt_ = dt.new_page()
+    pt_.insert_text((72, 100), "Facture du 05/10/2026 : total 125,40 EUR", fontsize=14)
+    pt_.insert_text((72, 130), "Pharmacie du Prado, Cannes", fontsize=14)
+    img = pt_.get_pixmap(dpi=300, colorspace=fitz.csGRAY)
+    ds = fitz.open(); ps_ = ds.new_page(); ps_.insert_image(ps_.rect, pixmap=img); ds.save(vs)
+    IA.demander = lambda params, consignes, texte, **k: "Facture du 05/10/2026 : total 125,40 €\nPharmacie du Prado, Cannes"
+    vus_ocr = []
+    DIA.DialogueOCRIA.exec = lambda self: (vus_ocr.append([cb.currentText() for cb in self.choix]),
+                                           capture(self, "36_ocr_ia.png"), QDialog.Accepted)[2]
+    for tour in (1, 2):
+        os_ = w.ouvrir(vs)
+        w.lancer_outil("ocr_ia")
+        w.fermer_onglet(w.onglets.indexOf(w.doc_courant()))
+        w.fermer_onglet(w.onglets.indexOf(os_))
+    verif(vus_ocr and vus_ocr[0] == ["€"], f"OCR IA : la différence est proposée ({vus_ocr})")
+    regles = AP.lire(w.params, "ocr.json").get("regles", {})
+    verif(regles.get("EUR\u2192€", {}).get("n") == 2, "OCR IA : correction retenue deux fois")
+    sortie_auto = os.path.join(TRAVAIL, "Scan_auto.pdf")
+    SC.traiter(vs, sortie_auto, apprentissage=AP.ocr_appris(w.params))
+    verif("125,40 €" in fitz.open(sortie_auto)[0].get_text(), "OCR classique : la correction apprise s'applique seule")
+    IA.demander = _dem
+w.onglets.setCurrentWidget(o)
+
+# --- rechercher dans tous mes PDF (index + question comprise par l'IA simulee)
+import app.recherche as RE
+w.params["recherche_racines"] = [{"genre": "local", "chemin": TRAVAIL}]
+w.lancer_outil("ia_recherche")
+dr = w._recherche
+dr.tache.wait(60000); app.processEvents()
+verif("Index à jour" in dr.etat.text(), f"recherche : index construit ({dr.etat.text()})")
+IA.demander = lambda params, consignes, texte, **k: {"mots": ["facture"], "expediteur": "Dupontel",
+                                                     "date_debut": "2026-10-01", "date_fin": "2026-10-31"}
+dr.question.setText("la facture Dupontel d'octobre")
+res = dr.chercher()
+verif(res and res[0]["nom"] == "2026-10-05 Dupontel – facture octobre.pdf", f"recherche : question en français → bon document ({[r['nom'] for r in res][:3]})")
+capture(dr, "37_recherche.png")
+IA.demander = lambda params, consignes, texte, **k: (_ for _ in ()).throw(IA.ErreurIA("hors ligne"))
+dr.question.setText("préavis")
+res = dr.chercher()
+verif(any(r["nom"] == "Bail_v1.pdf" for r in res), "recherche : sans IA, recherche par mots (accents ignorés)")
+IA.demander = _dem
+dr.close()
+
 # --- fermeture : question en francais
 vu = {}
 F.question = lambda parent, titre, texte, boutons: (vu.setdefault("b", [b for b, _ in boutons]), 1)[1]

@@ -49,6 +49,29 @@ Verification manuelle : Aide > Rechercher les mises a jour.
 3. CE QUE FAIT LA VERSION 0.3
 -----------------------------
 
+  Nouveau en 0.5 : l'assistant IA (avec votre clef Claude ou Gemini)
+    - Resumer : resume, points clefs, action attendue et echeances ; les
+      echeances sont rappelees sur l'Accueil de tous vos postes ;
+    - Renommer et classer : nom propose (date, expediteur, objet) et
+      dossier ou le ranger, sur ce PC, le NAS ou un Drive ; PhilPDF retient
+      votre choix pour chaque expediteur ;
+    - Comparer deux versions : differences surlignees cote a cote (sans
+      IA), puis expliquees en francais par l'IA si vous le souhaitez ;
+    - Traduire le document : texte traduit et remis a sa place, dans un
+      nouveau fichier ;
+    - OCR IA compare : lecture de Tesseract et lecture de l'IA, vous
+      choisissez ; les mots valides et les corrections confirmees deux fois
+      ameliorent ensuite l'OCR ordinaire, sur tous vos postes ;
+    - Rechercher dans tous mes PDF : une question en francais, PhilPDF
+      retrouve les documents (ce PC, NAS, Drive) ; seule la question part a
+      l'IA ;
+    - avant tout envoi a l'IA, PhilPDF signale les donnees sensibles
+      reperees (IBAN, carte, securite sociale, numero fiscal, mot de passe)
+      et demande confirmation ;
+    - Creer un formulaire : zones a remplir reperees (pointilles, traits,
+      cases, cadres) et transformees en vrais champs ; on les remplit
+      directement dans PhilPDF.
+
   Nouveau en 0.4.2 :
     - assistant de bienvenue (premiere installation, ou poste sans
       synchronisation) : langue, votre nom, nom du poste et emplacement de

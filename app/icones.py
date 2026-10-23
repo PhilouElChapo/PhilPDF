@@ -31,6 +31,7 @@ TRAITS = {
     "lot": '<path d="M12 2l10 5-10 5L2 7z"/><path d="M2 12l10 5 10-5M2 17l10 5 10-5"/>',
     "ia": '<path d="M4 6h9M4 12h7M4 18h5"/><path d="M18 8l1.2 2.8L22 12l-2.8 1.2L18 16l-1.2-2.8L14 12l2.8-1.2z"/>',
     "enregistrer": '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
+    "langue": '<path d="M4 5h9M8.5 3v2M6 5c0 4 3 7 6 8M11 5c-.5 4-3 7-7 9"/><path d="M13 21l4-9 4 9M14.5 18h5"/>',
     "rechercher": '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
     "zoom_plus": '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6M11 8v6"/>',
     "zoom_moins": '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6"/>',
