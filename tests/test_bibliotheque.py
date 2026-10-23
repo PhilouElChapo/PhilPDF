@@ -1,6 +1,8 @@
 """Tampons et signatures synchronises entre deux postes via le Drive (ajouts et suppressions)."""
 import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import annotations  # noqa: F401  (erreurs lisibles sur GitHub)
 os.environ["PHILPDF_LANGUE"] = "fr"
 import app.bibliotheque as B
 

@@ -1,6 +1,8 @@
 """Cascade de reprise de session : deux machines simulees, fichiers deplaces, renommes, appris."""
 import os, shutil, sys, tempfile, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import annotations  # noqa: F401  (erreurs lisibles sur GitHub)
 os.environ["PHILPDF_LANGUE"] = "fr"       # les tests verifient les textes francais
 import app.session as m
 from app.session import Session

@@ -3,6 +3,8 @@ Lancement : QT_QPA_PLATFORM=offscreen python tests/test_interface.py <dossier_ca
 Aucun document reel : les PDF de test sont fabriques a la volee."""
 import os, sys, shutil, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import annotations  # noqa: F401  (erreurs lisibles sur GitHub)
 os.environ["PHILPDF_LANGUE"] = "fr"       # les tests verifient les textes francais
 os.environ["APPDATA"] = tempfile.mkdtemp()
 os.environ["HOME"] = os.environ["APPDATA"]

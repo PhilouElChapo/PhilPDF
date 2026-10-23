@@ -1,6 +1,8 @@
 """Preferences : export chiffre, import selectif (communs / poste / secrets), copie automatique sur le Drive."""
 import json, os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import annotations  # noqa: F401  (erreurs lisibles sur GitHub)
 os.environ["PHILPDF_LANGUE"] = "fr"
 base = tempfile.mkdtemp()
 os.environ["HOME"] = os.environ["APPDATA"] = base

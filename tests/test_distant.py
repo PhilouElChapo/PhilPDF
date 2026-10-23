@@ -3,6 +3,8 @@ Synology simule (connexion, verification en deux etapes, liste, telechargement, 
 import json, os, socket, sys, tempfile, threading, time, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import annotations  # noqa: F401  (erreurs lisibles sur GitHub)
 os.environ["PHILPDF_LANGUE"] = "fr"
 base = tempfile.mkdtemp()
 os.environ["HOME"] = os.environ["APPDATA"] = base

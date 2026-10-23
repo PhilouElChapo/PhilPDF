@@ -3,6 +3,8 @@ dossiers, envoi, mise a jour, telechargement, jeton expire renouvele, autorisati
 import base64, hashlib, json, os, re, socket, sys, tempfile, threading, urllib.parse, urllib.request, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import annotations  # noqa: F401  (erreurs lisibles sur GitHub)
 os.environ["PHILPDF_LANGUE"] = "fr"
 base = tempfile.mkdtemp()
 os.environ["HOME"] = os.environ["APPDATA"] = base
