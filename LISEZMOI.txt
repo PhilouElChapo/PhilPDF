@@ -92,7 +92,7 @@ Verification manuelle : Aide > Rechercher les mises a jour.
             Ordre de recherche : dossier deja appris, meme chemin, meme
             dossier par defaut (Documents, Telechargements, Bureau, NAS ;
             Windows et Linux se repondent), dossier utilisateur, puis par
-            le nom et par le contenu (fichier renomme), 80 000 fichiers ou
+            le nom et par le contenu (fichier renomme), 30 000 fichiers ou
             8 secondes au plus, sans AppData ni dossiers systeme.
             Reglages : Edition > Preferences > Drive et dossiers, et
             Synchronisation (avance).

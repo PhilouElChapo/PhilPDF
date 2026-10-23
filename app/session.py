@@ -21,7 +21,7 @@ la fois suivante, c'est immediat.
 """
 import datetime, hashlib, json, os, subprocess, sys, time
 
-LIMITE_FICHIERS = 80_000           # recherche rapide et silencieuse : quelques secondes au plus
+LIMITE_FICHIERS = 30_000           # recherche rapide et silencieuse : quelques secondes au plus
 DELAI_SILENCIEUX = 8               # secondes, verification au demarrage
 IGNORES = {"AppData", "node_modules", "Windows", "Program Files", "Program Files (x86)", "ProgramData",
            "__pycache__", "System Volume Information", "Library", "snap"}
