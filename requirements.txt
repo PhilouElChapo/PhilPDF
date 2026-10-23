@@ -5,3 +5,4 @@ opencv-python-headless
 Pillow
 pdf2docx
 pywin32; sys_platform == "win32"
+keyring

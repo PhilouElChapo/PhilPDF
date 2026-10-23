@@ -28,7 +28,7 @@ jobs:
       - name: Dependances
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller
+          pip install -r requirements.txt pyinstaller pyftpdlib wsgidav cheroot
 
       - name: Test du moteur
         run: python tests/test_moteur.py
@@ -41,6 +41,9 @@ jobs:
 
       - name: Test des traductions
         run: python tests/test_langues.py
+
+      - name: Test des emplacements distants (FTP, WebDAV, Synology simule)
+        run: python tests/test_distant.py
 
       - name: Tesseract (embarque dans le paquet)
         shell: pwsh
@@ -65,6 +68,7 @@ jobs:
           --add-data "fonts;fonts" --add-data "langues;langues" --add-data "tessdata;tessdata" --add-data "tesseract;tesseract"
           --hidden-import moteur.modifier --hidden-import moteur.scan --hidden-import moteur.objets
           --hidden-import moteur.scanner --hidden-import win32com.client --collect-submodules pdf2docx
+          --collect-submodules keyring --hidden-import win32ctypes.core
           --exclude-module scipy --exclude-module onnxruntime --exclude-module pymupdf_layout
           --exclude-module pymupdf4llm --exclude-module matplotlib --exclude-module pandas --exclude-module tkinter
           philpdf.py

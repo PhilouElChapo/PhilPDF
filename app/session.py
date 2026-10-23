@@ -154,16 +154,23 @@ class Session:
         return self.lire().get(self.params["machine"], {}).get("maj", "")
 
     def ecrire(self, ouverts):
-        """ouverts = [(chemin, page, zoom)] des documents ouverts ici."""
+        """ouverts = [(chemin, page, zoom[, distant])] des documents ouverts ici. Pour un fichier ouvert
+        depuis un NAS, un FTP ou un Drive, `distant` = {"cle", "chemin", "lieu"} : l'autre poste le
+        rouvrira directement la-bas s'il a le meme compte."""
         maison = os.path.expanduser("~")
         connus = dossiers_connus(self.params)
         fichiers = []
-        for chemin, page, zoom in ouverts:
+        for ligne in ouverts:
+            chemin, page, zoom = ligne[:3]
+            dist = ligne[3] if len(ligne) > 3 else None
             if not chemin or not os.path.exists(chemin):
                 continue
             e = {"chemin": chemin, "nom": os.path.basename(chemin), "taille": os.path.getsize(chemin),
                  "empreinte": empreinte(chemin), "page": page, "zoom": zoom,
                  "relatif_maison": _relatif(chemin, maison)}
+            if dist:
+                e["distant"] = {"cle": dist.get("cle"), "chemin": dist.get("chemin"), "lieu": dist.get("lieu")}
+                e["nom"] = os.path.basename(dist.get("chemin") or chemin)
             # dossier par defaut le plus precis qui le contient (Documents plutot que dossier utilisateur)
             for clef, base in sorted(connus.items(), key=lambda kv: -len(kv[1])):
                 rel = _relatif(chemin, base)
@@ -250,6 +257,14 @@ class Session:
 
     def retrouver_direct(self, machine, e):
         """Etapes sans parcours de disque (instantanees). Renvoie (chemin, comment) ou (None, None)."""
+        # 0. fichier d'un NAS, d'un FTP ou d'un Drive : meme compte ici -> on le rouvre la-bas
+        dist = e.get("distant")
+        if dist:
+            for c in self.params.get("comptes", []):
+                from .distant import cle_compte, libelle
+                if cle_compte(c) == dist.get("cle"):
+                    return f"distant:{c['id']}:{dist['chemin']}", _("sur {lieu}", lieu=libelle(c))
+            return None, None
         src = e["chemin"].replace("\\", "/")
         # 1. correspondance apprise (le dossier lui-meme ou un dossier parent)
         appris = self._corresp().get(f"{machine} -> {self.params['machine']}", {})
@@ -344,6 +359,8 @@ class Session:
         """Retient dossier source -> dossier trouve, et aussi la racine commune : si
         C:/Users/A/Documents/Ordo est en fait /home/b/Documents/Ordo, on apprend aussi
         C:/Users/A -> /home/b, qui servira pour tous les autres fichiers de A."""
+        if trouve.startswith("distant:") or e.get("distant"):
+            return
         src = e["chemin"].replace("\\", "/")
         d_src = src.rsplit("/", 1)[0]
         d_ici = os.path.dirname(trouve)

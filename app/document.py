@@ -519,6 +519,7 @@ class OngletDocument(QWidget):
         self.chiffrement = None
         self._cache_lignes, self._cache_mots, self._cache_images = {}, {}, {}
         self.objets_pdf = {}       # xref annotation -> (pdf, nom, genre) pour copier/coller
+        self.distant = None        # {"compte", "cle", "chemin", "lieu"} si ouvert depuis un NAS, un FTP, un Drive
         self._construire()
         self.maj_historique()
 

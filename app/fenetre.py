@@ -14,6 +14,8 @@ from .pages import PageOutils, PageAccueil
 from .document import OngletDocument, DialogueRemplacer, question
 from .outils import outil
 from .bibliotheque import Bibliotheque, detecter_clouds
+from . import distant
+from .dialogues_distant import DialogueParcourir, PanneauComptes, ouvrir_emplacement
 from .session import session_de, date_fr, nb_fichiers, dossiers_connus, DELAI_SILENCIEUX
 from .dialogues import (boutons_fr, DialogueFiligrane, DialogueEntete, DialogueNumeriser, DialogueExporter,
                         DialogueBibliotheque, DialogueSynchro, DialogueFond)
@@ -126,6 +128,7 @@ class Fenetre(QMainWindow):
         self.accueil = PageAccueil(self.params)
         self.accueil.ouvrir.connect(self.ouvrir)
         self.accueil.ouvrir_dialogue.connect(self.dialogue_ouvrir)
+        self.accueil.ouvrir_distant.connect(lambda: self.ouvrir_distant())
         self.accueil.reprendre.connect(self.reprendre_proposee)
         self.accueil.synchroniser.connect(self.synchroniser)
         self.synchro = None              # (machine, date, fichiers, resultats) trouve au demarrage
@@ -183,6 +186,7 @@ class Fenetre(QMainWindow):
         act(m, _('Ouvrir...'), self.dialogue_ouvrir, "Ctrl+O", "ouvrir")
         self.menu_recents = m.addMenu(icone("recent"), _('Ouvrir un fichier récent'))
         self.menu_recents.aboutToShow.connect(self._remplir_recents)
+        act(m, _("Ouvrir depuis un emplacement (NAS, FTP, Drive)..."), lambda: self.ouvrir_distant(), "Shift+Ctrl+O", "archiver")
         act(m, _('Synchroniser avec les autres postes...'), self.synchroniser, None, "synchro")
         sm = m.addMenu(icone("creer"), _('Créer un PDF'))
         act(sm, _('Page vierge'), lambda: self.creer("vierge"), None, "creer")
@@ -192,6 +196,7 @@ class Fenetre(QMainWindow):
         m.addSeparator()
         act(m, _('Enregistrer'), lambda: self.enregistrer(), "Ctrl+S", "enregistrer")
         act(m, _('Enregistrer sous...'), lambda: self.enregistrer(sous=True), "Shift+Ctrl+S", "enregistrer_sous")
+        act(m, _("Enregistrer vers un emplacement (NAS, FTP, Drive)..."), lambda: self.enregistrer_distant(), None, "archiver")
         act(m, _('Enregistrer une copie allégée...'), lambda: self.lancer_outil("alleger"), None, "alleger")
         sm = m.addMenu(icone("exporter"), _('Exporter vers'))
         act(sm, _('Word (.docx)...'), lambda: self.exporter("docx"))
@@ -299,7 +304,10 @@ class Fenetre(QMainWindow):
         i = self.onglets.indexOf(o)
         if i >= 0:
             self.onglets.setTabText(i, o.nom + (" *" if o.modifie else ""))
-            self.onglets.setTabToolTip(i, o.chemin or _('Non enregistré'))
+            dist = getattr(o, "distant", None)
+            self.onglets.setTabToolTip(i, _("{lieu} : {chemin}", lieu=dist["lieu"], chemin=dist["chemin"]) if dist
+                                       else o.chemin or _('Non enregistré'))
+            self.onglets.setTabIcon(i, icone("archiver" if dist else "creer", "#0f6cbd" if dist else "#c9252d"))
         if o is self.doc_courant():
             self.setWindowTitle(_('{nom}{x} – PhilPDF Editeur PDF', nom=o.nom, x=' *' if o.modifie else ''))
 
@@ -330,7 +338,7 @@ class Fenetre(QMainWindow):
         self._session_touchee = self._session_touchee or toucher
         if not self._session_touchee or not self.params.get("synchro", True):
             return
-        session_de(self.params).ecrire([(o.chemin, o.page_courante(), o.zoom) for o in self.documents() if o.chemin])
+        session_de(self.params).ecrire([(o.chemin, o.page_courante(), o.zoom, o.distant) for o in self.documents() if o.chemin])
 
     def ouvrir(self, chemin):
         chemin = os.path.abspath(chemin)
@@ -445,14 +453,18 @@ class Fenetre(QMainWindow):
         if not fichiers:
             return
         if remplacer:
-            garder = {os.path.normcase(c) for c, _x, _x in fichiers}
+            garder = {os.path.normcase(c) for c, _x, _x2 in fichiers}
             for i in range(self.onglets.count() - 1, -1, -1):
                 w = self.onglets.widget(i)
                 if isinstance(w, OngletDocument) and (not w.chemin or os.path.normcase(w.chemin) not in garder):
                     self.fermer_onglet(i)
         from PySide6.QtCore import QTimer
         for chemin, page, zoom in fichiers:
-            o = self.ouvrir(chemin)
+            if chemin.startswith("distant:"):
+                _p, cid, ch = chemin.split(":", 2)
+                o = self.ouvrir_distant(compte_id=cid, chemin=ch)
+            else:
+                o = self.ouvrir(chemin)
             if o:
                 if zoom:
                     o.changer_zoom(zoom)
@@ -479,15 +491,110 @@ class Fenetre(QMainWindow):
                 return False
             if not chemin.lower().endswith(".pdf"):
                 chemin += ".pdf"
+        if sous and getattr(o, "distant", None):
+            o.distant = None                  # "Enregistrer sous" sur ce PC : le fichier n'est plus celui du NAS
         try:
             o.enregistrer(chemin)
         except Exception as e:
             QMessageBox.warning(self, "PhilPDF", _('Enregistrement impossible :\n{e}', e=e))
             return False
+        if getattr(o, "distant", None):
+            return self._renvoyer(o)
         self.params.ajouter_recent(chemin)
         self.statusBar().showMessage(_('Enregistré : {chemin} ({x} Ko)', chemin=chemin, x=os.path.getsize(chemin) // 1024), 8000)
         self._session()
         return True
+
+    # ------------------------------------------------------------ emplacements distants
+    def _compte(self, ident=None, cle=None):
+        for c in self.params.get("comptes", []):
+            if c["id"] == ident or (cle and distant.cle_compte(c) == cle):
+                return c
+        return None
+
+    def ouvrir_distant(self, compte_id=None, chemin=None, cle=None):
+        """Ouvre un PDF d'un NAS, d'un FTP ou d'un Drive : copie de travail sur ce PC, Ctrl+S le renvoie."""
+        if not self.params.get("comptes"):
+            QMessageBox.information(self, _("Emplacements"), _("Ajoutez d'abord votre NAS, FTP ou Drive dans "
+                                                              "Edition › Préférences › Comptes et emplacements."))
+            self.preferences(onglet="comptes")
+            return None
+        c = self._compte(compte_id, cle)
+        e = None
+        if chemin is None or not c:
+            d = DialogueParcourir(self, self.params, "ouvrir", compte_id=compte_id)
+            if d.exec() != QDialog.Accepted or not d.choisi:
+                return None
+            c, e, chemin = d.compte(), d.e, d.choisi
+        if e is None:
+            e = ouvrir_emplacement(self, c)
+            if not e:
+                return None
+        local = distant.cache(dossier_donnees(), c, chemin)
+        try:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                e.telecharger(chemin, local)
+            finally:
+                QApplication.restoreOverrideCursor()
+        except distant.ErreurDistant as ex:
+            QMessageBox.warning(self, distant.libelle(c), str(ex))
+            return None
+        o = self.ouvrir(local)
+        if o:
+            o.distant = {"compte": c["id"], "cle": distant.cle_compte(c), "chemin": chemin, "lieu": distant.libelle(c)}
+            self._maj_titre(o)
+            self.statusBar().showMessage(_("Ouvert depuis {lieu} : {chemin}", lieu=distant.libelle(c), chemin=chemin), 8000)
+            self._session(toucher=True)
+        return o
+
+    def _renvoyer(self, o):
+        """Renvoie la copie de travail a son emplacement d'origine."""
+        c = self._compte(o.distant["compte"], o.distant.get("cle"))
+        if not c:
+            QMessageBox.warning(self, "PhilPDF", _("Le compte d'origine n'existe plus sur ce poste : le fichier est "
+                                                   "enregistré seulement ici :\n{chemin}", chemin=o.chemin))
+            return False
+        e = ouvrir_emplacement(self, c)
+        if not e:
+            QMessageBox.warning(self, "PhilPDF", _("Copie gardée sur ce PC : {chemin}", chemin=o.chemin))
+            return False
+        try:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                e.envoyer(o.chemin, o.distant["chemin"])
+            finally:
+                QApplication.restoreOverrideCursor()
+        except distant.ErreurDistant as ex:
+            QMessageBox.warning(self, distant.libelle(c), _("Envoi impossible ({erreur}). Copie gardée sur ce PC : {chemin}",
+                                                          erreur=ex, chemin=o.chemin))
+            return False
+        self.statusBar().showMessage(_("Enregistré sur {lieu} : {chemin}", lieu=distant.libelle(c), chemin=o.distant["chemin"]), 8000)
+        self._session()
+        return True
+
+    def enregistrer_distant(self, o=None):
+        o = o or self.doc_courant()
+        if not o:
+            return False
+        if not self.params.get("comptes"):
+            self.preferences(onglet="comptes")
+            return False
+        d = DialogueParcourir(self, self.params, "enregistrer", nom=o.nom,
+                              compte_id=(o.distant or {}).get("compte") if getattr(o, "distant", None) else None)
+        if d.exec() != QDialog.Accepted or not d.choisi:
+            return False
+        c = d.compte()
+        local = distant.cache(dossier_donnees(), c, d.choisi)
+        try:
+            o.enregistrer(local)
+        except Exception as ex:
+            QMessageBox.warning(self, "PhilPDF", _('Enregistrement impossible :\n{e}', e=ex))
+            return False
+        o.chemin, o.nom = local, os.path.basename(local)
+        o.distant = {"compte": c["id"], "cle": distant.cle_compte(c), "chemin": d.choisi, "lieu": distant.libelle(c)}
+        self._maj_titre(o)
+        return self._renvoyer(o)
 
     # ------------------------------------------------------------ outils
     def lancer_outil(self, oid):
@@ -854,10 +961,10 @@ class Fenetre(QMainWindow):
         polices = sorted({f[3] for p in o.doc for f in p.get_fonts()})
         QMessageBox.information(self, _('Propriétés'), _('Fichier : {x}\nPages : {n}\nCréé par : {x2}\nProduit par : {x3}\nPolices : {x4}', x=o.chemin or o.nom, n=len(o.doc), x2=m.get('creator') or '-', x3=m.get('producer') or '-', x4=', '.join(polices[:12]) or 'aucune (scan)'))
 
-    def preferences(self):
+    def preferences(self, onglet=None):
         d = QDialog(self)
         d.setWindowTitle(_('Préférences'))
-        d.setMinimumWidth(760)
+        d.setMinimumWidth(920)
         vd = QVBoxLayout(d)
         tabs = QTabWidget()
         vd.addWidget(tabs)
@@ -933,6 +1040,19 @@ class Fenetre(QMainWindow):
         hn.addWidget(bn)
         f.addRow("NAS", hn)
         note(f, _("Documents, Téléchargements et Bureau sont détectés automatiquement, sous Windows comme sous Linux (%USERPROFILE%\\Documents ↔ ~/Documents). A l'ouverture, PhilPDF part du dernier dossier utilisé."))
+
+        # ---------------- Comptes et emplacements
+        w = QWidget()
+        vc = QVBoxLayout(w)
+        lc = QLabel(_("Vos NAS, serveurs FTP, WebDAV et Drives : on y ouvre et on y enregistre directement "
+                      "(Fichier › Ouvrir depuis un emplacement). Chaque compte est enregistré une fois sur ce poste."))
+        lc.setWordWrap(True)
+        lc.setStyleSheet("color:#555")
+        vc.addWidget(lc)
+        vc.addWidget(PanneauComptes(w, self.params), 1)
+        tabs.addTab(w, _("Comptes et emplacements"))
+        if onglet == "comptes":
+            tabs.setCurrentWidget(w)
 
         # ---------------- Tampons et signatures
         from .dialogues import PanneauBibliotheque

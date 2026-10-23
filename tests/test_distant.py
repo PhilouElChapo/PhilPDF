@@ -1,0 +1,145 @@
+"""Emplacements distants avec de vrais serveurs lances sur ce poste : FTP, FTPS non, WebDAV, et un
+Synology simule (connexion, verification en deux etapes, liste, telechargement, envoi)."""
+import json, os, socket, sys, tempfile, threading, time, urllib.parse
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+os.environ["PHILPDF_LANGUE"] = "fr"
+base = tempfile.mkdtemp()
+os.environ["HOME"] = os.environ["APPDATA"] = base
+from app import distant, coffre
+
+ok = 0
+def verifie(cond, msg):
+    global ok
+    assert cond, msg
+    ok += 1
+    print("OK ", msg)
+
+def port_libre():
+    s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
+
+racine = os.path.join(base, "serveur"); os.makedirs(os.path.join(racine, "Factures"))
+open(os.path.join(racine, "Factures", "edf.pdf"), "wb").write(b"%PDF-1.7 edf")
+local = os.path.join(base, "local.pdf"); open(local, "wb").write(b"%PDF-1.7 modifie")
+
+# --- coffre : jamais en clair
+coffre.enregistrer("essai", "M0tDeP@sse")
+verifie(coffre.lire("essai") == "M0tDeP@sse", "coffre : mot de passe relu")
+if not coffre.systeme():
+    verifie("M0tDeP@sse" not in open(os.path.join(base, ".config", "philpdf", "coffre.json") if os.path.exists(
+        os.path.join(base, ".config", "philpdf", "coffre.json")) else coffre._fichier()[0]).read(), "coffre : pas de mot de passe en clair")
+
+def scenario(nom, e, dossier="/Factures"):
+    l = e.lister(dossier)
+    verifie(any(x.nom == "edf.pdf" and not x.dossier for x in l), f"{nom} : liste du dossier")
+    dst = os.path.join(base, f"{nom}.pdf"); e.telecharger(dossier + "/edf.pdf", dst)
+    verifie(open(dst, "rb").read() == b"%PDF-1.7 edf", f"{nom} : téléchargement")
+    e.envoyer(local, dossier + "/nouveau.pdf")
+    verifie(any(x.nom == "nouveau.pdf" for x in e.lister(dossier)), f"{nom} : envoi")
+    os.remove(os.path.join(racine, "Factures", "nouveau.pdf"))
+
+# --- dossier reseau
+c = distant.nouveau_compte("reseau"); c["adresse"] = racine
+scenario("Dossier réseau", distant.emplacement(c, ""))
+
+# --- FTP
+from pyftpdlib.authorizers import DummyAuthorizer
+from pyftpdlib.handlers import FTPHandler
+from pyftpdlib.servers import FTPServer
+import logging
+from pyftpdlib.log import config_logging
+config_logging(level=logging.ERROR)
+auth = DummyAuthorizer(); auth.add_user("phil", "secret", racine, perm="elradfmw")
+h = FTPHandler; h.authorizer = auth
+pf = port_libre(); srv = FTPServer(("127.0.0.1", pf), h)
+threading.Thread(target=srv.serve_forever, daemon=True).start()
+c = distant.nouveau_compte("ftp"); c.update(adresse="127.0.0.1", port=pf, utilisateur="phil", chiffrement="")
+scenario("FTP", distant.emplacement(c, "secret"))
+try:
+    distant.emplacement(c, "faux").lister("/")
+    verifie(False, "FTP : mauvais mot de passe refusé")
+except distant.ErreurDistant as e:
+    verifie("refusé" in str(e), "FTP : mauvais mot de passe refusé proprement")
+
+# --- WebDAV
+from wsgidav.wsgidav_app import WsgiDAVApp
+from cheroot import wsgi
+pw = port_libre()
+app = WsgiDAVApp({"provider_mapping": {"/": racine}, "simple_dc": {"user_mapping": {"*": {"phil": {"password": "secret"}}}},
+                  "http_authenticator": {"accept_basic": True, "accept_digest": False, "default_to_digest": False},
+                  "verbose": 0, "logging": {"enable": False}})
+sw = wsgi.Server(("127.0.0.1", pw), app)
+threading.Thread(target=sw.safe_start, daemon=True).start(); time.sleep(0.5)
+c = distant.nouveau_compte("webdav"); c.update(adresse=f"http://127.0.0.1:{pw}", utilisateur="phil")
+scenario("WebDAV", distant.emplacement(c, "secret"))
+
+# --- Synology simule (API File Station)
+ETAT = {"2fa": True}
+class DSM(BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def _json(self, d):
+        b = json.dumps(d).encode(); self.send_response(200); self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+    def _traiter(self, q, corps=b""):
+        api = q.get("api"); m = q.get("method")
+        if api == "SYNO.API.Auth" and m == "login":
+            if q.get("account") != "phil" or q.get("passwd") != "secret":
+                return self._json({"success": False, "error": {"code": 400}})
+            if ETAT["2fa"] and q.get("otp_code") != "123456" and q.get("device_id") != "APPAREIL":
+                return self._json({"success": False, "error": {"code": 403}})
+            d = {"sid": "SID1"}
+            if q.get("enable_device_token") == "yes":
+                d["did"] = "APPAREIL"
+            return self._json({"success": True, "data": d})
+        if api == "SYNO.API.Auth":
+            return self._json({"success": True})
+        if q.get("_sid") != "SID1":
+            return self._json({"success": False, "error": {"code": 119}})
+        if api == "SYNO.FileStation.List" and m == "list_share":
+            return self._json({"success": True, "data": {"shares": [{"name": "Factures", "path": "/Factures", "isdir": True}]}})
+        if api == "SYNO.FileStation.List":
+            p = os.path.join(racine, q["folder_path"].strip("/"))
+            return self._json({"success": True, "data": {"files": [
+                {"name": n, "path": q["folder_path"] + "/" + n, "isdir": os.path.isdir(os.path.join(p, n)),
+                 "additional": {"size": os.path.getsize(os.path.join(p, n))}} for n in os.listdir(p)]}})
+        if api == "SYNO.FileStation.Download":
+            b = open(os.path.join(racine, q["path"].strip("/")), "rb").read()
+            self.send_response(200); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b); return
+        return self._json({"success": False, "error": {"code": 101}})
+    def do_GET(self):
+        self._traiter(dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(self.path).query)))
+    def do_POST(self):
+        q = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(self.path).query))
+        corps = self.rfile.read(int(self.headers["Content-Length"]))
+        bord = self.headers["Content-Type"].split("boundary=")[1].encode()
+        champs, fichier = {}, None
+        for part in corps.split(b"--" + bord):
+            if b"Content-Disposition" not in part: continue
+            tete, _s, val = part.partition(b"\r\n\r\n"); val = val[:-2]
+            nom = tete.split(b'name="')[1].split(b'"')[0].decode()
+            if b"filename=" in tete:
+                fichier = (tete.split(b'filename="')[1].split(b'"')[0].decode(), val)
+            else:
+                champs[nom] = val.decode()
+        if q.get("_sid") != "SID1" or champs.get("api") != "SYNO.FileStation.Upload":
+            return self._json({"success": False, "error": {"code": 119}})
+        open(os.path.join(racine, champs["path"].strip("/"), fichier[0]), "wb").write(fichier[1])
+        self._json({"success": True})
+ps = port_libre(); hs = ThreadingHTTPServer(("127.0.0.1", ps), DSM)
+threading.Thread(target=hs.serve_forever, daemon=True).start()
+c = distant.nouveau_compte("synology"); c.update(adresse=f"127.0.0.1:{ps}", utilisateur="phil")
+try:
+    distant.emplacement(c, "secret").lister("/")
+    verifie(False, "Synology : code demandé")
+except distant.BesoinCode:
+    verifie(True, "Synology : le code de vérification en deux étapes est demandé")
+e = distant.emplacement(c, "secret", code="123456")
+verifie([x.nom for x in e.lister("/")] == ["Factures"], "Synology : dossiers partagés listés après le code")
+verifie(coffre.lire(c["id"] + ".appareil") == "APPAREIL", "Synology : appareil mémorisé (plus de code ensuite)")
+scenario("Synology", distant.emplacement(c, "secret"))
+
+# --- comptes identiques sur deux postes (session)
+c2 = dict(c, id="autre", nom="Mon NAS")
+verifie(distant.cle_compte(c) == distant.cle_compte(c2), "même compte reconnu sur un autre poste")
+srv.close_all(); sw.stop(); hs.shutdown()
+print(f"\n{ok} vérifications d'emplacements distants réussies")

@@ -245,6 +245,7 @@ class PageOutils(QScrollArea):
 class PageAccueil(QWidget):
     ouvrir = Signal(str)
     ouvrir_dialogue = Signal()
+    ouvrir_distant = Signal()
     reprendre = Signal()          # reprendre la session proposee (remplace les fichiers ouverts)
     synchroniser = Signal()       # fenetre de synchronisation manuelle
 
@@ -270,6 +271,12 @@ class PageAccueil(QWidget):
         b.setStyleSheet("QPushButton{background:#c9252d;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:600}"
                         "QPushButton:hover{background:#a81e25}")
         b.clicked.connect(self.ouvrir_dialogue)
+        bd = QPushButton(_("  NAS, FTP, Drive..."))
+        bd.setIcon(icone("archiver", "#0f6cbd"))
+        bd.setToolTip(_("Ouvrir depuis un emplacement (NAS, FTP, Drive)..."))
+        bd.setStyleSheet("QPushButton{padding:10px 16px;border-radius:8px;font-weight:600}")
+        bd.clicked.connect(self.ouvrir_distant)
+        h.addWidget(bd)
         h.addWidget(b)
         v.addLayout(h)
         # --- carte "session plus recente sur un autre poste" (reste la tant qu'elle n'est pas traitee)

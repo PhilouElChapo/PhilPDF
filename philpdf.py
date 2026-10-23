@@ -56,6 +56,16 @@ def verifier(sortie):
         lignes.append(f"ocr: {'OK' if bon else 'ECHEC'} ({texte.strip()[:60]!r})")
     else:
         ok = False
+    try:
+        from app import coffre
+        coffre.enregistrer("verification", "essai-123")
+        bon = coffre.lire("verification") == "essai-123"
+        coffre.supprimer("verification")
+        lignes.append(f"coffre: {'OK' if bon else 'ECHEC'} ({'systeme' if coffre.systeme() else 'fichier chiffre'})")
+        ok &= bon
+    except Exception as ex:
+        ok = False
+        lignes.append(f"coffre: {ex}")
     from app.langue import disponibles
     langues = [c for c, _n in disponibles()]
     ok &= "en" in langues
