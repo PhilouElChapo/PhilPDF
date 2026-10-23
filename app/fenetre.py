@@ -15,7 +15,7 @@ from .document import OngletDocument, DialogueRemplacer, question
 from .outils import outil
 from .bibliotheque import Bibliotheque, detecter_clouds
 from . import distant
-from .dialogues_distant import DialogueParcourir, PanneauComptes, ouvrir_emplacement
+from .dialogues_distant import DialogueParcourir, PanneauComptes, ouvrir_emplacement, erreur as erreur_distant
 from .session import session_de, date_fr, nb_fichiers, dossiers_connus, DELAI_SILENCIEUX
 from .dialogues import (boutons_fr, DialogueFiligrane, DialogueEntete, DialogueNumeriser, DialogueExporter,
                         DialogueBibliotheque, DialogueSynchro, DialogueFond)
@@ -555,7 +555,7 @@ class Fenetre(QMainWindow):
             finally:
                 QApplication.restoreOverrideCursor()
         except distant.ErreurDistant as ex:
-            QMessageBox.warning(self, distant.libelle(c), str(ex))
+            erreur_distant(self, distant.libelle(c), ex, e)
             return None
         o = self.ouvrir(local)
         if o:
@@ -583,8 +583,8 @@ class Fenetre(QMainWindow):
             finally:
                 QApplication.restoreOverrideCursor()
         except distant.ErreurDistant as ex:
-            QMessageBox.warning(self, distant.libelle(c), _("Envoi impossible ({erreur}). Copie gardée sur ce PC : {chemin}",
-                                                          erreur=ex, chemin=o.chemin))
+            erreur_distant(self, distant.libelle(c), _("Envoi impossible ({erreur}). Copie gardée sur ce PC : {chemin}",
+                                                     erreur=ex, chemin=o.chemin), e)
             return False
         self.statusBar().showMessage(_("Enregistré sur {lieu} : {chemin}", lieu=distant.libelle(c), chemin=o.distant["chemin"]), 8000)
         self._session()

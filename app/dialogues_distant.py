@@ -1,5 +1,5 @@
 """Fenetres des emplacements distants : compte (NAS, FTP, WebDAV...), choix d'un fichier ou d'un dossier."""
-import os, posixpath
+import os, posixpath, urllib.parse
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QLineEdit, QPushButton, QComboBox,
                                QCheckBox, QSpinBox, QDialogButtonBox, QListWidget, QListWidgetItem, QMessageBox,
@@ -12,7 +12,7 @@ ICONES = {"reseau": "ouvrir", "synology": "archiver", "webdav": "lot", "ftp": "e
 AIDE = {
     "reseau": _("Un dossier partagé déjà accessible depuis ce PC : \\\\NAS\\partage, une lettre de lecteur (Z:\\) ou /mnt/nas."),
     "synology": _("L'adresse de votre Synology dans le navigateur : http://nas:5000, https://nas:5001 ou une adresse "
-                "personnelle (nasdelaye.homedns.org). Si la vérification en deux étapes est active, le code sera demandé "
+                "personnelle (monnas.exemple.org). Si la vérification en deux étapes est active, le code sera demandé "
                 "une seule fois."),
     "webdav": _("Adresse WebDAV complète, par exemple https://nas:5006 (paquet « WebDAV Server » du Synology) ou "
               "https://cloud.exemple.fr/remote.php/dav/files/nom/."),
@@ -22,6 +22,46 @@ AIDE = {
     "onedrive": _("OneDrive en direct, par autorisation dans le navigateur : arrive dès que l'identifiant d'application "
                 "de PhilPDF sera enregistré."),
 }
+
+
+def erreur(parent, titre, ex, e=None, info=False):
+    """Message (erreur ou reussite) avec l'echange complet avec le serveur, a deplier et a copier."""
+    from PySide6.QtWidgets import QPlainTextEdit, QStyle
+    from PySide6.QtGui import QFont
+    d = QDialog(parent)
+    d.setWindowTitle(titre)
+    v = QVBoxLayout(d)
+    h = QHBoxLayout()
+    ic = QLabel()
+    ic.setPixmap(d.style().standardIcon(QStyle.SP_MessageBoxInformation if info else QStyle.SP_MessageBoxWarning).pixmap(36, 36))
+    ic.setAlignment(Qt.AlignTop)
+    h.addWidget(ic)
+    t = QLabel(str(ex))
+    t.setWordWrap(True)
+    t.setMinimumWidth(460)
+    t.setTextInteractionFlags(Qt.TextSelectableByMouse)
+    h.addWidget(t, 1)
+    v.addLayout(h)
+    journal = QPlainTextEdit(e.texte_journal() if e is not None else "")
+    journal.setReadOnly(True)
+    journal.setFont(QFont("Consolas" if os.name == "nt" else "DejaVu Sans Mono", 9))
+    journal.setLineWrapMode(QPlainTextEdit.NoWrap)
+    journal.setMinimumSize(720, 260)
+    journal.hide()
+    v.addWidget(journal, 1)
+    bb = QDialogButtonBox()
+    if e is not None:
+        bd = bb.addButton(_("Détails de l'échange"), QDialogButtonBox.ActionRole)
+        bd.setCheckable(True)
+        bd.toggled.connect(lambda on: (journal.setVisible(on), d.adjustSize()))
+        bc = bb.addButton(_("Copier"), QDialogButtonBox.ActionRole)
+        bc.setToolTip(_("Copier l'échange (mots de passe masqués), par exemple pour me l'envoyer"))
+        bc.clicked.connect(lambda: QApplication.clipboard().setText(str(ex) + "\n\n" + e.texte_journal()))
+    ok = bb.addButton("OK", QDialogButtonBox.AcceptRole)
+    ok.setDefault(True)
+    bb.accepted.connect(d.accept)
+    v.addWidget(bb)
+    d.exec()
 
 
 def ouvrir_emplacement(parent, compte):
@@ -42,81 +82,135 @@ def ouvrir_emplacement(parent, compte):
                 return None
             e = distant.emplacement(compte, code=code.strip())
         except distant.ErreurDistant as ex:
-            QMessageBox.warning(parent, distant.libelle(compte), str(ex))
+            erreur(parent, distant.libelle(compte), ex, e)
             return None
     return None
 
 
 # ------------------------------------------------------------------------------------------- compte
+PORTS = {"synology": _("par défaut : 5000 en http, 5001 en https"), "webdav": _("Synology : 5005 en http, 5006 en https"),
+         "ftp": _("par défaut : 21")}
+EXEMPLES = {"reseau": r"\\NAS\partage", "synology": "http://monnas.exemple.org:5000", "webdav": "https://monnas.exemple.org:5006",
+            "ftp": "ftp.exemple.org"}
+
+
 class DialogueCompte(QDialog):
     def __init__(self, parent, compte):
         super().__init__(parent)
         self.c = dict(compte)
-        t = self.c["type"]
-        self.setWindowTitle(_(distant.TYPES[t]))
-        self.setMinimumWidth(520)
-        f = QFormLayout(self)
-        aide = QLabel(AIDE[t])
-        aide.setWordWrap(True)
-        aide.setStyleSheet("color:#555")
-        f.addRow(aide)
+        self.setWindowTitle(_("Compte"))
+        self.setMinimumWidth(560)
+        f = self.f = QFormLayout(self)
+        self.type = QComboBox()
+        for t, lib in distant.TYPES.items():
+            self.type.addItem(icone(ICONES[t], "#0f6cbd"), lib, t)
+        self.type.setCurrentIndex(max(0, self.type.findData(self.c["type"])))
+        f.addRow(_("Type"), self.type)
+        self.aide = QLabel()
+        self.aide.setWordWrap(True)
+        self.aide.setStyleSheet("color:#555")
+        f.addRow(self.aide)
         self.nom = QLineEdit(self.c.get("nom", ""))
         f.addRow(_("Nom affiché"), self.nom)
+        # adresse (+ bouton Choisir pour un dossier reseau)
         self.adresse = QLineEdit(self.c.get("adresse", ""))
-        self.adresse.setPlaceholderText({"reseau": r"\\NAS\partage", "synology": "http://nasdelaye.homedns.org:5000",
-                                         "webdav": "https://nas:5006", "ftp": "ftp.exemple.fr"}.get(t, ""))
+        self.b_choisir = QPushButton(_("Choisir..."))
+        from PySide6.QtWidgets import QFileDialog
+        self.b_choisir.clicked.connect(lambda: (lambda p: p and self.adresse.setText(p))(
+            QFileDialog.getExistingDirectory(self, _("Dossier réseau"))))
+        ha = QWidget()
+        h = QHBoxLayout(ha)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.addWidget(self.adresse, 1)
+        h.addWidget(self.b_choisir)
+        f.addRow(_("Adresse"), ha)
         self.port = QSpinBox()
         self.port.setRange(0, 65535)
         self.port.setSpecialValueText(_("par défaut"))
         self.port.setValue(int(self.c.get("port") or 0))
+        f.addRow(_("Port"), self.port)
         self.utilisateur = QLineEdit(self.c.get("utilisateur", ""))
+        f.addRow(_("Utilisateur"), self.utilisateur)
         self.mdp = QLineEdit(coffre.lire(self.c["id"]) or "")
         self.mdp.setEchoMode(QLineEdit.Password)
-        self.dossier = QLineEdit(self.c.get("dossier", "/"))
+        self.oeil = self.mdp.addAction(icone("oeil", "#555555"), QLineEdit.TrailingPosition)
+        self.oeil.setToolTip(_("Afficher le mot de passe"))
+        self.oeil.triggered.connect(self._basculer_mdp)
+        f.addRow(_("Mot de passe"), self.mdp)
         self.chiffrement = QComboBox()
         self.chiffrement.addItem(_("Chiffré (FTPS, conseillé)"), "tls")
         self.chiffrement.addItem(_("Aucun (FTP en clair)"), "")
-        self.chiffrement.setCurrentIndex(0 if self.c.get("chiffrement") == "tls" else 1)
+        self.chiffrement.setCurrentIndex(0 if self.c.get("chiffrement", "tls") == "tls" else 1)
+        f.addRow(_("Chiffrement"), self.chiffrement)
+        self.dossier = QLineEdit(self.c.get("dossier", "/"))
+        f.addRow(_("Dossier de départ"), self.dossier)
         self.libre = QCheckBox(_("Accepter un certificat non vérifié (NAS avec certificat auto-signé)"))
         self.libre.setChecked(self.c.get("certificat_libre", False))
-        if t == "reseau":
-            h = QHBoxLayout()
-            h.addWidget(self.adresse, 1)
-            b = QPushButton(_("Choisir..."))
-            from PySide6.QtWidgets import QFileDialog
-            b.clicked.connect(lambda: (lambda p: p and self.adresse.setText(p))(
-                QFileDialog.getExistingDirectory(self, _("Dossier réseau"))))
-            h.addWidget(b)
-            f.addRow(_("Dossier"), h)
-        elif t in ("synology", "webdav", "ftp"):
-            f.addRow(_("Adresse"), self.adresse)
-            f.addRow(_("Port"), self.port)
-            f.addRow(_("Utilisateur"), self.utilisateur)
-            f.addRow(_("Mot de passe"), self.mdp)
-            if t == "ftp":
-                f.addRow(_("Chiffrement"), self.chiffrement)
-            f.addRow(_("Dossier de départ"), self.dossier)
-            f.addRow(self.libre)
-            note = QLabel(_("Le mot de passe est rangé dans le coffre de Windows (ou de Linux), jamais en clair."))
-            note.setStyleSheet("color:#555;font-size:12px")
-            note.setWordWrap(True)
-            f.addRow(note)
+        f.addRow(self.libre)
+        self.note = QLabel(_("Le mot de passe est rangé dans le coffre de Windows (ou de Linux), jamais en clair."))
+        self.note.setStyleSheet("color:#555;font-size:12px")
+        self.note.setWordWrap(True)
+        f.addRow(self.note)
         bb = QDialogButtonBox()
         self.b_test = bb.addButton(_("Tester la connexion"), QDialogButtonBox.ActionRole)
         self.b_test.clicked.connect(self.tester)
-        self.b_test.setEnabled(t not in ("gdrive", "onedrive"))
         b_ok = bb.addButton(_("Enregistrer"), QDialogButtonBox.AcceptRole)
         b_ok.setDefault(True)
         bb.addButton(_("Annuler"), QDialogButtonBox.RejectRole)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         f.addRow(bb)
+        self.type.currentIndexChanged.connect(lambda _i: self._maj_type())
+        self.adresse.textChanged.connect(self._maj_port)
+        self._maj_type()
+
+    def _basculer_mdp(self):
+        visible = self.mdp.echoMode() == QLineEdit.Password
+        self.mdp.setEchoMode(QLineEdit.Normal if visible else QLineEdit.Password)
+        self.oeil.setIcon(icone("oeil_barre" if visible else "oeil", "#555555"))
+        self.oeil.setToolTip(_("Masquer le mot de passe") if visible else _("Afficher le mot de passe"))
+
+    def _maj_type(self):
+        t = self.type.currentData()
+        ancien = self.c.get("type")
+        if self.nom.text().strip() in ("", distant.TYPES.get(ancien, "")):
+            self.nom.setText(distant.TYPES[t])
+        self.c["type"] = t
+        self.aide.setText(AIDE[t])
+        self.adresse.setPlaceholderText(EXEMPLES.get(t, ""))
+        serveur = t in ("synology", "webdav", "ftp")
+        for w, vis in ((self.adresse.parentWidget(), t not in ("gdrive", "onedrive")), (self.port, serveur),
+                       (self.utilisateur, serveur), (self.mdp, serveur), (self.chiffrement, t == "ftp"),
+                       (self.dossier, serveur), (self.libre, serveur), (self.note, serveur)):
+            self.f.setRowVisible(w, vis)
+        self.b_choisir.setVisible(t == "reseau")
+        self.port.setToolTip(PORTS.get(t, ""))
+        self.b_test.setEnabled(t not in ("gdrive", "onedrive"))
+        self._maj_port()
+        self.adjustSize()
+
+    def _maj_port(self, *_a):
+        """Un port ecrit dans l'adresse (…:5006) l'emporte : le champ Port le montre et se grise."""
+        a = self.adresse.text().strip()
+        try:
+            u = urllib.parse.urlsplit(a if "://" in a else "x://" + a)
+            p = u.port
+        except ValueError:
+            p = None
+        if p and self.c.get("type") != "reseau":
+            self.port.setValue(p)
+            self.port.setEnabled(False)
+            self.port.setToolTip(_("Port indiqué dans l'adresse."))
+        else:
+            self.port.setEnabled(True)
+            self.port.setToolTip(PORTS.get(self.c.get("type"), ""))
 
     def compte(self):
-        self.c.update(nom=self.nom.text().strip() or _(distant.TYPES[self.c["type"]]),
-                      adresse=self.adresse.text().strip(), port=self.port.value(),
+        t = self.type.currentData()
+        self.c.update(type=t, nom=self.nom.text().strip() or distant.TYPES[t],
+                      adresse=self.adresse.text().strip(), port=self.port.value() if self.port.isEnabled() else 0,
                       utilisateur=self.utilisateur.text().strip(), dossier=self.dossier.text().strip() or "/",
-                      chiffrement=self.chiffrement.currentData() if self.c["type"] == "ftp" else "",
+                      chiffrement=self.chiffrement.currentData() if t == "ftp" else "",
                       certificat_libre=self.libre.isChecked())
         return self.c
 
@@ -130,7 +224,7 @@ class DialogueCompte(QDialog):
                     msg = e.tester()
                 finally:
                     QApplication.restoreOverrideCursor()
-                QMessageBox.information(self, _("Tester la connexion"), msg)
+                erreur(self, _("Tester la connexion"), msg, e, info=True)
                 return
             except distant.BesoinCode:
                 code, ok = QInputDialog.getText(self, c["nom"], _("Code de vérification (application d'authentification) :"))
@@ -139,7 +233,7 @@ class DialogueCompte(QDialog):
                 coffre.enregistrer(c["id"], self.mdp.text())
                 e = distant.emplacement(c, self.mdp.text(), code=code.strip())
             except distant.ErreurDistant as ex:
-                QMessageBox.warning(self, _("Tester la connexion"), str(ex))
+                erreur(self, _("Tester la connexion"), ex, e)
                 return
 
     def accept(self):
@@ -299,7 +393,7 @@ class DialogueParcourir(QDialog):
             finally:
                 QApplication.restoreOverrideCursor()
         except distant.ErreurDistant as ex:
-            QMessageBox.warning(self, self.windowTitle(), str(ex))
+            erreur(self, self.windowTitle(), ex, self.e)
             return
         self.dossier = dossier
         self.lbl_chemin.setText(dossier)

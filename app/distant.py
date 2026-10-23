@@ -2,7 +2,7 @@
 
 Types de comptes (Preferences > Comptes et emplacements) :
   reseau    dossier reseau ou disque (\\\\NAS\\partage, Z:\\, /mnt/nas) : simple chemin
-  synology  NAS Synology par son adresse web (File Station) : http(s)://nas:5000, nasdelaye.homedns.org...
+  synology  NAS Synology par son adresse web (File Station) : http(s)://nas:5000, monnas.exemple.org...
   webdav    WebDAV en http ou https (paquet WebDAV Server du Synology, Nextcloud...)
   ftp       FTP en clair ou FTPS (chiffre)
   gdrive / onedrive   en direct par autorisation (identifiants d'application a venir)
@@ -11,7 +11,7 @@ Chaque emplacement offre : lister(dossier), telecharger(chemin, fichier_local), 
 tester(). Les chemins distants s'ecrivent toujours avec des / et commencent par /.
 Les mots de passe ne sont jamais dans les parametres : ils vont dans le coffre du systeme (coffre.py).
 """
-import base64, ftplib, io, json, os, posixpath, ssl, time, urllib.error, urllib.parse, urllib.request, uuid
+import base64, contextlib, ftplib, io, json, os, posixpath, re, ssl, time, urllib.error, urllib.parse, urllib.request, uuid
 import xml.etree.ElementTree as ET
 from .langue import _
 from . import coffre
@@ -66,11 +66,25 @@ def libelle(c):
 
 
 # ---------------------------------------------------------------------------------- base
+def masquer(texte):
+    """Retire mots de passe, codes et jetons d'une ligne du journal."""
+    t = re.sub(r"((?:passwd|password|otp_code|_sid|device_id|access_token|refresh_token)=)[^&\s]+", r"\1****", str(texte))
+    return re.sub(r"(Authorization: \w+ )\S+", r"\1****", t)
+
+
 class Emplacement:
     def __init__(self, compte, mot_de_passe=None, code=None):
         self.c = compte
         self.mdp = mot_de_passe if mot_de_passe is not None else coffre.lire(compte["id"])
         self.code = code
+        self.journal = []            # echanges avec le serveur (mots de passe masques), montres si erreur
+
+    def log(self, texte):
+        self.journal.append(time.strftime("%H:%M:%S ") + masquer(texte))
+        self.journal = self.journal[-200:]
+
+    def texte_journal(self):
+        return "\n".join(self.journal) or _("Aucun échange enregistré.")
 
     def racine(self):
         return self.c.get("dossier") or "/"
@@ -138,14 +152,35 @@ class _Http(Emplacement):
         return None
 
     def _ouvrir(self, req):
+        self.log(f"→ {req.get_method()} {req.full_url}")
+        for k, v in req.header_items():
+            if k.lower() in ("authorization", "depth", "content-type"):
+                self.log(f"   {k}: {v}")
+        if req.data:
+            self.log(f"   ({len(req.data)} octets envoyés)")
         try:
-            return urllib.request.urlopen(req, timeout=DELAI, context=self._contexte())
+            r = urllib.request.urlopen(req, timeout=DELAI, context=self._contexte())
+            self.log(f"← {r.status} {r.reason}  {r.headers.get('Content-Type', '')}  {r.headers.get('Server', '')}")
+            return r
         except urllib.error.HTTPError as e:
+            self.dernier_code = e.code
+            try:
+                corps = e.read(600).decode("utf-8", "replace")
+            except Exception:
+                corps = ""
+            self.log(f"← {e.code} {e.reason}  {e.headers.get('Server', '') if e.headers else ''}")
+            if corps:
+                self.log("   " + corps.replace("\n", " ")[:400])
             if e.code in (401, 403):
                 raise ErreurDistant(_("Identifiant ou mot de passe refusé ({code}).", code=e.code))
             raise ErreurDistant(_("Le serveur a répondu {code} : {raison}", code=e.code, raison=e.reason))
         except (urllib.error.URLError, OSError) as e:
-            raise ErreurDistant(_("Serveur injoignable : {raison}", raison=getattr(e, "reason", e)))
+            raison = getattr(e, "reason", e)
+            self.log(f"✕ {type(raison).__name__ if not isinstance(raison, str) else 'Erreur'} : {raison}")
+            if isinstance(raison, ssl.SSLError) or "CERTIFICATE" in str(raison).upper():
+                raise ErreurDistant(_("Certificat du serveur refusé : {raison}. Cochez « Accepter un certificat non vérifié » "
+                                      "si votre NAS utilise un certificat auto-signé.", raison=raison))
+            raise ErreurDistant(_("Serveur injoignable : {raison}", raison=raison))
 
 
 # ---------------------------------------------------------------------------------- WebDAV
@@ -168,7 +203,13 @@ class WebDAV(_Http):
         corps = (b'<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/>'
                  b'<d:getcontentlength/><d:getlastmodified/></d:prop></d:propfind>')
         with self._req("PROPFIND", dossier, corps, {"Depth": "1", "Content-Type": "application/xml"}) as f:
-            arbre = ET.fromstring(f.read())
+            brut = f.read()
+        self.log("   " + brut[:300].decode("utf-8", "replace").replace("\n", " "))
+        try:
+            arbre = ET.fromstring(brut)
+        except ET.ParseError:
+            raise ErreurDistant(_("Ce n'est pas un serveur WebDAV (réponse inattendue). Vérifiez l'adresse et le port "
+                                  "(Synology : 5005 en http, 5006 en https)."))
         ns = {"d": "DAV:"}
         base_chemin = urllib.parse.urlsplit(self._base()).path
         out = []
@@ -194,9 +235,25 @@ class WebDAV(_Http):
 
 # ---------------------------------------------------------------------------------- FTP / FTPS
 class FTP(Emplacement):
+    """Chaque operation est faite dans _capture : le dialogue FTP complet va dans le journal."""
+    @contextlib.contextmanager
+    def _capture(self):
+        tampon = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(tampon):
+                yield
+        finally:
+            for l in tampon.getvalue().splitlines():
+                self.log(l.replace("*cmd*", "→").replace("*resp*", "←").replace("*put*", "→").replace("*get*", "←"))
+
     def _connexion(self):
         hote = (self.c.get("adresse") or "").replace("ftp://", "").replace("ftps://", "").strip("/")
-        port = int(self.c.get("port") or 21)
+        if ":" in hote and not self.c.get("port"):
+            hote, p = hote.rsplit(":", 1)
+            port = int(p) if p.isdigit() else 21
+        else:
+            port = int(self.c.get("port") or 21)
+        self.log(f"→ connexion {'FTPS' if self.c.get('chiffrement') == 'tls' else 'FTP'} {hote}:{port}")
         try:
             if self.c.get("chiffrement") == "tls":
                 ctx = ssl.create_default_context()
@@ -204,21 +261,25 @@ class FTP(Emplacement):
                     ctx.check_hostname = False
                     ctx.verify_mode = ssl.CERT_NONE
                 f = ftplib.FTP_TLS(context=ctx, timeout=DELAI)
+                f.set_debuglevel(1)
                 f.connect(hote, port)
                 f.login(self.c.get("utilisateur") or "anonymous", self.mdp or "")
                 f.prot_p()
             else:
                 f = ftplib.FTP(timeout=DELAI)
+                f.set_debuglevel(1)
                 f.connect(hote, port)
                 f.login(self.c.get("utilisateur") or "anonymous", self.mdp or "")
             f.encoding = "utf-8"
             return f
         except ftplib.error_perm as e:
+            self.log(f"← {e}")
             raise ErreurDistant(_("Identifiant ou mot de passe refusé ({code}).", code=str(e)[:3]))
         except (OSError, ftplib.Error) as e:
+            self.log(f"✕ {type(e).__name__} : {e}")
             raise ErreurDistant(_("Serveur injoignable : {raison}", raison=e))
 
-    def lister(self, dossier):
+    def _lister(self, dossier):
         f = self._connexion()
         try:
             out = []
@@ -238,7 +299,7 @@ class FTP(Emplacement):
         finally:
             f.close()
 
-    def telecharger(self, chemin, local):
+    def _telecharger(self, chemin, local):
         f = self._connexion()
         try:
             with open(local, "wb") as g:
@@ -246,13 +307,25 @@ class FTP(Emplacement):
         finally:
             f.close()
 
-    def envoyer(self, local, chemin):
+    def _envoyer(self, local, chemin):
         f = self._connexion()
         try:
             with open(local, "rb") as g:
                 f.storbinary(f"STOR {chemin}", g)
         finally:
             f.close()
+
+    def lister(self, dossier):
+        with self._capture():
+            return self._lister(dossier)
+
+    def telecharger(self, chemin, local):
+        with self._capture():
+            return self._telecharger(chemin, local)
+
+    def envoyer(self, local, chemin):
+        with self._capture():
+            return self._envoyer(local, chemin)
 
 
 # ---------------------------------------------------------------------------------- Synology File Station
@@ -268,8 +341,16 @@ class Synology(_Http):
         r = urllib.request.Request(url, data=donnees)
         for k, v in (entetes or {}).items():
             r.add_header(k, v)
-        f = self._ouvrir(r)
+        self.dernier_code = None
+        try:
+            f = self._ouvrir(r)
+        except ErreurDistant:
+            # le DSM repond toujours en JSON : une erreur HTTP veut dire que ce n'est pas le bureau DSM
+            if self.dernier_code in (401, 403, 404, 405):
+                self._pas_dsm()
+            raise
         contenu = f.read()
+        self.log("   " + contenu[:300].decode("utf-8", "replace").replace("\n", " "))
         if brut and not contenu.lstrip().startswith(b'{"'):
             return contenu
         try:
@@ -277,7 +358,7 @@ class Synology(_Http):
         except ValueError:
             if brut:
                 return contenu
-            raise ErreurDistant(_("Ce n'est pas un NAS Synology (réponse inattendue)."))
+            self._pas_dsm()
         if not rep.get("success"):
             code = (rep.get("error") or {}).get("code")
             if code in (102, 103, 104):
@@ -290,6 +371,15 @@ class Synology(_Http):
                 raise ErreurDistant(_("Fichier ou dossier introuvable sur le NAS ({code}).", code=code))
             raise ErreurDistant(_("Le NAS a refusé la demande (erreur {code}).", code=code))
         return rep.get("data") or {}
+
+    def _pas_dsm(self):
+        port = urllib.parse.urlsplit(self._base()).port
+        if port in (5005, 5006) or self.dernier_code == 401:
+            raise ErreurDistant(_("Cette adresse ne répond pas comme le bureau DSM du Synology : c'est sans doute son "
+                                  "WebDAV (ports 5005 / 5006). Choisissez le type « WebDAV » pour cette adresse, ou "
+                                  "indiquez le port du bureau DSM (5000 en http, 5001 en https)."))
+        raise ErreurDistant(_("Ce n'est pas un NAS Synology (réponse inattendue). L'adresse doit être celle du bureau "
+                              "DSM (en général port 5000 en http, 5001 en https)."))
 
     def connecter(self):
         if self.sid:
