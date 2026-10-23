@@ -30,6 +30,15 @@ def _date(v):
     return (v.get("maj") or v.get("date") or "") if isinstance(v, dict) else ""
 
 
+def _empreinte(chemin):
+    import hashlib
+    h = hashlib.sha1()
+    with open(chemin, "rb") as f:
+        for bloc in iter(lambda: f.read(1 << 20), b""):
+            h.update(bloc)
+    return h.hexdigest()
+
+
 def _fusion(local, dist):
     """Fusion de deux JSON : union des clefs ; conflit -> la valeur la plus recente (champ maj/date),
     dictionnaires sans date fusionnes recursivement, listes « supprimes » et « elements » reunies."""
@@ -92,7 +101,8 @@ def synchroniser(params, compte=None, emplacement=None):
                 continue
             avant = etat.get(rel, {})
             l_mtime = os.path.getmtime(lp) if os.path.exists(lp) else None
-            local_modifie = l_mtime is not None and l_mtime != avant.get("local")
+            # l'heure seule ne suffit pas (horloge des fichiers grossiere sous Windows) : on compare aussi l'empreinte
+            local_modifie = l_mtime is not None and (l_mtime != avant.get("local") or _empreinte(lp) != avant.get("empreinte"))
             distant_modifie = d is not None and d[1] != avant.get("distant")
             if d is None and l_mtime is None:
                 continue
@@ -141,7 +151,7 @@ def synchroniser(params, compte=None, emplacement=None):
             if envoye:
                 d = e.modifies(posixpath.dirname(dp)).get(nom) or d
             if os.path.exists(lp):
-                nouvel_etat[rel] = {"local": os.path.getmtime(lp), "distant": (d or (0, None))[1]}
+                nouvel_etat[rel] = {"local": os.path.getmtime(lp), "empreinte": _empreinte(lp), "distant": (d or (0, None))[1]}
 
     parcourir("")
     with open(chemin_etat, "w", encoding="utf-8") as f:

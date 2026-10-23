@@ -148,7 +148,9 @@ ecrire(la, "sauvegarde/tampons/t1.pdf", {"tampon": 1})
 verifie(miroir.synchroniser(pa)[1] == 2, "poste A : session et tampon envoyés sur le Drive")
 pb, lb = poste("B")
 r = miroir.synchroniser(pb); verifie(r[0] >= 2 and lire(lb, "session.json")["A"]["fichiers"] == ["a.pdf"], "poste B : les reçoit")
+_h = os.path.getmtime(os.path.join(lb, "session.json"))
 ecrire(lb, "session.json", dict(lire(lb, "session.json"), B={"maj": "2026-10-23T11:00", "fichiers": ["b.pdf"]}))
+os.utime(os.path.join(lb, "session.json"), (_h, _h))   # horloge grossiere de Windows : meme heure qu'avant
 miroir.synchroniser(pb)
 os.environ["HOME"] = os.environ["APPDATA"] = os.path.join(base, "A")
 ecrire(la, "session.json", {"A": {"maj": "2026-10-23T12:00", "fichiers": ["a2.pdf"]}})   # A n'a pas encore vu B
