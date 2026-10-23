@@ -15,8 +15,12 @@ class P(dict):
     def enregistrer(self): pass
 
 def machine(home):
+    """Simule un poste : dossier utilisateur et dossiers par defaut (sous Windows, les vrais dossiers
+    connus de la machine de fabrication seraient renvoyes sinon)."""
     os.environ["HOME"] = os.environ["USERPROFILE"] = home
     m._cache_connus.clear()
+    m._cache_connus.update(maison=home, documents=os.path.join(home, "Documents"),
+                           telechargements=os.path.join(home, "Téléchargements"), bureau=os.path.join(home, "Bureau"))
 
 base = tempfile.mkdtemp()
 drive = os.path.join(base, "Drive"); os.makedirs(drive)
