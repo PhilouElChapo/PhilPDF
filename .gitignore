@@ -5,3 +5,4 @@ dist/
 Output/
 tesseract/
 *.spec
+app/identifiants.py

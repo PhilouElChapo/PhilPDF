@@ -49,8 +49,23 @@ Verification manuelle : Aide > Rechercher les mises a jour.
 3. CE QUE FAIT LA VERSION 0.3
 -----------------------------
 
+  Nouveau en 0.4 :
+    - Google Drive en direct, sans l'application de bureau : Preferences >
+      Drive et dossiers > "Google Drive en direct : ajouter et autoriser" ;
+      le navigateur s'ouvre, on autorise, c'est tout. Session, tampons,
+      signatures et preferences y sont synchronises. Ouvrir / enregistrer
+      des PDF sur Google Drive (PhilPDF ne voit que ses propres fichiers) ;
+    - preferences : copie automatique sur le Drive (sans mot de passe) et,
+      sur une nouvelle installation, proposition de les reprendre ;
+      export / import a la main (Preferences > General), avec les mots de
+      passe si on veut, chiffres en AES-256 par une phrase secrete ;
+      reglages communs et reglages propres a chaque poste separes ;
+    - changement de langue : PhilPDF propose de redemarrer aussitot ;
+    - comptes : type modifiable, oeil pour voir le mot de passe, detail
+      complet de l'echange avec le serveur en cas d'erreur (bouton Copier).
+
   Nouveau en 0.3.1 : emplacements distants
-    - Edition > Preferences > Comptes et emplacements : dossier reseau,
+    - Edition > Preferences > Comptes : dossier reseau,
       NAS Synology par son adresse web (File Station, verification en deux
       etapes geree, code demande une seule fois), WebDAV (http ou https),
       FTP chiffre ou en clair ; bouton "Tester la connexion" ;
@@ -126,7 +141,7 @@ Verification manuelle : Aide > Rechercher les mises a jour.
             le nom et par le contenu (fichier renomme), 30 000 fichiers ou
             8 secondes au plus, sans AppData ni dossiers systeme.
             Reglages : Edition > Preferences > Drive et dossiers, et
-            Synchronisation (avance).
+            Avance.
   Plus tard : signature numerique (certificat), formulaires, comparer, IA
 
 

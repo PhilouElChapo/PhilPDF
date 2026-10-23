@@ -457,7 +457,142 @@ class EnAttente(Emplacement):
     lister = telecharger = envoyer = tester = _refus
 
 
-CLASSES = {"reseau": Reseau, "synology": Synology, "webdav": WebDAV, "ftp": FTP, "gdrive": EnAttente, "onedrive": EnAttente}
+# ---------------------------------------------------------------------------------- Google Drive (API)
+DRIVE_API = "https://www.googleapis.com/drive/v3"
+DRIVE_ENVOI = "https://www.googleapis.com/upload/drive/v3"
+DOSSIER_MIME = "application/vnd.google-apps.folder"
+
+
+class GoogleDrive(_Http):
+    """Google Drive en direct (autorisation drive.file : PhilPDF ne voit que les fichiers qu'il a crees ou
+    ouverts). Les chemins /Dossier/Fichier.pdf sont resolus par nom a partir de la racine du Drive."""
+
+    def __init__(self, compte, mot_de_passe=None, code=None):
+        super().__init__(compte, mot_de_passe, code)
+        self.jeton, self.expire, self._ids = None, 0, {"/": "root"}
+
+    # --- jetons
+    def _acces(self):
+        from . import oauth
+        if self.jeton and time.time() < self.expire:
+            return self.jeton
+        rt = coffre.lire(self.c["id"] + ".jeton")
+        if not rt:
+            raise ErreurDistant(_("Google Drive n'est pas encore autorisé : cliquez sur « Autoriser l'accès » dans le compte."))
+        try:
+            j = oauth.rafraichir("gdrive", rt, self.log)
+        except oauth.ErreurAutorisation as e:
+            raise ErreurDistant(_("L'autorisation Google Drive a expiré ou a été retirée ({raison}) : autorisez à nouveau.",
+                                  raison=e))
+        self.jeton, self.expire = j["access_token"], j["expire"]
+        return self.jeton
+
+    def _appel(self, methode, url, donnees=None, entetes=None, brut=False):
+        for essai in range(2):
+            r = urllib.request.Request(url, data=donnees, method=methode)
+            r.add_header("Authorization", "Bearer " + self._acces())
+            for k, v in (entetes or {}).items():
+                r.add_header(k, v)
+            self.dernier_code = None
+            try:
+                with self._ouvrir(r) as f:
+                    contenu = f.read()
+                break
+            except ErreurDistant:
+                if self.dernier_code == 401 and essai == 0:
+                    self.jeton = None          # jeton expire : on en redemande un
+                    continue
+                raise
+        if brut:
+            return contenu
+        return json.loads(contenu or b"{}")
+
+    def _q(self, q):
+        return f"{DRIVE_API}/files?" + urllib.parse.urlencode({
+            "q": q, "fields": "files(id,name,mimeType,size,modifiedTime)", "pageSize": "1000", "spaces": "drive"})
+
+    @staticmethod
+    def _echapper(nom):
+        return nom.replace("\\", "\\\\").replace("'", "\\'")
+
+    def _id(self, chemin, creer=False):
+        """Identifiant du dossier ou fichier ; creer=True cree les dossiers manquants."""
+        chemin = "/" + "/".join(p for p in chemin.split("/") if p)
+        if chemin in self._ids:
+            return self._ids[chemin]
+        parent_chemin, nom = posixpath.split(chemin)
+        parent = self._id(parent_chemin, creer)
+        if parent is None:
+            return None
+        fichiers = self._appel("GET", self._q(f"name = '{self._echapper(nom)}' and '{parent}' in parents and trashed = false"))
+        trouves = fichiers.get("files", [])
+        if trouves:
+            self._ids[chemin] = trouves[0]["id"]
+            return trouves[0]["id"]
+        if not creer:
+            return None
+        d = self._appel("POST", f"{DRIVE_API}/files?fields=id",
+                        json.dumps({"name": nom, "mimeType": DOSSIER_MIME, "parents": [parent]}).encode(),
+                        {"Content-Type": "application/json"})
+        self._ids[chemin] = d["id"]
+        return d["id"]
+
+    def lister(self, dossier):
+        i = self._id(dossier)
+        if i is None:
+            raise ErreurDistant(_("Dossier inaccessible : {dossier}", dossier=dossier))
+        out = []
+        for f in self._appel("GET", self._q(f"'{i}' in parents and trashed = false")).get("files", []):
+            est_dossier = f.get("mimeType") == DOSSIER_MIME
+            ch = _joindre(dossier, f["name"])
+            self._ids["/" + "/".join(p for p in ch.split("/") if p)] = f["id"]
+            out.append(Element(f["name"], ch, est_dossier, int(f.get("size") or 0)))
+        return sorted(out, key=lambda e: (not e.dossier, e.nom.lower()))
+
+    def telecharger(self, chemin, local):
+        i = self._id(chemin)
+        if i is None:
+            raise ErreurDistant(_("Fichier ou dossier introuvable sur le Drive : {chemin}", chemin=chemin))
+        with open(local, "wb") as g:
+            g.write(self._appel("GET", f"{DRIVE_API}/files/{i}?alt=media", brut=True))
+
+    def envoyer(self, local, chemin):
+        dossier, nom = posixpath.split(chemin)
+        parent = self._id(dossier, creer=True)
+        with open(local, "rb") as f:
+            contenu = f.read()
+        type_mime = "application/pdf" if nom.lower().endswith(".pdf") else "application/octet-stream"
+        i = self._id(chemin)
+        if i:
+            self._appel("PATCH", f"{DRIVE_ENVOI}/files/{i}?uploadType=media", contenu, {"Content-Type": type_mime})
+            return
+        bord = "PhilPDF" + uuid.uuid4().hex
+        meta = json.dumps({"name": nom, "parents": [parent]}).encode()
+        corps = (f"--{bord}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n".encode() + meta +
+                 f"\r\n--{bord}\r\nContent-Type: {type_mime}\r\n\r\n".encode() + contenu + f"\r\n--{bord}--".encode())
+        d = self._appel("POST", f"{DRIVE_ENVOI}/files?uploadType=multipart&fields=id", corps,
+                        {"Content-Type": f"multipart/related; boundary={bord}"})
+        self._ids["/" + "/".join(p for p in chemin.split("/") if p)] = d["id"]
+
+    def modifies(self, dossier):
+        """{nom: (taille, date ISO)} des fichiers d'un dossier (pour le miroir)."""
+        i = self._id(dossier)
+        if i is None:
+            return {}
+        return {f["name"]: (int(f.get("size") or 0), f.get("modifiedTime", ""), f.get("mimeType") == DOSSIER_MIME)
+                for f in self._appel("GET", self._q(f"'{i}' in parents and trashed = false")).get("files", [])}
+
+    def qui(self):
+        u = self._appel("GET", f"{DRIVE_API}/about?fields=user(emailAddress,displayName)").get("user", {})
+        return u.get("emailAddress") or u.get("displayName") or "?"
+
+    def tester(self):
+        qui = self.qui()
+        n = len(self.lister("/"))
+        return _("Connexion réussie au Google Drive de {qui} : {n} élément(s) créé(s) ou ouvert(s) par PhilPDF.", qui=qui, n=n)
+
+
+CLASSES = {"reseau": Reseau, "synology": Synology, "webdav": WebDAV, "ftp": FTP, "gdrive": GoogleDrive, "onedrive": EnAttente}
 
 
 def emplacement(compte, mot_de_passe=None, code=None):

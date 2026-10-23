@@ -1,0 +1,163 @@
+"""Autorisation OAuth 2 des Drives (Google Drive, plus tard OneDrive, Dropbox, Box).
+
+L'utilisateur clique « Autoriser » : le navigateur s'ouvre sur la page du fournisseur, il accepte,
+le navigateur revient sur une petite page locale de PhilPDF (http://127.0.0.1:<port>) qui recoit le code.
+PhilPDF l'echange contre un jeton de renouvellement, range dans le coffre du systeme.
+Methode « application de bureau » avec PKCE, comme le recommandent Google et Microsoft.
+
+Les identifiants d'application (client_id, secret) ne sont pas dans le code source public :
+ - la fabrication sur GitHub les ecrit dans app/identifiants.py (secrets GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET) ;
+ - pour une fabrication personnelle : variables PHILPDF_GOOGLE_ID / PHILPDF_GOOGLE_SECRET, ou fichier
+   identifiants.json dans le dossier de donnees ({"gdrive": {"id": "...", "secret": "..."}}).
+"""
+import base64, hashlib, html, http.server, json, os, secrets, socket, threading, time, urllib.parse, urllib.request, webbrowser
+from .langue import _
+
+FOURNISSEURS = {
+    "gdrive": {
+        "nom": "Google Drive",
+        "auth": "https://accounts.google.com/o/oauth2/v2/auth",
+        "jeton": "https://oauth2.googleapis.com/token",
+        "portee": "https://www.googleapis.com/auth/drive.file",
+        "extra": {"access_type": "offline", "prompt": "consent"},
+        "env": ("PHILPDF_GOOGLE_ID", "PHILPDF_GOOGLE_SECRET"),
+    },
+}
+
+
+class ErreurAutorisation(Exception):
+    pass
+
+
+def identifiants(fournisseur):
+    """(client_id, secret) ou (None, None) si PhilPDF n'a pas d'identifiant pour ce fournisseur."""
+    f = FOURNISSEURS[fournisseur]
+    cid, sec = os.environ.get(f["env"][0]), os.environ.get(f["env"][1])
+    if cid:
+        return cid, sec
+    try:
+        from . import identifiants as I
+        d = getattr(I, "IDENTIFIANTS", {}).get(fournisseur)
+        if d and d.get("id"):
+            return d["id"], d.get("secret")
+    except ImportError:
+        pass
+    try:
+        from .config import dossier_donnees
+        with open(os.path.join(dossier_donnees(), "identifiants.json"), encoding="utf-8") as fic:
+            d = json.load(fic).get(fournisseur) or {}
+        if d.get("id"):
+            return d["id"], d.get("secret")
+    except (OSError, ValueError):
+        pass
+    return None, None
+
+
+def disponible(fournisseur):
+    return identifiants(fournisseur)[0] is not None
+
+
+PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>PhilPDF</title>
+<style>body{{font:16px "Segoe UI",system-ui,sans-serif;background:#f6f6f4;color:#1f1f1f;display:flex;align-items:center;
+justify-content:center;height:90vh;margin:0}}div{{background:#fff;border:1px solid #e4e4e0;border-radius:12px;padding:28px 36px;
+max-width:460px}}h1{{font-size:22px;margin:0 0 8px}}b{{color:#c9252d}}</style></head><body><div><h1>Phil<b>PDF</b></h1>
+<p>{texte}</p></div></body></html>"""
+
+
+def _poster(url, champs, journal=None):
+    donnees = urllib.parse.urlencode(champs).encode()
+    req = urllib.request.Request(url, data=donnees, headers={"Content-Type": "application/x-www-form-urlencoded"})
+    if journal:
+        journal(f"→ POST {url}  (grant_type={champs.get('grant_type')})")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            rep = json.load(r)
+            if journal:
+                journal(f"← {r.status} jeton reçu")
+            return rep
+    except urllib.error.HTTPError as e:
+        try:
+            detail = json.load(e)
+        except Exception:
+            detail = {}
+        if journal:
+            journal(f"← {e.code} {detail.get('error', '')} {detail.get('error_description', '')}")
+        raise ErreurAutorisation(detail.get("error_description") or detail.get("error") or str(e))
+    except (urllib.error.URLError, OSError) as e:
+        if journal:
+            journal(f"✕ {e}")
+        raise ErreurAutorisation(_("Serveur injoignable : {raison}", raison=getattr(e, "reason", e)))
+
+
+def autoriser(fournisseur, ouvrir=webbrowser.open, delai=300, arret=lambda: False, journal=None):
+    """Ouvre le navigateur et attend l'accord. Renvoie le dict de jetons (refresh_token, access_token...)."""
+    f = FOURNISSEURS[fournisseur]
+    cid, sec = identifiants(fournisseur)
+    if not cid:
+        raise ErreurAutorisation(_("PhilPDF n'a pas d'identifiant d'application pour {nom}.", nom=f["nom"]))
+    verif = base64.urlsafe_b64encode(secrets.token_bytes(48)).rstrip(b"=").decode()
+    defi = base64.urlsafe_b64encode(hashlib.sha256(verif.encode()).digest()).rstrip(b"=").decode()
+    etat = secrets.token_urlsafe(16)
+    recu = {}
+
+    class Retour(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            q = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(self.path).query))
+            if "code" not in q and "error" not in q:
+                self.send_response(404)
+                self.end_headers()
+                return
+            recu.update(q)
+            ok = "code" in q and q.get("state") == etat
+            texte = (_("C'est fait : PhilPDF peut maintenant utiliser votre {nom}. Vous pouvez fermer cette page.", nom=f["nom"])
+                     if ok else _("Autorisation refusée ou annulée. Vous pouvez fermer cette page."))
+            corps = PAGE.format(texte=html.escape(texte)).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(corps)))
+            self.end_headers()
+            self.wfile.write(corps)
+
+    serveur = http.server.HTTPServer(("127.0.0.1", 0), Retour)
+    serveur.timeout = 0.5
+    redirection = f"http://127.0.0.1:{serveur.server_port}"
+    params = {"client_id": cid, "redirect_uri": redirection, "response_type": "code", "scope": f["portee"],
+              "code_challenge": defi, "code_challenge_method": "S256", "state": etat, **f["extra"]}
+    url = f["auth"] + "?" + urllib.parse.urlencode(params)
+    if journal:
+        journal(f"→ navigateur : {f['auth']} (retour sur {redirection})")
+    ouvrir(url)
+    debut = time.monotonic()
+    try:
+        while not recu and time.monotonic() - debut < delai and not arret():
+            serveur.handle_request()
+    finally:
+        serveur.server_close()
+    if not recu:
+        raise ErreurAutorisation(_("Pas de réponse du navigateur (délai dépassé ou annulé)."))
+    if recu.get("state") != etat or "code" not in recu:
+        raise ErreurAutorisation(_("Autorisation refusée : {raison}", raison=recu.get("error", "?")))
+    champs = {"client_id": cid, "code": recu["code"], "code_verifier": verif, "grant_type": "authorization_code",
+              "redirect_uri": redirection}
+    if sec:
+        champs["client_secret"] = sec
+    jetons = _poster(f["jeton"], champs, journal)
+    if not jetons.get("refresh_token"):
+        raise ErreurAutorisation(_("Le fournisseur n'a pas donné de jeton durable."))
+    jetons["expire"] = time.time() + int(jetons.get("expires_in", 3000)) - 60
+    return jetons
+
+
+def rafraichir(fournisseur, refresh_token, journal=None):
+    """Nouveau jeton d'acces a partir du jeton durable."""
+    f = FOURNISSEURS[fournisseur]
+    cid, sec = identifiants(fournisseur)
+    champs = {"client_id": cid, "refresh_token": refresh_token, "grant_type": "refresh_token"}
+    if sec:
+        champs["client_secret"] = sec
+    j = _poster(f["jeton"], champs, journal)
+    j["expire"] = time.time() + int(j.get("expires_in", 3000)) - 60
+    return j

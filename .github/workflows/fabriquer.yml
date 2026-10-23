@@ -45,6 +45,12 @@ jobs:
       - name: Test des emplacements distants (FTP, WebDAV, Synology simule)
         run: python tests/test_distant.py
 
+      - name: Test de Google Drive (Google simule)
+        run: python tests/test_gdrive.py
+
+      - name: Test des preferences (export, import)
+        run: python tests/test_reglages.py
+
       - name: Tesseract (embarque dans le paquet)
         shell: pwsh
         run: |
@@ -62,13 +68,25 @@ jobs:
           (Get-Content app/config.py) -replace 'VERSION = ".+"', "VERSION = `"$v`"" | Set-Content app/config.py
           "VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      - name: Identifiants des Drives (secrets du depot, jamais dans le code public)
+        shell: python
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: |
+          import os
+          g = {"id": os.environ.get("GOOGLE_CLIENT_ID", ""), "secret": os.environ.get("GOOGLE_CLIENT_SECRET", "")}
+          with open("app/identifiants.py", "w") as f:
+              f.write("IDENTIFIANTS = " + repr({"gdrive": g} if g["id"] else {}) + "\n")
+          print("Google Drive :", "identifiant present" if g["id"] else "secret GOOGLE_CLIENT_ID absent")
+
       - name: PhilPDF.exe
         run: >
           pyinstaller --noconfirm --clean --windowed --name PhilPDF --icon philpdf.ico
           --add-data "fonts;fonts" --add-data "langues;langues" --add-data "tessdata;tessdata" --add-data "tesseract;tesseract"
           --hidden-import moteur.modifier --hidden-import moteur.scan --hidden-import moteur.objets
           --hidden-import moteur.scanner --hidden-import win32com.client --collect-submodules pdf2docx
-          --collect-submodules keyring --hidden-import win32ctypes.core
+          --collect-submodules keyring --hidden-import win32ctypes.core --hidden-import app.identifiants
           --exclude-module scipy --exclude-module onnxruntime --exclude-module pymupdf_layout
           --exclude-module pymupdf4llm --exclude-module matplotlib --exclude-module pandas --exclude-module tkinter
           philpdf.py

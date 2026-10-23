@@ -66,6 +66,11 @@ def verifier(sortie):
     except Exception as ex:
         ok = False
         lignes.append(f"coffre: {ex}")
+    try:
+        from app import oauth
+        lignes.append(f"google drive: {'identifiant present' if oauth.disponible('gdrive') else 'identifiant absent'}")
+    except Exception as ex:
+        lignes.append(f"google drive: {ex}")
     from app.langue import disponibles
     langues = [c for c, _n in disponibles()]
     ok &= "en" in langues

@@ -17,8 +17,8 @@ AIDE = {
     "webdav": _("Adresse WebDAV complète, par exemple https://nas:5006 (paquet « WebDAV Server » du Synology) ou "
               "https://cloud.exemple.fr/remote.php/dav/files/nom/."),
     "ftp": _("Nom ou adresse du serveur (ftp.exemple.fr, 192.168.1.20). Chiffrement conseillé ; « aucun » = FTP en clair."),
-    "gdrive": _("Google Drive en direct, par autorisation dans le navigateur : arrive dès que l'identifiant d'application "
-              "de PhilPDF sera enregistré."),
+    "gdrive": _("Google Drive en direct, sans l'application de bureau : votre navigateur s'ouvre, vous autorisez PhilPDF, "
+                "c'est tout. PhilPDF ne voit que les fichiers qu'il crée ou que vous ouvrez avec lui."),
     "onedrive": _("OneDrive en direct, par autorisation dans le navigateur : arrive dès que l'identifiant d'application "
                 "de PhilPDF sera enregistré."),
 }
@@ -87,6 +87,62 @@ def ouvrir_emplacement(parent, compte):
     return None
 
 
+# ------------------------------------------------------------------------------------------- autorisation OAuth
+from PySide6.QtCore import QThread, Signal
+
+
+class TacheAutorisation(QThread):
+    fini = Signal(object, str)          # jetons, erreur
+
+    def __init__(self, fournisseur):
+        super().__init__()
+        self.f, self.stop, self.journal = fournisseur, False, []
+
+    def run(self):
+        from . import oauth
+        import webbrowser
+        try:
+            j = oauth.autoriser(self.f, ouvrir=webbrowser.open, arret=lambda: self.stop, journal=self.journal.append)
+            self.fini.emit(j, "")
+        except Exception as e:
+            self.fini.emit(None, str(e))
+
+
+def autoriser_compte(parent, compte):
+    """Ouvre le navigateur pour l'autorisation ; jeton durable range dans le coffre. True si accorde."""
+    from . import oauth
+    from PySide6.QtWidgets import QProgressDialog
+    from PySide6.QtCore import QEventLoop
+    if not oauth.disponible(compte["type"]):
+        QMessageBox.information(parent, distant.TYPES[compte["type"]],
+                                _("Cette version de PhilPDF n'a pas l'identifiant d'application pour {nom}.",
+                                  nom=distant.TYPES[compte["type"]]))
+        return False
+    t = TacheAutorisation(compte["type"])
+    dlg = QProgressDialog(_("Votre navigateur s'ouvre sur la page de {nom}.\nConnectez-vous si besoin, puis cliquez sur "
+                            "« Autoriser » (ou « Continuer »). Revenez ensuite ici.", nom=distant.TYPES[compte["type"]]),
+                          _("Annuler"), 0, 0, parent)
+    dlg.setWindowTitle(_("Autorisation"))
+    dlg.setMinimumWidth(480)
+    res = {}
+    boucle = QEventLoop()
+    t.fini.connect(lambda j, err: (res.update(j=j, err=err), boucle.quit()))
+    dlg.canceled.connect(lambda: setattr(t, "stop", True))
+    t.start()
+    dlg.show()
+    boucle.exec()
+    dlg.close()
+    if res.get("j"):
+        coffre.enregistrer(compte["id"] + ".jeton", res["j"]["refresh_token"])
+        return True
+    if not t.stop:
+        class _J:
+            def texte_journal(self_):
+                return "\n".join(distant.masquer(l) for l in t.journal) or _("Aucun échange enregistré.")
+        erreur(parent, _("Autorisation"), _("Autorisation non obtenue : {raison}", raison=res.get("err", "?")), _J())
+    return False
+
+
 # ------------------------------------------------------------------------------------------- compte
 PORTS = {"synology": _("par défaut : 5000 en http, 5001 en https"), "webdav": _("Synology : 5005 en http, 5006 en https"),
          "ftp": _("par défaut : 21")}
@@ -147,6 +203,17 @@ class DialogueCompte(QDialog):
         self.libre = QCheckBox(_("Accepter un certificat non vérifié (NAS avec certificat auto-signé)"))
         self.libre.setChecked(self.c.get("certificat_libre", False))
         f.addRow(self.libre)
+        self.b_autoriser = QPushButton()
+        self.b_autoriser.setIcon(icone("certificat", "#0f6cbd"))
+        self.b_autoriser.clicked.connect(self._autoriser)
+        self.etat_auth = QLabel()
+        self.etat_auth.setWordWrap(True)
+        wa = QWidget()
+        ha2 = QVBoxLayout(wa)
+        ha2.setContentsMargins(0, 0, 0, 0)
+        ha2.addWidget(self.b_autoriser)
+        ha2.addWidget(self.etat_auth)
+        f.addRow(_("Accès"), wa)
         self.note = QLabel(_("Le mot de passe est rangé dans le coffre de Windows (ou de Linux), jamais en clair."))
         self.note.setStyleSheet("color:#555;font-size:12px")
         self.note.setWordWrap(True)
@@ -163,6 +230,38 @@ class DialogueCompte(QDialog):
         self.type.currentIndexChanged.connect(lambda _i: self._maj_type())
         self.adresse.textChanged.connect(self._maj_port)
         self._maj_type()
+
+    def _maj_auth(self):
+        from . import oauth
+        t = self.c["type"]
+        nom = distant.TYPES[t]
+        if t not in oauth.FOURNISSEURS or not oauth.disponible(t):
+            self.b_autoriser.setEnabled(False)
+            self.b_autoriser.setText(_("Autoriser l'accès à {nom}", nom=nom))
+            self.etat_auth.setText(_("Pas encore disponible dans cette version (identifiant d'application de PhilPDF à venir)."))
+            return
+        self.b_autoriser.setEnabled(True)
+        if coffre.lire(self.c["id"] + ".jeton"):
+            self.b_autoriser.setText(_("Autoriser à nouveau (autre compte)"))
+            self.etat_auth.setText("✓ " + _("Accès autorisé. PhilPDF ne voit que les fichiers qu'il crée ou que vous ouvrez avec lui."))
+            self.etat_auth.setStyleSheet("color:#1d5a2b")
+        else:
+            self.b_autoriser.setText(_("Autoriser l'accès à {nom}...", nom=nom))
+            self.etat_auth.setText(_("Le navigateur s'ouvrira : connectez-vous et cliquez sur « Autoriser ». Aucun mot de passe "
+                                     "n'est donné à PhilPDF."))
+            self.etat_auth.setStyleSheet("color:#555")
+
+    def _autoriser(self):
+        c = self.compte()
+        if autoriser_compte(self, c):
+            self._maj_auth()
+            self.b_test.setEnabled(True)
+            try:
+                qui = distant.emplacement(c).qui()
+                if qui and self.nom.text().strip() in ("", distant.TYPES[c["type"]]):
+                    self.nom.setText(f"{distant.TYPES[c['type']]} ({qui})")
+            except distant.ErreurDistant:
+                pass
 
     def _basculer_mdp(self):
         visible = self.mdp.echoMode() == QLineEdit.Password
@@ -181,11 +280,15 @@ class DialogueCompte(QDialog):
         serveur = t in ("synology", "webdav", "ftp")
         for w, vis in ((self.adresse.parentWidget(), t not in ("gdrive", "onedrive")), (self.port, serveur),
                        (self.utilisateur, serveur), (self.mdp, serveur), (self.chiffrement, t == "ftp"),
-                       (self.dossier, serveur), (self.libre, serveur), (self.note, serveur)):
+                       (self.dossier, serveur), (self.libre, serveur), (self.note, serveur),
+                       (self.b_autoriser.parentWidget(), t in ("gdrive", "onedrive"))):
             self.f.setRowVisible(w, vis)
+        if t in ("gdrive", "onedrive"):
+            self._maj_auth()
         self.b_choisir.setVisible(t == "reseau")
         self.port.setToolTip(PORTS.get(t, ""))
-        self.b_test.setEnabled(t not in ("gdrive", "onedrive"))
+        from . import oauth
+        self.b_test.setEnabled(t not in ("gdrive", "onedrive") or bool(coffre.lire(self.c["id"] + ".jeton")))
         self._maj_port()
         self.adjustSize()
 

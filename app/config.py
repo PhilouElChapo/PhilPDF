@@ -7,7 +7,7 @@ et rien n'est ecrit ailleurs sur le PC ni dans le registre.
 import json, os, platform, sys
 
 APP = "PhilPDF"
-VERSION = "0.3.3"
+VERSION = "0.4.0"
 
 
 def dossier_programme():
@@ -51,6 +51,7 @@ DEFAUTS = {
     "nas": "",                      # dossier du NAS sur ce poste
     "synchro": True,                # synchroniser les fichiers ouverts entre postes
     "dernier_dossier": "",
+    "drive_compte": "",             # Drive « en direct » (compte Google...) au lieu du dossier de l'appli de bureau
 }
 
 
@@ -58,6 +59,7 @@ class Parametres(dict):
     def __init__(self):
         super().__init__(DEFAUTS)
         self.chemin = os.path.join(dossier_donnees(), "parametres.json")
+        self.nouveau = not os.path.exists(self.chemin)      # premiere installation sur ce poste
         try:
             with open(self.chemin, encoding="utf-8") as f:
                 self.update(json.load(f))
