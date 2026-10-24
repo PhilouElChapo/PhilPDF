@@ -91,6 +91,8 @@ jobs:
               if i:
                   ids[cle] = {"id": i, "secret": os.environ.get(env + "_CLIENT_SECRET", "") or None}
               print(cle, ":", "identifiant present" if i else "secret " + env + "_CLIENT_ID absent")
+              print(("::notice title=Identifiants::" if i else "::warning title=Identifiants::") + cle + " : " +
+                    ("identifiant present (" + str(len(i)) + " caracteres)" if i else "secret " + env + "_CLIENT_ID absent ou vide"))
           with open("app/identifiants.py", "w") as f:
               f.write("IDENTIFIANTS = " + repr(ids) + "\n")
 
@@ -110,6 +112,7 @@ jobs:
         run: |
           $p = Start-Process -FilePath dist\PhilPDF\PhilPDF.exe -ArgumentList "--verifier", "$PWD\verif.txt" -Wait -PassThru
           Get-Content verif.txt
+          Get-Content verif.txt | Where-Object { $_ -match "^(google drive|onedrive|dropbox|box|coffre|ocr|langues|RESULTAT)" } | ForEach-Object { Write-Output "::notice title=Auto-controle::$_" }
           if ($p.ExitCode -ne 0) { throw "auto-controle en echec" }
 
       - name: Version portable

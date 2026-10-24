@@ -89,6 +89,9 @@ dlg = BV.DialogueBienvenue(w, w.params)
 types_proposes = [dlg.emplacement.itemData(i) for i in range(dlg.emplacement.count())]
 verif(all("nouveau:" + t in types_proposes for t in ("synology", "webdav", "ftp", "reseau")),
       "assistant : NAS, WebDAV, FTP et dossier réseau proposés")
+verif(all(("nouveau:" + t in types_proposes or "absent:" + t in types_proposes) for t in ("gdrive", "onedrive", "dropbox", "box"))
+      and all(x == "" or str(x).startswith(("compte:", "nouveau:", "absent:", "dossier:")) for x in types_proposes),
+      "assistant : les quatre Drives proposés en direct, pas les dossiers locaux")
 dlg.emplacement.setCurrentIndex(dlg.emplacement.findData("compte:" + cr["id"]))
 dlg.machine.setText("Pharmacie")
 dlg.show(); capture(dlg, "00_bienvenue.png")

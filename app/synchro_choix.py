@@ -24,27 +24,43 @@ def libelle_compte(c):
 
 
 def combo_emplacements(parent, params):
-    """QComboBox des emplacements possibles ; la donnee est "" (aucun), "compte:<id>" ou un chemin de dossier."""
-    from .bibliotheque import detecter_clouds
+    """QComboBox des emplacements possibles ; la donnee est "" (aucun), "compte:<id>" ou un chemin de dossier.
+    Les Drives sont proposes « en direct » (PhilPDF s'y connecte lui-meme, autorisation tout de suite)."""
     from .dialogues_distant import ICONES
     from . import oauth
     cb = QComboBox()
     cb.addItem(_("(aucun : chaque poste reste indépendant)"), "")
     for c in params.get("comptes", []):
         cb.addItem(icone(ICONES.get(c["type"], "ouvrir"), "#0f6cbd"), libelle_compte(c), "compte:" + c["id"])
-    for nom, chemin in detecter_clouds():
-        cb.addItem(icone("ouvrir", "#c8a000"), _("{nom} — dossier de l'application de bureau ({chemin})", nom=nom, chemin=chemin), chemin)
-    if params.get("drive") and not params.get("drive_compte") and cb.findData(params["drive"]) < 0:
-        cb.addItem(params["drive"], params["drive"])
+    deja = {c["type"] for c in params.get("comptes", []) if c["type"] in distant.NUAGES}
     for t in distant.NUAGES:
+        if t in deja:
+            continue
         if oauth.disponible(t):
-            cb.addItem(icone("plus", "#0f6cbd"), _("{nom} en direct : ajouter et autoriser...", nom=distant.TYPES[t]), "nouveau:" + t)
+            cb.addItem(icone("synchro", "#0f6cbd"), _("{nom} en direct : se connecter et autoriser...", nom=distant.TYPES[t]), "nouveau:" + t)
+        else:
+            cb.addItem(icone("synchro", "#aaaaaa"), _("{nom} en direct (pas encore activé dans cette version)", nom=distant.TYPES[t]), "absent:" + t)
     for t in AJOUTABLES:
         cb.addItem(icone("plus", "#0f6cbd"), _("{nom} : ajouter un compte...", nom=_(distant.TYPES[t])), "nouveau:" + t)
     cb.addItem(icone("ouvrir", "#555"), _("Autre dossier de ce PC..."), "dossier:")
+    if params.get("drive") and not params.get("drive_compte"):     # ancien reglage : on le montre tel quel
+        cb.insertItem(1, icone("ouvrir", "#c8a000"), params["drive"], params["drive"])
     actuel = "compte:" + params["drive_compte"] if params.get("drive_compte") else params.get("drive", "")
     cb.setCurrentIndex(max(0, cb.findData(actuel)))
     cb._precedent = cb.currentIndex()
+
+    def remettre():
+        cb.blockSignals(True)
+        cb.setCurrentIndex(cb._precedent)
+        cb.blockSignals(False)
+
+    def ajouter_compte(c):
+        params["comptes"] = [x for x in params.get("comptes", []) if x["id"] != c["id"]] + [c]
+        params.enregistrer()
+        cb.blockSignals(True)
+        cb.insertItem(1, icone(ICONES.get(c["type"], "ouvrir"), "#0f6cbd"), libelle_compte(c), "compte:" + c["id"])
+        cb.setCurrentIndex(1)
+        cb.blockSignals(False)
 
     def choisi(i):
         donnee = cb.itemData(i) or ""
@@ -56,7 +72,24 @@ def combo_emplacements(parent, params):
                 cb.setCurrentIndex(1)
                 cb.blockSignals(False)
             else:
-                cb.setCurrentIndex(cb._precedent)
+                remettre()
+        elif donnee.startswith("absent:"):
+            QMessageBox.information(parent, distant.TYPES[donnee[7:]], _(
+                "{nom} en direct n'est pas encore activé dans cette version de PhilPDF : son identifiant d'application "
+                "n'a pas été intégré à la fabrication. Il le sera dans une prochaine mise à jour.", nom=distant.TYPES[donnee[7:]]))
+            remettre()
+        elif donnee.startswith("nouveau:") and donnee[8:] in distant.NUAGES:
+            from .dialogues_distant import autoriser_compte
+            c = distant.nouveau_compte(donnee[8:])
+            if autoriser_compte(parent, c):
+                try:
+                    qui = distant.emplacement(c).qui()
+                    c["nom"] = f"{distant.TYPES[c['type']]} ({qui})"
+                except Exception:
+                    pass
+                ajouter_compte(c)
+            else:
+                remettre()
         elif donnee.startswith("nouveau:"):
             from .dialogues_distant import DialogueCompte
             dc = DialogueCompte(parent, distant.nouveau_compte(donnee[8:]))
@@ -67,16 +100,9 @@ def combo_emplacements(parent, params):
                     QMessageBox.information(parent, _("Synchronisation"), _(
                         "Le dossier PhilPDF sera créé dans « /home » (votre dossier personnel sur le NAS). Pour un autre "
                         "dossier partagé, modifiez le « Dossier de départ » du compte (Préférences › Comptes)."))
-                params["comptes"] = [x for x in params.get("comptes", []) if x["id"] != c["id"]] + [c]
-                params.enregistrer()
-                cb.blockSignals(True)
-                cb.insertItem(1, icone(ICONES.get(c["type"], "ouvrir"), "#0f6cbd"), libelle_compte(c), "compte:" + c["id"])
-                cb.setCurrentIndex(1)
-                cb.blockSignals(False)
+                ajouter_compte(c)
             else:
-                cb.blockSignals(True)
-                cb.setCurrentIndex(cb._precedent)
-                cb.blockSignals(False)
+                remettre()
         cb._precedent = cb.currentIndex()
     cb.currentIndexChanged.connect(choisi)
     return cb
@@ -89,6 +115,6 @@ def valeurs(cb, params):
     if donnee.startswith("compte:"):
         c = next((x for x in params.get("comptes", []) if x["id"] == donnee[7:]), None)
         return (miroir.dossier_miroir(c), c["id"]) if c else ("", "")
-    if donnee.startswith(("nouveau:", "dossier:")):
+    if donnee.startswith(("nouveau:", "dossier:", "absent:")):
         return "", ""
     return donnee, ""
