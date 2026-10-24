@@ -140,6 +140,8 @@ def autoriser(fournisseur, ouvrir=webbrowser.open, delai=300, arret=lambda: Fals
     recu = {}
 
     class Retour(http.server.BaseHTTPRequestHandler):
+        timeout = 5                                # connexion ouverte d'avance par le navigateur sans requete : on la lache
+
         def log_message(self, *a):
             pass
 
@@ -149,7 +151,12 @@ def autoriser(fournisseur, ouvrir=webbrowser.open, delai=300, arret=lambda: Fals
                 self.send_response(404)
                 self.end_headers()
                 return
-            recu.update(q)
+            if recu:                               # deuxieme passage (rechargement de la page) : on ne refait rien
+                q = recu
+            else:
+                recu.update(q)
+                if journal:
+                    journal("← retour du navigateur : " + ("code d'autorisation reçu" if "code" in q else f"refus ({q.get('error')})"))
             ok = "code" in q and q.get("state") == etat
             texte = (_("C'est fait : PhilPDF peut maintenant utiliser votre {nom}. Vous pouvez fermer cette page.", nom=f["nom"])
                      if ok else _("Autorisation refusée ou annulée. Vous pouvez fermer cette page."))
@@ -157,20 +164,23 @@ def autoriser(fournisseur, ouvrir=webbrowser.open, delai=300, arret=lambda: Fals
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(corps)))
+            self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(corps)
+
+    class Serveur(http.server.ThreadingHTTPServer):
+        daemon_threads = True
 
     serveur = None
     for port in f.get("ports") or [0]:
         try:
-            serveur = http.server.HTTPServer(("127.0.0.1", port), Retour)
+            serveur = Serveur(("127.0.0.1", port), Retour)
             break
         except OSError:
             continue
     if serveur is None:
         raise ErreurAutorisation(_("Les ports {ports} sont occupés : fermez l'application qui les utilise.",
                                    ports=", ".join(map(str, f.get("ports", [])))))
-    serveur.timeout = 0.5
     redirection = f.get("retour", "http://127.0.0.1:{port}").format(port=serveur.server_port)
     params = {"client_id": cid, "redirect_uri": redirection, "response_type": "code",
               "code_challenge": defi, "code_challenge_method": "S256", "state": etat, **f["extra"]}
@@ -178,13 +188,17 @@ def autoriser(fournisseur, ouvrir=webbrowser.open, delai=300, arret=lambda: Fals
         params["scope"] = f["portee"]
     url = f["auth"] + "?" + urllib.parse.urlencode(params)
     if journal:
-        journal(f"→ navigateur : {f['auth']} (retour sur {redirection})")
+        journal(f"→ navigateur : {f['auth']} (retour attendu sur {redirection})")
+    fil = threading.Thread(target=serveur.serve_forever, kwargs={"poll_interval": 0.3}, daemon=True)
+    fil.start()
     ouvrir(url)
     debut = time.monotonic()
     try:
         while not recu and time.monotonic() - debut < delai and not arret():
-            serveur.handle_request()
+            time.sleep(0.2)
+        time.sleep(0.3)                            # laisse la page « C'est fait » partir vers le navigateur
     finally:
+        serveur.shutdown()
         serveur.server_close()
     if not recu:
         raise ErreurAutorisation(_("Pas de réponse du navigateur (délai dépassé ou annulé)."))
@@ -194,9 +208,15 @@ def autoriser(fournisseur, ouvrir=webbrowser.open, delai=300, arret=lambda: Fals
               "redirect_uri": redirection}
     if sec:
         champs["client_secret"] = sec
+    if journal:
+        journal("→ échange du code contre le jeton durable...")
     jetons = _poster(f["jeton"], champs, journal)
     if not jetons.get("refresh_token"):
+        if journal:
+            journal("✕ réponse sans jeton durable : " + ", ".join(sorted(jetons)))
         raise ErreurAutorisation(_("Le fournisseur n'a pas donné de jeton durable."))
+    if journal:
+        journal("✓ jeton durable reçu")
     jetons["expire"] = time.time() + int(jetons.get("expires_in", 3000)) - 60
     return jetons
 

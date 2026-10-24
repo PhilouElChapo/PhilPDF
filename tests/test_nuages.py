@@ -138,7 +138,12 @@ for t in ("onedrive", "dropbox", "box"):
     oauth.FOURNISSEURS[t].update(auth=f"{B}/{t}/auth", jeton=f"{B}/{t}/token")
     oauth.FOURNISSEURS[t]["retour"] = oauth.FOURNISSEURS[t]["retour"].replace("localhost", "127.0.0.1")
 
+PRECONNEXIONS = []
 def navigateur(url):
+    """Comme Chrome ou Edge : une connexion vide ouverte d'avance vers le retour, puis la vraie requete."""
+    retour = urllib.parse.urlsplit(dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(url).query))["redirect_uri"])
+    vide = socket.create_connection((retour.hostname, retour.port))
+    PRECONNEXIONS.append(vide)                     # gardee ouverte, sans rien envoyer
     threading.Thread(target=lambda: urllib.request.urlopen(url, timeout=10).read(), daemon=True).start()
 
 local = os.path.join(base, "f.pdf")
@@ -148,7 +153,7 @@ for t, qui in (("onedrive", "phil@outlook.fr"), ("dropbox", "phil@dropbox.fr"), 
     j = oauth.autoriser(t, ouvrir=navigateur, delai=10)
     c = distant.nouveau_compte(t); coffre.enregistrer(c["id"] + ".jeton", j["refresh_token"])
     e = distant.emplacement(c)
-    verifie(qui in e.tester(), f"{nom} : autorisation et test de connexion")
+    verifie(qui in e.tester(), f"{nom} : autorisation (malgré une connexion vide du navigateur) et test de connexion")
     open(local, "wb").write(b"%PDF v1"); e.envoyer(local, "/PhilPDF/Factures/a.pdf")
     verifie([x.nom for x in e.lister("/PhilPDF")] == ["Factures"] and [x.nom for x in e.lister("/PhilPDF/Factures")] == ["a.pdf"],
             f"{nom} : envoi, dossiers créés")

@@ -96,44 +96,51 @@ from PySide6.QtCore import QThread, Signal
 
 class TacheAutorisation(QThread):
     fini = Signal(object, str)          # jetons, erreur
+    ligne = Signal(str)                 # etape de l'echange, affichee en direct
 
     def __init__(self, fournisseur):
         super().__init__()
         self.f, self.stop, self.journal = fournisseur, False, []
 
+    def _noter(self, t):
+        self.journal.append(t)
+        self.ligne.emit(distant.masquer(t))
+
     def run(self):
         from . import oauth
         import webbrowser
         try:
-            j = oauth.autoriser(self.f, ouvrir=webbrowser.open, arret=lambda: self.stop, journal=self.journal.append)
+            j = oauth.autoriser(self.f, ouvrir=webbrowser.open, arret=lambda: self.stop, journal=self._noter)
             self.fini.emit(j, "")
         except Exception as e:
             self.fini.emit(None, str(e))
 
 
 def autoriser_compte(parent, compte):
-    """Ouvre le navigateur pour l'autorisation ; jeton durable range dans le coffre. True si accorde."""
+    """Ouvre le navigateur pour l'autorisation ; jeton durable range dans le coffre. True si accorde.
+    La fenetre d'attente montre chaque etape (navigateur, retour, echange du jeton)."""
     from . import oauth
-    from PySide6.QtWidgets import QProgressDialog
     from PySide6.QtCore import QEventLoop
+    from .dialogues_ia import Avancement
+    nom = distant.TYPES[compte["type"]]
     if not oauth.disponible(compte["type"]):
-        QMessageBox.information(parent, distant.TYPES[compte["type"]],
-                                _("Cette version de PhilPDF n'a pas l'identifiant d'application pour {nom}.",
-                                  nom=distant.TYPES[compte["type"]]))
+        QMessageBox.information(parent, nom, _("Cette version de PhilPDF n'a pas l'identifiant d'application pour {nom}.", nom=nom))
         return False
     t = TacheAutorisation(compte["type"])
-    dlg = QProgressDialog(_("Votre navigateur s'ouvre sur la page de {nom}.\nConnectez-vous si besoin, puis cliquez sur "
-                            "« Autoriser » (ou « Continuer »). Revenez ensuite ici.", nom=distant.TYPES[compte["type"]]),
-                          _("Annuler"), 0, 0, parent)
-    dlg.setWindowTitle(_("Autorisation"))
-    dlg.setMinimumWidth(480)
+    dlg = Avancement(parent, _("Autorisation"))
+    dlg.etape(_("Votre navigateur s'ouvre sur la page de {nom}.\nConnectez-vous si besoin, puis cliquez sur "
+                "« Autoriser » (ou « Continuer »). Revenez ensuite ici.", nom=nom), 0, 0)
+    dlg.b_stop.setText(_("Annuler"))
     res = {}
     boucle = QEventLoop()
+    t.ligne.connect(dlg.noter)
     t.fini.connect(lambda j, err: (res.update(j=j, err=err), boucle.quit()))
-    dlg.canceled.connect(lambda: setattr(t, "stop", True))
+    dlg.b_stop.clicked.connect(lambda: setattr(t, "stop", True))
+    dlg.rejected.connect(lambda: setattr(t, "stop", True))
     t.start()
     dlg.show()
     boucle.exec()
+    t.wait(3000)
     dlg.close()
     if res.get("j"):
         coffre.enregistrer(compte["id"] + ".jeton", res["j"]["refresh_token"])
@@ -153,6 +160,9 @@ def autoriser_compte(parent, compte):
             erreur(parent, _("Autorisation"), _("L'autorisation est enregistrée, mais la connexion de test a échoué : {e}", e=ex),
                    getattr(ex, "emplacement", None))
         return True
+    if t.stop and not res.get("j"):
+        QMessageBox.information(parent, _("Autorisation"), _("Autorisation annulée : rien n'a été enregistré."))
+        return False
     if not t.stop:
         class _J:
             def texte_journal(self_):

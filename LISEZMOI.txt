@@ -49,6 +49,10 @@ Verification manuelle : Aide > Rechercher les mises a jour.
 3. CE QUE FAIT LA VERSION 0.3
 -----------------------------
 
+  Nouveau en 0.6.3 : autorisation des Drives corrigee (le navigateur
+    ouvrait une connexion d'avance qui bloquait l'attente) ; la fenetre
+    d'autorisation montre chaque etape.
+
   Nouveau en 0.6.2 :
     - reglages communs (favoris, outils, barres, volets, comptes, langue...)
       repris automatiquement d'un poste a l'autre ; le dernier vraiment

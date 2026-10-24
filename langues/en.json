@@ -134,6 +134,7 @@
  "Automatique (conseillé)": "Automatic (recommended)",
  "Automatique (langue du système)": "Automatic (system language)",
  "Autorisation": "Authorization",
+ "Autorisation annulée : rien n'a été enregistré.": "Authorization canceled: nothing was saved.",
  "Autorisation non obtenue : {raison}": "Authorization not obtained: {raison}",
  "Autorisation refusée : {raison}": "Authorization denied: {raison}",
  "Autorisation refusée ou annulée. Vous pouvez fermer cette page.": "Authorization denied or cancelled. You can close this page.",
