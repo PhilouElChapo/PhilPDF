@@ -64,7 +64,18 @@ def combo_emplacements(parent, params):
 
     def choisi(i):
         donnee = cb.itemData(i) or ""
-        if donnee == "dossier:":
+        if donnee.startswith("compte:"):                # Drive deja dans la liste mais pas encore autorise
+            from . import coffre
+            c = next((x for x in params.get("comptes", []) if x["id"] == donnee[7:]), None)
+            if c and c["type"] in distant.NUAGES and not coffre.lire(c["id"] + ".jeton"):
+                from .dialogues_distant import autoriser_compte
+                if autoriser_compte(parent, c):
+                    params["comptes"] = [x if x["id"] != c["id"] else c for x in params.get("comptes", [])]
+                    params.enregistrer()
+                    cb.setItemText(i, libelle_compte(c))
+                else:
+                    remettre()
+        elif donnee == "dossier:":
             p = QFileDialog.getExistingDirectory(parent, _("Dossier partagé entre vos postes"))
             if p:
                 cb.blockSignals(True)

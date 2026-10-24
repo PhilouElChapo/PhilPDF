@@ -17,10 +17,10 @@ s'ils sont inclus, le fichier est chiffre en AES-256 par une phrase secrete.
 import datetime, json, os
 from . import coffre
 
-COMMUNS = ["auteur", "langue", "outils_epingles", "zoom", "barre_rapide", "volet", "vignettes", "fixer_objets",
+COMMUNS = ["auteur", "langue", "outils_epingles", "barre_rapide", "volet", "vignettes", "fixer_objets",
            "filigranes_perso", "ia_moteur", "maj_source", "maj_auto", "synchro", "comptes", "defaut_tampons",
-           "defaut_signatures", "theme"]
-POSTE = ["machine", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
+           "defaut_signatures", "theme", "synchro_secrets"]
+POSTE = ["machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
 CLEFS_IA = ["clef_claude", "clef_gemini"]
 FICHIER_DRIVE = "preferences.json"
 
@@ -124,7 +124,11 @@ def ecrire_drive(params):
     d = lire_drive(p)
     i = instantane(params)
     d["philpdf"] = 1
-    d["communs"] = dict(i["communs"], maj=i["date"], par=i["machine"])
+    local = params.get("communs_maj") or ""
+    sur_drive = (d.get("communs") or {}).get("maj") or ""
+    # les reglages communs de ce poste ne remplacent ceux du Drive que s'ils ont ete changes plus recemment
+    if local and local > sur_drive:
+        d["communs"] = dict(i["communs"], maj=local, par=i["machine"])
     d.setdefault("postes", {})[i["machine"]] = dict(i["poste"], maj=i["date"])
     try:
         with open(p, "w", encoding="utf-8") as f:
@@ -144,3 +148,85 @@ def trouver_sur_drives():
         if d.get("communs"):
             out.append((nom, racine, d))
     return out
+
+
+# ------------------------------------------------------------------ mots de passe sur le Drive (chiffres)
+FICHIER_SECRETS = "secrets.philpdf"
+PHRASE = "phrase_synchro"            # cle du coffre local qui garde la phrase de ce poste
+
+
+def chemin_secrets(params):
+    from .bibliotheque import dossier_philpdf_drive
+    d = dossier_philpdf_drive(params)
+    return os.path.join(d, FICHIER_SECRETS) if d else None
+
+
+def _secrets_partageables(params):
+    s = instantane(params, avec_secrets=True).get("secrets", {})
+    # Box change de jeton durable a chaque usage : partage entre postes impossible, chacun autorise le sien
+    box = {c["id"] for c in params.get("comptes", []) if c.get("type") == "box"}
+    return {k: v for k, v in s.items() if v and not any(k == f"coffre:{b}.jeton" for b in box)}
+
+
+def lire_secrets_drive(params, phrase):
+    """Secrets du Drive ({cle: valeur}) ; leve PhraseRequise si la phrase est fausse, {} s'il n'y a rien."""
+    p = chemin_secrets(params)
+    if not p or not os.path.exists(p):
+        return {}
+    return importer(p, phrase).get("secrets", {})
+
+
+def ecrire_secrets_drive(params, phrase=None):
+    """Met les mots de passe, autorisations et clefs de ce poste sur le Drive, chiffres (AES-256) par la phrase.
+    Ceux des autres postes deja presents sont gardes. Renvoie False si rien n'a ete ecrit."""
+    phrase = phrase or coffre.lire(PHRASE)
+    p = chemin_secrets(params)
+    if not phrase or not p or not params.get("synchro_secrets"):
+        return False
+    try:
+        anciens = lire_secrets_drive(params, phrase)
+    except (PhraseRequise, OSError, ValueError, KeyError):
+        anciens = {}
+    tous = dict(anciens, **_secrets_partageables(params))
+    tmp = p + ".tmp"
+    exporter(tmp, {"philpdf": 1, "date": maintenant(), "machine": params.get("machine", ""), "communs": {}, "poste": {},
+                   "secrets": tous}, phrase)
+    os.replace(tmp, p)
+    return True
+
+
+def reprendre_secrets_drive(params, phrase, ecraser=False):
+    """Copie dans le coffre de ce poste les secrets du Drive (sans ecraser ceux deja presents, sauf demande).
+    Renvoie le nombre de secrets repris."""
+    n = 0
+    for k, v in lire_secrets_drive(params, phrase).items():
+        if k.startswith("coffre:"):
+            if ecraser or not coffre.lire(k[7:]):
+                coffre.enregistrer(k[7:], v)
+                n += 1
+        elif k in CLEFS_IA and v and (ecraser or not params.get(k)):
+            params[k] = v
+            n += 1
+    params.enregistrer()
+    return n
+
+
+def reprendre_communs_drive(params):
+    """Au demarrage : si un autre poste a change des reglages communs plus recemment (favoris, outils, barres,
+    comptes, langue...), on les reprend ici. Renvoie le nom de ce poste, ou None."""
+    p = chemin_drive(params)
+    if not p:
+        return None
+    c = (lire_drive(p).get("communs") or {})
+    maj, par = c.get("maj") or "", c.get("par") or ""
+    if not maj or maj <= (params.get("communs_maj") or "") or par == params.get("machine"):
+        return None
+    comptes_ici = {x["id"] for x in params.get("comptes", [])}
+    for k, v in c.items():
+        if k in COMMUNS:
+            params[k] = v
+    params["communs_maj"] = maj
+    params._communs_vus = params._empreinte_communs() if hasattr(params, "_empreinte_communs") else ""
+    params.enregistrer()
+    nouveaux = [x for x in params.get("comptes", []) if x["id"] not in comptes_ici]
+    return par, nouveaux

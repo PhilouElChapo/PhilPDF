@@ -61,5 +61,7 @@ class DialogueBienvenue(QDialog):
         p.update(langue=self.langue.currentData(), auteur=self.auteur.text().strip() or p.get("auteur", ""),
                  machine=self.machine.text().strip() or p.get("machine", ""), drive=drive, drive_compte=compte,
                  bienvenue_vue=True)
+        if hasattr(p, "_empreinte_communs"):       # l'assistant ne doit pas imposer ses reglages par defaut aux autres postes
+            p._communs_vus = p._empreinte_communs()
         p.enregistrer()
         return self.langue.currentData() != ancienne

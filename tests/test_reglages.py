@@ -40,8 +40,39 @@ verifie(coffre.lire("c1") == "motdepasse" and b["clef_claude"] == "sk-test", "mo
 c = P(machine="?")
 reglages.appliquer(c, d, communs=True, poste=True, secrets=False)
 verifie(c["machine"] == "Pharmacie" and c["racines"] == ["D:\\Docs"], "réinstallation du même poste : ses chemins reviennent")
+a["communs_maj"] = "2026-10-24T10:00:00"           # reglages vraiment changes sur ce poste
 verifie(reglages.ecrire_drive(a), "copie automatique sur le Drive")
 dd = reglages.lire_drive(os.path.join(drive, "PhilPDF", "preferences.json"))
 verifie("Pharmacie" in dd["postes"] and dd["communs"]["auteur"] == "Phil" and "secrets" not in json.dumps(dd)
         and "motdepasse" not in json.dumps(dd), "Drive : communs + poste, jamais de mot de passe")
+
+# --- un poste neuf (reglages par defaut, jamais changes) n'ecrase pas les reglages communs du Drive
+neuf = P(machine="Portable", drive=drive, outils_epingles=["imprimer"], auteur="", comptes=[])
+reglages.ecrire_drive(neuf)
+dd = reglages.lire_drive(os.path.join(drive, "PhilPDF", "preferences.json"))
+verifie(dd["communs"]["outils_epingles"] == ["modifier", "imprimer"] and "Portable" in dd["postes"],
+        "poste neuf : ses réglages par défaut n'écrasent pas ceux du Drive")
+r = reglages.reprendre_communs_drive(neuf)
+verifie(r and r[0] == "Pharmacie" and neuf["outils_epingles"] == ["modifier", "imprimer"] and neuf["volet"] == "icones"
+        and [c["id"] for c in r[1]] == ["c1"], "au démarrage : favoris, volets et comptes repris du poste le plus récent")
+verifie(reglages.reprendre_communs_drive(neuf) is None, "rien à reprendre ensuite")
+neuf["outils_epingles"] = ["alleger"]; neuf["communs_maj"] = "2026-10-24T12:00:00"
+reglages.ecrire_drive(neuf)
+r = reglages.reprendre_communs_drive(a)
+verifie(r and a["outils_epingles"] == ["alleger"], "changement fait ailleurs plus récemment : repris ici")
+
+# --- mots de passe synchronises, chiffres par la phrase
+a["synchro_secrets"] = True
+coffre.enregistrer("c1", "motdepasse")
+verifie(reglages.ecrire_secrets_drive(a, "ma phrase secrète"), "mots de passe envoyés sur le Drive")
+brut = open(os.path.join(drive, "PhilPDF", "secrets.philpdf"), "rb").read()
+verifie(b"motdepasse" not in brut and b"sk-test" not in brut, "fichier des mots de passe illisible sans la phrase")
+coffre.supprimer("c1")
+autre = P(machine="Maison", drive=drive, comptes=[{"id": "c1", "type": "webdav"}], clef_claude="")
+try:
+    reglages.reprendre_secrets_drive(autre, "faux"); verifie(False, "phrase")
+except reglages.PhraseRequise:
+    verifie(True, "mauvaise phrase : rien n'est repris")
+n = reglages.reprendre_secrets_drive(autre, "ma phrase secrète")
+verifie(n >= 2 and coffre.lire("c1") == "motdepasse" and autre["clef_claude"] == "sk-test", "autre poste : mots de passe et clef IA repris")
 print(f"\n{ok} vérifications de préférences réussies")

@@ -7,7 +7,7 @@ et rien n'est ecrit ailleurs sur le PC ni dans le registre.
 import json, os, platform, sys
 
 APP = "PhilPDF"
-VERSION = "0.6.1"
+VERSION = "0.6.2"
 
 
 def dossier_programme():
@@ -68,8 +68,21 @@ class Parametres(dict):
             pass
         if self.get("dossier_synchro") and not self.get("drive"):   # ancienne 0.1
             self["drive"] = self.pop("dossier_synchro")
+        self._communs_vus = self._empreinte_communs()
+
+    def _empreinte_communs(self):
+        try:
+            from .reglages import COMMUNS
+        except ImportError:
+            return ""
+        return json.dumps({k: self.get(k) for k in COMMUNS}, sort_keys=True, ensure_ascii=False, default=str)
 
     def enregistrer(self):
+        e = self._empreinte_communs() if hasattr(self, "_communs_vus") else ""
+        if e and e != self._communs_vus:          # un reglage commun a vraiment change sur ce poste : il est date
+            import datetime
+            self["communs_maj"] = datetime.datetime.now().isoformat(timespec="seconds")
+            self._communs_vus = e
         try:
             with open(self.chemin, "w", encoding="utf-8") as f:
                 json.dump(self, f, ensure_ascii=False, indent=2)

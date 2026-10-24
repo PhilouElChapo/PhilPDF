@@ -49,6 +49,17 @@ Verification manuelle : Aide > Rechercher les mises a jour.
 3. CE QUE FAIT LA VERSION 0.3
 -----------------------------
 
+  Nouveau en 0.6.2 :
+    - reglages communs (favoris, outils, barres, volets, comptes, langue...)
+      repris automatiquement d'un poste a l'autre ; le dernier vraiment
+      modifie gagne ; un poste neuf n'ecrase plus rien ; bouton « Envoyer
+      ces reglages a mes autres postes » ;
+    - option : mots de passe, autorisations des Drives et clefs IA
+      synchronises entre vos postes, chiffres par une phrase secrete ;
+    - autorisation d'un Drive : verification immediate et message clair
+      (« Connexion reussie : ... de vous@gmail.com ») ou erreur detaillee ;
+    - Tester les clefs : on voit quelle IA est testee, 60 s maxi chacune.
+
   Nouveau en 0.6.1 : OneDrive en direct active (Preferences > Drive et
     dossiers, ou bouton de synchronisation de l'Accueil).
 

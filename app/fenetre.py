@@ -14,7 +14,7 @@ from .pages import PageOutils, PageAccueil
 from .document import OngletDocument, DialogueRemplacer, question
 from .outils import outil
 from .bibliotheque import Bibliotheque, detecter_clouds
-from . import distant, miroir, reglages
+from . import distant, miroir, reglages, coffre
 from .dialogues_distant import DialogueParcourir, PanneauComptes, ouvrir_emplacement, erreur as erreur_distant
 from .session import session_de, date_fr, nb_fichiers, dossiers_connus, DELAI_SILENCIEUX
 from .dialogues import (boutons_fr, DialogueFiligrane, DialogueEntete, DialogueNumeriser, DialogueExporter,
@@ -230,6 +230,8 @@ class Fenetre(QMainWindow):
         # tampons et signatures : synchronisation silencieuse avec le Drive au demarrage
         if not miroir.compte_drive(self.params):
             QTimer.singleShot(1200, self._synchro_biblio)
+            QTimer.singleShot(2200, self.communs_au_demarrage)
+            QTimer.singleShot(2500, self.secrets_au_demarrage)
 
     def _synchro_biblio(self):
         try:
@@ -530,6 +532,7 @@ class Fenetre(QMainWindow):
         self._session()
         self.params.enregistrer()
         reglages.ecrire_drive(self.params)
+        self._ecrire_secrets()
         for t in self.taches:
             if isinstance(t, TacheSynchro):
                 t.stop = True
@@ -557,6 +560,8 @@ class Fenetre(QMainWindow):
                 self.statusBar().showMessage(_("Emplacement de synchronisation injoignable : {raison}", raison=err[:120]), 8000)
             if au_demarrage:
                 self._synchro_biblio()
+                self.communs_au_demarrage()
+                self.secrets_au_demarrage()
                 if self.params.get("synchro", True):
                     self.verifier_synchro()
         t.fini.connect(fini)
@@ -1196,10 +1201,42 @@ class Fenetre(QMainWindow):
         bi = QPushButton(_("Importer des préférences..."))
         bi.clicked.connect(lambda: (d.reject(), self.importer_reglages()))
         hp.addWidget(bi)
+        be_ = QPushButton(_("Envoyer ces réglages à mes autres postes"))
+        be_.setToolTip(_("Les favoris, outils, barres, comptes et réglages communs de ce poste deviennent la référence : "
+                         "vos autres postes les reprennent à leur prochain démarrage."))
+
+        def envoyer_reglages():
+            import datetime
+            self.params["communs_maj"] = datetime.datetime.now().isoformat(timespec="seconds")
+            self.params.enregistrer()
+            ok = reglages.ecrire_drive(self.params)
+            self.synchro_miroir()
+            QMessageBox.information(d, _("Préférences"), _("Réglages envoyés : vos autres postes les reprendront à leur prochain démarrage.")
+                                    if ok else _("Aucun emplacement de synchronisation : choisissez-en un dans « Drive et dossiers »."))
+        be_.clicked.connect(envoyer_reglages)
+        hp.addWidget(be_)
         hp.addStretch()
         f.addRow(_("Sauvegarde"), hp)
-        note(f, _("Vos préférences sont aussi copiées automatiquement sur votre Drive (sans les mots de passe) : une "
-                  "nouvelle installation propose de les reprendre."))
+        note(f, _("Vos préférences sont aussi copiées automatiquement sur votre Drive : une nouvelle installation "
+                  "propose de les reprendre."))
+        hs_ = QHBoxLayout()
+        sync_sec = QCheckBox(_("Synchroniser aussi les mots de passe, autorisations des Drives et clefs IA (chiffrés)"))
+        sync_sec.setChecked(bool(self.params.get("synchro_secrets")) and bool(coffre.lire(reglages.PHRASE)))
+        hs_.addWidget(sync_sec, 1)
+        b_phrase = QPushButton(_("Phrase secrète..."))
+        hs_.addWidget(b_phrase)
+        f.addRow(hs_)
+
+        def activer_secrets(on):
+            if on and not coffre.lire(reglages.PHRASE):
+                if not self.choisir_phrase(d):
+                    sync_sec.blockSignals(True)
+                    sync_sec.setChecked(False)
+                    sync_sec.blockSignals(False)
+        sync_sec.toggled.connect(activer_secrets)
+        b_phrase.clicked.connect(lambda: self.choisir_phrase(d) and sync_sec.setChecked(True))
+        note(f, _("Chiffrés en AES-256 par une phrase secrète que vous choisissez (la même sur tous vos postes) : "
+                  "sans elle, le fichier est illisible, même pour le Drive. Chaque poste la demande une seule fois."))
         note(f, _("Le changement de langue s'applique au prochain démarrage de PhilPDF. Pour ajouter une langue : "
                   "copier langues/en.json, le traduire et le renommer (es.json, de.json...)."))
         assoc = QCheckBox(_('Ouvrir les fichiers PDF avec PhilPDF (proposé dans « Ouvrir avec »)'))
@@ -1319,29 +1356,38 @@ class Fenetre(QMainWindow):
 
         def tester_ia():
             from . import ia
-            from .dialogues_ia import executer
+            from .dialogues_ia import executer_suivi
             essai = dict(clef_claude=kc.text().strip(), clef_gemini=kg.text().strip())
 
-            def tester():
+            def tester(t):
                 lignes = []
-                ia.DELAI = 25                          # test : on n'attend pas plus de 25 s par moteur
+                moteurs_ = [(m, nom) for m, nom in (("claude", "Claude"), ("gemini", "Gemini"))]
                 try:
-                    for m, nom in (("claude", "Claude"), ("gemini", "Gemini")):
+                    for k, (m, nom) in enumerate(moteurs_):
                         clef = ia.nettoyer_clef(essai["clef_" + m])
                         if not clef:
                             lignes.append(_("{nom} : pas de clef.", nom=nom))
+                            t.noter(lignes[-1])
                             continue
+                        ia.DELAI = 60
+                        t.avancer(_("Test de {nom} (60 s au plus)...", nom=nom), k, len(moteurs_))
+                        import time as _t
+                        debut = _t.time()
                         p = {"ia_moteur": m, "clef_" + m: clef}
                         try:
-                            ia.demander(p, "Réponds seulement : OK", "Test", max_jetons=20)
-                            lignes.append(_("{nom} : clef valide (modèle {modele})", nom=nom, modele=ia._modeles_trouves.get(m) or
-                                            (ia.MODELE_CLAUDE if m == "claude" else ia.MODELE_GEMINI)))
+                            ia.demander(p, "Réponds seulement : OK", "Test", max_jetons=50)
+                            lignes.append(_("{nom} : clef valide (modèle {modele}, réponse en {s} s)", nom=nom, s=round(_t.time() - debut, 1),
+                                            modele=ia._modeles_trouves.get(m) or (ia.MODELE_CLAUDE if m == "claude" else ia.MODELE_GEMINI)))
                         except Exception as ex:
                             lignes.append(_("{nom} : {erreur}", nom=nom, erreur=ex))
+                        t.noter(lignes[-1])
                 finally:
                     ia.DELAI = 180
                 return lignes
-            lignes = executer(d, _("Test des clefs (25 s au plus par moteur)..."), tester)
+            try:
+                lignes = executer_suivi(d, _("Test des clefs IA"), tester)
+            except InterruptedError:
+                return
             QMessageBox.information(d, _("IA"), "\n\n".join(lignes))
         bt.clicked.connect(tester_ia)
         f.addRow("", bt)
@@ -1373,12 +1419,14 @@ class Fenetre(QMainWindow):
                            racines=[racines.item(i).text() for i in range(racines.count())],
                            ia_moteur=["claude", "gemini", "deux"][moteur.currentIndex()],
                            clef_claude=kc.text().strip(), clef_gemini=kg.text().strip(),
-                           maj_source=["github", "dossier"][majs.currentIndex()], maj_auto=maja.isChecked())
+                           maj_source=["github", "dossier"][majs.currentIndex()], maj_auto=maja.isChecked(),
+                           synchro_secrets=sync_sec.isChecked())
         if assoc.isChecked() != self.params["association_pdf"]:
             if associer_pdf(assoc.isChecked()):
                 self.params["association_pdf"] = assoc.isChecked()
         self.params.enregistrer()
         reglages.ecrire_drive(self.params)
+        self._ecrire_secrets()
         self._session()
         self.accueil.rafraichir()
         if miroir.compte_drive(self.params):
@@ -1389,6 +1437,97 @@ class Fenetre(QMainWindow):
                 self.redemarrer()
 
     # ------------------------------------------------------------ sauvegarde des preferences
+    # ------------------------------------------------------------ mots de passe synchronises (chiffres)
+    def _ecrire_secrets(self):
+        try:
+            if reglages.ecrire_secrets_drive(self.params):
+                self.synchro_miroir()
+        except Exception as ex:
+            self.statusBar().showMessage(_("Mots de passe non synchronisés : {e}", e=ex), 8000)
+
+    def choisir_phrase(self, parent=None):
+        """Demande la phrase secrete de synchronisation (verifiee sur le Drive si un autre poste l'a deja choisie)."""
+        parent = parent or self
+        existe = bool(reglages.chemin_secrets(self.params) and os.path.exists(reglages.chemin_secrets(self.params)))
+        while True:
+            if existe:
+                ph, ok = QInputDialog.getText(parent, _("Phrase secrète"), _(
+                    "Un autre de vos postes synchronise déjà ses mots de passe.\nEntrez la même phrase secrète :"),
+                    QLineEdit.Password)
+                if not ok:
+                    return False
+                try:
+                    n = reglages.reprendre_secrets_drive(self.params, ph)
+                except reglages.PhraseRequise:
+                    QMessageBox.warning(parent, _("Phrase secrète"), _("Phrase incorrecte."))
+                    continue
+                coffre.enregistrer(reglages.PHRASE, ph)
+                self.params["synchro_secrets"] = True
+                self.params.enregistrer()
+                QMessageBox.information(parent, _("Phrase secrète"), _(
+                    "{n} mot(s) de passe, autorisation(s) ou clef(s) repris de vos autres postes.", n=n))
+                return True
+            d = QDialog(parent)
+            d.setWindowTitle(_("Phrase secrète"))
+            fl = QFormLayout(d)
+            lb = QLabel(_("Choisissez une phrase secrète (8 caractères au moins). Notez-la : il faudra la même sur vos "
+                          "autres postes, et personne ne peut la retrouver pour vous."))
+            lb.setWordWrap(True)
+            fl.addRow(lb)
+            p1, p2 = QLineEdit(), QLineEdit()
+            for p in (p1, p2):
+                p.setEchoMode(QLineEdit.Password)
+            fl.addRow(_("Phrase secrète"), p1)
+            fl.addRow(_("Confirmation"), p2)
+            bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
+            bb.accepted.connect(d.accept)
+            bb.rejected.connect(d.reject)
+            fl.addRow(bb)
+            if d.exec() != QDialog.Accepted:
+                return False
+            if len(p1.text()) < 8 or p1.text() != p2.text():
+                QMessageBox.warning(parent, _("Phrase secrète"), _("Phrase trop courte (8 caractères au moins) ou différente de sa confirmation."))
+                continue
+            coffre.enregistrer(reglages.PHRASE, p1.text())
+            self.params["synchro_secrets"] = True
+            self.params.enregistrer()
+            self._ecrire_secrets()
+            return True
+
+    def communs_au_demarrage(self):
+        """Reglages communs plus recents sur un autre poste : repris ici, sans rien demander."""
+        try:
+            r = reglages.reprendre_communs_drive(self.params)
+        except Exception:
+            r = None
+        if not r:
+            return
+        par, nouveaux = r
+        for o in self.documents():
+            o.remplir_volet()
+        self.outils.rafraichir() if hasattr(self.outils, "rafraichir") else None
+        self.accueil.rafraichir()
+        Notification(self, _("Réglages repris de « {poste} » : favoris, outils, barres, comptes...", poste=par),
+                     _("Redémarrer"), self.redemarrer)
+
+    def secrets_au_demarrage(self):
+        """Poste qui connait la phrase : reprend en silence les mots de passe nouveaux des autres postes.
+        Sinon, si des mots de passe attendent sur le Drive, une bulle propose de les reprendre."""
+        p = reglages.chemin_secrets(self.params)
+        if not p or not os.path.exists(p):
+            return
+        phrase = coffre.lire(reglages.PHRASE)
+        if phrase:
+            try:
+                n = reglages.reprendre_secrets_drive(self.params, phrase)
+                if n:
+                    self.statusBar().showMessage(_("{n} mot(s) de passe ou autorisation(s) repris de vos autres postes.", n=n), 8000)
+            except Exception:
+                pass
+            return
+        Notification(self, _("Les mots de passe de vos autres postes (NAS, FTP, Drives, IA) sont disponibles, chiffrés."),
+                     _("Les reprendre..."), lambda: self.choisir_phrase())
+
     def exporter_reglages(self, parent=None):
         parent = parent or self
         d = QDialog(parent)
@@ -1464,7 +1603,8 @@ class Fenetre(QMainWindow):
         cp = QCheckBox(_("Réglages propres au poste : nom du poste, dossiers et chemins (à cocher pour réinstaller ce même poste)"))
         cp.setChecked(origine == self.params.get("machine"))
         v.addWidget(cp)
-        cs = QCheckBox(_("Mots de passe, autorisations et clefs contenus dans le fichier"))
+        cs = QCheckBox(_("Mots de passe, autorisations et clefs contenus dans le fichier") if donnees.get("secrets") else
+                       _("Ce fichier ne contient pas les mots de passe (à l'export, cochez « Inclure les mots de passe »)"))
         cs.setChecked(bool(donnees.get("secrets")))
         cs.setEnabled(bool(donnees.get("secrets")))
         v.addWidget(cs)

@@ -137,6 +137,21 @@ def autoriser_compte(parent, compte):
     dlg.close()
     if res.get("j"):
         coffre.enregistrer(compte["id"] + ".jeton", res["j"]["refresh_token"])
+        if coffre.lire(compte["id"] + ".jeton") != res["j"]["refresh_token"]:
+            QMessageBox.warning(parent, _("Autorisation"), _(
+                "L'autorisation a été accordée, mais le coffre des mots de passe de ce poste a refusé de la garder. "
+                "Réessayez ; si cela recommence, envoyez-moi ce message."))
+            return False
+        # verification immediate : on se connecte vraiment et on dit a qui
+        try:
+            qui = distant.emplacement(compte).qui()
+            if qui and compte.get("nom", "") in ("", distant.TYPES[compte["type"]], _(distant.TYPES[compte["type"]])):
+                compte["nom"] = f"{distant.TYPES[compte['type']]} ({qui})"
+            QMessageBox.information(parent, _("Autorisation"), _("Connexion réussie : PhilPDF accède au {nom} de {qui}.",
+                                                                 nom=distant.TYPES[compte["type"]], qui=qui or "?"))
+        except Exception as ex:
+            erreur(parent, _("Autorisation"), _("L'autorisation est enregistrée, mais la connexion de test a échoué : {e}", e=ex),
+                   getattr(ex, "emplacement", None))
         return True
     if not t.stop:
         class _J:
