@@ -71,8 +71,15 @@ def libelle(c):
 # ---------------------------------------------------------------------------------- base
 def masquer(texte):
     """Retire mots de passe, codes et jetons d'une ligne du journal."""
-    t = re.sub(r"((?:passwd|password|otp_code|_sid|device_id|access_token|refresh_token)=)[^&\s]+", r"\1****", str(texte))
-    return re.sub(r"(Authorization: \w+ )\S+", r"\1****", t)
+    t = re.sub(r"((?:passwd|password|otp_code|_sid|device_id|access_token|refresh_token|client_secret|code_verifier|code)=)[^&\s]+", r"\1****", str(texte))
+    t = re.sub(r"(Authorization: \w+ )\S+", r"\1****", t)
+    # secrets reconnaissables meme seuls (sans « nom= » devant) : Google, Claude, Gemini, jetons Google
+    t = re.sub(r"GOCSPX-[A-Za-z0-9_\-]+", "GOCSPX-****", t)
+    t = re.sub(r"sk-ant-[A-Za-z0-9_\-]+", "sk-ant-****", t)
+    t = re.sub(r"AIza[0-9A-Za-z_\-]{20,}", "AIza****", t)
+    t = re.sub(r"\b1//[0-9A-Za-z_\-]{20,}", "1//****", t)
+    t = re.sub(r"\bya29\.[0-9A-Za-z_\-.]+", "ya29.****", t)
+    return re.sub(r'("(?:client_secret|refresh_token|access_token|password|clef_\w+)"\s*:\s*")[^"]+"', r'\1****"', t)
 
 
 class Emplacement:
@@ -85,6 +92,8 @@ class Emplacement:
     def log(self, texte):
         self.journal.append(time.strftime("%H:%M:%S ") + masquer(texte))
         self.journal = self.journal[-200:]
+        from .journal import ecrire
+        ecrire(libelle(self.c) if isinstance(self.c, dict) else "?", texte)
 
     def texte_journal(self):
         return "\n".join(self.journal) or _("Aucun échange enregistré.")

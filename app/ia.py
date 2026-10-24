@@ -234,12 +234,18 @@ def demander(params, consignes, texte, images=None, json_attendu=False, max_jeto
     if json_attendu:
         consignes += "\n\nRéponds uniquement par un objet JSON valide, sans texte autour ni balises de code."
     derniere = None
+    from .journal import ecrire
     for m, clef in ms:
+        import time as _t
+        debut = _t.time()
         try:
             r = _claude(clef, params, consignes, texte, images, max_jetons) if m == "claude" else \
                 _gemini(clef, params, consignes, texte, images, max_jetons, json_attendu)
+            ecrire("IA " + m, f"réponse en {_t.time() - debut:.1f} s, modèle {_modeles_trouves.get(m, '?')}, "
+                              f"{len(texte)} car. envoyés{', ' + str(len(images)) + ' image(s)' if images else ''}")
             return lire_json(r) if json_attendu else r.strip()
         except ErreurIA as e:
+            ecrire("IA " + m, f"✕ après {_t.time() - debut:.1f} s : {e}")
             derniere = e
             if params.get("ia_moteur") != "deux":
                 break

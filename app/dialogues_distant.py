@@ -105,6 +105,8 @@ class TacheAutorisation(QThread):
     def _noter(self, t):
         self.journal.append(t)
         self.ligne.emit(distant.masquer(t))
+        from .journal import ecrire
+        ecrire(_("Autorisation {nom}", nom=distant.TYPES.get(self.f, self.f)), t)
 
     def run(self):
         from . import oauth
@@ -113,6 +115,7 @@ class TacheAutorisation(QThread):
             j = oauth.autoriser(self.f, ouvrir=webbrowser.open, arret=lambda: self.stop, journal=self._noter)
             self.fini.emit(j, "")
         except Exception as e:
+            self._noter(f"✕ {e}")
             self.fini.emit(None, str(e))
 
 

@@ -49,6 +49,10 @@ Verification manuelle : Aide > Rechercher les mises a jour.
 3. CE QUE FAIT LA VERSION 0.3
 -----------------------------
 
+  Nouveau en 0.6.5 : journal des echanges (Aide > Journal des echanges) :
+    tout ce que PhilPDF echange avec les Drives, NAS, FTP et IA est garde
+    (mots de passe et jetons masques), a copier en cas de probleme.
+
   Nouveau en 0.6.3 : autorisation des Drives corrigee (le navigateur
     ouvrait une connexion d'avance qui bloquait l'attente) ; la fenetre
     d'autorisation montre chaque etape.

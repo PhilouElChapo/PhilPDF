@@ -170,6 +170,13 @@ miroir_scenario("WebDAV", cw, "secret")
 verifie(os.path.isfile(os.path.join(racine, "PhilPDF", "session.json")) and os.path.isfile(os.path.join(racine, "Factures", "PhilPDF", "session.json")),
         "dossier PhilPDF créé dans le dossier choisi du compte")
 
+# --- journal : aucun secret lisible, meme sans « nom= » devant
+fuites = ["GOCSPX-AbCdEf1234567890abcdefghij", "sk-ant-usr-1300abcdefXQAA", "AIzaSyAbcdefghijklmnopqrstuvwx123",
+          "1//0gAbcdefghijklmnopqrstuvwxyz", "ya29.a0AfH6SMabc"]
+masque = distant.masquer(" ".join(fuites) + ' {"client_secret": "abc123", "password": "x"} passwd=y&otp_code=1')
+verifie(not any(f in masque for f in fuites) and "abc123" not in masque and "passwd=y" not in masque,
+        "journal : secrets Google, Claude, Gemini et jetons masqués")
+
 # --- comptes identiques sur deux postes (session)
 c2 = dict(c, id="autre", nom="Mon NAS")
 verifie(distant.cle_compte(c) == distant.cle_compte(c2), "même compte reconnu sur un autre poste")

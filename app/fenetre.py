@@ -336,7 +336,48 @@ class Fenetre(QMainWindow):
         act(m, _('Mes tampons...'), lambda: self.lancer_outil("tampons"), None, "tampon")
         act(m, _('Mes signatures...'), lambda: self.lancer_outil("remplir_signer"), None, "signer")
         act(m, _('Rechercher les mises à jour...'), lambda: self.verifier_maj(silencieux=False), None, "mise_a_jour")
+        act(m, _('Journal des échanges (Drives, NAS, IA)...'), self.journal_echanges, None, "lot")
         act(m, _('A propos de PhilPDF'), self.a_propos, None, "aide")
+
+    def journal_echanges(self):
+        """Les derniers echanges avec les Drives, NAS, FTP et IA (mots de passe masques), a copier pour un depannage."""
+        from PySide6.QtWidgets import QPlainTextEdit
+        from .journal import chemin
+        p = chemin()
+        try:
+            with open(p, encoding="utf-8", errors="replace") as f:
+                lignes = f.readlines()[-800:]
+        except OSError:
+            lignes = []
+        d = QDialog(self)
+        d.setWindowTitle(_("Journal des échanges"))
+        d.resize(1000, 620)
+        v = QVBoxLayout(d)
+        lb = QLabel(_("Ce qu'ont échangé PhilPDF et vos Drives, NAS, FTP et IA (les 800 dernières lignes ; mots de passe, "
+                      "codes et jetons masqués). Copiez-le pour signaler un problème."))
+        lb.setWordWrap(True)
+        v.addWidget(lb)
+        t = QPlainTextEdit("".join(lignes) or _("Aucun échange enregistré."))
+        t.setReadOnly(True)
+        t.setLineWrapMode(QPlainTextEdit.NoWrap)
+        f_ = t.font()
+        f_.setFamily("Consolas")
+        t.setFont(f_)
+        v.addWidget(t, 1)
+        h = QHBoxLayout()
+        b = QPushButton(_("Copier"))
+        b.clicked.connect(lambda: QApplication.clipboard().setText(t.toPlainText()))
+        h.addWidget(b)
+        b = QPushButton(_("Ouvrir le dossier"))
+        b.clicked.connect(lambda: montrer_dans_explorateur(p))
+        h.addWidget(b)
+        h.addStretch(1)
+        b = QPushButton(_("Fermer"))
+        b.clicked.connect(d.accept)
+        h.addWidget(b)
+        v.addLayout(h)
+        t.moveCursor(t.textCursor().MoveOperation.End)
+        d.exec()
 
     def _remplir_recents(self):
         self.menu_recents.clear()
