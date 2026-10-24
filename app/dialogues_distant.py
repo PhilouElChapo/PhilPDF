@@ -135,12 +135,19 @@ def autoriser_compte(parent, compte):
     boucle = QEventLoop()
     t.ligne.connect(dlg.noter)
     t.fini.connect(lambda j, err: (res.update(j=j, err=err), boucle.quit()))
-    dlg.b_stop.clicked.connect(lambda: setattr(t, "stop", True))
-    dlg.rejected.connect(lambda: setattr(t, "stop", True))
+    annule = []
+
+    def annuler():                                 # seulement un vrai clic de l'utilisateur, pendant l'attente
+        if not res:
+            annule.append(1)
+            t.stop = True
+    dlg.b_stop.clicked.connect(annuler)
+    dlg.rejected.connect(annuler)
     t.start()
     dlg.show()
     boucle.exec()
     t.wait(3000)
+    dlg.blockSignals(True)
     dlg.close()
     if res.get("j"):
         coffre.enregistrer(compte["id"] + ".jeton", res["j"]["refresh_token"])
@@ -160,10 +167,10 @@ def autoriser_compte(parent, compte):
             erreur(parent, _("Autorisation"), _("L'autorisation est enregistrée, mais la connexion de test a échoué : {e}", e=ex),
                    getattr(ex, "emplacement", None))
         return True
-    if t.stop and not res.get("j"):
+    if annule and not res.get("j"):
         QMessageBox.information(parent, _("Autorisation"), _("Autorisation annulée : rien n'a été enregistré."))
         return False
-    if not t.stop:
+    if not res.get("j"):
         class _J:
             def texte_journal(self_):
                 return "\n".join(distant.masquer(l) for l in t.journal) or _("Aucun échange enregistré.")

@@ -91,8 +91,12 @@ jobs:
               if i:
                   ids[cle] = {"id": i, "secret": os.environ.get(env + "_CLIENT_SECRET", "") or None}
               print(cle, ":", "identifiant present" if i else "secret " + env + "_CLIENT_ID absent")
+              sec = os.environ.get(env + "_CLIENT_SECRET", "")
               print(("::notice title=Identifiants::" if i else "::warning title=Identifiants::") + cle + " : " +
-                    ("identifiant present (" + str(len(i)) + " caracteres)" if i else "secret " + env + "_CLIENT_ID absent ou vide"))
+                    ("identifiant present (" + str(len(i)) + " caracteres, se termine par " + i[-27:] + ")" if i else
+                     "secret " + env + "_CLIENT_ID absent ou vide") +
+                    (" ; secret present (" + str(len(sec)) + " caracteres, commence par " + sec[:6] + ")" if sec else
+                     (" ; pas de secret" if cle in ("gdrive", "box") else "")))
           with open("app/identifiants.py", "w") as f:
               f.write("IDENTIFIANTS = " + repr(ids) + "\n")
 
