@@ -61,6 +61,11 @@ class ErreurAutorisation(Exception):
     pass
 
 
+# Identifiants d'application publics de PhilPDF (applications « client public » : ils ne sont pas secrets).
+# Les secrets du depot GitHub ou les variables d'environnement passent avant.
+PUBLICS = {"onedrive": "e6479a20-b120-476d-ba0a-e4f37aa9841c"}
+
+
 def identifiants(fournisseur):
     """(client_id, secret) ou (None, None) si PhilPDF n'a pas d'identifiant pour ce fournisseur."""
     f = FOURNISSEURS[fournisseur]
@@ -74,6 +79,8 @@ def identifiants(fournisseur):
             return d["id"], d.get("secret")
     except ImportError:
         pass
+    if fournisseur in PUBLICS:                    # identifiant public (application de bureau, sans secret)
+        return PUBLICS[fournisseur], None
     try:
         from .config import dossier_donnees
         with open(os.path.join(dossier_donnees(), "identifiants.json"), encoding="utf-8") as fic:

@@ -49,6 +49,9 @@ Verification manuelle : Aide > Rechercher les mises a jour.
 3. CE QUE FAIT LA VERSION 0.3
 -----------------------------
 
+  Nouveau en 0.6.1 : OneDrive en direct active (Preferences > Drive et
+    dossiers, ou bouton de synchronisation de l'Accueil).
+
   Nouveau en 0.6 :
     - Modifier : double-clic sur un paragraphe = zone de texte sur
       plusieurs lignes ; Entree fait un retour a la ligne, le texte se
