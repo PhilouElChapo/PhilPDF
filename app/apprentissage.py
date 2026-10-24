@@ -138,6 +138,7 @@ def retenir_ocr(params, corrections):
     Garder la lecture de Tesseract alors qu'une regle proposait autre chose affaiblit la regle."""
     d = lire(params, "ocr.json")
     mots, regles = d.setdefault("mots", {}), d.setdefault("regles", {})
+    nb_mots, nb_regles = 0, 0
     for avant, apres in corrections:
         if avant == apres:
             for cle, v in regles.items():
@@ -148,9 +149,12 @@ def retenir_ocr(params, corrections):
         for m in apres.split():
             m = m.strip(".,;:!?()[]«»\"“”")
             if len(m) >= 3 and any(c.isalpha() for c in m):
+                nb_mots += m not in mots
                 mots[m] = {"maj": maintenant()}
         if len(avant.split()) == 1 and len(apres.split()) == 1:
             cle = f"{avant}\u2192{apres}"
             v = regles.get(cle, {"n": 0})
             regles[cle] = {"n": v.get("n", 0) + 1, "maj": maintenant()}
+            nb_regles += 1
     ecrire(params, "ocr.json", d)
+    return nb_mots, nb_regles

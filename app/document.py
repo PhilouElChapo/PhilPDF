@@ -202,7 +202,7 @@ class PageWidget(QWidget):
             if o.mode == "poser":
                 o.poser_objet(self.num, hg)
             elif o.mode == "ajout_texte":
-                self.ouvrir_editeur(None, hg)
+                self.editeur = EditeurParagraphe(self, None, hg)
             else:
                 o.ajouter_image_ici(self.num, hg)
             return
@@ -305,10 +305,8 @@ class PageWidget(QWidget):
             o.renommer_champ()
             return
         if o.mode == "modifier":
-            for r, t in o.lignes_page(self.num):
-                if fitz.Rect(r).contains(pt):
-                    self.ouvrir_editeur(fitz.Rect(r), None, t)
-                    return
+            if self.ouvrir_paragraphe(pt):
+                return
         obj = o.objet_sous(self.num, pt)
         if obj and obj["type"] == "annot":
             o.editer_annotation(obj)
@@ -357,9 +355,164 @@ class PageWidget(QWidget):
         ed.setFocus()
         self.saisie = ed
 
+    def ouvrir_paragraphe(self, pt):
+        """Edition du paragraphe sous le point (plusieurs lignes, retours a la ligne). False si pas de texte."""
+        try:
+            para = Editeur(self.o.doc).paragraphe_a(self.num, pt)
+        except Exception:
+            para = None
+        if not para:
+            return False
+        if self.editeur:
+            self.editeur.valider()
+        self.editeur = EditeurParagraphe(self, para)
+        return True
+
     # ---- edition directe dans la page (WYSIWYG)
     def ouvrir_editeur(self, rect, pt, texte=""):
         self.editeur = EditeurEnLigne(self, rect, pt, texte)
+
+
+class EditeurParagraphe(QFrame):
+    """Zone de texte posee sur la page, a la largeur du paragraphe : on tape, Entree fait un retour a la ligne,
+    la poignee de droite elargit ou retrecit la zone ; Ctrl+Entree (ou clic ailleurs) valide, Echap annule."""
+
+    def __init__(self, pw, para=None, coin=None):
+        from PySide6.QtWidgets import QPlainTextEdit
+        super().__init__(pw)
+        self.pw, self.para, self.coin = pw, para, coin
+        o = pw.o
+        e = pw.echelle()
+        self.e = e
+        self._fini = False
+        self.setObjectName("edpar")
+        self.setStyleSheet("#edpar{background:transparent}")
+        if para:
+            r = pw.vers_ecran(fitz.Rect(para["x0"], para["rect"].y0, para["x1"], para["rect"].y1))
+            self.taille = para["taille"]
+            texte = para["texte"]
+        else:
+            p = fitz.Point(coin) * pw._mat_texte()
+            self.taille = o.format_taille.value()
+            r = QRectF(p.x, p.y, 260 * e, self.taille * e * 1.4)
+            texte = ""
+        self.initial = texte
+        self.zone = QPlainTextEdit(self)
+        self.zone.setPlainText(texte)
+        self.zone.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+        self.zone.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.zone.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.zone.setStyleSheet("QPlainTextEdit{background:rgb(240,246,254);border:1.5px solid #1462c2;"
+                                "border-radius:3px;padding:0px}")
+        self.zone.document().setDocumentMargin(1)
+        f = self._police_affichage()
+        f.setPixelSize(max(8, int(self.taille * e * 0.98)))
+        self.zone.setFont(f)
+        self.zone.installEventFilter(self)
+        self.poignee = QLabel("⋮", self)
+        self.poignee.setAlignment(Qt.AlignCenter)
+        self.poignee.setCursor(Qt.SizeHorCursor)
+        self.poignee.setToolTip(_("Glissez pour élargir ou rétrécir la zone de texte"))
+        self.poignee.setStyleSheet("QLabel{background:#1462c2;color:#fff;border-radius:3px;font-weight:700}")
+        self.poignee.installEventFilter(self)
+        self.aide = QLabel(_("Entrée : nouvelle ligne · Ctrl+Entrée ou clic ailleurs : valider · Echap : annuler"), self)
+        self.aide.setStyleSheet("QLabel{background:#1462c2;color:#fff;font-size:10px;padding:1px 6px;border-radius:3px}")
+        self.largeur = max(80.0, r.width() + 6)
+        self.x, self.y = r.x() - 3, r.y() - 3
+        self.zone.document().contentsChanged.connect(self._ajuster)
+        self._ajuster()
+        self.show()
+        QTimer.singleShot(0, self._ajuster)
+        self.zone.setFocus()
+        c = self.zone.textCursor()
+        c.movePosition(c.MoveOperation.End)
+        self.zone.setTextCursor(c)
+
+    def _police_affichage(self):
+        """Police de l'ecran la plus proche de celle du paragraphe (affichage fidele pendant la saisie)."""
+        try:
+            o = self.pw.o
+            if self.para:
+                ed = Editeur(o.doc)
+                sp = next(sp for c, sp in self.para["lignes"][0]["chars"] if c["c"].strip())
+                p = ed._police_du_span(o.doc[self.pw.num], sp)
+                r = ed._police_par_nom(p) if p else None
+                if r:
+                    from .polices import qfont
+                    return qfont({"famille": r.nom, "fichier": r.fichier, "gras": "Bold" in r.nom or (p and p.weight >= 600),
+                                  "italique": "Italic" in r.nom, "fournie": True})
+            elif o.format_police.currentData():
+                from .polices import qfont, liste
+                pp = next((x for x in liste() if x["fichier"] == o.format_police.currentData()), None)
+                if pp:
+                    return qfont(pp)
+        except Exception:
+            pass
+        return QFont()
+
+    def _ajuster(self):
+        doc = self.zone.document()
+        doc.setTextWidth(self.largeur - 6)
+        lignes = 0                                    # hauteur : nombre de lignes affichees x interligne
+        b = doc.begin()
+        while b.isValid():
+            lignes += max(1, b.layout().lineCount() if b.layout() else 1)
+            b = b.next()
+        h = int(max(doc.size().height(), lignes * self.zone.fontMetrics().lineSpacing()) + 10)
+        self.zone.setGeometry(0, 0, int(self.largeur), h)
+        self.poignee.setGeometry(int(self.largeur), 0, 10, h)
+        self.aide.adjustSize()
+        self.aide.move(0, h + 2)
+        self.setGeometry(int(self.x), int(self.y), int(max(self.largeur + 12, self.aide.width())), h + self.aide.height() + 4)
+
+    def eventFilter(self, obj, ev):
+        t = ev.type()
+        if obj is self.zone and t == ev.Type.KeyPress:
+            if ev.key() == Qt.Key_Escape:
+                self.annuler()
+                return True
+            if ev.key() in (Qt.Key_Return, Qt.Key_Enter) and ev.modifiers() & Qt.ControlModifier:
+                self.valider()
+                return True
+        if obj is self.poignee:
+            if t == ev.Type.MouseButtonPress:
+                self._tire = (ev.globalPosition().x(), self.largeur)
+                return True
+            if t == ev.Type.MouseMove and getattr(self, "_tire", None):
+                self.largeur = max(60.0, self._tire[1] + ev.globalPosition().x() - self._tire[0])
+                self._ajuster()
+                return True
+            if t == ev.Type.MouseButtonRelease:
+                self._tire = None
+                return True
+        return False
+
+    def annuler(self):
+        self._fini = True
+        self.pw.editeur = None
+        self.hide()
+        self.deleteLater()
+        self.pw.update()
+
+    def valider(self, *_a, **_k):
+        if self._fini:
+            return
+        self._fini = True
+        texte = self.zone.toPlainText().rstrip()
+        self.pw.editeur = None
+        self.hide()
+        self.deleteLater()
+        o = self.pw.o
+        largeur_pt = (self.largeur - 6) / self.e
+        if self.para:
+            elargi = abs(largeur_pt - (self.para["x1"] - self.para["x0"])) > 2
+            if texte != self.initial or elargi:
+                if elargi:
+                    self.para["x1"] = self.para["x0"] + largeur_pt
+                o.modifier_paragraphe(self.pw.num, self.para, texte)
+        elif texte.strip():
+            o.ajouter_paragraphe(self.pw.num, self.coin, texte, largeur_pt)
+        self.pw.update()
 
 
 class EditeurEnLigne(QWidget):
@@ -456,10 +609,8 @@ class DialogueTexte(QDialog):
         b = QPushButton(_('Choisir...'))
         b.clicked.connect(self._coul)
         f.addRow(_('Couleur'), b)
-        self.combo = QComboBox()
-        self.combo.addItem(_('Police du document (automatique)'), None)
-        for n, fichier in CANDIDATS:
-            self.combo.addItem(n, fichier)
+        from .polices import combo as combo_polices
+        self.combo = combo_polices(self)
         f.addRow(_('Police'), self.combo)
         bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
         bb.accepted.connect(self.accept)
@@ -476,6 +627,11 @@ class DialogueTexte(QDialog):
 
 
 # ================================================================ barre rapide
+def _rgb(c):
+    q = QColor(c)
+    return (q.redF(), q.greenF(), q.blueF())
+
+
 class BarreRapide(QFrame):
     """Actions rapides sur le texte selectionne (comme Office et Acrobat)."""
 
@@ -483,28 +639,50 @@ class BarreRapide(QFrame):
         super().__init__(parent)
         self.o = onglet
         self.setObjectName("barre")
-        self.setStyleSheet("#barre{background:#2b2b2b;border-radius:8px} QToolButton{color:#fff;padding:4px 6px;border-radius:6px}"
+        self.setStyleSheet("#barre{background:#2b2b2b;border-radius:10px;border:1px solid #111}"
+                           "QToolButton{color:#fff;padding:3px 7px;border-radius:6px;font-size:11px}"
                            "QToolButton:hover{background:#4a4a4a}")
         h = QHBoxLayout(self)
         h.setContentsMargins(6, 4, 6, 4)
         h.setSpacing(2)
-        for ic, txt, f in [("surligner", _('Surligner'), lambda: self.o.annoter("surligner")),
-                           ("souligner", _('Souligner'), lambda: self.o.annoter("souligner")),
-                           ("barrer", _('Barrer'), lambda: self.o.annoter("barrer")),
-                           ("commentaire", _('Note'), lambda: self.o.annoter("note")),
-                           ("copier", _('Copier'), self.o.copier),
-                           ("modifier", _('Modifier le texte'), self.o.modifier_selection),
-                           ("biffer", _('Biffer (effacer pour de vrai)'), self.o.biffer)]:
+        for ic, txt, court, f in [("surligner", _('Surligner'), _('Surligner'), lambda: self.o.annoter("surligner")),
+                                  ("souligner", _('Souligner'), _('Souligner'), lambda: self.o.annoter("souligner")),
+                                  ("barrer", _('Barrer'), _('Barrer'), lambda: self.o.annoter("barrer")),
+                                  ("commentaire", _('Note'), _('Note'), lambda: self.o.annoter("note")),
+                                  ("copier", _('Copier'), _('Copier'), self.o.copier),
+                                  ("modifier", _('Modifier le texte (zone de texte)'), _('Modifier'), self.o.modifier_selection),
+                                  ("biffer", _('Biffer (effacer pour de vrai)'), _('Biffer'), self.o.biffer)]:
             b = QToolButton()
-            b.setIcon(icone(ic, "#ffffff", 40))
-            b.setIconSize(QSize(18, 18))
+            b.setIcon(icone(ic, "#ffffff", 48))
+            b.setIconSize(QSize(22, 22))
+            b.setText(court)
+            b.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
             b.setToolTip(txt)
             b.setAccessibleName(txt)
             b.setAutoRaise(True)
             b.clicked.connect(f)
             b.clicked.connect(self.hide)
             h.addWidget(b)
+        self.b_couleur = QToolButton()
+        self.b_couleur.setText(_('Couleur'))
+        self.b_couleur.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        self.b_couleur.setIconSize(QSize(22, 22))
+        self.b_couleur.setToolTip(_("Couleur et style du surlignage, du soulignement et du barré"))
+        self.b_couleur.clicked.connect(lambda: self.o.menu_style_annotations(self.b_couleur.mapToGlobal(self.b_couleur.rect().bottomLeft())))
+        h.addWidget(self.b_couleur)
+        self.maj_couleur()
         self.hide()
+
+    def maj_couleur(self):
+        from PySide6.QtGui import QPixmap, QPainter
+        pm = QPixmap(22, 22)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        c = self.o.couleurs_annot()
+        for i, g in enumerate(("surligner", "souligner", "barrer")):
+            p.fillRect(2 + i * 7, 4, 6, 14, QColor(c[g]))
+        p.end()
+        self.b_couleur.setIcon(QIcon(pm))
 
 
 # ================================================================ vignettes / organiser
@@ -518,10 +696,29 @@ class Loupe(QLabel):
         self.facteur = 1.0
 
 
+def defilable(w):
+    """Barre d'outils qui defile horizontalement quand la fenetre est etroite (au lieu d'empecher de la reduire)."""
+    from PySide6.QtWidgets import QScrollArea, QFrame as _F
+    z = QScrollArea()
+    z.setWidget(w)
+    z.setWidgetResizable(True)
+    z.setFrameShape(_F.NoFrame)
+    z.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    z.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    z.setStyleSheet("QScrollArea{background:transparent} QScrollBar:horizontal{height:6px}")
+
+    def ajuster():
+        z.setFixedHeight(w.sizeHint().height() + (8 if z.horizontalScrollBar().isVisible() else 0))
+    z.horizontalScrollBar().rangeChanged.connect(lambda *_a: ajuster())
+    ajuster()
+    return z
+
+
 class GrillePages(QListWidget):
     """Vignettes reordonnables par glisser-deposer (colonne ou grille), avec defilement automatique pres
     des bords pendant le glisser, et loupe au survol (molette = zoom de la loupe)."""
     ordre_change = Signal(list)
+    vignettes_agrandies = Signal(int)
     HAUTEUR_LOUPE = 520
 
     def __init__(self, grille=False):
@@ -537,15 +734,15 @@ class GrillePages(QListWidget):
         self.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         self.setViewMode(QListWidget.ListMode)          # le mode « icones » de Qt deplace les vignettes a sa facon
         self.grille = grille
-        if grille:
-            from PySide6.QtWidgets import QStyledItemDelegate, QStyleOptionViewItem
+        from PySide6.QtWidgets import QStyledItemDelegate, QStyleOptionViewItem
 
-            class Dessus(QStyledItemDelegate):           # numero de page sous la vignette
-                def initStyleOption(self, opt, index):
-                    super().initStyleOption(opt, index)
-                    opt.decorationPosition = QStyleOptionViewItem.Top
-                    opt.displayAlignment = Qt.AlignHCenter | Qt.AlignTop
-            self.setItemDelegate(Dessus(self))
+        class Dessus(QStyledItemDelegate):               # numero de page sous la vignette
+            def initStyleOption(self, opt, index):
+                super().initStyleOption(opt, index)
+                opt.decorationPosition = QStyleOptionViewItem.Top
+                opt.displayAlignment = Qt.AlignHCenter | Qt.AlignTop
+        self.setItemDelegate(Dessus(self))
+        if grille:
             self.setFlow(QListWidget.LeftToRight)
             self.setWrapping(True)
             self.setResizeMode(QListWidget.Adjust)
@@ -566,6 +763,14 @@ class GrillePages(QListWidget):
         self._vitesse = 0
         self.setMouseTracking(True)
         self.viewport().setMouseTracking(True)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if not self.grille:                        # le volet s'elargit : les vignettes grandissent avec lui
+            l = max(70, min(420, self.viewport().width() - 18))
+            if abs(l - self.iconSize().width()) > 4:
+                self.setIconSize(QSize(l, int(l * 1.42)))
+                self.vignettes_agrandies.emit(l)
 
     # ---------------------------------------------------------------- loupe
     def _cacher_loupe(self):
@@ -739,8 +944,10 @@ class OngletDocument(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
         self.barre = self._barre_outils()
-        v.addWidget(self.barre)
-        v.addWidget(self._bandeau_modifier())
+        v.addWidget(defilable(self.barre))
+        self._zone_bandeau = defilable(self._bandeau_modifier())
+        self._zone_bandeau.hide()
+        v.addWidget(self._zone_bandeau)
         self.bandeau_simple = QLabel()
         self.bandeau_simple.setStyleSheet("background:#f1ebfc;color:#3f2380;padding:8px 16px;border-bottom:1px solid #ddd0f6")
         self.bandeau_simple.hide()
@@ -795,6 +1002,12 @@ class OngletDocument(QWidget):
         self.vignettes.customContextMenuRequested.connect(lambda p: self._menu_pages(self.vignettes, p))
         self.vignettes.ordre_change.connect(self.reordonner)
         self.vignettes.rendu = self._rendu_loupe
+        self._taille_vign = 120
+        self._minut_vign = QTimer(self)
+        self._minut_vign.setSingleShot(True)
+        self._minut_vign.timeout.connect(self._rafraichir_icones_vignettes)
+        self.vignettes.vignettes_agrandies.connect(lambda l: (setattr(self, "_taille_vign", max(120, int(l * 1.45))),
+                                                               self._minut_vign.start(250)))
         self.sp.addWidget(self.vignettes)
         self.centre = QStackedWidget()
         self.zone = QScrollArea()
@@ -988,10 +1201,13 @@ class OngletDocument(QWidget):
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(16, 10, 16, 10)
-        h = QHBoxLayout()
         t = QLabel(_("<b>Organiser les pages</b> — glissez pour réordonner, clic droit pour plus d'actions ; "
                      "survolez une page pour la loupe, molette pour zoomer"))
-        h.addWidget(t)
+        t.setWordWrap(True)
+        v.addWidget(t)
+        boutons = QWidget()
+        h = QHBoxLayout(boutons)
+        h.setContentsMargins(0, 0, 0, 0)
         h.addStretch()
         for txt, f in [(_('Pivoter ↺'), lambda: self._sel_grille(lambda p: self.pivoter(p, -90, demander=False))),
                        (_('Pivoter ↻'), lambda: self._sel_grille(lambda p: self.pivoter(p, 90, demander=False))),
@@ -1005,7 +1221,7 @@ class OngletDocument(QWidget):
         fin.setStyleSheet("QPushButton{background:#c9252d;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-weight:600}")
         fin.clicked.connect(lambda: self.organiser(False))
         h.addWidget(fin)
-        v.addLayout(h)
+        v.addWidget(defilable(boutons))
         self.grille = GrillePages(grille=True)
         self.grille.setStyleSheet("QListWidget{background:#ececec;border:none}")
         self.grille.ordre_change.connect(self.reordonner)
@@ -1192,10 +1408,8 @@ class OngletDocument(QWidget):
         self.format_info.setWordWrap(True)
         self.format_info.setStyleSheet("color:#555;font-size:12px")
         f.addRow(self.format_info)
-        self.format_police = QComboBox()
-        self.format_police.addItem(_('Police du document (automatique)'), None)
-        for n, fichier in CANDIDATS:
-            self.format_police.addItem(n, fichier)
+        from .polices import combo as combo_polices
+        self.format_police = combo_polices()
         f.addRow(_('Police'), self.format_police)
         self.format_taille = QDoubleSpinBox()
         self.format_taille.setRange(4, 96)
@@ -1345,10 +1559,18 @@ class OngletDocument(QWidget):
         pm = page.get_pixmap(matrix=fitz.Matrix(k, k).prerotate(self.rotation_vue.get(n, 0)), alpha=False)
         return QPixmap.fromImage(QImage(pm.samples, pm.width, pm.height, pm.stride, QImage.Format_RGB888).copy())
 
+    def _rafraichir_icones_vignettes(self):
+        """Vignettes redessinees nettes a la nouvelle taille du volet."""
+        for i in range(self.vignettes.count()):
+            it = self.vignettes.item(i)
+            n = it.data(Qt.UserRole)
+            if n is not None and n < len(self.doc):
+                it.setIcon(QIcon(self._vignette(n, self._taille_vign)))
+
     def construire_vignettes(self):
         self.vignettes.clear()
         for n in range(len(self.doc)):
-            it = QListWidgetItem(QIcon(self._vignette(n)), str(n + 1))
+            it = QListWidgetItem(QIcon(self._vignette(n, getattr(self, "_taille_vign", 120))), str(n + 1))
             it.setData(Qt.UserRole, n)
             it.setTextAlignment(Qt.AlignHCenter)
             self.vignettes.addItem(it)
@@ -1620,6 +1842,30 @@ class OngletDocument(QWidget):
         if obj:
             self.choisir_objet(obj)
         m = QMenu(self)
+        ax = self.annot_texte_sous(pw.num, pt) if not self.objet else None
+        if self.selection and not self.objet:
+            s = self.selection
+            m.addAction(icone("copier"), _('Copier'), self.copier)
+            m.addSeparator()
+            m.addAction(icone("surligner"), _('Surligner'), lambda: self.annoter("surligner"))
+            m.addAction(icone("souligner"), _('Souligner'), lambda: self.annoter("souligner"))
+            m.addAction(icone("souligner"), _('Souligner (ondulé)'), lambda: self.annoter("ondule"))
+            m.addAction(icone("barrer"), _('Barrer'), lambda: self.annoter("barrer"))
+            m.addAction(icone("commentaire"), _('Ajouter une note'), lambda: self.annoter("note"))
+            m.addAction(_('Couleurs et style...'), lambda: self.menu_style_annotations(pos_globale))
+            m.addSeparator()
+            m.addAction(icone("modifier"), _('Modifier le texte'), self.modifier_selection)
+            texte = s["texte"].strip().split("\n")[0][:40]
+            if texte:
+                m.addAction(icone("rechercher"), _('Rechercher « {t} »', t=texte), lambda: self.rechercher_texte(texte))
+            m.addAction(icone("biffer"), _('Biffer (effacer pour de vrai)'), self.biffer)
+            m.exec(pos_globale)
+            return
+        if ax is not None:
+            m.addAction(_("Couleur et style de l'annotation..."),
+                        lambda: self.menu_style_annotations(pos_globale, ax, pw.num))
+            m.addAction(icone("fermer", "#c9252d"), _("Supprimer l'annotation"), lambda: self._supprimer_annot(pw.num, ax))
+            m.addSeparator()
         if self.objet:
             m.addAction(icone("copier"), _('Copier'), self.copier)
             m.addAction(_('Couper'), self.couper)
@@ -1632,6 +1878,18 @@ class OngletDocument(QWidget):
         m.addAction(_('Coller'), lambda: self.coller(pw.num, pt))
         m.addAction(_('Ajouter du texte ici'), lambda: pw.ouvrir_editeur(None, pt))
         m.exec(pos_globale)
+
+    def _supprimer_annot(self, n, xref):
+        page = self.doc[n]
+        a = next((x for x in page.annots() if x.xref == xref), None)
+        if a:
+            self.memoriser(_("Suppression d'une annotation"))
+            page.delete_annot(a)
+            self.apres_modif()
+
+    def rechercher_texte(self, texte):
+        """Ouvre Rechercher et remplacer avec le texte selectionne (la selection est encore active)."""
+        self.outil_demande.emit("remplacer")
 
     # ---- presse-papiers
     def copier(self):
@@ -1688,10 +1946,15 @@ class OngletDocument(QWidget):
             return
         self.memoriser()
         page = self.doc[s["page"]]
+        coul = self.couleurs_annot()
         if genre == "surligner":
             a = page.add_highlight_annot(s["lignes"])
+        elif genre == "souligner" and self.params.get("style_souligne") == "ondule":
+            a = page.add_squiggly_annot(s["lignes"])
         elif genre == "souligner":
             a = page.add_underline_annot(s["lignes"])
+        elif genre == "ondule":
+            a = page.add_squiggly_annot(s["lignes"])
         elif genre == "barrer":
             a = page.add_strikeout_annot(s["lignes"])
         else:
@@ -1702,8 +1965,103 @@ class OngletDocument(QWidget):
             r = s["lignes"][-1]
             a = page.add_text_annot(fitz.Point(r.x1 + 2, r.y0), txt, icon="Comment")
         a.set_info(title=self.params.get("auteur") or self.params["machine"])
+        if genre in ("surligner", "souligner", "ondule", "barrer"):
+            a.set_colors(stroke=_rgb(coul["souligner" if genre == "ondule" else genre]))
+            a.set_opacity(float(self.params.get("opacite_surlignage", 1.0)) if genre == "surligner" else 1.0)
         a.update()
         self.selection = None
+        self.apres_modif()
+
+    # ---- couleurs et styles des annotations de texte
+    COULEURS_DEFAUT = {"surligner": "#ffe600", "souligner": "#0f6cbd", "barrer": "#d32f2f"}
+
+    def couleurs_annot(self):
+        return dict(self.COULEURS_DEFAUT, **(self.params.get("couleurs_annotations") or {}))
+
+    def menu_style_annotations(self, pos, annot_xref=None, n=None):
+        """Menu : couleur de chaque genre, style du souligne ; sur une annotation existante : la changer."""
+        m = QMenu(self)
+        palette = [("#ffe600", _("Jaune")), ("#7ee36e", _("Vert")), ("#6ec8ff", _("Bleu clair")), ("#ff9de0", _("Rose")),
+                   ("#ffa94d", _("Orange")), ("#0f6cbd", _("Bleu")), ("#d32f2f", _("Rouge")), ("#000000", _("Noir"))]
+
+        def pastille(c):
+            pm = QPixmap(16, 16)
+            pm.fill(QColor(c))
+            return QIcon(pm)
+        if annot_xref is not None:
+            for c, nom in palette:
+                m.addAction(pastille(c), nom, lambda c=c: self.recolorer_annot(n, annot_xref, c))
+            m.addAction(_("Autre couleur..."), lambda: self._autre_couleur(lambda c: self.recolorer_annot(n, annot_xref, c)))
+            m.addSeparator()
+            for g, lib in (("surligner", _("Surligné")), ("souligner", _("Souligné")), ("ondule", _("Souligné ondulé")),
+                           ("barrer", _("Barré"))):
+                m.addAction(lib, lambda g=g: self.transformer_annot(n, annot_xref, g))
+        else:
+            for g, lib in (("surligner", _("Surlignage")), ("souligner", _("Soulignement")), ("barrer", _("Barré"))):
+                sm = m.addMenu(pastille(self.couleurs_annot()[g]), lib)
+                for c, nom in palette:
+                    sm.addAction(pastille(c), nom, lambda g=g, c=c: self._fixer_couleur(g, c))
+                sm.addAction(_("Autre couleur..."), lambda g=g: self._autre_couleur(lambda c: self._fixer_couleur(g, c)))
+            m.addSeparator()
+            st = m.addMenu(_("Style du soulignement"))
+            for v, lib in (("droit", _("Trait droit")), ("ondule", _("Ondulé"))):
+                a = st.addAction(lib, lambda v=v: (self.params.__setitem__("style_souligne", v), self.params.enregistrer()))
+                a.setCheckable(True)
+                a.setChecked(self.params.get("style_souligne", "droit") == v)
+            op = m.addMenu(_("Opacité du surlignage"))
+            for v in (1.0, 0.6, 0.35):
+                a = op.addAction(f"{int(v * 100)} %", lambda v=v: (self.params.__setitem__("opacite_surlignage", v), self.params.enregistrer()))
+                a.setCheckable(True)
+                a.setChecked(abs(float(self.params.get("opacite_surlignage", 1.0)) - v) < 0.01)
+        m.exec(pos)
+
+    def _autre_couleur(self, suite):
+        from PySide6.QtWidgets import QColorDialog
+        c = QColorDialog.getColor(parent=self)
+        if c.isValid():
+            suite(c.name())
+
+    def _fixer_couleur(self, genre, c):
+        d = dict(self.params.get("couleurs_annotations") or {})
+        d[genre] = c
+        self.params["couleurs_annotations"] = d
+        self.params.enregistrer()
+        self.barre_rapide.maj_couleur()
+
+    def annot_texte_sous(self, n, pt):
+        for a in self.doc[n].annots(types=[fitz.PDF_ANNOT_HIGHLIGHT, fitz.PDF_ANNOT_UNDERLINE, fitz.PDF_ANNOT_STRIKE_OUT,
+                                           fitz.PDF_ANNOT_SQUIGGLY]):
+            if fitz.Rect(a.rect).contains(pt):
+                return a.xref
+        return None
+
+    def recolorer_annot(self, n, xref, c):
+        page = self.doc[n]
+        a = next((x for x in page.annots() if x.xref == xref), None)
+        if a:
+            self.memoriser(_("Couleur de l'annotation"))
+            a.set_colors(stroke=_rgb(c))
+            a.update()
+            self.apres_modif()
+
+    def transformer_annot(self, n, xref, genre):
+        page = self.doc[n]
+        a = next((x for x in page.annots() if x.xref == xref), None)
+        if not a:
+            return
+        self.memoriser(_("Style de l'annotation"))
+        quads = a.vertices
+        coul = a.colors.get("stroke")
+        info = a.info
+        page.delete_annot(a)
+        q = [fitz.Quad(quads[i:i + 4]) for i in range(0, len(quads), 4)] if quads else []
+        f = {"surligner": page.add_highlight_annot, "souligner": page.add_underline_annot,
+             "ondule": page.add_squiggly_annot, "barrer": page.add_strikeout_annot}[genre]
+        b = f(q)
+        if coul:
+            b.set_colors(stroke=coul)
+        b.set_info(title=info.get("title", ""))
+        b.update()
         self.apres_modif()
 
     def biffer(self):
@@ -1747,6 +2105,9 @@ class OngletDocument(QWidget):
         self.selection = None
         self.changer_mode("modifier")
         pw = self.page_widgets[n]
+        r0 = fitz.Rect(s["lignes"][0])
+        if pw.ouvrir_paragraphe(fitz.Point(r0.x0 + 1, (r0.y0 + r0.y1) / 2)):
+            return
         for r, t in self.lignes_page(n):
             if fitz.Rect(r).intersects(s["lignes"][0]):
                 pw.ouvrir_editeur(fitz.Rect(r), None, t)
@@ -1763,6 +2124,40 @@ class OngletDocument(QWidget):
             return
         self.objet = None
         self.apres_modif(ed.journal or [_('Aucun changement.')])
+
+    def modifier_paragraphe(self, n, para, texte, taille=None, couleur=None, police=None):
+        self.memoriser(_("Modification d'un paragraphe"))
+        ed = Editeur(self.doc)
+        try:
+            res = ed.modifier_paragraphe(n, para, texte, taille, couleur, police)
+        except Exception as e:
+            (self.annulations.pop(), self.maj_historique())
+            self.message(_("Modification impossible : {e}", e=e))
+            return
+        if res is None:
+            (self.annulations.pop(), self.maj_historique())
+            return
+        self.objet = None
+        self.apres_modif(ed.journal)
+        if res["en_plus"] > 0:                     # le texte descend : touche-t-il ce qui est en dessous ?
+            bas_avant = para["rect"].y1
+            dessous = [l for l in ed._infos_lignes(self.doc[n]) if bas_avant + 1 < l["base"] <= res["bas"] + 2
+                       and min(l["x1"], para["x1"]) - max(l["x0"], para["x0"]) > 5
+                       and not any(abs(l["base"] - b) < 0.5 for b in [para["lignes"][0]["base"] + i * para["interligne"]
+                                                                   for i in range(res["lignes"])])]
+            if dessous:
+                QMessageBox.information(self, _("Modifier"), _(
+                    "Le paragraphe a maintenant {n} ligne(s) de plus et déborde sur le texte en dessous. "
+                    "Elargissez la zone (poignée à droite), réduisez la taille ou raccourcissez le texte ; Ctrl+Z annule.",
+                    n=res["en_plus"]))
+
+    def ajouter_paragraphe(self, n, coin, texte, largeur):
+        self.memoriser(_("Ajout de texte"))
+        ed = Editeur(self.doc)
+        police = self.format_police.currentData()
+        coul = self.format_couleur.getRgbF()[:3] if police else None
+        ed.ajouter_paragraphe(n, coin, texte, largeur, self.format_taille.value(), coul, police)
+        self.apres_modif(ed.journal)
 
     def appliquer_format(self):
         obj = self.objet
@@ -2008,6 +2403,7 @@ class OngletDocument(QWidget):
         if mode == "formulaire":
             self._maj_form()
         modif = mode in ("modifier", "ajout_texte", "ajout_image", "lien", "recadrer")
+        self._zone_bandeau.setVisible(modif)
         self.bandeau.setVisible(modif)
         for cle, b in self.boutons_modif.items():
             if b.isCheckable():
@@ -2140,6 +2536,13 @@ class OngletDocument(QWidget):
             self.doc = fitz.open(stream=avant, filetype="pdf")
         self._recharger(self.doc.tobytes())
         self.message(_('Annulé : {lib}', lib=lib) + (_(' (et {x} autre{x2})', x=fois - 1, x2='s' if fois > 2 else '') if fois > 1 else ""))
+
+    def remplacer_document(self, octets):
+        """Remplace le contenu du document (apres un memoriser()) : allegement, traitement global..."""
+        self.doc = fitz.open(stream=octets, filetype="pdf")
+        self._recharger(octets)
+        self.modifie = True
+        self.titre_change.emit()
 
     def retablir(self, fois=1):
         if not self.retablissements:

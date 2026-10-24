@@ -108,11 +108,12 @@ def appliquer_regles(mots, regles, seuil=2):
     return faites
 
 
-def poser_couche_texte(page, mots, dpi):
-    """Remplace le texte invisible de la page (scan + texte) par les mots fournis, a leur place."""
-    page.add_redact_annot(page.rect)
-    page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE,
-                          text=fitz.PDF_REDACT_TEXT_REMOVE)
+def poser_couche_texte(page, mots, dpi, effacer=True):
+    """Pose le texte invisible des mots (coordonnees en pixels de l'image a `dpi`) ; efface d'abord l'ancien."""
+    if effacer and page.get_text("text").strip():
+        page.add_redact_annot(page.rect)
+        page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE,
+                              text=fitz.PDF_REDACT_TEXT_REMOVE)
     k = 72.0 / dpi
     police = os.path.join(_BASE, "fonts", "LiberationSans-Regular.ttf")
     nom_police = "helv"
@@ -142,30 +143,99 @@ def poser_couche_texte(page, mots, dpi):
                                  morph=(fitz.Point(x0, base), mat))
             except Exception:
                 pass                                   # caractere hors police : le mot reste sans texte
+    try:
+        page.clean_contents()                          # un seul flux par page au lieu d'un par mot : fichier leger
+    except Exception:
+        pass
 
 
-def ocr_image(gris, dpi, base, mots_perso=None):
-    """Nettoie, redresse et reconnait une image : (pdf de la page, mots, angle, image nettoyee)."""
-    a = angle_inclinaison(gris)
-    nb = nettoyer(redresser(gris, a) if abs(a) > 0.05 else gris)
-    tif = base + ".tif"
-    Image.fromarray(nb).convert("1").save(tif, compression="group4", dpi=(dpi, dpi))
-    cmd = [tesseract_exe() or "tesseract", tif, base, "-l", "fra", "--dpi", str(dpi)]
+def qualite(mots):
+    """Confiance moyenne de Tesseract, ponderee par la longueur des mots (0 a 100)."""
+    n = sum(len(m["texte"]) for m in mots)
+    return sum(m["conf"] * len(m["texte"]) for m in mots) / n if n else 0.0
+
+
+def _tesseract(image, base, dpi, sorties, mots_perso=None):
+    cmd = [tesseract_exe() or "tesseract", image, base, "-l", "fra", "--dpi", str(dpi)]
     if mots_perso:
         liste = base + ".mots.txt"
         with open(liste, "w", encoding="utf-8") as f:
             f.write("\n".join(mots_perso) + "\n")
         cmd += ["--user-words", liste]
-    r = subprocess.run(cmd + ["pdf", "tsv"], env={**os.environ, "TESSDATA_PREFIX": TESS}, stdout=subprocess.DEVNULL,
+    r = subprocess.run(cmd + sorties, env={**os.environ, "TESSDATA_PREFIX": TESS}, stdout=subprocess.DEVNULL,
                        stderr=subprocess.PIPE, creationflags=0x08000000 if sys.platform == "win32" else 0)
-    if r.returncode != 0 or not os.path.exists(base + ".pdf"):
+    if r.returncode != 0 or not os.path.exists(base + ".tsv"):
         raise RuntimeError("Tesseract : " + r.stderr.decode("utf-8", "replace")[-300:])
-    return base + ".pdf", lire_tsv(base + ".tsv"), a, nb
+
+
+def tiff_g4(nb, dpi):
+    import io
+    t = io.BytesIO()
+    Image.fromarray(nb).convert("1").save(t, "TIFF", compression="group4", dpi=(dpi, dpi), tiffinfo={278: nb.shape[0]})
+    return t.getvalue()
+
+
+def image_de_tiff(tif):
+    import io
+    return np.array(Image.open(io.BytesIO(tif)).convert("L"))
+
+
+def page_scan(doc, tif, largeur_pt, hauteur_pt):
+    """Ajoute une page avec l'image noir et blanc compressee en G4 (comme un fax : tres leger)."""
+    import io
+    r = Image.open(io.BytesIO(tif))
+    w, h = r.size
+    brut = b"".join(tif[o:o + c] for o, c in zip(r.tag_v2[273], r.tag_v2[279]))
+    page = doc.new_page(width=largeur_pt, height=hauteur_pt)
+    x = page.insert_image(page.rect, pixmap=fitz.Pixmap(fitz.csGRAY, fitz.IRect(0, 0, 1, 1), False))
+    doc.update_stream(x, brut, compress=False)
+    for cle, val in (("Filter", "/CCITTFaxDecode"), ("DecodeParms", f"<</K -1/Columns {w}/Rows {h}/BlackIs1 true>>"),
+                     ("Width", str(w)), ("Height", str(h)), ("BitsPerComponent", "1"), ("ColorSpace", "/DeviceGray")):
+        doc.xref_set_key(x, cle, val)
+    return page
+
+
+def _lire(image, base, dpi, mots_perso, echelle):
+    cv2.imwrite(base + ".png", image)
+    _tesseract(base + ".png", base, dpi, ["tsv"], mots_perso)
+    mots = lire_tsv(base + ".tsv")
+    if echelle != 1:
+        for m in mots:
+            for c in ("x", "y", "l", "h"):
+                m[c] = int(round(m[c] / echelle))
+    return mots
+
+
+SEUIL_QUALITE = 60
+CONF_MINI = 25
+DPI_LECTURE = 300
+
+
+def ocr_image(gris, dpi, base, mots_perso=None):
+    """Nettoie, redresse et reconnait une image : (tiff G4 de la page, mots, angle, qualite).
+    Lecture a 300 dpi au plus (plus rapide, et Tesseract lit mieux). Si la lecture est peu sure (lettres fines
+    ou cassees : machine a ecrire, fax, photocopie pale), une seconde lecture se fait sur une copie aux traits
+    epaissis ; la meilleure est gardee. L'image du PDF reste l'image nettoyee, non epaissie."""
+    a = angle_inclinaison(gris)
+    nb = nettoyer(redresser(gris, a) if abs(a) > 0.05 else gris)
+    echelle = min(1.0, DPI_LECTURE / dpi)
+    lecture = nb if echelle == 1 else cv2.resize(nb, None, fx=echelle, fy=echelle, interpolation=cv2.INTER_AREA)
+    dpi_l = int(round(dpi * echelle))
+    mots = _lire(lecture, base, dpi_l, mots_perso, echelle)
+    q = qualite(mots)
+    for k in (2, 3):
+        if q >= SEUIL_QUALITE:
+            break
+        autres = _lire(cv2.erode(lecture, np.ones((k, k), np.uint8)), f"{base}_e{k}", dpi_l, mots_perso, echelle)
+        if qualite(autres) > q + 5:
+            mots, q = autres, qualite(autres)
+    mots = [m for m in mots if m["conf"] >= CONF_MINI]
+    return tiff_g4(nb, dpi), mots, a, q
 
 
 def analyser(entree, progression=None, apprentissage=None):
     """Premiere etape : reconnaissance page par page (les pages qui ont deja du texte sont gardees).
-    apprentissage = {"mots": [...], "regles": {...}}. Renvoie un dict a passer a assembler()."""
+    progression(page, total, qualite_page_precedente). apprentissage = {"mots": [...], "regles": {...}}."""
     d = fitz.open(entree)
     if d.needs_pass:
         raise ValueError("document protégé par mot de passe")
@@ -179,10 +249,12 @@ def analyser(entree, progression=None, apprentissage=None):
             pages.append({"num": i, "garder": True})
             continue
         gris, dpi = image_de_page(d, p)
-        pdf, mots, angle, nb = ocr_image(gris, dpi, os.path.join(tmp, f"p{i:03d}"), app.get("mots"))
+        tif, mots, angle, q = ocr_image(gris, dpi, os.path.join(tmp, f"p{i:03d}"), app.get("mots"))
         auto = appliquer_regles(mots, app.get("regles"))
-        pages.append({"num": i, "garder": False, "pdf": pdf, "mots": mots, "dpi": dpi, "angle": angle,
-                      "image": nb, "auto": auto, "modifie": bool(auto)})
+        pages.append({"num": i, "garder": False, "tif": tif, "mots": mots, "dpi": dpi, "angle": angle, "qualite": q,
+                      "auto": auto, "taille": (p.rect.width, p.rect.height)})
+    if progression:
+        progression(len(d), len(d))
     return {"doc": d, "pages": pages, "entree": entree}
 
 
@@ -195,10 +267,8 @@ def assembler(analyse, sortie):
             out.insert_pdf(d, from_page=pg["num"], to_page=pg["num"])
             rapport.append((pg["num"] + 1, 0.0, None))
             continue
-        morceau = fitz.open(pg["pdf"])
-        if pg.get("modifie"):
-            poser_couche_texte(morceau[0], pg["mots"], pg["dpi"])
-        out.insert_pdf(morceau)
+        page = page_scan(out, pg["tif"], *pg["taille"])
+        poser_couche_texte(page, pg["mots"], pg["dpi"], effacer=False)
         rapport.append((pg["num"] + 1, pg["angle"], pg["dpi"]))
     out.set_metadata({"producer": "PhilPDF", "title": os.path.basename(analyse["entree"])})
     try:

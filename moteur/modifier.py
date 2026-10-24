@@ -115,6 +115,15 @@ class PolicePDF:
             fd = int(doc.xref_get_key(xref, "FontDescriptor")[1].split()[0])
         else:  # Type1 / TrueType simples
             fd = None
+            fc = doc.xref_get_key(xref, "FirstChar")
+            ws = (_resolve(doc, xref, "Widths") or "").strip("[] ").split()
+            if fc[0] == "int" and ws:                  # largeurs donnees par le PDF (ReportLab, Word...)
+                first = int(fc[1])
+                for i, v in enumerate(ws):
+                    try:
+                        self.width[first + i] = float(v) / 1000
+                    except ValueError:
+                        pass
             if self.base in BASE14:
                 f = fitz.Font(BASE14[self.base])
                 enc = doc.xref_get_key(xref, "Encoding")[1]
@@ -126,7 +135,7 @@ class PolicePDF:
                         continue
                     if f.has_glyph(ord(ch)):
                         cmap.setdefault(c, ch)
-                        self.width[c] = f.glyph_advance(ord(ch))
+                        self.width.setdefault(c, f.glyph_advance(ord(ch)))
             t = doc.xref_get_key(xref, "FontDescriptor")
             fd = int(t[1].split()[0]) if t[0] == "xref" else None
         for code, ch in cmap.items():
@@ -390,6 +399,207 @@ class Editeur:
         return self._remplacer_dans_ligne(page, chars, p, fin, mid)
 
     # ---- images
+    # ------------------------------------------------------------- paragraphes
+    def _infos_lignes(self, page):
+        out = []
+        for chars in self._lignes(page):
+            vis = [(c, sp) for c, sp in chars if c["c"].strip()]
+            if not vis:
+                continue
+            r = fitz.Rect()
+            for c, _sp in chars:
+                r |= fitz.Rect(c["bbox"])
+            tailles = sorted(sp["size"] for _c, sp in vis)
+            out.append({"chars": chars, "rect": r, "base": vis[0][0]["origin"][1], "x0": vis[0][0]["bbox"][0],
+                        "x1": vis[-1][0]["bbox"][2], "taille": tailles[len(tailles) // 2],
+                        "texte": "".join(c["c"] for c, _sp in chars).rstrip()})
+        return out
+
+    def paragraphe_a(self, num_page, pt):
+        """Paragraphe sous le point : lignes de la meme colonne, de meme taille, regulierement espacees.
+        Renvoie {"lignes": [...], "rect", "texte", "taille", "interligne", "justifie"} ou None."""
+        page = self.doc[num_page]
+        lignes = self._infos_lignes(page)
+        pt = fitz.Point(pt)
+        dep = next((l for l in lignes if (l["rect"] + (-1, -2, 1, 2)).contains(pt)), None)
+        if dep is None:
+            return None
+        para = [dep]
+
+        def meme_colonne(a, b):
+            inter = min(a["x1"], b["x1"]) - max(a["x0"], b["x0"])
+            return inter > 0.4 * min(a["x1"] - a["x0"], b["x1"] - b["x0"]) and abs(a["x0"] - b["x0"]) < max(4 * a["taille"], 40)
+
+        pas = None
+        for sens in (1, -1):
+            cur = dep
+            while True:
+                cands = [l for l in lignes if l not in para and (l["base"] - cur["base"]) * sens > 0.5
+                         and meme_colonne(cur, l) and abs(l["taille"] - cur["taille"]) <= 0.8]
+                if not cands:
+                    break
+                nxt = min(cands, key=lambda l: abs(l["base"] - cur["base"]))
+                d = abs(nxt["base"] - cur["base"])
+                if d > 1.8 * cur["taille"] or (pas and d > pas * 1.3):
+                    break
+                # un trou (autre texte entre les deux) arrete le paragraphe
+                if any(l is not nxt and meme_colonne(cur, l) and min(cur["base"], nxt["base"]) < l["base"] < max(cur["base"], nxt["base"])
+                       for l in lignes):
+                    break
+                pas = pas or d
+                para.append(nxt)
+                cur = nxt
+        para.sort(key=lambda l: l["base"])
+        r = fitz.Rect()
+        for l in para:
+            r |= l["rect"]
+        bases = [l["base"] for l in para]
+        ecarts = sorted(b - a for a, b in zip(bases, bases[1:]))
+        interligne = ecarts[len(ecarts) // 2] if ecarts else dep["taille"] * 1.2
+        droite = max(l["x1"] for l in para)
+        justifie = len(para) >= 3 and all(droite - l["x1"] < 1.5 for l in para[:-1])
+        return {"lignes": para, "rect": r, "texte": self._texte_paragraphe(para)[0], "taille": dep["taille"],
+                "interligne": interligne, "justifie": justifie, "x0": min(l["x0"] for l in para), "x1": droite,
+                "retrait": para[0]["x0"] - min(l["x0"] for l in para)}
+
+    @staticmethod
+    def _texte_paragraphe(lignes):
+        """Texte continu (lignes recollees, cesures retirees) et style de chaque caractere."""
+        texte, styles = "", []
+        for l in lignes:
+            chars = [(c, sp) for c, sp in l["chars"]]
+            while chars and not chars[-1][0]["c"].strip():
+                chars.pop()
+            while chars and not chars[0][0]["c"].strip():
+                chars.pop(0)
+            if not chars:
+                continue
+            if texte:
+                if texte.endswith("-") and chars[0][0]["c"].islower() and len(texte) > 1 and texte[-2].isalpha():
+                    texte, styles = texte[:-1], styles[:-1]
+                else:
+                    texte += " "
+                    styles.append(styles[-1])
+            for c, sp in chars:
+                texte += c["c"]
+                styles.append(sp)
+        return texte, styles
+
+    def modifier_paragraphe(self, num_page, para, nouveau, taille=None, couleur=None, police=None):
+        """Reecrit le paragraphe avec le nouveau texte (retours a la ligne compris), coupe a la largeur d'origine.
+        Chaque lettre garde le style (police, gras, taille, couleur) du texte d'origine a cet endroit."""
+        import difflib
+        page = self.doc[num_page]
+        ancien, styles = self._texte_paragraphe(para["lignes"])
+        if nouveau == ancien and not (taille or couleur or police):
+            return None
+        k = (taille / para["taille"]) if taille else 1.0
+        # style de chaque nouveau caractere : celui du caractere d'origine correspondant
+        st = [None] * len(nouveau)
+        for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, ancien, nouveau, autojunk=False).get_opcodes():
+            for j in range(j1, j2):
+                i = min(i1 + (j - j1), i2 - 1) if i2 > i1 else max(0, i1 - 1)
+                st[j] = styles[min(i, len(styles) - 1)] if styles else None
+        pol = self._polices(page)
+        repli_par_police = {}
+        incorporee = PoliceIncorporee(os.path.basename(police), police) if police else None
+
+        def cible_de(ch, sp):
+            if incorporee:
+                return incorporee if incorporee.a(ch) else None
+            p_sp = self._police_du_span(page, sp)
+            if p_sp and p_sp.a(ch):
+                return p_sp
+            for q in pol.values():
+                if p_sp and q.famille() == p_sp.famille() and q.a(ch):
+                    return q
+            cle = p_sp.ref if p_sp else sp["font"]
+            if cle not in repli_par_police:
+                r = self._police_par_nom(p_sp) if p_sp else None
+                if r is None:
+                    sc = self._choisir_par_rendu(page, para["lignes"][0]["chars"][:12])
+                    r = PoliceIncorporee(sc[1], sc[2])
+                repli_par_police[cle] = r
+                self.journal.append(f"police de remplacement : {r.nom}")
+            r = repli_par_police[cle]
+            return r if r.a(ch) else None
+        # mots avec leurs lettres (police, taille, couleur, avance)
+        lettres = []
+        for ch, sp in zip(nouveau, st):
+            if ch == "\n":
+                lettres.append(("\n", None, 0, None, 0))
+                continue
+            sp = sp or styles[-1]
+            sz = sp["size"] * k
+            cible = cible_de(ch if ch != " " else "a", sp) if ch != " " else None
+            if ch != " " and cible is None:
+                continue
+            av = (cible.avance(ch) if cible else (self._police_du_span(page, sp).avance(" ")
+                                                    if self._police_du_span(page, sp) and self._police_du_span(page, sp).a(" ") else 0.28)) * sz
+            coul = couleur or fitz.sRGB_to_pdf(sp["color"])
+            lettres.append((ch, cible, sz, coul, av))
+        # coupure en lignes a la largeur du paragraphe
+        x0, x1 = para["x0"], para["x1"] + 0.5
+        lignes, ligne, mot, larg_ligne, larg_mot = [], [], [], 0.0, 0.0
+        retrait = para["retrait"]
+
+        def fin_mot():
+            nonlocal ligne, mot, larg_ligne, larg_mot
+            dispo = x1 - x0 - (retrait if not lignes else 0)
+            if ligne and larg_ligne + larg_mot > dispo:
+                while ligne and ligne[-1][0] == " ":
+                    larg_ligne -= ligne.pop()[4]
+                lignes.append((ligne, False))
+                ligne, larg_ligne = [], 0.0
+            ligne += mot
+            larg_ligne += larg_mot
+            mot, larg_mot = [], 0.0
+        for l in lettres:
+            if l[0] == "\n":
+                fin_mot()
+                lignes.append((ligne, True))
+                ligne, larg_ligne = [], 0.0
+            elif l[0] == " ":
+                fin_mot()
+                if ligne:
+                    ligne.append(l)
+                    larg_ligne += l[4]
+            else:
+                mot.append(l)
+                larg_mot += l[4]
+        fin_mot()
+        if ligne:
+            lignes.append((ligne, True))
+        # plan d'ecriture
+        plan = []
+        y = para["lignes"][0]["base"]
+        pas = para["interligne"] * k
+        for n, (ligne, fin_par) in enumerate(lignes):
+            while ligne and ligne[-1][0] == " ":
+                ligne = ligne[:-1]
+            x = x0 + (retrait if n == 0 else 0)
+            extra = 0.0
+            if para["justifie"] and not fin_par:
+                espaces = sum(1 for l in ligne if l[0] == " ")
+                if espaces:
+                    extra = (x1 - x - sum(l[4] for l in ligne)) / espaces
+            for ch, cible, sz, coul, av in ligne:
+                if ch != " ":
+                    plan.append((ch, cible, sz, coul, x, "paragraphe", y))
+                x += av + (extra if ch == " " else 0)
+            y += pas
+        # effacer l'ancien paragraphe (texte seulement), puis ecrire
+        for l in para["lignes"]:
+            r = l["rect"]
+            page.add_redact_annot(fitz.Rect(r.x0 + 0.3, r.y0 + r.height * 0.25, r.x1 + 0.5, r.y1 - r.height * 0.25), fill=False)
+        page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE,
+                              text=fitz.PDF_REDACT_TEXT_REMOVE)
+        self._ecrire(page, plan, para["lignes"][0]["base"])
+        en_plus = len(lignes) - len(para["lignes"])
+        self.journal.append(f"paragraphe réécrit : {len(lignes)} ligne(s)" +
+                            (f" ({en_plus:+d} par rapport à avant)" if en_plus else ""))
+        return {"lignes": len(lignes), "en_plus": en_plus, "bas": y - pas}
+
     def images(self, num_page):
         """[(xref, rect)] des images visibles de la page."""
         out = []
@@ -576,6 +786,44 @@ class Editeur:
             self.journal.append(f"texte ajouté ({os.path.basename(police)}, {taille or 11:.0f} pt)")
             return
         return self._ajouter_texte_auto(num_page, point, texte, taille, couleur)
+
+    def ajouter_paragraphe(self, num_page, coin, texte, largeur, taille=11, couleur=None, police=None):
+        """Bloc de texte sur plusieurs lignes : coupe a la largeur donnee, retours a la ligne respectes.
+        coin = haut gauche du bloc. Police : fichier choisi, sinon celle de la page (glyphes d'origine)."""
+        mesure = PoliceIncorporee(os.path.basename(police), police) if police else None
+        if mesure is None:
+            page = self.doc[num_page]
+            lignes = list(self._lignes(page))
+            p = None
+            if lignes:
+                compte = {}
+                for chars in lignes:
+                    for c, sp in chars:
+                        compte[sp["font"]] = compte.get(sp["font"], 0) + 1
+                fnt = max(compte, key=compte.get)
+                sp = next(sp for chars in lignes for c, sp in chars if sp["font"] == fnt)
+                p = self._police_du_span(page, sp)
+            mesure = self._police_par_nom(p) if p else None
+            mesure = mesure or PoliceIncorporee("Liberation Sans", os.path.join(FONT_DIR, "LiberationSans-Regular.ttf"))
+        espace = mesure.avance(" ") * taille if mesure.a(" ") else taille * 0.28
+        y = coin[1] + taille * 0.9
+        n = 0
+        for bloc in texte.split("\n"):
+            ligne, larg = [], 0.0
+            mots = bloc.split(" ")
+            for m in mots + [None]:
+                lm = sum((mesure.avance(c) if mesure.a(c) else 0.5) for c in (m or "")) * taille
+                if m is None or (ligne and larg + espace + lm > largeur):
+                    if ligne or m is None:
+                        self.ajouter_texte(num_page, fitz.Point(coin[0], y), " ".join(ligne), taille, couleur, police)
+                        y += taille * 1.22
+                        n += 1
+                    ligne, larg = ([m], lm) if m is not None else ([], 0.0)
+                else:
+                    larg += (espace if ligne else 0) + lm
+                    ligne.append(m)
+        self.journal.append(f"bloc de texte ajouté : {n} ligne(s)")
+        return n
 
     def _ajouter_texte_auto(self, num_page, point, texte, taille=None, couleur=None):
         """Ajoute du texte avec la police dominante de la page (glyphes d'origine si possible)."""

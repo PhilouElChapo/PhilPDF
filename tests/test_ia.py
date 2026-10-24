@@ -50,7 +50,7 @@ class S(BaseHTTPRequestHandler):
         u = urllib.parse.urlsplit(self.path)
         corps = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         if u.path == "/claude/messages":
-            if self.headers["x-api-key"] != "CLEF-C":
+            if self.headers.get("x-api-key") != "CLEF-C" and self.headers.get("Authorization") != "Bearer sk-ant-usr-B":
                 return self._json({"error": {"message": "invalid x-api-key"}}, 401)
             if corps["model"] not in ETAT["claude_modeles"]:
                 return self._json({"error": {"message": f"model: {corps['model']}"}}, 404)
@@ -81,6 +81,8 @@ try:
     ia.demander(dict(p, clef_claude="FAUX"), "c", "t"); verifie(False, "clef refusée")
 except ia.ErreurIA as e:
     verifie("Clef Claude refusée" in str(e), "Claude : clef refusée, message clair")
+r = ia.demander({"ia_moteur": "claude", "clef_claude": "  sk-ant-usr-B \n"}, "Consigne", "Bonjour")
+verifie(r.startswith("Réponse"), "Claude : clef collée avec espaces, présentée autrement (Bearer) si besoin")
 r = ia.demander({"ia_moteur": "gemini", "clef_gemini": "G"}, "Consigne", "x", json_attendu=True)
 verifie(r == {"ok": True} and ETAT["appels"][-1][1] == "gemini-9.5-flash", "Gemini : JSON, modèle le plus récent choisi")
 r = ia.demander({"ia_moteur": "deux", "clef_claude": "FAUX", "clef_gemini": "G"}, "c", "t", json_attendu=True)

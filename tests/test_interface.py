@@ -387,7 +387,7 @@ if SC.tesseract_exe():
     ds = fitz.open(); ps_ = ds.new_page(); ps_.insert_image(ps_.rect, pixmap=img); ds.save(vs)
     IA.demander = lambda params, consignes, texte, **k: "Facture du 05/10/2026 : total 125,40 €\nPharmacie du Prado, Cannes"
     vus_ocr = []
-    DIA.DialogueOCRIA.exec = lambda self: (vus_ocr.append([cb.currentText() for cb in self.choix]),
+    DIA.DialogueOCRIA.exec = lambda self: (vus_ocr.append(self.valeurs()),
                                            capture(self, "36_ocr_ia.png"), QDialog.Accepted)[2]
     for tour in (1, 2):
         os_ = w.ouvrir(vs)
@@ -422,6 +422,82 @@ res = dr.chercher()
 verif(any(r["nom"] == "Bail_v1.pdf" for r in res), "recherche : sans IA, recherche par mots (accents ignorés)")
 IA.demander = _dem
 dr.close()
+
+# --- couleur et style du souligne, menu clic droit sur une selection
+o.changer_mode(None)
+o._fixer_couleur("souligner", "#7ee36e")
+w.params["style_souligne"] = "ondule"
+o.selection = {"page": 0, "lignes": [fitz.Rect(72, 80, 200, 95)], "texte": "Facture"}
+o.annoter("souligner")
+an_ = [a for a in o.doc[0].annots() if a.type[0] == fitz.PDF_ANNOT_SQUIGGLY]
+verif(an_ and tuple(round(c, 2) for c in an_[-1].colors["stroke"]) == (0.49, 0.89, 0.43), "souligné ondulé dans la couleur choisie")
+o.transformer_annot(0, an_[-1].xref, "barrer")
+verif(any(a.type[0] == fitz.PDF_ANNOT_STRIKE_OUT for a in o.doc[0].annots()), "annotation transformée en barré")
+w.params["style_souligne"] = "droit"
+from PySide6.QtWidgets import QMenu
+vus_menu = []
+class MenuTest(QMenu):
+    def exec(self, *a):
+        vus_menu.append([x.text() for x in self.actions() if x.text()])
+_menu = D.QMenu
+D.QMenu = MenuTest
+o.selection = {"page": 0, "lignes": [fitz.Rect(72, 80, 200, 95)], "texte": "Facture"}
+o.menu_contexte(o.page_widgets[0], fitz.Point(80, 90), QPoint(10, 10))
+D.QMenu = _menu
+verif(vus_menu and vus_menu[0][0] == "Copier" and "Surligner" in vus_menu[0] and any(x.startswith("Rechercher") for x in vus_menu[0]),
+      f"clic droit sur une sélection : {vus_menu[0][:5] if vus_menu else None}")
+o.selection = None
+
+# --- alleger : fenetre d'options, apercu, application
+import app.alleger as AL
+lourd = os.path.join(TRAVAIL, "Photo_lourde.pdf")
+dl = fitz.open(); pl = dl.new_page()
+import numpy as _np
+bruit = (_np.random.default_rng(1).random((1200, 900, 3)) * 255).astype(_np.uint8)
+pm_ = fitz.Pixmap(fitz.csRGB, 900, 1200, bruit.tobytes(), False)
+pl.insert_image(pl.rect, pixmap=pm_); dl.save(lourd)
+ol = w.ouvrir(lourd)
+vus_al = []
+def faux_alleger(self):
+    self.calcul.wait(); app.processEvents()
+    vus_al.append(self.poids.text()); capture(self, "38_alleger.png")
+    self.appliquer()
+    return 1
+AL.DialogueAlleger.exec = faux_alleger
+avant_al = len(ol.doc.tobytes())
+w.lancer_outil("alleger")
+verif(vus_al and "Ko →" in vus_al[0] and len(ol.doc.tobytes()) < avant_al and ol.modifie,
+      f"alléger : poids estimé ({vus_al[0] if vus_al else ''}) puis appliqué au document")
+ol.annuler()
+verif(len(ol.doc.tobytes()) >= avant_al * 0.9, "alléger : Annuler remet le document d'origine")
+w.onglets.setCurrentWidget(o)
+
+# --- modifier un paragraphe : plusieurs lignes, retour a la ligne, zone elargie
+vp = os.path.join(TRAVAIL, "Paragraphe.pdf")
+dp_ = fitz.open(); pp_ = dp_.new_page()
+pp_.insert_textbox(fitz.Rect(72, 100, 330, 200), "Le présent document récapitule les prestations réalisées au cours "
+                   "du mois d'octobre. Le paiement est attendu sous trente jours.", fontsize=11, fontname="helv")
+pp_.insert_text((72, 260), "Texte en dessous", fontsize=11); dp_.save(vp)
+op = w.ouvrir(vp); op.changer_mode("modifier")
+pw_ = op.page_widgets[0]
+verif(pw_.ouvrir_paragraphe(fitz.Point(80, 110)) and isinstance(pw_.editeur, D.EditeurParagraphe), "paragraphe : éditeur ouvert")
+ed_ = pw_.editeur
+verif("récapitule les prestations" in ed_.zone.toPlainText() and "octobre. Le paiement" in ed_.zone.toPlainText(),
+      "paragraphe : texte des lignes recollé")
+app.processEvents(); capture(w, "39_paragraphe.png")
+ed_.zone.setPlainText("Le présent document récapitule les prestations.\nLe paiement est attendu sous quinze jours.")
+ed_.largeur += 120 * ed_.e
+ed_.valider()
+t_ = op.doc[0].get_text()
+verif("prestations.\nLe paiement est attendu sous quinze jours." in t_ and "Texte en dessous" in t_,
+      "paragraphe : retour à la ligne et nouvelle largeur appliqués")
+op.changer_mode("ajout_texte")
+pw_.editeur = D.EditeurParagraphe(pw_, None, fitz.Point(72, 300))
+pw_.editeur.zone.setPlainText("Bloc ajouté\nsur deux lignes")
+pw_.editeur.valider()
+verif("Bloc ajouté\nsur deux lignes" in op.doc[0].get_text(), "ajouter du texte : bloc sur plusieurs lignes")
+op.changer_mode(None)
+w.onglets.setCurrentWidget(o)
 
 # --- fermeture : question en francais
 vu = {}

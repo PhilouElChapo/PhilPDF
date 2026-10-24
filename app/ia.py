@@ -13,6 +13,8 @@ GEMINI_API = "https://generativelanguage.googleapis.com/v1beta"
 MODELE_CLAUDE = "claude-sonnet-5-5"
 MODELE_GEMINI = "gemini-2.5-flash"
 _modeles_trouves = {}
+DELAI = 180                 # secondes d'attente d'une reponse (le test des clefs met moins)
+_entete_claude = {}         # clef -> en-tetes qui marchent (x-api-key ou Authorization: Bearer)
 
 
 class ErreurIA(Exception):
@@ -89,11 +91,16 @@ def confirmer_envoi(parent, texte, moteur_nom):
 
 
 # ------------------------------------------------------------------ appels
+def nettoyer_clef(c):
+    """Retire espaces, retours a la ligne et guillemets venus du copier-coller."""
+    return re.sub(r"[\s\"'«»]+", "", c or "")
+
+
 def moteurs(params):
     """Moteurs utilisables dans l'ordre de preference : [("claude", clef), ("gemini", clef)]."""
     choix = params.get("ia_moteur", "claude")
     ordre = ["gemini", "claude"] if choix == "gemini" else ["claude", "gemini"]
-    return [(m, params.get("clef_" + m, "").strip()) for m in ordre if params.get("clef_" + m, "").strip()]
+    return [(m, nettoyer_clef(params.get("clef_" + m, ""))) for m in ordre if nettoyer_clef(params.get("clef_" + m, ""))]
 
 
 def nom_moteur(params):
@@ -105,7 +112,8 @@ def disponible(params):
     return bool(moteurs(params))
 
 
-def _http(url, corps=None, entetes=None, methode=None, delai=180):
+def _http(url, corps=None, entetes=None, methode=None, delai=None):
+    delai = delai or DELAI
     r = urllib.request.Request(url, data=json.dumps(corps).encode() if corps is not None else None,
                                method=methode or ("POST" if corps is not None else "GET"))
     r.add_header("Content-Type", "application/json")
@@ -127,10 +135,18 @@ def _http(url, corps=None, entetes=None, methode=None, delai=180):
         raise ErreurIA(_("Service injoignable : {raison}", raison=e))
 
 
+def _entetes_claude(clef, autre=False):
+    base = {"anthropic-version": "2023-06-01"}
+    bearer = _entete_claude.get(clef) == "bearer"
+    if autre:
+        bearer = not bearer
+    return dict(base, **({"Authorization": f"Bearer {clef}"} if bearer else {"x-api-key": clef}))
+
+
 def _modele_claude(clef, params, forcer=False):
     if not forcer:
         return params.get("ia_modele_claude") or _modeles_trouves.get("claude") or MODELE_CLAUDE
-    d = _http(f"{CLAUDE_API}/models?limit=100", entetes={"x-api-key": clef, "anthropic-version": "2023-06-01"})
+    d = _http(f"{CLAUDE_API}/models?limit=100", entetes=_entetes_claude(clef))
     ids = [m["id"] for m in d.get("data", [])]
     for famille in ("sonnet", "opus", "haiku"):
         for i in ids:                                  # la liste est triee du plus recent au plus ancien
@@ -162,18 +178,28 @@ def _claude(clef, params, consignes, texte, images, max_jetons):
     contenu = [{"type": "image", "source": {"type": "base64", "media_type": "image/png",
                                              "data": base64.b64encode(i).decode()}} for i in images or []]
     contenu.append({"type": "text", "text": texte})
-    for essai in (False, True):
-        modele = _modele_claude(clef, params, forcer=essai)
+    corps = lambda m: {"model": m, "max_tokens": max_jetons, "system": consignes,
+                       "messages": [{"role": "user", "content": contenu}]}
+    forcer, autre_entete = False, False
+    for _essai in range(3):
+        modele = _modele_claude(clef, params, forcer=forcer)
         try:
-            d = _http(f"{CLAUDE_API}/messages", {"model": modele, "max_tokens": max_jetons, "system": consignes,
-                                                  "messages": [{"role": "user", "content": contenu}]},
-                      {"x-api-key": clef, "anthropic-version": "2023-06-01"})
+            d = _http(f"{CLAUDE_API}/messages", corps(modele), _entetes_claude(clef, autre_entete))
+            if autre_entete:                           # cette clef veut l'autre en-tete : on s'en souvient
+                _entete_claude[clef] = "bearer" if _entete_claude.get(clef) != "bearer" else "x-api-key"
             return "".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text")
         except ErreurIA as e:
-            if getattr(e, "code", 0) == 404 and not essai:
-                continue                               # modele retire : on prend le plus recent
-            if getattr(e, "code", 0) == 401:
-                raise ErreurIA(_("Clef Claude refusée : vérifiez-la dans Edition › Préférences › IA."))
+            code = getattr(e, "code", 0)
+            if code == 404 and not forcer:
+                forcer = True                          # modele retire : on prend le plus recent
+                continue
+            if code in (401, 403) and not autre_entete:
+                autre_entete = True                    # autre facon de presenter la clef
+                continue
+            if code in (401, 403):
+                raise ErreurIA(_("Clef Claude refusée ({detail}). Vérifiez-la dans Edition › Préférences › IA : "
+                                 "elle commence par « sk-ant- » et doit être copiée en entier depuis console.anthropic.com "
+                                 "(Clés API), avec du crédit sur le compte.", detail=str(e)[:160]))
             raise
 
 

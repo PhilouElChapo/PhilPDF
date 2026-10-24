@@ -48,6 +48,92 @@ def executer(parent, texte, fonction):
     return res.get("r")
 
 
+class _TacheSuivie(QThread):
+    etape = Signal(str, int, int)          # texte, valeur, total
+    detail = Signal(str)
+    fini = Signal(object, object)
+
+    def __init__(self, fonction):
+        super().__init__()
+        self.fonction, self.stop = fonction, False
+
+    def run(self):
+        try:
+            self.fini.emit(self.fonction(self), None)
+        except Exception as e:
+            self.fini.emit(None, e)
+
+    def avancer(self, texte, valeur=0, total=0):
+        if self.stop:
+            raise InterruptedError(_("Arrêté à votre demande."))
+        self.etape.emit(texte, valeur, total)
+
+    def noter(self, texte):
+        self.detail.emit(texte)
+
+
+class Avancement(QDialog):
+    """Fenetre d'avancement : etape en cours, barre (page x / y), detail des operations, bouton Arreter."""
+
+    def __init__(self, parent, titre):
+        from PySide6.QtWidgets import QProgressBar, QPlainTextEdit
+        super().__init__(parent)
+        self.setWindowTitle(titre)
+        self.setMinimumWidth(560)
+        self.setWindowModality(Qt.WindowModal)
+        v = QVBoxLayout(self)
+        self.etat = QLabel(_("Préparation..."))
+        self.etat.setWordWrap(True)
+        v.addWidget(self.etat)
+        self.barre = QProgressBar()
+        self.barre.setRange(0, 0)
+        v.addWidget(self.barre)
+        self.journal = QPlainTextEdit()
+        self.journal.setReadOnly(True)
+        self.journal.setMaximumHeight(150)
+        self.journal.setStyleSheet("font-size:12px;color:#444")
+        v.addWidget(self.journal)
+        h = QHBoxLayout()
+        h.addStretch(1)
+        self.b_stop = QPushButton(_("Arrêter"))
+        h.addWidget(self.b_stop)
+        v.addLayout(h)
+
+    def etape(self, texte, valeur, total):
+        self.etat.setText(texte)
+        if total:
+            self.barre.setRange(0, total)
+            self.barre.setValue(valeur)
+            self.barre.setFormat(f"{valeur} / {total}")
+        else:
+            self.barre.setRange(0, 0)
+
+    def noter(self, texte):
+        import time
+        self.journal.appendPlainText(time.strftime("%H:%M:%S  ") + texte)
+
+
+def executer_suivi(parent, titre, fonction):
+    """Comme executer(), avec une fenetre d'avancement : fonction(tache) appelle tache.avancer(texte, n, total)
+    et tache.noter(detail). Leve l'erreur de fonction, ou InterruptedError si l'utilisateur arrete."""
+    dlg = Avancement(parent, titre)
+    t = _TacheSuivie(fonction)
+    res = {}
+    boucle = QEventLoop()
+    t.etape.connect(dlg.etape)
+    t.detail.connect(dlg.noter)
+    t.fini.connect(lambda r, e: (res.update(r=r, e=e), boucle.quit()))
+    dlg.b_stop.clicked.connect(lambda: (setattr(t, "stop", True), dlg.etat.setText(_("Arrêt en cours..."))))
+    t.start()
+    dlg.show()
+    boucle.exec()
+    t.wait()
+    dlg.close()
+    if res.get("e"):
+        raise res["e"]
+    return res.get("r")
+
+
 def verifier_cle(parent, params):
     if ia.disponible(params):
         return True
@@ -548,7 +634,7 @@ def _png_reduit(nb, largeur_max=2000):
     return cv2.imencode(".png", nb)[1].tobytes()
 
 
-def _vignette(nb, zone, hauteur=46):
+def _vignette(nb, zone, hauteur=34, largeur_max=320):
     from PySide6.QtGui import QImage, QPixmap
     import numpy as np
     x0, y0, x1, y1 = [int(v) for v in zone]
@@ -557,61 +643,85 @@ def _vignette(nb, zone, hauteur=46):
     if morceau.size == 0:
         return QPixmap()
     img = QImage(morceau.data, morceau.shape[1], morceau.shape[0], morceau.strides[0], QImage.Format_Grayscale8).copy()
-    return QPixmap.fromImage(img).scaledToHeight(hauteur, Qt.SmoothTransformation)
+    pm = QPixmap.fromImage(img).scaledToHeight(hauteur, Qt.SmoothTransformation)
+    return pm if pm.width() <= largeur_max else pm.scaledToWidth(largeur_max, Qt.SmoothTransformation)
+
+
+def _essentiel(t):
+    return re.sub(r"[\W_]+", "", t.lower())
+
+
+def differences_utiles(mots, texte_ia):
+    """Differences qui comptent : ni simple ponctuation, ni majuscules, ni espaces, ni bruit des deux cotes."""
+    from moteur import scan
+    out = []
+    for d in scan.differences(mots, texte_ia):
+        a, b = _essentiel(d["tesseract"]), _essentiel(d["ia"])
+        if a == b or (not a and not b):
+            continue
+        out.append(d)
+    return out
 
 
 class DialogueOCRIA(QDialog):
-    """Une ligne par difference : l'image du passage, la lecture de Tesseract, celle de l'IA ; vous choisissez."""
+    """Tableau : une ligne par difference. Colonne « A garder » deja remplie avec la lecture de l'IA ;
+    on ne touche qu'aux lignes ou l'IA se trompe. Valider = texte du PDF corrige + apprentissage."""
 
-    def __init__(self, parent, lignes):
-        from PySide6.QtWidgets import QScrollArea, QWidget, QGridLayout, QFrame
+    def __init__(self, parent, lignes, moteur):
+        from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
         super().__init__(parent)
-        self.setWindowTitle(_("OCR IA comparé — {n} différence(s)", n=len(lignes)))
-        self.resize(900, 640)
+        self.lignes = lignes
+        self.setWindowTitle(_("OCR IA comparé — {n} différence(s) à vérifier", n=len(lignes)))
+        self.resize(1100, 700)
         v = QVBoxLayout(self)
-        t = QLabel(_("Pour chaque passage, choisissez la bonne lecture (ou corrigez-la). Vos choix sont retenus : les mots "
-                     "rejoignent votre liste personnelle et les corrections confirmées deux fois s'appliqueront seules, "
-                     "sur tous vos postes."))
+        t = QLabel(_("<b>Comment faire :</b> chaque ligne est un passage que Tesseract et {ia} n'ont pas lu pareil. "
+                     "La colonne <b>A garder</b> contient déjà la lecture de l'IA (souvent la meilleure) : regardez "
+                     "l'image et ne corrigez que si elle se trompe (double-clic dans la case, ou clic sur la lecture de Tesseract). "
+                     "Puis <b>Valider</b> : le texte du PDF est corrigé et PhilPDF retient vos corrections pour les "
+                     "prochaines lectures, sur tous vos postes.", ia=moteur))
         t.setWordWrap(True)
         v.addWidget(t)
-        zone = QScrollArea()
-        zone.setWidgetResizable(True)
-        w = QWidget()
-        g = QGridLayout(w)
-        g.setColumnStretch(1, 2)
-        g.setColumnStretch(2, 1)
-        g.setColumnStretch(3, 1)
-        for c, titre in enumerate((_("Image"), _("Lecture retenue"), _("Tesseract"), _("IA"))):
-            l = QLabel(f"<b>{titre}</b>")
-            g.addWidget(l, 0, c)
-        self.choix = []
-        for i, ln in enumerate(lignes, 1):
+        self.table = QTableWidget(len(lignes), 5)
+        self.table.setHorizontalHeaderLabels([_("Page"), _("Image du passage"), _("Tesseract"), _("IA ({nom})", nom=moteur),
+                                              _("A garder")])
+        self.table.verticalHeader().setVisible(False)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed |
+                                   QAbstractItemView.AnyKeyPressed)
+        hh = self.table.horizontalHeader()
+        hh.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        hh.setSectionResizeMode(1, QHeaderView.Fixed)
+        self.table.setColumnWidth(1, 330)
+        for c in (2, 3, 4):
+            hh.setSectionResizeMode(c, QHeaderView.Stretch)
+        for i, ln in enumerate(lignes):
+            it = QTableWidgetItem(str(ln["page"]["num"] + 1))
+            it.setFlags(Qt.ItemIsEnabled)
+            self.table.setItem(i, 0, it)
             im = QLabel()
             im.setPixmap(ln["vignette"])
-            im.setFrameShape(QFrame.StyledPanel)
-            g.addWidget(im, i, 0)
-            cb = QComboBox()
-            cb.setEditable(True)
-            for x in dict.fromkeys([ln["ia"], ln["tesseract"]]):
-                cb.addItem(x if x else _("(rien)"), x)
-            cb.setCurrentIndex(0)
-            g.addWidget(cb, i, 1)
-            lt = QLabel(ln["tesseract"] + (_("  (règle apprise)") if ln.get("auto") else ""))
-            lt.setStyleSheet("color:#8a1c1c")
-            g.addWidget(lt, i, 2)
-            la = QLabel(ln["ia"])
-            la.setStyleSheet("color:#1d6b2f")
-            g.addWidget(la, i, 3)
-            self.choix.append(cb)
-        g.setRowStretch(len(lignes) + 1, 1)
-        zone.setWidget(w)
-        v.addWidget(zone, 1)
+            im.setAlignment(Qt.AlignCenter)
+            self.table.setCellWidget(i, 1, im)
+            for c, txt, coul in ((2, ln["tesseract"] + (_("  (règle apprise)") if ln.get("auto") else ""), "#8a1c1c"),
+                                 (3, ln["ia"], "#1d6b2f")):
+                it = QTableWidgetItem(txt)
+                it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+                from PySide6.QtGui import QColor
+                it.setForeground(QColor(coul))
+                self.table.setItem(i, c, it)
+            self.table.setItem(i, 4, QTableWidgetItem(ln["ia"]))
+            self.table.setRowHeight(i, 40)
+        self.table.cellClicked.connect(self._clic)
+        v.addWidget(self.table, 1)
+        n = QLabel(_("Astuce : cliquez sur la colonne Tesseract ou IA d'une ligne pour recopier cette lecture dans « A garder »."))
+        n.setStyleSheet("color:#666;font-size:12px")
+        v.addWidget(n)
         h = QHBoxLayout()
         b = QPushButton(_("Tout selon l'IA"))
-        b.clicked.connect(lambda: [cb.setCurrentIndex(0) for cb in self.choix])
+        b.clicked.connect(lambda: self._tout(3))
         h.addWidget(b)
         b = QPushButton(_("Tout selon Tesseract"))
-        b.clicked.connect(lambda: [cb.setCurrentIndex(cb.count() - 1) for cb in self.choix])
+        b.clicked.connect(lambda: self._tout(2))
         h.addWidget(b)
         h.addStretch(1)
         bb = QDialogButtonBox()
@@ -622,12 +732,28 @@ class DialogueOCRIA(QDialog):
         h.addWidget(bb)
         v.addLayout(h)
 
+    def _clic(self, r, c):
+        if c == 2:
+            self.table.item(r, 4).setText(self.lignes[r]["tesseract"])
+        elif c == 3:
+            self.table.item(r, 4).setText(self.lignes[r]["ia"])
+
+    def _tout(self, c):
+        for r, ln in enumerate(self.lignes):
+            self.table.item(r, 4).setText(ln["tesseract"] if c == 2 else ln["ia"])
+
     def valeurs(self):
-        out = []
-        for cb in self.choix:
-            i = cb.findText(cb.currentText())
-            out.append(cb.itemData(i) if i >= 0 and cb.itemData(i) is not None else cb.currentText().strip())
-        return out
+        return [self.table.item(r, 4).text().strip() for r in range(self.table.rowCount())]
+
+
+def _nom_ia(params):
+    m = ia.moteurs(params)
+    if not m:
+        return "?"
+    nom = {"claude": "Claude", "gemini": "Gemini"}[m[0][0]]
+    modele = params.get("ia_modele_" + m[0][0]) or ia._modeles_trouves.get(m[0][0]) or \
+        (ia.MODELE_CLAUDE if m[0][0] == "claude" else ia.MODELE_GEMINI)
+    return f"{nom} ({modele})"
 
 
 def ocr_ia(fenetre, onglet):
@@ -643,9 +769,21 @@ def ocr_ia(fenetre, onglet):
         return
     if not verifier_cle(fenetre, params):
         return
+    appris = apprentissage.ocr_appris(params)
+
+    def lecture_tesseract(t):
+        def prog(i, n):
+            t.avancer(_("Tesseract lit la page {i} sur {n}...", i=min(i + 1, n), n=n), i, n)
+        an = scan.analyser(onglet.chemin, prog, appris)
+        for pg in an["pages"]:
+            if not pg["garder"]:
+                t.noter(_("Page {p} : Tesseract, {m} mots, confiance {q} %", p=pg["num"] + 1, m=len(pg["mots"]),
+                          q=round(pg["qualite"])))
+        return an
     try:
-        an = executer(fenetre, _("Lecture par Tesseract (redressement, nettoyage)..."),
-                      lambda: scan.analyser(onglet.chemin, apprentissage=apprentissage.ocr_appris(params)))
+        an = executer_suivi(fenetre, _("OCR IA comparé"), lecture_tesseract)
+    except InterruptedError:
+        return
     except Exception as e:
         QMessageBox.warning(fenetre, _("OCR IA comparé"), _("La reconnaissance a échoué :\n{e}", e=e))
         return
@@ -658,61 +796,84 @@ def ocr_ia(fenetre, onglet):
     texte_classique = "\n".join(" ".join(m["texte"] for m in pg["mots"]) for pg in a_lire)
     if not ia.confirmer_envoi(fenetre, texte_classique, ia.nom_moteur(params)):
         return
+    nom = _nom_ia(params)
 
-    def lire_ia():
-        for pg in a_lire:
+    def lecture_ia(t):
+        import time
+        for k, pg in enumerate(a_lire):
+            t.avancer(_("{ia} lit la page {i} sur {n}...", ia=nom, i=k + 1, n=len(a_lire)), k, len(a_lire))
+            debut = time.time()
             pg["texte_ia"] = ia.demander(params, CONSIGNES_OCR, _("Page {n}", n=pg["num"] + 1),
-                                         images=[_png_reduit(pg["image"])], max_jetons=8000)
+                                         images=[_png_reduit(scan.image_de_tiff(pg["tif"]))], max_jetons=8000)
+            pg["diffs"] = differences_utiles(pg["mots"], pg["texte_ia"])
+            t.noter(_("Page {p} : {ia}, {m} mots en {s} s ; {d} différence(s) avec Tesseract", p=pg["num"] + 1,
+                      ia=nom, m=len(pg["texte_ia"].split()), s=round(time.time() - debut), d=len(pg["diffs"])))
+        t.avancer(_("Lecture terminée."), len(a_lire), len(a_lire))
     try:
-        executer(fenetre, _("Lecture par l'IA ({n} page(s))...", n=len(a_lire)), lire_ia)
+        executer_suivi(fenetre, _("OCR IA comparé"), lecture_ia)
+    except InterruptedError:
+        return
     except Exception as e:
         montrer_erreur(fenetre, e)
         return
     lignes = []
     for pg in a_lire:
-        auto = {i: (avant, apres) for i, avant, apres in pg["auto"]}
+        image = None
         vus = set()
-        for d in scan.differences(pg["mots"], pg["texte_ia"]):
-            lignes.append(dict(d, page=pg, vignette=_vignette(pg["image"], scan.zone_mots(pg["mots"], d["i1"], d["i2"]))))
+        for d in pg["diffs"]:
+            image = image if image is not None else scan.image_de_tiff(pg["tif"])
+            lignes.append(dict(d, page=pg, vignette=_vignette(image, scan.zone_mots(pg["mots"], d["i1"], d["i2"]))))
             vus.update(range(d["i1"], d["i2"]))
-        for i, (avant, apres) in auto.items():        # corrections appliquees seules : montrees pour controle
+        for i, avant, apres in pg["auto"]:            # corrections appliquees seules : montrees pour controle
             if i not in vus:
+                image = image if image is not None else scan.image_de_tiff(pg["tif"])
                 lignes.append({"i1": i, "i2": i + 1, "tesseract": avant, "ia": apres, "auto": True, "page": pg,
-                               "vignette": _vignette(pg["image"], scan.zone_mots(pg["mots"], i, i + 1))})
+                               "vignette": _vignette(image, scan.zone_mots(pg["mots"], i, i + 1))})
+    corrige, appris_mots, appris_regles = 0, 0, 0
     if lignes:
-        d = DialogueOCRIA(fenetre, lignes)
+        d = DialogueOCRIA(fenetre, lignes, nom)
         if d.exec() != QDialog.Accepted:
             return
         corrections = []
         echantillons = os.path.join(dossier_donnees(), "apprentissage_ocr")
         os.makedirs(echantillons, exist_ok=True)
+        import difflib
         for ln, val in zip(lignes, d.valeurs()):
             pg = ln["page"]
             actuel = " ".join(m["texte"] for m in pg["mots"][ln["i1"]:ln["i2"]] if m["texte"])
             if val != actuel:
                 scan.remplacer_mots(pg["mots"], ln["i1"], ln["i2"], val)
-                pg["modifie"] = True
-            corrections.append((ln["tesseract"], val))
-            if val and val != ln["tesseract"]:            # echantillon image + verite, pour un futur entrainement
+                corrige += 1
+            avant = ln["tesseract"]
+            # on n'apprend que des confusions plausibles de lettres (pas des passages entiers mal decoupes)
+            if val and val != avant and len(avant.split()) <= 2 and \
+                    (len(avant) <= 4 or difflib.SequenceMatcher(None, avant, val).ratio() >= 0.5):
+                corrections.append((avant, val))
                 try:
                     import cv2, hashlib
+                    image = scan.image_de_tiff(pg["tif"])
                     x0, y0, x1, y1 = [int(v) for v in scan.zone_mots(pg["mots"], ln["i1"], ln["i2"], 2)]
-                    morceau = pg["image"][max(0, y0):y1, max(0, x0):x1]
+                    morceau = image[max(0, y0):y1, max(0, x0):x1]
                     cle = hashlib.sha1(morceau.tobytes()).hexdigest()[:12]
                     cv2.imwrite(os.path.join(echantillons, cle + ".png"), morceau)
                     with open(os.path.join(echantillons, cle + ".gt.txt"), "w", encoding="utf-8") as f:
                         f.write(val)
                 except Exception:
                     pass
-        apprentissage.retenir_ocr(params, corrections)
-    else:
-        QMessageBox.information(fenetre, _("OCR IA comparé"), _("Tesseract et l'IA ont lu exactement la même chose."))
-    sortie = _sans_doublon(os.path.splitext(onglet.chemin)[0] + "_OCR.pdf")
+            elif val == avant and ln.get("auto"):
+                corrections.append((avant, avant))     # regle refusee : elle s'affaiblit
+        appris_mots, appris_regles = apprentissage.retenir_ocr(params, corrections)
+    sortie = _sans_doublon(os.path.splitext(onglet.chemin)[0] + "_OCR_IA.pdf")
     try:
         scan.assembler(an, sortie)
     except Exception as e:
         QMessageBox.warning(fenetre, _("OCR IA comparé"), _("Enregistrement impossible :\n{e}", e=e))
         return
     fenetre.ouvrir(sortie)
-    fenetre.statusBar().showMessage(_("Texte reconnu et vérifié : {nom}", nom=os.path.basename(sortie)), 10000)
+    QMessageBox.information(fenetre, _("OCR IA comparé"), _(
+        "Terminé : {c} passage(s) corrigé(s) dans le texte du PDF, sur {n} différence(s).\n\n"
+        "Appris : {m} mot(s) ajouté(s) à votre liste personnelle, {r} correction(s) retenue(s) (une correction "
+        "s'applique seule dès qu'elle a été confirmée deux fois).\n\nFichier : {f}",
+        c=corrige, n=len(lignes), m=appris_mots, r=appris_regles, f=os.path.basename(sortie)) if lignes else
+        _("Tesseract et l'IA ont lu la même chose. Fichier : {f}", f=os.path.basename(sortie)))
     return sortie

@@ -128,6 +128,9 @@ class TacheSynchro(QThread):
             pass
 
 
+EXTENSIONS_OUVRABLES = (".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp")
+
+
 class Notification(QFrame):
     """Petite bulle non bloquante en bas a droite de la fenetre, disparait seule."""
 
@@ -171,6 +174,7 @@ class Fenetre(QMainWindow):
         self.dernier_doc = None
         self.setWindowTitle("PhilPDF")
         self.setWindowIcon(logo(64))
+        self.setAcceptDrops(True)                  # deposer des PDF (ou des images) sur la fenetre les ouvre
         self.resize(1400, 900)
         self.onglets = QTabWidget()
         self.onglets.setDocumentMode(True)
@@ -409,6 +413,38 @@ class Fenetre(QMainWindow):
             return
         session_de(self.params).ecrire([(o.chemin, o.page_courante(), o.zoom, o.distant) for o in self.documents() if o.chemin])
         self.synchro_miroir()
+
+    # ------------------------------------------------------------ glisser-deposer de fichiers sur la fenetre
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasUrls() and any(u.isLocalFile() and u.toLocalFile().lower().endswith(EXTENSIONS_OUVRABLES)
+                                          for u in e.mimeData().urls()):
+            e.acceptProposedAction()
+        else:
+            e.ignore()
+
+    def dragMoveEvent(self, e):
+        self.dragEnterEvent(e)
+
+    def dropEvent(self, e):
+        fichiers = [u.toLocalFile() for u in e.mimeData().urls() if u.isLocalFile()]
+        pdfs = [f for f in fichiers if f.lower().endswith(".pdf")]
+        images = [f for f in fichiers if f.lower().endswith(EXTENSIONS_OUVRABLES[1:])]
+        for f in pdfs:
+            self.ouvrir(f)
+        if images:                                    # images deposees : un PDF est cree a partir d'elles
+            try:
+                import pymupdf as _f
+                d = _f.open()
+                for im in images:
+                    i = _f.open(im)
+                    d.insert_pdf(_f.open("pdf", i.convert_to_pdf()))
+                from .config import dossier_donnees
+                sortie = os.path.join(dossier_donnees(), os.path.splitext(os.path.basename(images[0]))[0] + ".pdf")
+                d.save(sortie)
+                self.ouvrir(sortie)
+            except Exception as ex:
+                QMessageBox.warning(self, "PhilPDF", _("Impossible d'ouvrir ce fichier :\n{e}", e=ex))
+        e.acceptProposedAction()
 
     def ouvrir(self, chemin):
         chemin = os.path.abspath(chemin)
@@ -1009,17 +1045,8 @@ class Fenetre(QMainWindow):
             self.imprimer(fs)
 
     def alleger(self, o):
-        avant = len(o.doc.tobytes(garbage=3, deflate=True))
-        o.memoriser()
-        try:
-            o.doc.rewrite_images(dpi_threshold=200, dpi_target=150, quality=75)
-        except Exception:
-            pass
-        o.doc.subset_fonts()
-        apres = len(o.doc.tobytes(garbage=4, deflate=True, deflate_fonts=True))
-        o.apres_modif()
-        QMessageBox.information(self, _('Alléger le fichier'),
-                                _("Poids estimé : {x} Ko → {x2} Ko ({x3} % de moins).\nEnregistrez pour appliquer (Enregistrer sous pour garder l'original).", x=avant // 1024, x2=apres // 1024, x3=100 - apres * 100 // max(1, avant)))
+        from .alleger import DialogueAlleger
+        DialogueAlleger(self, o).exec()
 
     def mot_de_passe(self, o):
         d = QDialog(self)
@@ -1073,27 +1100,39 @@ class Fenetre(QMainWindow):
             QMessageBox.information(self, _('Reconnaître le texte'), _("Enregistrez d'abord le document."))
             return
         sortie = os.path.splitext(o.chemin)[0] + "_OCR.pdf"
-        prog = QProgressDialog(_('Redressement, nettoyage et reconnaissance du texte...'), None, 0, 0, self)
-        prog.setWindowTitle("PhilPDF")
-        prog.setWindowModality(Qt.WindowModal)
-        prog.show()
         from .apprentissage import ocr_appris
-        t = TacheScan(o.chemin, sortie, ocr_appris(self.params))
-        self.taches.append(t)
+        from .dialogues_ia import executer_suivi
+        from moteur import scan
+        appris = ocr_appris(self.params)
 
-        def fin(chemin, err):
-            prog.close()
-            if err == "__deja__":
-                QMessageBox.information(self, _('Reconnaître le texte'),
-                                        _("Ce document contient déjà du texte sur toutes ses pages : il n'y a rien à "
-                                          "reconnaître. (La reconnaissance sert aux scans et aux photos de documents.)"))
-            elif err:
-                QMessageBox.warning(self, _('Reconnaître le texte'), _("La reconnaissance a échoué :\n{e}", e=err))
-            else:
-                self.ouvrir(chemin)
-                self.statusBar().showMessage(_('Texte reconnu : {nom}', nom=os.path.basename(chemin)), 10000)
-        t.fini.connect(fin)
-        t.start()
+        def travail(t):
+            def prog(i, n):
+                t.avancer(_("Redressement, nettoyage et reconnaissance : page {i} sur {n}...", i=min(i + 1, n), n=n), i, n)
+            an = scan.analyser(o.chemin, prog, appris)
+            lues = [pg for pg in an["pages"] if not pg["garder"]]
+            for pg in an["pages"]:
+                t.noter(_("Page {p} : déjà du texte, gardée telle quelle", p=pg["num"] + 1) if pg["garder"] else
+                        _("Page {p} : {m} mots, confiance {q} %{x}", p=pg["num"] + 1, m=len(pg["mots"]), q=round(pg["qualite"]),
+                          x=_(", {n} correction(s) apprise(s)", n=len(pg["auto"])) if pg["auto"] else ""))
+            if not lues:
+                return None
+            t.avancer(_("Enregistrement..."), len(an["pages"]), len(an["pages"]))
+            scan.assembler(an, sortie)
+            return sortie
+        try:
+            chemin = executer_suivi(self, _('Reconnaître le texte'), travail)
+        except InterruptedError:
+            return
+        except Exception as e:
+            QMessageBox.warning(self, _('Reconnaître le texte'), _("La reconnaissance a échoué :\n{e}", e=e))
+            return
+        if not chemin:
+            QMessageBox.information(self, _('Reconnaître le texte'),
+                                    _("Ce document contient déjà du texte sur toutes ses pages : il n'y a rien à "
+                                      "reconnaître. (La reconnaissance sert aux scans et aux photos de documents.)"))
+            return
+        self.ouvrir(chemin)
+        self.statusBar().showMessage(_('Texte reconnu : {nom}', nom=os.path.basename(chemin)), 10000)
 
     # ------------------------------------------------------------ divers
     def ajuster_largeur(self):
@@ -1282,18 +1321,28 @@ class Fenetre(QMainWindow):
             from . import ia
             from .dialogues_ia import executer
             essai = dict(clef_claude=kc.text().strip(), clef_gemini=kg.text().strip())
-            lignes = []
-            for m, nom in (("claude", "Claude"), ("gemini", "Gemini")):
-                if not essai["clef_" + m]:
-                    continue
-                p = {"ia_moteur": m, "clef_" + m: essai["clef_" + m]}
+
+            def tester():
+                lignes = []
+                ia.DELAI = 25                          # test : on n'attend pas plus de 25 s par moteur
                 try:
-                    executer(d, _("Test de {nom}...", nom=nom), lambda p=p: ia.demander(p, "Réponds seulement : OK", "Test", max_jetons=20))
-                    lignes.append(_("{nom} : clef valide (modèle {modele})", nom=nom, modele=ia._modeles_trouves.get(m) or
-                                    (ia.MODELE_CLAUDE if m == "claude" else ia.MODELE_GEMINI)))
-                except Exception as ex:
-                    lignes.append(_("{nom} : {erreur}", nom=nom, erreur=ex))
-            QMessageBox.information(d, _("IA"), "\n".join(lignes) or _("Aucune clef renseignée."))
+                    for m, nom in (("claude", "Claude"), ("gemini", "Gemini")):
+                        clef = ia.nettoyer_clef(essai["clef_" + m])
+                        if not clef:
+                            lignes.append(_("{nom} : pas de clef.", nom=nom))
+                            continue
+                        p = {"ia_moteur": m, "clef_" + m: clef}
+                        try:
+                            ia.demander(p, "Réponds seulement : OK", "Test", max_jetons=20)
+                            lignes.append(_("{nom} : clef valide (modèle {modele})", nom=nom, modele=ia._modeles_trouves.get(m) or
+                                            (ia.MODELE_CLAUDE if m == "claude" else ia.MODELE_GEMINI)))
+                        except Exception as ex:
+                            lignes.append(_("{nom} : {erreur}", nom=nom, erreur=ex))
+                finally:
+                    ia.DELAI = 180
+                return lignes
+            lignes = executer(d, _("Test des clefs (25 s au plus par moteur)..."), tester)
+            QMessageBox.information(d, _("IA"), "\n\n".join(lignes))
         bt.clicked.connect(tester_ia)
         f.addRow("", bt)
         note(f, _('Gemini en offre gratuite : Google peut réutiliser les documents envoyés. A éviter pour les documents sensibles.'), "#a35c00")
