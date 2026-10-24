@@ -77,12 +77,12 @@ jobs:
       - name: Identifiants des Drives (secrets du depot, jamais dans le code public)
         shell: python
         env:
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          ONEDRIVE_CLIENT_ID: ${{ secrets.ONEDRIVE_CLIENT_ID }}
-          DROPBOX_CLIENT_ID: ${{ secrets.DROPBOX_CLIENT_ID }}
-          BOX_CLIENT_ID: ${{ secrets.BOX_CLIENT_ID }}
-          BOX_CLIENT_SECRET: ${{ secrets.BOX_CLIENT_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID || vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET || vars.GOOGLE_CLIENT_SECRET }}
+          ONEDRIVE_CLIENT_ID: ${{ secrets.ONEDRIVE_CLIENT_ID || vars.ONEDRIVE_CLIENT_ID }}
+          DROPBOX_CLIENT_ID: ${{ secrets.DROPBOX_CLIENT_ID || vars.DROPBOX_CLIENT_ID }}
+          BOX_CLIENT_ID: ${{ secrets.BOX_CLIENT_ID || vars.BOX_CLIENT_ID }}
+          BOX_CLIENT_SECRET: ${{ secrets.BOX_CLIENT_SECRET || vars.BOX_CLIENT_SECRET }}
         run: |
           import os
           ids = {}
