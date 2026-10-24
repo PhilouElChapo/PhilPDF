@@ -1,1 +1,4 @@
-{"pymupdf": "", "tesseract": ""}
+{
+ "pymupdf": "2.0",
+ "tesseract": "5.5.3.20260724"
+}
