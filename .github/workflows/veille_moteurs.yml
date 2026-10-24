@@ -38,7 +38,8 @@ jobs:
               nouveau["tesseract"] = re.search(r"<d:Version>([^<]+)", x).group(1)
           except Exception as e:
               print("::warning::Tesseract illisible :", e)
-          change = [k for k in nouveau if nouveau[k] and nouveau[k] != connu.get(k)]
+          # premier passage (rien de connu) : on note les versions sans refabriquer
+          change = [k for k in nouveau if nouveau[k] and connu.get(k) and nouveau[k] != connu[k]]
           for k in change:
               print(f"::notice title=Nouveau moteur::{k} {connu.get(k) or '?'} -> {nouveau[k]}")
           if not change:
@@ -47,6 +48,13 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write("change=" + ("oui" if change else "non") + "\n")
               f.write("quoi=" + ", ".join(f"{k} {nouveau[k]}" for k in change) + "\n")
+
+      - name: Premier passage (versions notees)
+        if: steps.v.outputs.change == 'non'
+        run: |
+          git config user.name "PhilPDF (veille des moteurs)"
+          git config user.email "actions@users.noreply.github.com"
+          git diff --quiet moteurs.json || (git commit -am "Veille des moteurs : versions de reference" && git push)
 
       - name: Nouvelle version de PhilPDF
         if: steps.v.outputs.change == 'oui'
