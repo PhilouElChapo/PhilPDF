@@ -155,6 +155,33 @@ def qualite(mots):
     return sum(m["conf"] * len(m["texte"]) for m in mots) / n if n else 0.0
 
 
+def versions_moteurs():
+    """{'PyMuPDF': '1.26.x', 'MuPDF': '...', 'Tesseract': '5.x', 'Qt': '...'} ; 'absent' si introuvable."""
+    v = {}
+    try:
+        import pymupdf
+        v["PyMuPDF"] = getattr(pymupdf, "__version__", None) or pymupdf.VersionBind
+        v["MuPDF"] = pymupdf.VersionFitz
+    except Exception:
+        v["PyMuPDF"] = "absent"
+    try:
+        exe = tesseract_exe()
+        r = subprocess.run([exe or "tesseract", "--version"], capture_output=True, text=True, timeout=15,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        premiere = (r.stdout or r.stderr).strip().splitlines()[0]
+        v["Tesseract"] = premiere.split()[-1].lstrip("v")
+    except Exception:
+        v["Tesseract"] = "absent"
+    try:
+        import PySide6
+        from PySide6.QtCore import qVersion
+        v["Qt"] = qVersion()
+        v["PySide6"] = PySide6.__version__
+    except Exception:
+        pass
+    return v
+
+
 def _tesseract(image, base, dpi, sorties, mots_perso=None):
     cmd = [tesseract_exe() or "tesseract", image, base, "-l", "fra", "--dpi", str(dpi)]
     if mots_perso:

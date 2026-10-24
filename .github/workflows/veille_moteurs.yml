@@ -1,0 +1,71 @@
+# Veille des moteurs : chaque lundi, regarde si PyMuPDF (moteur PDF) ou Tesseract (OCR) ont une nouvelle version.
+# Si oui : numero de version de PhilPDF +1 (correctif), note dans moteurs.json, puis fabrication complete.
+# La fabrication passe tous les tests avant de publier : si le nouveau moteur casse quelque chose,
+# rien n'est publie et vos postes gardent la version precedente.
+name: Veille des moteurs
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  veille:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Dernieres versions publiees
+        id: v
+        shell: python
+        run: |
+          import json, os, re, urllib.request
+          def lire(url):
+              with urllib.request.urlopen(url, timeout=60) as r:
+                  return r.read().decode("utf-8", "replace")
+          connu = json.load(open("moteurs.json"))
+          nouveau = dict(connu)
+          try:
+              nouveau["pymupdf"] = json.loads(lire("https://pypi.org/pypi/pymupdf/json"))["info"]["version"]
+          except Exception as e:
+              print("::warning::PyMuPDF illisible :", e)
+          try:   # version reellement installee par la fabrication (paquet Chocolatey)
+              x = lire("https://community.chocolatey.org/api/v2/Packages()?$filter=Id%20eq%20'tesseract'%20and%20IsLatestVersion")
+              nouveau["tesseract"] = re.search(r"<d:Version>([^<]+)", x).group(1)
+          except Exception as e:
+              print("::warning::Tesseract illisible :", e)
+          change = [k for k in nouveau if nouveau[k] and nouveau[k] != connu.get(k)]
+          for k in change:
+              print(f"::notice title=Nouveau moteur::{k} {connu.get(k) or '?'} -> {nouveau[k]}")
+          if not change:
+              print("::notice title=Veille::moteurs a jour", nouveau)
+          json.dump(nouveau, open("moteurs.json", "w"), indent=1)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write("change=" + ("oui" if change else "non") + "\n")
+              f.write("quoi=" + ", ".join(f"{k} {nouveau[k]}" for k in change) + "\n")
+
+      - name: Nouvelle version de PhilPDF
+        if: steps.v.outputs.change == 'oui'
+        shell: python
+        run: |
+          import re
+          s = open("app/config.py", encoding="utf-8").read()
+          v = re.search(r'VERSION = "(\d+)\.(\d+)\.(\d+)"', s)
+          neuf = f"{v.group(1)}.{v.group(2)}.{int(v.group(3)) + 1}"
+          open("app/config.py", "w", encoding="utf-8").write(s.replace(v.group(0), f'VERSION = "{neuf}"'))
+          print("::notice title=Version::" + neuf)
+
+      - name: Enregistrer et fabriquer
+        if: steps.v.outputs.change == 'oui'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "PhilPDF (veille des moteurs)"
+          git config user.email "actions@users.noreply.github.com"
+          git commit -am "Moteurs mis a jour : ${{ steps.v.outputs.quoi }}"
+          git push
+          gh workflow run fabriquer.yml --ref main

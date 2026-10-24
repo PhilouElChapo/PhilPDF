@@ -499,6 +499,48 @@ verif("Bloc ajouté\nsur deux lignes" in op.doc[0].get_text(), "ajouter du texte
 op.changer_mode(None)
 w.onglets.setCurrentWidget(o)
 
+# --- barre d'outils : ouvrir, retour a la ligne, ordre personnalise, pivoter anti-horaire, echeances
+from PySide6.QtWidgets import QToolButton as _QTB
+textes_ = [b.toolTip() or b.text() for b in o.barre.findChildren(_QTB) if b.isVisible()]
+verif(any("Ouvrir" in t for t in textes_), "barre : bouton Ouvrir présent")
+recu_ = []
+w.dialogue_ouvrir = lambda: recu_.append("ouvrir")
+w.lancer_outil("__ouvrir__")
+verif(recu_ == ["ouvrir"], "barre : Ouvrir lance la boîte d'ouverture")
+w.resize(700, 600); app.processEvents()
+h_etroite = o.barre.height()
+w.resize(1500, 800); app.processEvents()
+verif(h_etroite > o.barre.height(), f"barre : passe sur plusieurs lignes si étroite ({h_etroite} > {o.barre.height()})")
+verif(w.minimumSizeHint().width() < 900, f"fenêtre réductible ({w.minimumSizeHint().width()} px)")
+w.params["barre"] = ["volet", "|", "pivoter_gauche", "ouvrir"]
+o.construire_barre(); app.processEvents()
+ordre_ = [o.flux_barre.itemAt(i).widget() for i in range(o.flux_barre.count())]
+verif(ordre_[0] is o.b_volet and len(ordre_) == 4, "barre : ordre personnalisé respecté")
+r0_ = o.doc[o.page_courante()].rotation
+o.pivoter_courante(-90)
+verif(o.doc[o.page_courante()].rotation == (r0_ - 90) % 360, "pivoter : sens anti-horaire")
+o.pivoter_courante(90)
+w.params["barre"] = []
+o.construire_barre()
+_exec0 = F.QDialog.exec
+F.QDialog.exec = lambda self: F.QDialog.Accepted
+w.personnaliser_barre()
+F.QDialog.exec = _exec0
+verif(w.params["barre"] and w.params["barre"][0] == "vignettes", "barre : boîte de personnalisation (barre par défaut proposée)")
+from app import apprentissage as AP
+import datetime as _dt
+demain_ = (_dt.date.today() + _dt.timedelta(days=3)).isoformat()
+AP.ajouter_echeance(w.params, demain_, "Payer la facture", "/x/facture.pdf")
+AP.ajouter_echeance(w.params, demain_, "Autre", "/x/autre.pdf")
+e_ = [x for x in AP.echeances_a_venir(w.params) if x.get("libelle") in ("Payer la facture", "Autre")]
+verif(len(e_) == 2 and all("cle" in x for x in e_), "échéances : clés fournies à l'accueil")
+AP.marquer_echeance(w.params, e_[0]["cle"])
+AP.marquer_echeance(w.params, e_[1]["cle"], retirer=True)
+reste_ = {x["cle"] for x in AP.echeances_a_venir(w.params)}
+verif(not ({e_[0]["cle"], e_[1]["cle"]} & reste_), "échéances : fait / retirer les enlèvent de l'accueil")
+AP.marquer_echeance(w.params, "*", retirer=True)
+verif(not AP.echeances_a_venir(w.params), "échéances : tout retirer")
+
 # --- fermeture : question en francais
 vu = {}
 F.question = lambda parent, titre, texte, boutons: (vu.setdefault("b", [b for b, _ in boutons]), 1)[1]

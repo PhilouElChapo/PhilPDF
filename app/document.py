@@ -5,7 +5,7 @@ import os, sys
 import pymupdf as fitz
 from PySide6.QtCore import Qt, Signal, QRectF, QPointF, QTimer, QSize, QPoint, QRect
 from PySide6.QtGui import QImage, QPainter, QColor, QPen, QPixmap, QGuiApplication, QFont, QIcon
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QFrame, QLabel, QToolButton,
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QFrame, QLayout, QLabel, QToolButton,
                                QListWidget, QListWidgetItem, QSplitter, QPushButton, QInputDialog, QMenu,
                                QMessageBox, QLineEdit, QDialog, QDialogButtonBox, QCheckBox, QFormLayout,
                                QAbstractItemView, QComboBox, QSpinBox, QStackedWidget, QColorDialog, QFileDialog,
@@ -696,6 +696,71 @@ class Loupe(QLabel):
         self.facteur = 1.0
 
 
+class FluxLayout(QLayout):
+    """Disposition « en flux » : les elements vont a la ligne quand la place manque (barre d'outils sur plusieurs
+    lignes quand la fenetre est etroite, au lieu d'icones cachees)."""
+
+    def __init__(self, parent=None, marge=6, espace=2):
+        super().__init__(parent)
+        self._items = []
+        self.setContentsMargins(marge, 2, marge, 2)
+        self.setSpacing(espace)
+
+    def addItem(self, item):
+        self._items.append(item)
+
+    def count(self):
+        return len(self._items)
+
+    def itemAt(self, i):
+        return self._items[i] if 0 <= i < len(self._items) else None
+
+    def takeAt(self, i):
+        return self._items.pop(i) if 0 <= i < len(self._items) else None
+
+    def expandingDirections(self):
+        return Qt.Orientation(0)
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, largeur):
+        return self._placer(QRect(0, 0, largeur, 0), simuler=True)
+
+    def setGeometry(self, r):
+        super().setGeometry(r)
+        self._placer(r, simuler=False)
+
+    def sizeHint(self):
+        return self.minimumSize()
+
+    def minimumSize(self):
+        t = QSize()
+        for it in self._items:
+            t = t.expandedTo(it.minimumSize())
+        m = self.contentsMargins()
+        return t + QSize(m.left() + m.right(), m.top() + m.bottom())
+
+    def _placer(self, r, simuler):
+        m = self.contentsMargins()
+        zone = r.adjusted(m.left(), m.top(), -m.right(), -m.bottom())
+        x, y, haut_ligne = zone.x(), zone.y(), 0
+        e = self.spacing()
+        for it in self._items:
+            if it.widget() is not None and it.widget().isHidden():
+                continue
+            t = it.sizeHint()
+            if x + t.width() > zone.right() + 1 and haut_ligne > 0:
+                x = zone.x()
+                y += haut_ligne + e
+                haut_ligne = 0
+            if not simuler:
+                it.setGeometry(QRect(QPoint(x, y), t))
+            x += t.width() + e
+            haut_ligne = max(haut_ligne, t.height())
+        return y + haut_ligne - r.y() + m.bottom()
+
+
 def defilable(w):
     """Barre d'outils qui defile horizontalement quand la fenetre est etroite (au lieu d'empecher de la reduire)."""
     from PySide6.QtWidgets import QScrollArea, QFrame as _F
@@ -944,7 +1009,7 @@ class OngletDocument(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
         self.barre = self._barre_outils()
-        v.addWidget(defilable(self.barre))
+        v.addWidget(self.barre)
         self._zone_bandeau = defilable(self._bandeau_modifier())
         self._zone_bandeau.hide()
         v.addWidget(self._zone_bandeau)
@@ -1067,20 +1132,36 @@ class OngletDocument(QWidget):
             n = self.page_courante()
         self.aller_a(max(0, min(len(self.doc) - 1, n)))
 
+    # ------------------------------------------------------------ barre d'outils (personnalisable, sur plusieurs lignes)
+    ELEMENTS_BARRE = ["vignettes", "ouvrir", "enregistrer", "imprimer", "rechercher", "annuler", "retablir", "navigation",
+                      "zoom", "pivoter", "pivoter_gauche", "|", "volet"]
+
+    def barre_par_defaut(self):
+        favoris = [o for o in self.params.get("outils_epingles", []) if o not in ("imprimer", "remplacer", "enregistrer")]
+        return ["vignettes", "ouvrir", "enregistrer", "imprimer", "rechercher", "annuler", "retablir", "navigation",
+                "zoom", "pivoter", "|"] + favoris + ["volet"]
+
+    def libelle_element(self, cle):
+        fixes = {"vignettes": _("Vignettes (volet gauche)"), "ouvrir": _("Ouvrir"), "enregistrer": _("Enregistrer"),
+                 "imprimer": _("Imprimer"), "rechercher": _("Rechercher"), "annuler": _("Annuler|action"),
+                 "retablir": _("Rétablir"), "navigation": _("Pages (première, précédente, numéro, suivante, dernière)"),
+                 "zoom": _("Zoom − / + "), "pivoter": _("Pivoter (sens horaire)"),
+                 "pivoter_gauche": _("Pivoter (sens anti-horaire)"), "|": _("— séparateur —"), "volet": _("Volet de droite")}
+        if cle in fixes:
+            return fixes[cle]
+        o = outil(cle)
+        return o[3] if o else cle
+
     def _barre_outils(self):
         w = QFrame()
         w.setObjectName("barre")
         w.setStyleSheet("QFrame#barre{background:#fff;border-bottom:1px solid #e2e2e2} QToolButton{font-size:11px;color:#444}")
-        h = QHBoxLayout(w)
-        h.setContentsMargins(10, 2, 10, 2)
-        h.setSpacing(2)
+        self.flux_barre = FluxLayout(w, marge=6, espace=2)
+        w.setContextMenuPolicy(Qt.CustomContextMenu)
+        w.customContextMenuRequested.connect(lambda p: self._menu_barre(w.mapToGlobal(p)))
+        # elements toujours crees (d'autres parties de l'onglet s'en servent), places seulement s'ils sont choisis
         self.b_vignettes = self._petit("volet_gauche", _('Afficher / masquer les vignettes des pages'), self.basculer_vignettes, True)
         self.b_vignettes.setChecked(self.params.get("vignettes", True))
-        h.addWidget(self.b_vignettes)
-        h.addSpacing(4)
-        h.addWidget(self._bouton("enregistrer", _('Enregistrer'), lambda: self.outil_demande.emit("enregistrer"), aide=_('Enregistrer (Ctrl+S)')))
-        h.addWidget(self._bouton("imprimer", _('Imprimer'), lambda: self.outil_demande.emit("imprimer"), aide=_('Imprimer (Ctrl+P)')))
-        h.addWidget(self._bouton("rechercher", _('Rechercher'), lambda: self.outil_demande.emit("remplacer"), aide=_('Rechercher et remplacer (Ctrl+F)')))
         for attr, ic, txt, f in (("b_annuler", "annuler", _("Annuler|action"), lambda: self.annuler()),
                                  ("b_retablir", "retablir", _('Rétablir'), lambda: self.retablir())):
             b = self._bouton(ic, txt, f)
@@ -1088,9 +1169,9 @@ class OngletDocument(QWidget):
             b.setMenu(QMenu(b))
             b.setMinimumWidth(70)
             setattr(self, attr, b)
-            h.addWidget(b)
-        h.addSpacing(6)
-        nav = QHBoxLayout()
+        self.nav = QWidget()
+        nav = QHBoxLayout(self.nav)
+        nav.setContentsMargins(4, 0, 4, 0)
         nav.setSpacing(0)
         for ic, aide, f in (("premiere", _('Première page (Début)'), lambda: self.aller_a(0)),
                             ("precedente", _('Page précédente (Page préc.)'), lambda: self.aller_a(max(0, self.page_courante() - 1)))):
@@ -1107,43 +1188,92 @@ class OngletDocument(QWidget):
         for ic, aide, f in (("suivante", _('Page suivante (Page suiv.)'), lambda: self.aller_a(min(len(self.doc) - 1, self.page_courante() + 1))),
                             ("derniere", _('Dernière page (Fin)'), lambda: self.aller_a(len(self.doc) - 1))):
             nav.addWidget(self._petit(ic, aide, f))
-        h.addLayout(nav)
-        h.addSpacing(6)
-        h.addWidget(self._bouton("zoom_moins", _('Zoom −'), lambda: self.changer_zoom(self.zoom / 1.2)))
+        self.zoom_w = QWidget()
+        hz = QHBoxLayout(self.zoom_w)
+        hz.setContentsMargins(0, 0, 0, 0)
+        hz.setSpacing(0)
+        hz.addWidget(self._bouton("zoom_moins", _('Zoom −'), lambda: self.changer_zoom(self.zoom / 1.2)))
         self.lbl_zoom = QLabel()
         self.lbl_zoom.setMinimumWidth(44)
         self.lbl_zoom.setAlignment(Qt.AlignCenter)
-        h.addWidget(self.lbl_zoom)
-        h.addWidget(self._bouton("zoom_plus", _('Zoom +'), lambda: self.changer_zoom(self.zoom * 1.2)))
-        h.addWidget(self._bouton("pivoter", _('Pivoter'), self.pivoter_courante, aide=_('Pivoter la page affichée de 90°')))
-        sep = QFrame()
-        sep.setFrameShape(QFrame.VLine)
-        sep.setStyleSheet("color:#e2e2e2")
-        h.addWidget(sep)
-        self.zone_favoris = QHBoxLayout()
-        self.zone_favoris.setSpacing(2)
-        h.addLayout(self.zone_favoris)
-        h.addStretch()
+        hz.addWidget(self.lbl_zoom)
+        hz.addWidget(self._bouton("zoom_plus", _('Zoom +'), lambda: self.changer_zoom(self.zoom * 1.2)))
         self.b_volet = self._bouton("volet_droit", _('Volet'), self.basculer_volet,
                                     aide=_('Volet de droite : complet → icônes seules → masqué'))
-        h.addWidget(self.b_volet)
-        self.remplir_favoris()
+        self.zone_favoris = None
+        self.construire_barre()
         return w
 
+    def construire_barre(self):
+        """Place les elements choisis (Preferences ou clic droit sur la barre), dans l'ordre choisi."""
+        fl = self.flux_barre
+        permanents = (self.b_vignettes, self.b_annuler, self.b_retablir, self.nav, self.zoom_w, self.b_volet)
+        while fl.count():
+            it = fl.takeAt(0)
+            wd = it.widget()
+            if wd is not None:
+                wd.hide()
+                if wd not in permanents:
+                    wd.setParent(None)
+                    wd.deleteLater()
+        for cle in self.params.get("barre") or self.barre_par_defaut():
+            wd = None
+            if cle == "vignettes":
+                wd = self.b_vignettes
+            elif cle == "ouvrir":
+                wd = self._bouton("ouvrir", _('Ouvrir'), lambda: self.outil_demande.emit("__ouvrir__"), aide=_('Ouvrir un fichier (Ctrl+O)'))
+            elif cle == "enregistrer":
+                wd = self._bouton("enregistrer", _('Enregistrer'), lambda: self.outil_demande.emit("enregistrer"), aide=_('Enregistrer (Ctrl+S)'))
+            elif cle == "imprimer":
+                wd = self._bouton("imprimer", _('Imprimer'), lambda: self.outil_demande.emit("imprimer"), aide=_('Imprimer (Ctrl+P)'))
+            elif cle == "rechercher":
+                wd = self._bouton("rechercher", _('Rechercher'), lambda: self.outil_demande.emit("remplacer"), aide=_('Rechercher et remplacer (Ctrl+F)'))
+            elif cle == "annuler":
+                wd = self.b_annuler
+            elif cle == "retablir":
+                wd = self.b_retablir
+            elif cle == "navigation":
+                wd = self.nav
+            elif cle == "zoom":
+                wd = self.zoom_w
+            elif cle == "pivoter":
+                wd = self._bouton("pivoter", _('Pivoter'), lambda: self.pivoter_courante(90),
+                                  aide=_('Pivoter la page affichée de 90° (sens horaire) ; flèche : autres sens'))
+                wd.setPopupMode(QToolButton.MenuButtonPopup)
+                m = QMenu(wd)
+                m.addAction(icone("pivoter"), _("90° sens horaire ↻"), lambda: self.pivoter_courante(90))
+                m.addAction(icone("annuler"), _("90° sens anti-horaire ↺"), lambda: self.pivoter_courante(-90))
+                m.addAction(_("180°"), lambda: self.pivoter_courante(180))
+                wd.setMenu(m)
+            elif cle == "pivoter_gauche":
+                wd = self._bouton("annuler", _('Pivoter ↺'), lambda: self.pivoter_courante(-90), aide=_('Pivoter de 90° (sens anti-horaire)'))
+            elif cle == "|":
+                wd = QFrame()
+                wd.setFrameShape(QFrame.VLine)
+                wd.setFixedSize(8, 40)
+                wd.setStyleSheet("color:#e2e2e2")
+            elif cle == "volet":
+                wd = self.b_volet
+            else:
+                o = outil(cle)
+                if o:
+                    _x, _x, coul, _x = famille(o[1])
+                    wd = self._bouton(o[2], o[3].split(" ")[0] if len(o[3]) > 12 else o[3],
+                                      lambda _x=False, x=cle: self.outil_demande.emit(x), coul, o[3] + " — " + o[5])
+            if wd is not None:
+                fl.addWidget(wd)
+                wd.show()
+        fl.invalidate()
+
     def remplir_favoris(self):
-        """Outils epingles (etoiles) dans la barre, dans l'ordre choisi dans le volet."""
-        while self.zone_favoris.count():
-            it = self.zone_favoris.takeAt(0)
-            if it.widget():
-                it.widget().hide()
-                it.widget().setParent(None)
-        for oid in self.params["outils_epingles"]:
-            o = outil(oid)
-            if o and oid not in ("imprimer", "remplacer", "enregistrer"):
-                _x, _x, coul, _x = famille(o[1])
-                b = self._bouton(o[2], o[3].split(" ")[0] if len(o[3]) > 12 else o[3],
-                                 lambda _x=False, x=oid: self.outil_demande.emit(x), coul, o[3] + " — " + o[5])
-                self.zone_favoris.addWidget(b)
+        """Compatibilite : sans barre personnalisee, la barre suit les outils epingles du volet."""
+        if not self.params.get("barre"):
+            self.construire_barre()
+
+    def _menu_barre(self, pos):
+        m = QMenu(self)
+        m.addAction(_("Personnaliser la barre d'outils..."), lambda: self.outil_demande.emit("__barre__"))
+        m.exec(pos)
 
     def _bandeau_modifier(self):
         self.bandeau = QFrame()
@@ -2418,8 +2548,8 @@ class OngletDocument(QWidget):
         self.rafraichir_pages()
 
     # ------------------------------------------------------------ pages : rotation, organisation
-    def pivoter_courante(self):
-        self.pivoter([self.page_courante()])
+    def pivoter_courante(self, angle=90):
+        self.pivoter([self.page_courante()], angle)
 
     def pivoter(self, pages, angle=90, demander=True):
         dans_fichier = True

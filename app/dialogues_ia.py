@@ -212,9 +212,7 @@ class DialogueResume(QDialog):
         a = p.add_text_annot((20, 20), self.texte.toPlainText(), icon="Note")
         a.set_info(title=self.params.get("auteur") or "PhilPDF", subject=_("Résumé IA"))
         a.update()
-        self.onglet.modifie = True
-        self.onglet.rafraichir_pages()
-        self.onglet.titre_change.emit()
+        self.onglet.apres_modif([_("Note de résumé ajoutée en haut de la page 1.")])
 
     def _retenir(self, *_a):
         if self.case and self.case.isChecked():

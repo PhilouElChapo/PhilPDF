@@ -1,7 +1,7 @@
 """Onglets Accueil et Outils."""
 import os
 from PySide6.QtCore import Qt, Signal, QRect, QSize, QPoint
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+from PySide6.QtWidgets import (QMessageBox, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
                                QScrollArea, QFrame, QLayout, QSizePolicy, QListWidget, QListWidgetItem,
                                QToolButton)
 from .icones import icone, logo
@@ -329,6 +329,7 @@ class PageAccueil(QWidget):
         self.echeances.setStyleSheet("QLabel{background:#fff8e6;border:1px solid #f0d58c;border-left:4px solid #d69e00;"
                                      "border-radius:10px;padding:8px 12px}")
         self.echeances.hide()
+        self.echeances.linkActivated.connect(self._echeance_lien)
         v.addWidget(self.echeances)
         hl = QHBoxLayout()
         self.bandeau = QLabel()
@@ -377,12 +378,26 @@ class PageAccueil(QWidget):
             ech = []
         if ech:
             import html
+            from urllib.parse import quote
             lignes = [f"<b>{datetime.date.fromisoformat(e['date']).strftime('%d/%m/%Y')}</b> — {html.escape(e.get('libelle', ''))}"
-                      f" <span style='color:#777'>({html.escape(os.path.basename(e.get('fichier', '')))})</span>" for e in ech[:6]]
-            self.echeances.setText(_("<b>Echéances à venir</b>") + "<br>" + "<br>".join(lignes))
+                      f" <span style='color:#777'>({html.escape(os.path.basename(e.get('fichier', '')))})</span>"
+                      f" &nbsp;<a href='fait:{quote(e['cle'])}'>{_('✓ fait')}</a>"
+                      f" &nbsp;<a href='retirer:{quote(e['cle'])}' style='color:#a33'>{_('✕ retirer')}</a>" for e in ech[:6]]
+            self.echeances.setText(_("<b>Echéances à venir</b>") + f" &nbsp; <a href='retirer:*' style='color:#a33'>{_('tout retirer')}</a>"
+                                   + "<br>" + "<br>".join(lignes))
             self.echeances.show()
         else:
             self.echeances.hide()
+
+    def _echeance_lien(self, lien):
+        from urllib.parse import unquote
+        from .apprentissage import marquer_echeance
+        action, _s, cle = lien.partition(":")
+        cle = unquote(cle)
+        if cle == "*" and QMessageBox.question(self, "PhilPDF", _("Retirer toutes les échéances proposées par l'IA ?")) != QMessageBox.Yes:
+            return
+        marquer_echeance(self.params, cle, retirer=(action == "retirer"))
+        self.rafraichir()
 
     def _lieu_synchro(self):
         cid = self.params.get("drive_compte")

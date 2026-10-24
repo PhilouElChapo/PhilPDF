@@ -120,9 +120,24 @@ def ajouter_echeance(params, date_iso, libelle, fichier):
 def echeances_a_venir(params, jours=60):
     aujourd_hui = datetime.date.today().isoformat()
     fin = (datetime.date.today() + datetime.timedelta(days=jours)).isoformat()
-    out = [e for e in lire(params, "echeances.json").get("echeances", {}).values()
+    out = [dict(e, cle=k) for k, e in lire(params, "echeances.json").get("echeances", {}).items()
            if not e.get("fait") and aujourd_hui <= e.get("date", "") <= fin]
     return sorted(out, key=lambda e: e["date"])
+
+
+def marquer_echeance(params, cle, retirer=False):
+    """'Fait' garde la trace (n'est plus affichee) ; 'retirer' l'efface. cle='*' : toutes."""
+    d = lire(params, "echeances.json")
+    e = d.setdefault("echeances", {})
+    cles = list(e) if cle == "*" else [cle]
+    for k in cles:
+        if k not in e:
+            continue
+        if retirer:
+            del e[k]
+        else:
+            e[k].update(fait=True, maj=maintenant())
+    ecrire(params, "echeances.json", d)
 
 
 # ------------------------------------------------------------------ OCR

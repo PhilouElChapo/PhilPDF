@@ -49,6 +49,14 @@ Verification manuelle : Aide > Rechercher les mises a jour.
 3. CE QUE FAIT LA VERSION 0.3
 -----------------------------
 
+  Nouveau en 0.6.6 : barre d'outils sur plusieurs lignes si la fenetre est
+    etroite, bouton Ouvrir, ordre libre (clic droit sur la barre >
+    Personnaliser), pivoter dans les deux sens ; echeances de l'accueil :
+    liens "fait" / "retirer" ; note de resume IA visible tout de suite ;
+    versions des moteurs dans A propos ; veille hebdomadaire des moteurs
+    (PyMuPDF, Tesseract) : nouvelle version de PhilPDF fabriquee et testee
+    automatiquement quand l'un d'eux evolue.
+
   Nouveau en 0.6.5 : journal des echanges (Aide > Journal des echanges) :
     tout ce que PhilPDF echange avec les Drives, NAS, FTP et IA est garde
     (mots de passe et jetons masques), a copier en cas de probleme.

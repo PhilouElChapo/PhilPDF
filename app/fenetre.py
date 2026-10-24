@@ -308,7 +308,8 @@ class Fenetre(QMainWindow):
         act(m, _('Préférences...'), self.preferences, "Ctrl+K", "parametres")
 
         m = mb.addMenu(_('&Affichage'))
-        act(m, _('Pivoter la page (90°)'), lambda: self.doc_courant() and self.doc_courant().pivoter_courante(), "Shift+Ctrl++", "pivoter")
+        act(m, _('Pivoter la page (90°, sens horaire)'), lambda: self.doc_courant() and self.doc_courant().pivoter_courante(90), "Shift+Ctrl++", "pivoter")
+        act(m, _('Pivoter la page (90°, sens anti-horaire)'), lambda: self.doc_courant() and self.doc_courant().pivoter_courante(-90), "Shift+Ctrl+-", "annuler")
         act(m, _('Zoom avant'), lambda: self.doc_courant() and self.doc_courant().changer_zoom(self.doc_courant().zoom * 1.2), "Ctrl++", "zoom_plus")
         act(m, _('Zoom arrière'), lambda: self.doc_courant() and self.doc_courant().changer_zoom(self.doc_courant().zoom / 1.2), "Ctrl+-", "zoom_moins")
         act(m, _('Taille réelle'), lambda: self.doc_courant() and self.doc_courant().changer_zoom(1.0), "Ctrl+1", "taille_reelle")
@@ -338,6 +339,96 @@ class Fenetre(QMainWindow):
         act(m, _('Rechercher les mises à jour...'), lambda: self.verifier_maj(silencieux=False), None, "mise_a_jour")
         act(m, _('Journal des échanges (Drives, NAS, IA)...'), self.journal_echanges, None, "lot")
         act(m, _('A propos de PhilPDF'), self.a_propos, None, "aide")
+
+    def personnaliser_barre(self):
+        """Choisir et ordonner les boutons de la barre d'outils des documents (independante du volet de droite)."""
+        from .outils import OUTILS
+        from types import SimpleNamespace
+        o = self.doc_courant()
+        ref = SimpleNamespace(params=self.params)
+        par_defaut = OngletDocument.barre_par_defaut(ref)
+        actuelle = list(self.params.get("barre") or par_defaut)
+        d = QDialog(self)
+        d.setWindowTitle(_("Personnaliser la barre d'outils"))
+        d.resize(760, 560)
+        v = QVBoxLayout(d)
+        lb = QLabel(_("Glissez pour changer l'ordre. La barre passe sur plusieurs lignes si la fenêtre est étroite. "
+                      "Elle est la même sur tous vos postes."))
+        lb.setWordWrap(True)
+        v.addWidget(lb)
+        h = QHBoxLayout()
+        dispo, barre = QListWidget(), QListWidget()
+        barre.setDragDropMode(QListWidget.InternalMove)
+        libelle = OngletDocument.libelle_element
+
+        def item(cle):
+            it = QListWidgetItem(libelle(ref, cle))
+            it.setData(Qt.UserRole, cle)
+            return it
+        cles = OngletDocument.ELEMENTS_BARRE + [x[0] for x in OUTILS if x[6]]
+        for c in actuelle:
+            barre.addItem(item(c))
+
+        def remplir_dispo():
+            dispo.clear()
+            presents = {barre.item(i).data(Qt.UserRole) for i in range(barre.count())}
+            for c in cles:
+                if c not in presents or c == "|":
+                    dispo.addItem(item(c))
+        remplir_dispo()
+        vg = QVBoxLayout()
+        vg.addWidget(QLabel(_("<b>Disponibles</b>")))
+        vg.addWidget(dispo)
+        h.addLayout(vg, 1)
+        vb = QVBoxLayout()
+        vb.addStretch(1)
+        b_aj, b_ret = QPushButton(_("Ajouter →")), QPushButton(_("← Retirer"))
+        vb.addWidget(b_aj)
+        vb.addWidget(b_ret)
+        vb.addStretch(1)
+        h.addLayout(vb)
+        vd = QVBoxLayout()
+        vd.addWidget(QLabel(_("<b>Dans la barre</b> (de gauche à droite)")))
+        vd.addWidget(barre)
+        h.addLayout(vd, 1)
+        v.addLayout(h, 1)
+
+        def ajouter():
+            for it in dispo.selectedItems() or ([dispo.currentItem()] if dispo.currentItem() else []):
+                ligne = barre.currentRow() + 1 if barre.currentRow() >= 0 else barre.count()
+                barre.insertItem(ligne, item(it.data(Qt.UserRole)))
+            remplir_dispo()
+
+        def retirer():
+            for it in barre.selectedItems():
+                barre.takeItem(barre.row(it))
+            remplir_dispo()
+        b_aj.clicked.connect(ajouter)
+        b_ret.clicked.connect(retirer)
+        dispo.itemDoubleClicked.connect(lambda _i: ajouter())
+        barre.itemDoubleClicked.connect(lambda _i: retirer())
+        hb = QHBoxLayout()
+        b_def = QPushButton(_("Barre par défaut"))
+
+        def defaut():
+            barre.clear()
+            for c in par_defaut:
+                barre.addItem(item(c))
+            remplir_dispo()
+        b_def.clicked.connect(defaut)
+        hb.addWidget(b_def)
+        hb.addStretch(1)
+        bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
+        bb.accepted.connect(d.accept)
+        bb.rejected.connect(d.reject)
+        hb.addWidget(bb)
+        v.addLayout(hb)
+        if d.exec() != QDialog.Accepted:
+            return
+        self.params["barre"] = [barre.item(i).data(Qt.UserRole) for i in range(barre.count())]
+        self.params.enregistrer()
+        for doc in self.documents():
+            doc.construire_barre()
 
     def journal_echanges(self):
         """Les derniers echanges avec les Drives, NAS, FTP et IA (mots de passe masques), a copier pour un depannage."""
@@ -804,6 +895,12 @@ class Fenetre(QMainWindow):
         if oid == "__epingles__":
             self._epingles(self.params["outils_epingles"])
             self.outils.maj_etoiles()
+            return
+        if oid == "__ouvrir__":
+            self.dialogue_ouvrir()
+            return
+        if oid == "__barre__":
+            self.personnaliser_barre()
             return
         if oid == "numeriser":
             self.numeriser()
@@ -1809,7 +1906,12 @@ class Fenetre(QMainWindow):
                                   "F11  Plein écran"))
 
     def a_propos(self):
+        from moteur.scan import versions_moteurs
+        v = versions_moteurs()
+        moteurs = "<br>".join(f"{k} : <b>{x}</b>" for k, x in v.items())
         QMessageBox.about(self, _('A propos de PhilPDF'),
                           _("<b>PhilPDF {version}</b> – Editeur PDF<br>Usage personnel et familial.<br><br>"
                             "Moteur PDF : PyMuPDF (AGPL). Interface : Qt / PySide6 (LGPL). OCR : Tesseract (Apache 2.0).<br>"
-                            "Police de remplacement fournie : Nunito (SIL Open Font License).", version=VERSION))
+                            "Police de remplacement fournie : Nunito (SIL Open Font License).", version=VERSION)
+                          + "<br><br>" + _("<b>Moteurs embarqués</b> (mis à jour automatiquement à chaque nouvelle version) :")
+                          + "<br>" + moteurs)

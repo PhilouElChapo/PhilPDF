@@ -116,7 +116,7 @@ jobs:
         run: |
           $p = Start-Process -FilePath dist\PhilPDF\PhilPDF.exe -ArgumentList "--verifier", "$PWD\verif.txt" -Wait -PassThru
           Get-Content verif.txt
-          Get-Content verif.txt | Where-Object { $_ -match "^(google drive|onedrive|dropbox|box|coffre|ocr|langues|RESULTAT)" } | ForEach-Object { Write-Output "::notice title=Auto-controle::$_" }
+          Get-Content verif.txt | Where-Object { $_ -match "^(google drive|onedrive|dropbox|box|coffre|ocr|langues|moteur|RESULTAT)" } | ForEach-Object { Write-Output "::notice title=Auto-controle::$_" }
           if ($p.ExitCode -ne 0) { throw "auto-controle en echec" }
 
       - name: Version portable

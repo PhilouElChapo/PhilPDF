@@ -19,6 +19,9 @@ def verifier(sortie):
     from moteur.modifier import Editeur
     from moteur.scan import tesseract_exe, traiter
     lignes, ok = [], True
+    from moteur.scan import versions_moteurs
+    for k, x in versions_moteurs().items():
+        lignes.append(f"moteur {k}: {x}")
     d = fitz.open(); p = d.new_page()
     p.insert_text((72, 100), "Net à payer : 130,00 EUR", fontname="hebo", fontsize=12)
     tmp = tempfile.mkdtemp(); src = os.path.join(tmp, "t.pdf"); d.save(src)
