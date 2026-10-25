@@ -71,12 +71,12 @@ def identifiants(fournisseur):
     f = FOURNISSEURS[fournisseur]
     cid, sec = os.environ.get(f["env"][0]), os.environ.get(f["env"][1])
     if cid:
-        return cid, sec
+        return cid.strip(), (sec or "").strip() or None
     try:
         from . import identifiants as I
         d = getattr(I, "IDENTIFIANTS", {}).get(fournisseur)
         if d and d.get("id"):
-            return d["id"], d.get("secret")
+            return d["id"].strip(), (d.get("secret") or "").strip() or None
     except ImportError:
         pass
     if fournisseur in PUBLICS:                    # identifiant public (application de bureau, sans secret)

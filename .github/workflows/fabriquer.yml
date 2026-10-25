@@ -84,10 +84,14 @@ jobs:
           BOX_CLIENT_ID: ${{ secrets.BOX_CLIENT_ID || vars.BOX_CLIENT_ID }}
           BOX_CLIENT_SECRET: ${{ secrets.BOX_CLIENT_SECRET || vars.BOX_CLIENT_SECRET }}
         run: |
-          import os
+          import os, hashlib
           ids = {}
           for cle, env in (("gdrive", "GOOGLE"), ("onedrive", "ONEDRIVE"), ("dropbox", "DROPBOX"), ("box", "BOX")):
-              i = os.environ.get(env + "_CLIENT_ID", "")
+              brut_i, brut_s = os.environ.get(env + "_CLIENT_ID", ""), os.environ.get(env + "_CLIENT_SECRET", "")
+              i = "".join(brut_i.split())          # espaces / retours a la ligne colles par erreur
+              if brut_i != i or brut_s != brut_s.strip():
+                  print("::warning title=Identifiants::" + cle + " : espaces ou retour a la ligne retires du secret du depot")
+              os.environ[env + "_CLIENT_SECRET"] = "".join(brut_s.split())
               if i:
                   ids[cle] = {"id": i, "secret": os.environ.get(env + "_CLIENT_SECRET", "") or None}
               print(cle, ":", "identifiant present" if i else "secret " + env + "_CLIENT_ID absent")
@@ -95,7 +99,8 @@ jobs:
               print(("::notice title=Identifiants::" if i else "::warning title=Identifiants::") + cle + " : " +
                     ("identifiant present (" + str(len(i)) + " caracteres, se termine par " + i[-27:] + ")" if i else
                      "secret " + env + "_CLIENT_ID absent ou vide") +
-                    (" ; secret present (" + str(len(sec)) + " caracteres, commence par " + sec[:6] + ")" if sec else
+                    (" ; secret present (" + str(len(sec)) + " caracteres, commence par " + sec[:6] + ", empreinte " +
+                     hashlib.sha256(sec.encode()).hexdigest()[:10] + ")" if sec else
                      (" ; pas de secret" if cle in ("gdrive", "box") else "")))
           with open("app/identifiants.py", "w") as f:
               f.write("IDENTIFIANTS = " + repr(ids) + "\n")
