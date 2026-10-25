@@ -22,6 +22,15 @@ def verifier(sortie):
     from moteur.scan import versions_moteurs
     for k, x in versions_moteurs().items():
         lignes.append(f"moteur {k}: {x}")
+    try:
+        from app.orthographe import fautes, suggestions
+        bon = [m for _a, _b, m in fautes("Le documment est signé.", {"langue": "fr"})] == ["documment"] and \
+            "document" in suggestions("documment", {"langue": "fr"})
+    except Exception as ex:
+        bon = False
+        lignes.append(f"orthographe: {ex}")
+    ok &= bon
+    lignes.append(f"orthographe: {'OK' if bon else 'ECHEC'}")
     d = fitz.open(); p = d.new_page()
     p.insert_text((72, 100), "Net à payer : 130,00 EUR", fontname="hebo", fontsize=12)
     tmp = tempfile.mkdtemp(); src = os.path.join(tmp, "t.pdf"); d.save(src)

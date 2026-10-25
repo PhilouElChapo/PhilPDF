@@ -532,6 +532,20 @@ verif(any(r.y0 < 305 < r.y1 for r, _x in op.paragraphes_page(0)), "paragraphe : 
 verif(pw_.ouvrir_paragraphe(fitz.Point(76, 306)), "paragraphe ajouté : rouvert")
 verif(pw_.editeur.zone.toPlainText() == "Bloc ajouté\nsur deux lignes", f"paragraphe ajouté : retours à la ligne exacts ({pw_.editeur.zone.toPlainText()!r})")
 capture(w, "42_barre_format.png")
+from app import orthographe as ORT
+pw_.editeur.zone.setPlainText("Un documment signé")
+app.processEvents()
+fmts_ = pw_.editeur.zone.document().firstBlock().layout().formats()
+verif(any(f.format.underlineStyle() == D.QTextCharFormat.SpellCheckUnderline for f in fmts_) if hasattr(D, "QTextCharFormat") else
+      bool(ORT.fautes("Un documment signé", w.params)), "orthographe : faute soulignée dans la zone de texte")
+from PySide6.QtWidgets import QMenu as _QM
+m_ = _QM()
+m_.addAction("Copier")
+c_ = pw_.editeur.zone.textCursor(); c_.setPosition(5); pw_.editeur.zone.setTextCursor(c_)
+pos_ = pw_.editeur.zone.cursorRect(c_).center()
+verif(ORT.menu_correction(pw_.editeur.zone, pos_, w.params, m_) and m_.actions()[0].text() == "document",
+      f"orthographe : suggestion au clic droit ({[a.text() for a in m_.actions()][:3]})")
+pw_.editeur.zone.setPlainText("Bloc ajouté\nsur deux lignes")
 pw_.editeur.couleur, pw_.editeur.couleur_modifiee = D.QColor("#c00000"), True
 pw_.editeur.sp_taille.setValue(16)
 pw_.editeur.valider()
@@ -565,8 +579,13 @@ h_large = o.barre.height()
 w.resize(900, 700)
 for _k in range(5):
     app.processEvents()
-verif(o._mode_compact and o.barre.height() <= h_large * 1.3, f"barre étroite : icônes seules, hauteur réduite ({o.barre.height()} px contre {h_large})")
+verif(o._mode_compact[0] is True and o.barre.height() <= h_large * 1.3, f"barre étroite : icônes seules, hauteur réduite ({o.barre.height()} px contre {h_large})")
 capture(w, "41_barre_etroite.png")
+o.choisir_style_barre("icone_nom"); app.processEvents()
+verif(o._mode_compact[0] is False and o.b_volet.toolButtonStyle() == D.Qt.ToolButtonTextUnderIcon, "barre : « icône et nom » imposé par l'utilisateur")
+o.choisir_style_barre("nom"); app.processEvents()
+verif(o.b_volet.toolButtonStyle() == D.Qt.ToolButtonTextOnly, "barre : « nom seul »")
+o.choisir_style_barre("auto"); app.processEvents()
 w.resize(1500, 800); app.processEvents()
 w.params["barre"] = ["volet", "|", "pivoter_gauche", "ouvrir"]
 o.construire_barre()

@@ -147,6 +147,13 @@ def ocr_appris(params):
     return {"mots": sorted(d.get("mots", {})), "regles": d.get("regles", {})}
 
 
+def ajouter_mot(params, mot):
+    """Mot ajoute au dictionnaire personnel (correcteur d'orthographe et OCR), synchronise entre vos postes."""
+    d = lire(params, "ocr.json")
+    d.setdefault("mots", {})[mot] = {"maj": maintenant()}
+    ecrire(params, "ocr.json", d)
+
+
 def retenir_ocr(params, corrections):
     """corrections : [(lu par Tesseract, valide par vous)] ; les mots valides rejoignent les mots personnels,
     les remplacements d'un seul mot deviennent des regles (appliquees seules apres deux validations).

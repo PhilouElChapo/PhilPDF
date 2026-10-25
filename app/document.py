@@ -417,6 +417,7 @@ class EditeurParagraphe(QFrame):
         f.setPixelSize(max(8, int(self.taille * e * 0.98)))
         self.zone.setFont(f)
         self._police_origine = QFont(f)
+        self._orthographe(o.params)
         self.police_choisie = None                    # fichier choisi dans le volet Format pendant la saisie
         self.zone.installEventFilter(self)
         self.poignee = QLabel("⋮", self)
@@ -442,6 +443,39 @@ class EditeurParagraphe(QFrame):
         c = self.zone.textCursor()
         c.movePosition(c.MoveOperation.End)
         self.zone.setTextCursor(c)
+
+    def _orthographe(self, params):
+        """Fautes soulignees en rouge ; clic droit : suggestions, ajouter au dictionnaire, activer / couper."""
+        from . import orthographe
+
+        def activer():
+            if getattr(self.zone, "_surligneur", None) is not None:
+                self.zone._surligneur.setDocument(None)
+            self.zone._surligneur = None
+            if params.get("orthographe", True):
+                try:
+                    self.zone._surligneur = orthographe.surligneur(self.zone.document(), params)
+                except Exception:
+                    self.zone._surligneur = None
+        activer()
+        self.zone.setContextMenuPolicy(Qt.CustomContextMenu)
+
+        def menu(pos):
+            m = self.zone.createStandardContextMenu()
+            if self.zone._surligneur is not None:
+                orthographe.menu_correction(self.zone, pos, params, m)
+            m.addSeparator()
+            a = m.addAction(_("Vérifier l'orthographe pendant la saisie"))
+            a.setCheckable(True)
+            a.setChecked(bool(params.get("orthographe", True)))
+
+            def basculer(c):
+                params["orthographe"] = c
+                params.enregistrer()
+                activer()
+            a.toggled.connect(basculer)
+            m.exec(self.zone.mapToGlobal(pos))
+        self.zone.customContextMenuRequested.connect(menu)
 
     def _barre_format(self, o, para):
         """Petite barre au-dessus de la zone : police (du document ou toutes), taille, couleur — appliquees en direct."""
@@ -826,7 +860,7 @@ class _SurveilleTaille(QObject):
         w.installEventFilter(self)
 
     def eventFilter(self, obj, ev):
-        if ev.type() == ev.Type.Resize:
+        if ev.type() in (ev.Type.Resize, ev.Type.Show):
             QTimer.singleShot(0, self.rappel)
         return False
 
@@ -1432,21 +1466,26 @@ class OngletDocument(QWidget):
         fl.invalidate()
 
     def _style_barre(self, compact):
+        """compact : True (icone seule), False (icone et nom) ou "nom" (nom seul)."""
+        style = {True: Qt.ToolButtonIconOnly, False: Qt.ToolButtonTextUnderIcon, "nom": Qt.ToolButtonTextOnly}[compact]
         for b in self.barre_w.findChildren(QToolButton):
             if b.property("texte_dessous"):
                 if b.property("larg_mini") is None:
                     b.setProperty("larg_mini", b.minimumWidth())
-                b.setToolButtonStyle(Qt.ToolButtonIconOnly if compact else Qt.ToolButtonTextUnderIcon)
-                b.setMinimumWidth(0 if compact else b.property("larg_mini"))
-                b.setIconSize(QSize(20, 20) if compact else QSize(22, 22))
+                b.setToolButtonStyle(style)
+                b.setMinimumWidth(b.property("larg_mini") if compact is False else 0)
+                b.setIconSize(QSize(20, 20) if compact is True else QSize(22, 22))
 
     def _adapter_barre(self):
         """Tout tient sur une ligne : icones avec texte ; sinon icones seules (barre plus basse), puis plusieurs lignes."""
         if not hasattr(self, "_largeur_pleine"):
             return
-        compact = self.barre_w.width() < self._largeur_pleine
-        if compact != getattr(self, "_mode_compact", None):
-            self._mode_compact = compact
+        choix = self.params.get("barre_style") or "auto"
+        compact = {"icone_nom": False, "icone": True, "nom": "nom"}.get(choix)
+        if compact is None:                           # automatique : les noms seulement si toute la barre tient
+            compact = self.barre_w.width() < self._largeur_pleine
+        if (compact, choix) != getattr(self, "_mode_compact", None):
+            self._mode_compact = (compact, choix)
             self._style_barre(compact)
             self.flux_barre.invalidate()
 
@@ -1458,7 +1497,24 @@ class OngletDocument(QWidget):
     def _menu_barre(self, pos):
         m = QMenu(self)
         m.addAction(_("Personnaliser la barre d'outils..."), lambda: self.outil_demande.emit("__barre__"))
+        m.addSection(_("Affichage des boutons"))
+        from PySide6.QtGui import QActionGroup
+        g = QActionGroup(m)
+        actuel = self.params.get("barre_style") or "auto"
+        for cle, txt in (("auto", _("Automatique : noms affichés si toute la barre tient sur une ligne")),
+                         ("icone_nom", _("Icône et nom")), ("icone", _("Icône seule")), ("nom", _("Nom seul"))):
+            a = m.addAction(txt)
+            a.setCheckable(True)
+            a.setChecked(cle == actuel)
+            g.addAction(a)
+            a.triggered.connect(lambda _c=False, k=cle: self.choisir_style_barre(k))
         m.exec(pos)
+
+    def choisir_style_barre(self, cle):
+        self.params["barre_style"] = cle
+        self.params.enregistrer()
+        self._mode_compact = None
+        self._adapter_barre()
 
     def _bandeau_modifier(self):
         self.bandeau = QFrame()
