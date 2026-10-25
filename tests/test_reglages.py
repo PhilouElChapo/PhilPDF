@@ -75,4 +75,26 @@ except reglages.PhraseRequise:
     verifie(True, "mauvaise phrase : rien n'est repris")
 n = reglages.reprendre_secrets_drive(autre, "ma phrase secrète")
 verifie(n >= 2 and coffre.lire("c1") == "motdepasse" and autre["clef_claude"] == "sk-test", "autre poste : mots de passe et clef IA repris")
+
+# --- mise a jour choisie : rien en silence, chaque reglage decrit et a cocher
+a["outils_epingles"] = ["alleger", "ocr"]; a["auteur"] = "Philippe"; a["communs_maj"] = "2026-10-25T09:00:00"
+a["comptes"] = [{"id": "c1", "type": "webdav", "nom": "NAS maison"}, {"id": "c2", "type": "ftp", "nom": "FTP bureau"}]
+reglages.ecrire_drive(a)
+av_auteur = neuf["auteur"]
+ch = reglages.changements_communs(neuf)
+items = {it["cle"]: it for it in ch["items"]}
+verifie(ch["par"] == "Pharmacie" and "auteur" in items and "outils_epingles" in items and neuf["auteur"] == av_auteur,
+        "changements listés sans rien appliquer")
+verifie("ajoute : ocr" in items["outils_epingles"]["detail"] and "FTP bureau" in items["comptes"]["detail"]
+        and "Philippe" in items["auteur"]["detail"], f"chaque changement décrit ({items['comptes']['detail']})")
+reglages.appliquer_communs(neuf, ch, ["outils_epingles"])
+verifie(neuf["outils_epingles"] == ["alleger", "ocr"] and neuf["auteur"] == av_auteur and len(neuf["comptes"]) != 2,
+        "seuls les réglages cochés sont repris")
+verifie(reglages.changements_communs(neuf) is None, "refusés : la question ne revient pas")
+coffre.supprimer("c1")
+autre2 = P(machine="Labo", drive=drive, comptes=[{"id": "c1", "type": "webdav", "nom": "NAS maison"}], clef_claude="")
+nv = reglages.secrets_nouveaux(autre2, "ma phrase secrète")
+verifie(any("NAS maison" in x["libelle"] for x in nv) and "motdepasse" not in json.dumps(nv), "mots de passe nouveaux listés, sans leur valeur")
+reglages.reprendre_secrets_choisis(autre2, "ma phrase secrète", [x["cle"] for x in nv if "NAS" in x["libelle"]])
+verifie(coffre.lire("c1") == "motdepasse" and not autre2["clef_claude"], "seuls les mots de passe cochés sont repris")
 print(f"\n{ok} vérifications de préférences réussies")

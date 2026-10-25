@@ -19,7 +19,9 @@ class DialogueBienvenue(QDialog):
         v = QVBoxLayout(self)
         t = QLabel(_("<h3>Bienvenue dans PhilPDF</h3>Quelques réglages, une seule fois. Tout reste modifiable ensuite "
                      "dans Edition › Préférences.") if not seulement_synchro else
-                   _("<h3>Synchronisation entre vos postes</h3>"))
+                   _("<h3>Synchronisation entre vos postes</h3>Vous pouvez changer d'emplacement à tout moment : "
+                     "le nouveau reçoit les réglages, tampons et apprentissages de ce poste ; l'ancien n'est pas effacé. "
+                     "Pensez à choisir le même sur vos autres postes."))
         t.setWordWrap(True)
         v.addWidget(t)
         f = QFormLayout()

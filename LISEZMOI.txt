@@ -49,6 +49,15 @@ Verification manuelle : Aide > Rechercher les mises a jour.
 3. CE QUE FAIT LA VERSION 0.3
 -----------------------------
 
+  Nouveau en 0.6.7 : reglages des autres postes jamais repris en silence :
+    une fenetre montre chaque changement (avant -> apres) a cocher ou non ;
+    emplacement de synchronisation modifiable a tout moment (lien
+    "changer" sur l'accueil, Edition > Emplacement de synchronisation) ;
+    resume IA : votre consigne personnelle ajoutee a celle de PhilPDF ;
+    polices : liste "Polices du document" ou "Toutes les polices", et
+    apercu direct sur le texte en survolant la liste ; Google : espaces
+    parasites retires de l'identifiant a la fabrication.
+
   Nouveau en 0.6.6 : barre d'outils sur plusieurs lignes si la fenetre est
     etroite, bouton Ouvrir, ordre libre (clic droit sur la barre >
     Personnaliser), pivoter dans les deux sens ; echeances de l'accueil :

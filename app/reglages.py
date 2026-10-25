@@ -20,7 +20,7 @@ from . import coffre
 COMMUNS = ["auteur", "langue", "outils_epingles", "barre_rapide", "volet", "vignettes", "fixer_objets",
            "filigranes_perso", "ia_moteur", "maj_source", "maj_auto", "synchro", "comptes", "defaut_tampons",
            "defaut_signatures", "theme", "synchro_secrets", "barre", "couleurs_annotations",
-           "style_souligne", "opacite_surlignage"]
+           "style_souligne", "opacite_surlignage", "ia_consignes_resume"]
 POSTE = ["machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
 CLEFS_IA = ["clef_claude", "clef_gemini"]
 FICHIER_DRIVE = "preferences.json"
@@ -231,3 +231,127 @@ def reprendre_communs_drive(params):
     params.enregistrer()
     nouveaux = [x for x in params.get("comptes", []) if x["id"] not in comptes_ici]
     return par, nouveaux
+
+
+# ------------------------------------------------------------------ mise a jour choisie (jamais en silence)
+def _(t, **k):
+    from .langue import _ as tr
+    return tr(t, **k)
+
+
+def libelle_commun(k):
+    return {"auteur": _("Votre nom (tampons, commentaires)"), "langue": _("Langue de PhilPDF"),
+            "outils_epingles": _("Outils favoris"), "barre_rapide": _("Barre rapide de sélection"),
+            "volet": _("Volet de droite"), "vignettes": _("Vignettes"), "fixer_objets": _("Fixer les objets à l'enregistrement"),
+            "filigranes_perso": _("Filigranes personnels"), "ia_moteur": _("IA utilisée"),
+            "maj_source": _("Source des mises à jour"), "maj_auto": _("Mises à jour automatiques"),
+            "synchro": _("Synchronisation des fichiers"), "comptes": _("Comptes (NAS, FTP, Drives)"),
+            "defaut_tampons": _("Tampons par défaut"), "defaut_signatures": _("Signatures par défaut"),
+            "theme": _("Thème"), "synchro_secrets": _("Synchroniser les mots de passe"),
+            "barre": _("Barre d'outils des documents"), "couleurs_annotations": _("Couleurs des annotations"),
+            "style_souligne": _("Style du soulignement"), "opacite_surlignage": _("Opacité du surlignage"),
+            "ia_consignes_resume": _("Consignes personnelles pour le résumé IA")}.get(k, k)
+
+
+def _court(v):
+    if isinstance(v, bool):
+        return _("oui") if v else _("non")
+    if v in (None, "", [], {}):
+        return _("(vide)")
+    t = v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)
+    return t if len(t) <= 40 else t[:37] + "..."
+
+
+def _nom_element(x):
+    if isinstance(x, dict):
+        return str(x.get("nom") or x.get("id") or x.get("texte") or "?")
+    return str(x)
+
+
+def decrire_changement(k, avant, apres):
+    """Phrase lisible : ce qui va changer sur ce poste si on reprend ce reglage."""
+    if k == "comptes":
+        a = {c.get("id"): c for c in avant or []}
+        b = {c.get("id"): c for c in apres or []}
+        morceaux = []
+        aj = [_nom_element(b[i]) for i in b if i not in a]
+        rt = [_nom_element(a[i]) for i in a if i not in b]
+        md = [_nom_element(b[i]) for i in b if i in a and a[i] != b[i]]
+        if aj:
+            morceaux.append(_("ajoute : {x}", x=", ".join(aj)))
+        if rt:
+            morceaux.append(_("retire : {x}", x=", ".join(rt)))
+        if md:
+            morceaux.append(_("modifie : {x}", x=", ".join(md)))
+        return " ; ".join(morceaux) or _("ordre modifié")
+    if isinstance(avant, list) and isinstance(apres, list):
+        ka = [_nom_element(x) for x in avant]
+        kb = [_nom_element(x) for x in apres]
+        aj = [x for x in kb if x not in ka]
+        rt = [x for x in ka if x not in kb]
+        morceaux = []
+        if aj:
+            morceaux.append(_("ajoute : {x}", x=", ".join(aj[:8]) + ("..." if len(aj) > 8 else "")))
+        if rt:
+            morceaux.append(_("retire : {x}", x=", ".join(rt[:8]) + ("..." if len(rt) > 8 else "")))
+        return " ; ".join(morceaux) or _("ordre modifié")
+    if isinstance(avant, dict) and isinstance(apres, dict):
+        cles = [c for c in set(avant) | set(apres) if avant.get(c) != apres.get(c)]
+        return _("modifie : {x}", x=", ".join(sorted(map(str, cles))[:8]))
+    return f"{_court(avant)}  →  {_court(apres)}"
+
+
+def changements_communs(params):
+    """None si rien de plus recent sur le Drive ; sinon {"par", "maj", "items": [{cle, libelle, detail, valeur}]}."""
+    p = chemin_drive(params)
+    if not p:
+        return None
+    c = (lire_drive(p).get("communs") or {})
+    maj, par = c.get("maj") or "", c.get("par") or ""
+    if not maj or maj <= (params.get("communs_maj") or "") or par == params.get("machine"):
+        return None
+    items = []
+    for k in COMMUNS:
+        if k in c and c[k] != params.get(k):
+            items.append({"cle": k, "libelle": libelle_commun(k), "detail": decrire_changement(k, params.get(k), c[k]),
+                          "valeur": c[k]})
+    return {"par": par, "maj": maj, "items": items}
+
+
+def appliquer_communs(params, changements, cles):
+    """Reprend seulement les reglages choisis ; les autres restent ceux de ce poste. On ne redemande pas ensuite."""
+    for it in changements["items"]:
+        if it["cle"] in cles:
+            params[it["cle"]] = it["valeur"]
+    params["communs_maj"] = changements["maj"]
+    params._communs_vus = params._empreinte_communs() if hasattr(params, "_empreinte_communs") else ""
+    params.enregistrer()
+
+
+def secrets_nouveaux(params, phrase):
+    """Secrets du Drive absents de ce poste : [{cle, libelle}] (jamais les valeurs)."""
+    noms = {c["id"]: c.get("nom") or c["id"] for c in params.get("comptes", [])}
+    out = []
+    for k, v in lire_secrets_drive(params, phrase).items():
+        if k.startswith("coffre:"):
+            if v and not coffre.lire(k[7:]):
+                cid, _p, suffixe = k[7:].partition(".")
+                quoi = _("autorisation") if suffixe in ("jeton", "appareil") else _("mot de passe")
+                out.append({"cle": k, "libelle": f"{quoi} : {noms.get(cid, cid)}"})
+        elif k in CLEFS_IA and v and not params.get(k):
+            out.append({"cle": k, "libelle": _("clef IA : {x}", x="Claude" if "claude" in k else "Gemini")})
+    return out
+
+
+def reprendre_secrets_choisis(params, phrase, cles):
+    n = 0
+    for k, v in lire_secrets_drive(params, phrase).items():
+        if k not in cles:
+            continue
+        if k.startswith("coffre:"):
+            coffre.enregistrer(k[7:], v)
+        else:
+            params[k] = v
+        n += 1
+    params.enregistrer()
+    return n

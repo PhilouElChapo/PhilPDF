@@ -194,6 +194,7 @@ class Fenetre(QMainWindow):
         self.accueil.action_fichier.connect(self.action_fichier)
         self.accueil.reprendre.connect(self.reprendre_proposee)
         self.accueil.synchroniser.connect(self.synchroniser)
+        self.accueil.changer_synchro.connect(lambda: self.bienvenue(seulement_synchro=True))
         self.synchro = None              # (machine, date, fichiers, resultats) trouve au demarrage
         self._session_touchee = False    # on n'ecrit la session que si des fichiers ont ete ouverts ou fermes
         self.outils = PageOutils(self.params)
@@ -306,6 +307,7 @@ class Fenetre(QMainWindow):
         act(m, _('Rechercher et remplacer...'), lambda: self.lancer_outil("remplacer"), "Ctrl+F", "rechercher")
         m.addSeparator()
         act(m, _('Préférences...'), self.preferences, "Ctrl+K", "parametres")
+        act(m, _('Emplacement de synchronisation...'), lambda: self.bienvenue(seulement_synchro=True), None, "synchro")
 
         m = mb.addMenu(_('&Affichage'))
         act(m, _('Pivoter la page (90°, sens horaire)'), lambda: self.doc_courant() and self.doc_courant().pivoter_courante(90), "Shift+Ctrl++", "pivoter")
@@ -1349,10 +1351,13 @@ class Fenetre(QMainWindow):
             self.params.enregistrer()
             ok = reglages.ecrire_drive(self.params)
             self.synchro_miroir()
-            QMessageBox.information(d, _("Préférences"), _("Réglages envoyés : vos autres postes les reprendront à leur prochain démarrage.")
+            QMessageBox.information(d, _("Préférences"), _("Réglages envoyés : vos autres postes vous proposeront de les reprendre à leur prochain démarrage.")
                                     if ok else _("Aucun emplacement de synchronisation : choisissez-en un dans « Drive et dossiers »."))
         be_.clicked.connect(envoyer_reglages)
         hp.addWidget(be_)
+        bv_ = QPushButton(_("Voir les réglages de mes autres postes..."))
+        bv_.clicked.connect(lambda: self.communs_au_demarrage(manuel=True))
+        hp.addWidget(bv_)
         hp.addStretch()
         f.addRow(_("Sauvegarde"), hp)
         note(f, _("Vos préférences sont aussi copiées automatiquement sur votre Drive : une nouvelle installation "
@@ -1632,36 +1637,115 @@ class Fenetre(QMainWindow):
             self._ecrire_secrets()
             return True
 
-    def communs_au_demarrage(self):
-        """Reglages communs plus recents sur un autre poste : repris ici, sans rien demander."""
+    def communs_au_demarrage(self, manuel=False):
+        """Rien n'est repris en silence : si un autre poste a change des reglages (ou ajoute des mots de passe),
+        une bulle le signale et une fenetre montre chaque changement, a cocher ou non."""
         try:
-            r = reglages.reprendre_communs_drive(self.params)
+            ch = reglages.changements_communs(self.params)
         except Exception:
-            r = None
-        if not r:
-            return
-        par, nouveaux = r
-        for o in self.documents():
-            o.remplir_volet()
-        self.outils.rafraichir() if hasattr(self.outils, "rafraichir") else None
-        self.accueil.rafraichir()
-        Notification(self, _("Réglages repris de « {poste} » : favoris, outils, barres, comptes...", poste=par),
-                     _("Redémarrer"), self.redemarrer)
-
-    def secrets_au_demarrage(self):
-        """Poste qui connait la phrase : reprend en silence les mots de passe nouveaux des autres postes.
-        Sinon, si des mots de passe attendent sur le Drive, une bulle propose de les reprendre."""
-        p = reglages.chemin_secrets(self.params)
-        if not p or not os.path.exists(p):
-            return
+            ch = None
+        sec = []
         phrase = coffre.lire(reglages.PHRASE)
         if phrase:
             try:
-                n = reglages.reprendre_secrets_drive(self.params, phrase)
-                if n:
-                    self.statusBar().showMessage(_("{n} mot(s) de passe ou autorisation(s) repris de vos autres postes.", n=n), 8000)
+                sec = reglages.secrets_nouveaux(self.params, phrase)
             except Exception:
-                pass
+                sec = []
+        if ch and not ch["items"] and not sec:       # meme contenu : on note juste la date
+            reglages.appliquer_communs(self.params, ch, [])
+            ch = None
+        if not ch and not sec:
+            if manuel:
+                QMessageBox.information(self, _("Réglages de vos autres postes"), _("Rien de nouveau : ce poste est à jour."))
+            return
+        n = len(ch["items"] if ch else []) + len(sec)
+        if manuel:
+            self.choisir_reglages_distants(ch, sec)
+            return
+        Notification(self, _("{n} réglage(s) modifié(s) sur vos autres postes{par}.", n=n,
+                             par=_(" (dernier : « {poste} »)", poste=ch["par"]) if ch else ""),
+                     _("Voir et choisir..."), lambda: self.choisir_reglages_distants(ch, sec))
+
+    def choisir_reglages_distants(self, ch, sec):
+        def _date_heure(iso):
+            j, _t, h = iso.partition("T")
+            a_, m_, d_ = (j.split("-") + ["", "", ""])[:3]
+            return f"{d_}/{m_}/{a_}" + (_(" à {h}", h=h[:5]) if h else "")
+        from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView
+        d = QDialog(self)
+        d.setWindowTitle(_("Réglages de vos autres postes"))
+        d.resize(900, 480)
+        v = QVBoxLayout(d)
+        lb = QLabel(_("Voici ce qui a changé ailleurs. Cochez à droite ce que vous voulez reprendre sur ce poste ; "
+                      "ce qui reste décoché garde la valeur de ce poste.") +
+                    (_("<br>Dernière modification par « {poste} » le {date}.", poste=ch["par"],
+                       date=_date_heure(ch["maj"])) if ch else ""))
+        lb.setWordWrap(True)
+        v.addWidget(lb)
+        lignes = [("c", it["cle"], it["libelle"], it["detail"]) for it in (ch["items"] if ch else [])] + \
+                 [("s", it["cle"], it["libelle"], _("nouveau, absent de ce poste (valeur chiffrée, non affichée)")) for it in sec]
+        t = QTableWidget(len(lignes), 3)
+        t.setHorizontalHeaderLabels([_("Réglage"), _("Ce qui va changer sur ce poste"), _("Reprendre")])
+        t.verticalHeader().hide()
+        t.setEditTriggers(QTableWidget.NoEditTriggers)
+        t.setWordWrap(True)
+        for r, (genre, cle, lib, detail) in enumerate(lignes):
+            t.setItem(r, 0, QTableWidgetItem(lib))
+            it = QTableWidgetItem(detail)
+            it.setToolTip(detail)
+            t.setItem(r, 1, it)
+            c = QTableWidgetItem()
+            c.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            c.setCheckState(Qt.Checked)
+            c.setData(Qt.UserRole, (genre, cle))
+            t.setItem(r, 2, c)
+        h = t.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(1, QHeaderView.Stretch)
+        h.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        t.resizeRowsToContents()
+        v.addWidget(t, 1)
+        hb = QHBoxLayout()
+        for txt, etat in ((_("Tout cocher"), Qt.Checked), (_("Tout décocher"), Qt.Unchecked)):
+            b = QPushButton(txt)
+            b.clicked.connect(lambda _c=False, e=etat: [t.item(r, 2).setCheckState(e) for r in range(t.rowCount())])
+            hb.addWidget(b)
+        hb.addStretch(1)
+        b_ok = QPushButton(_("Appliquer la sélection"))
+        b_ok.setDefault(True)
+        b_tard = QPushButton(_("Plus tard"))
+        b_tard.setToolTip(_("Rien n'est changé ; la question reviendra au prochain démarrage."))
+        hb.addWidget(b_tard)
+        hb.addWidget(b_ok)
+        v.addLayout(hb)
+        b_ok.clicked.connect(d.accept)
+        b_tard.clicked.connect(d.reject)
+        self._dlg_reglages = d                        # pour les tests
+        if d.exec() != QDialog.Accepted:
+            return
+        choisis = [t.item(r, 2).data(Qt.UserRole) for r in range(t.rowCount()) if t.item(r, 2).checkState() == Qt.Checked]
+        communs = [k for g, k in choisis if g == "c"]
+        secrets = [k for g, k in choisis if g == "s"]
+        langue_avant = self.params.get("langue")
+        if ch:
+            reglages.appliquer_communs(self.params, ch, communs)
+        n_sec = reglages.reprendre_secrets_choisis(self.params, coffre.lire(reglages.PHRASE), secrets) if secrets else 0
+        for o in self.documents():
+            o.remplir_volet()
+            o.construire_barre()
+        self.outils.rafraichir() if hasattr(self.outils, "rafraichir") else None
+        self.accueil.rafraichir()
+        msg = _("{n} réglage(s) et {s} mot(s) de passe repris.", n=len(communs), s=n_sec)
+        if self.params.get("langue") != langue_avant:
+            Notification(self, msg + " " + _("La langue change au redémarrage."), _("Redémarrer"), self.redemarrer)
+        else:
+            self.statusBar().showMessage(msg, 8000)
+
+    def secrets_au_demarrage(self):
+        """Sans phrase sur ce poste : une bulle propose de reprendre les mots de passe des autres postes.
+        Avec la phrase, ils sont proposes dans la fenetre des reglages (communs_au_demarrage)."""
+        p = reglages.chemin_secrets(self.params)
+        if not p or not os.path.exists(p) or coffre.lire(reglages.PHRASE):
             return
         Notification(self, _("Les mots de passe de vos autres postes (NAS, FTP, Drives, IA) sont disponibles, chiffrés."),
                      _("Les reprendre..."), lambda: self.choisir_phrase())

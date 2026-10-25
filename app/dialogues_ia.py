@@ -4,7 +4,7 @@ import datetime, os, re, shutil
 from PySide6.QtCore import Qt, QThread, Signal, QEventLoop
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QLineEdit, QComboBox,
                                QPushButton, QDialogButtonBox, QTextBrowser, QCheckBox, QProgressDialog, QFileDialog,
-                               QMessageBox, QApplication, QListWidget, QListWidgetItem)
+                               QMessageBox, QApplication, QListWidget, QListWidgetItem, QPlainTextEdit)
 
 from .langue import _
 from . import ia, apprentissage
@@ -237,6 +237,59 @@ def _date_fr(iso):
         return iso
 
 
+def demander_consigne(parent, params, titre, cle, consigne_philpdf):
+    """Fenetre avant l'envoi : consigne personnelle ajoutee a celle de PhilPDF (None si annule).
+    Les 10 dernieres consignes sont gardees (et synchronisees entre postes) pour les reprendre d'un clic."""
+    d = QDialog(parent)
+    d.setWindowTitle(titre)
+    d.resize(640, 420)
+    v = QVBoxLayout(d)
+    lb = QLabel(_("Vous pouvez ajouter votre propre consigne à celle de PhilPDF (facultatif). "
+                  "Ex. : « insiste sur les montants », « fais un résumé en 3 lignes », « dis-moi si je dois répondre »."))
+    lb.setWordWrap(True)
+    v.addWidget(lb)
+    historique = list(params.get(cle) or [])
+    cb = QComboBox()
+    cb.addItem(_("— consignes déjà utilisées —"), "")
+    for h in historique:
+        cb.addItem(h if len(h) < 90 else h[:87] + "...", h)
+    cb.setEnabled(bool(historique))
+    v.addWidget(cb)
+    zone = QPlainTextEdit()
+    zone.setPlaceholderText(_("Votre consigne (laisser vide pour la consigne habituelle)"))
+    v.addWidget(zone, 1)
+    cb.currentIndexChanged.connect(lambda i: cb.itemData(i) and zone.setPlainText(cb.itemData(i)))
+    voir = QPushButton(_("Voir la consigne de PhilPDF"))
+    voir.setCheckable(True)
+    texte_ph = QTextBrowser()
+    texte_ph.setPlainText(consigne_philpdf)
+    texte_ph.hide()
+    voir.toggled.connect(texte_ph.setVisible)
+    v.addWidget(voir, 0, Qt.AlignLeft)
+    v.addWidget(texte_ph, 1)
+    bb = QDialogButtonBox()
+    bb.addButton(_("Lancer l'analyse"), QDialogButtonBox.AcceptRole)
+    bb.addButton(_("Annuler"), QDialogButtonBox.RejectRole)
+    bb.accepted.connect(d.accept)
+    bb.rejected.connect(d.reject)
+    v.addWidget(bb)
+    zone.setFocus()
+    if d.exec() != QDialog.Accepted:
+        return None
+    perso = zone.toPlainText().strip()
+    if perso:
+        params[cle] = [perso] + [h for h in historique if h != perso][:9]
+        params.enregistrer()
+    return perso
+
+
+def ajouter_consigne(consignes, perso):
+    if not perso:
+        return consignes
+    return consignes + ("\n\nConsigne supplémentaire de l'utilisateur (à suivre en priorité, en gardant le format de réponse "
+                        "demandé) :\n" + perso)
+
+
 def resumer(fenetre, onglet):
     params = fenetre.params
     texte = ia.texte_document(onglet.doc)
@@ -244,9 +297,12 @@ def resumer(fenetre, onglet):
         QMessageBox.information(fenetre, _("Résumer avec l'IA"), _(
             "Ce document ne contient pas de texte (scan ?) : lancez d'abord « Reconnaître le texte »."))
         return
+    perso = demander_consigne(fenetre, params, _("Résumer avec l'IA"), "ia_consignes_resume", CONSIGNES_RESUME)
+    if perso is None:
+        return
     if not preparer_envoi(fenetre, params, texte):
         return
-    consignes = CONSIGNES_RESUME + f"\nDate du jour : {datetime.date.today().isoformat()}."
+    consignes = ajouter_consigne(CONSIGNES_RESUME + f"\nDate du jour : {datetime.date.today().isoformat()}.", perso)
     try:
         r = executer(fenetre, _("L'IA lit le document..."),
                      lambda: ia.demander(params, consignes, texte, json_attendu=True))

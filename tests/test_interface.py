@@ -280,7 +280,10 @@ verif("Dupontel" in re_[1].get_text() and len(list(re_[0].annots())) == 1, f"enr
 import app.ia as IA, app.dialogues_ia as DIA, app.apprentissage as AP
 w.params.update(clef_claude="CLEF", ia_moteur="claude")
 reponses = []
-IA.demander = lambda params, consignes, texte, **k: reponses.pop(0)
+consignes_vues = []
+IA.demander = lambda params, consignes, texte, **k: (consignes_vues.append(consignes), reponses.pop(0))[1]
+_consigne0 = DIA.demander_consigne
+DIA.demander_consigne = lambda *a: "insiste sur les montants"
 import datetime as _dt
 dans_20 = (_dt.date.today() + _dt.timedelta(days=20)).isoformat()
 reponses.append({"resume": "Facture **Dupontel**.\n\n## Points clefs\n- montant", "echeances": [{"date": dans_20, "libelle": "payer la facture"}]})
@@ -288,6 +291,8 @@ vus_dlg = []
 DIA.DialogueResume.exec = lambda self: (vus_dlg.append(self), capture(self, "30_resume_ia.png"), self.done(QDialog.Accepted))
 w.lancer_outil("ia_resume")
 verif(vus_dlg and "Dupontel" in vus_dlg[0].texte.toPlainText(), "IA : résumé affiché")
+verif(consignes_vues and consignes_vues[-1].endswith("insiste sur les montants"), "IA : consigne personnelle ajoutée au résumé")
+DIA.demander_consigne = _consigne0
 w.accueil.rafraichir()
 verif(not w.accueil.echeances.isHidden() and "payer la facture" in w.accueil.echeances.text(), "IA : échéance rappelée sur l'Accueil")
 capture(w, "31_accueil_echeances.png") if w.onglets.setCurrentWidget(w.accueil) is None else None
@@ -491,6 +496,32 @@ ed_.valider()
 t_ = op.doc[0].get_text()
 verif("prestations.\nLe paiement est attendu sous quinze jours." in t_ and "Texte en dessous" in t_,
       "paragraphe : retour à la ligne et nouvelle largeur appliqués")
+# polices : liste courte du document, apercu direct en survolant, police appliquee au paragraphe
+fp_ = op.format_police
+fp_.portee.setCurrentIndex(0)
+noms_ = [fp_.itemText(i) for i in range(fp_.count())]
+fp_.portee.setCurrentIndex(1)
+verif(1 < len(noms_) < fp_.count(), f"polices : liste du document courte ({len(noms_)} contre {fp_.count()})")
+fp_.portee.setCurrentIndex(0)
+verif(pw_.ouvrir_paragraphe(fitz.Point(80, 110)), "polices : paragraphe rouvert")
+ed_ = pw_.editeur
+i_ = next(i for i in range(1, fp_.count()) if fp_.itemData(i))
+fam0_ = ed_.zone.font().toString()
+for j_ in range(1, fp_.count()):
+    if fp_.itemData(j_) and fp_.itemData(j_, D.Qt.FontRole) and fp_.itemData(j_, D.Qt.FontRole).toString().split(",")[0] + str(fp_.itemData(j_, D.Qt.FontRole).bold()) != ed_.zone.font().family() + str(ed_.zone.font().bold()):
+        i_ = j_
+        break
+fp_.highlighted.emit(i_)
+verif(ed_.zone.font().toString() != fam0_ and ed_.police_choisie == fp_.itemData(i_),
+      f"polices : aperçu immédiat au survol ({fam0_.split(',')[0]} → {fp_.itemText(i_)})")
+fp_.hidePopup()
+verif(ed_.police_choisie is None, "polices : Echap revient à la police choisie")
+fp_.setCurrentIndex(i_)
+ed_.valider()
+pol_ = {sp["font"] for b in op.doc[0].get_text("dict")["blocks"] for l in b.get("lines", []) for sp in l["spans"]
+        if "prestations" in sp["text"]}
+verif(pol_, f"polices : police appliquée au paragraphe ({fp_.itemText(i_)} → {pol_})")
+fp_.setCurrentIndex(0)
 op.changer_mode("ajout_texte")
 pw_.editeur = D.EditeurParagraphe(pw_, None, fitz.Point(72, 300))
 pw_.editeur.zone.setPlainText("Bloc ajouté\nsur deux lignes")
@@ -527,6 +558,20 @@ F.QDialog.exec = lambda self: F.QDialog.Accepted
 w.personnaliser_barre()
 F.QDialog.exec = _exec0
 verif(w.params["barre"] and w.params["barre"][0] == "vignettes", "barre : boîte de personnalisation (barre par défaut proposée)")
+_ch = {"par": "Maison", "maj": "2099-01-01T10:00", "items": [
+    {"cle": "auteur", "libelle": "Votre nom", "detail": "Phil  →  Philippe", "valeur": "Philippe"},
+    {"cle": "theme", "libelle": "Thème", "detail": "clair  →  sombre", "valeur": w.params.get("theme")}]}
+F.QDialog.exec = lambda self: (capture(self, "40_reglages_distants.png"),
+                               self.findChildren(F.QTableWidget if hasattr(F, "QTableWidget") else type(None)),
+                               F.QDialog.Accepted)[2]
+_auteur0 = w.params.get("auteur")
+_ecrire0 = F.reglages.appliquer_communs
+_vu_cles = []
+F.reglages.appliquer_communs = lambda params, ch, cles: _vu_cles.extend(cles)
+w.choisir_reglages_distants(_ch, [])
+F.reglages.appliquer_communs = _ecrire0
+F.QDialog.exec = _exec0
+verif(_vu_cles == ["auteur", "theme"], "synchro : fenêtre des réglages à cocher (tout coché par défaut)")
 from app import apprentissage as AP
 import datetime as _dt
 demain_ = (_dt.date.today() + _dt.timedelta(days=3)).isoformat()

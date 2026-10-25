@@ -408,6 +408,8 @@ class EditeurParagraphe(QFrame):
         f = self._police_affichage()
         f.setPixelSize(max(8, int(self.taille * e * 0.98)))
         self.zone.setFont(f)
+        self._police_origine = QFont(f)
+        self.police_choisie = None                    # fichier choisi dans le volet Format pendant la saisie
         self.zone.installEventFilter(self)
         self.poignee = QLabel("⋮", self)
         self.poignee.setAlignment(Qt.AlignCenter)
@@ -427,6 +429,18 @@ class EditeurParagraphe(QFrame):
         c = self.zone.textCursor()
         c.movePosition(c.MoveOperation.End)
         self.zone.setTextCursor(c)
+
+    def apercu_police(self, p):
+        """Police survolee ou choisie dans la liste : appliquee tout de suite au texte en cours (WYSIWYG)."""
+        if p:
+            from .polices import qfont
+            f = qfont(p)
+        else:
+            f = QFont(self._police_origine)
+        f.setPixelSize(max(8, int(self.taille * self.e * 0.98)))
+        self.zone.setFont(f)
+        self.police_choisie = p["fichier"] if p else None
+        self._ajuster()
 
     def _police_affichage(self):
         """Police de l'ecran la plus proche de celle du paragraphe (affichage fidele pendant la saisie)."""
@@ -506,10 +520,10 @@ class EditeurParagraphe(QFrame):
         largeur_pt = (self.largeur - 6) / self.e
         if self.para:
             elargi = abs(largeur_pt - (self.para["x1"] - self.para["x0"])) > 2
-            if texte != self.initial or elargi:
+            if texte != self.initial or elargi or self.police_choisie:
                 if elargi:
                     self.para["x1"] = self.para["x0"] + largeur_pt
-                o.modifier_paragraphe(self.pw.num, self.para, texte)
+                o.modifier_paragraphe(self.pw.num, self.para, texte, police=self.police_choisie)
         elif texte.strip():
             o.ajouter_paragraphe(self.pw.num, self.coin, texte, largeur_pt)
         self.pw.update()
@@ -610,8 +624,13 @@ class DialogueTexte(QDialog):
         b.clicked.connect(self._coul)
         f.addRow(_('Couleur'), b)
         from .polices import combo as combo_polices
-        self.combo = combo_polices(self)
-        f.addRow(_('Police'), self.combo)
+        self.combo = combo_polices(self, doc=onglet.doc)
+        f.addRow(_('Police'), self.combo.ligne())
+
+        def apercu(p):
+            from .polices import qfont
+            self.texte.setFont(qfont(p, 11) if p else QFont())
+        self.combo.apercu.connect(apercu)
         bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -1539,8 +1558,9 @@ class OngletDocument(QWidget):
         self.format_info.setStyleSheet("color:#555;font-size:12px")
         f.addRow(self.format_info)
         from .polices import combo as combo_polices
-        self.format_police = combo_polices()
-        f.addRow(_('Police'), self.format_police)
+        self.format_police = combo_polices(doc=lambda: getattr(self, "doc", None))
+        f.addRow(_('Police'), self.format_police.ligne())
+        self.format_police.apercu.connect(self._apercu_police)
         self.format_taille = QDoubleSpinBox()
         self.format_taille.setRange(4, 96)
         self.format_taille.setValue(11)
@@ -1563,6 +1583,12 @@ class OngletDocument(QWidget):
             b.clicked.connect(fn)
             f.addRow(b)
         return w
+
+    def _apercu_police(self, p):
+        for pw in getattr(self, "page_widgets", []):
+            ed = getattr(pw, "editeur", None)
+            if isinstance(ed, EditeurParagraphe):
+                ed.apercu_police(p)
 
     def _maj_b_couleur(self):
         self.b_couleur.setStyleSheet(f"background:{self.format_couleur.name()};min-height:22px;border:1px solid #999;border-radius:4px")

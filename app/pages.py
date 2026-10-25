@@ -250,6 +250,7 @@ class PageAccueil(QWidget):
     reprendre = Signal()          # reprendre la session proposee (remplace les fichiers ouverts)
     synchroniser = Signal()       # fenetre de synchronisation manuelle
     rechercher = Signal()         # rechercher dans tous mes PDF
+    changer_synchro = Signal()    # changer l'emplacement de synchronisation
 
     def __init__(self, params):
         super().__init__()
@@ -335,6 +336,8 @@ class PageAccueil(QWidget):
         self.bandeau = QLabel()
         self.bandeau.setWordWrap(True)
         self.bandeau.setStyleSheet("color:#555")
+        self.bandeau.setTextFormat(Qt.RichText)
+        self.bandeau.linkActivated.connect(lambda _l: self.changer_synchro.emit())
         hl.addWidget(self.bandeau, 1)
         bs = QPushButton()
         bs.setIcon(icone("synchro", "#2b6cb0"))
@@ -368,7 +371,8 @@ class PageAccueil(QWidget):
                 it.setForeground(Qt.gray)
             self.liste.addItem(it)
         self.bandeau.setText(_('Poste : <b>{machine}</b>. ', machine=self.params['machine']) + (
-                _('Synchronisation : ') + self._lieu_synchro() if (self.params.get("drive") or self.params.get("drive_compte")) else
+                _('Synchronisation : ') + self._lieu_synchro() + " &nbsp;<a href='changer_synchro'>" + _("changer") + "</a>"
+                if (self.params.get("drive") or self.params.get("drive_compte")) else
             _('Choisissez un emplacement de synchronisation (bouton à droite) pour retrouver vos fichiers ouverts, préférences et tampons sur vos autres PC.')))
         try:
             from .apprentissage import echeances_a_venir
