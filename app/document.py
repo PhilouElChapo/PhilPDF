@@ -454,7 +454,11 @@ class EditeurParagraphe(QFrame):
             self.zone._surligneur = None
             if params.get("orthographe", True):
                 try:
-                    self.zone._surligneur = orthographe.surligneur(self.zone.document(), params)
+                    try:
+                        contexte = self.pw.o.doc[self.pw.num].get_text()[:3000]
+                    except Exception:
+                        contexte = ""
+                    self.zone._surligneur = orthographe.surligneur(self.zone.document(), params, contexte)
                 except Exception:
                     self.zone._surligneur = None
         activer()
@@ -474,6 +478,12 @@ class EditeurParagraphe(QFrame):
                 params.enregistrer()
                 activer()
             a.toggled.connect(basculer)
+            if self.zone._surligneur is not None:
+                def langue(k):
+                    params["orthographe_langue"] = k
+                    params.enregistrer()
+                    activer()
+                orthographe.menu_langue(m, params, self.zone._surligneur.langue, langue)
             m.exec(self.zone.mapToGlobal(pos))
         self.zone.customContextMenuRequested.connect(menu)
 

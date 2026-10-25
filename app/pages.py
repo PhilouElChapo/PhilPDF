@@ -151,8 +151,8 @@ class PageOutils(QScrollArea):
         self.recherche.setStyleSheet("QLineEdit{background:#fff;border:1px solid #cfcfcf;border-radius:10px;padding:10px 12px;font-size:15px}")
         self.recherche.textChanged.connect(self._filtrer)
         v.addWidget(self.recherche)
-        filtres = QHBoxLayout()
-        filtres.setSpacing(8)
+        zone_filtres = QWidget()
+        filtres = FlowLayout(zone_filtres, espace=8)     # passe a la ligne si la fenetre est etroite (langues longues)
         self.boutons_fam = {}
         tout = QPushButton(_('Tous'))
         tout.setCheckable(True)
@@ -167,8 +167,7 @@ class PageOutils(QScrollArea):
             b.clicked.connect(lambda _x=False, f=fid: self._choisir_famille(f))
             self.boutons_fam[fid] = b
             filtres.addWidget(b)
-        filtres.addStretch()
-        v.addLayout(filtres)
+        v.addWidget(zone_filtres)
         self._style_filtres(None)
         self.sections, self.tuiles = {}, []
         for fid, nom, coul, fond in FAMILLES:

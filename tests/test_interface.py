@@ -524,6 +524,9 @@ verif(pol_ and all("Liberation" in x for x in pol_), f"polices : police appliqu�
 fp_.setCurrentIndex(0)
 op.changer_mode("ajout_texte")
 pw_.editeur = D.EditeurParagraphe(pw_, None, fitz.Point(72, 300))
+from app import orthographe as ORT
+verif(ORT.detecter("The tenant shall pay the rent on the first day") == "en" and ORT.fautes("The tennant pays", w.params, "en")
+      and not ORT.fautes("The tenant pays", w.params, "en"), "orthographe : langue du texte détectée (anglais)")
 pw_.editeur.zone.setPlainText("Bloc ajouté\nsur deux lignes")
 pw_.editeur.valider()
 verif("Bloc ajouté\nsur deux lignes" in op.doc[0].get_text(), "ajouter du texte : bloc sur plusieurs lignes")

@@ -49,6 +49,12 @@ Verification manuelle : Aide > Rechercher les mises a jour.
 3. CE QUE FAIT LA VERSION 0.3
 -----------------------------
 
+  Nouveau en 0.7.0 : PhilPDF en allemand, espagnol et italien (en plus du
+    francais et de l'anglais : Edition > Preferences > Langue) ; correcteur
+    d'orthographe dans la langue du texte (detectee, ou choisie au clic
+    droit : francais, anglais, allemand, espagnol, italien, portugais,
+    neerlandais) ; filtres de la page Outils sur plusieurs lignes.
+
   Nouveau en 0.6.9 : correcteur d'orthographe embarque (sans Internet) :
     fautes soulignees en rouge dans les zones de texte, suggestions au
     clic droit, « Ajouter au dictionnaire » (dictionnaire partage avec la
