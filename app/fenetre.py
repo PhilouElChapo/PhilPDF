@@ -131,6 +131,61 @@ class TacheSynchro(QThread):
 EXTENSIONS_OUVRABLES = (".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp")
 
 
+class FenetreFermeture(QDialog):
+    """Fenetre affichee pendant la fermeture : chaque etape (session, preferences, synchronisation) est montree,
+    pour que l'attente s'explique. « Fermer sans attendre » saute la derniere synchronisation."""
+
+    def __init__(self, parent, lieu):
+        super().__init__(parent)
+        self.lieu, self.presse = lieu, False
+        self.setWindowTitle(_("Fermeture de PhilPDF"))
+        self.setMinimumWidth(480)
+        v = QVBoxLayout(self)
+        t = QLabel(_("<b>PhilPDF range vos réglages avant de se fermer</b><br>"
+                     "Vos autres postes retrouveront ainsi vos préférences et vos fichiers ouverts."))
+        t.setWordWrap(True)
+        v.addWidget(t)
+        self.liste = QLabel()
+        self.liste.setTextFormat(Qt.RichText)
+        self.liste.setStyleSheet("color:#333;padding:6px 0")
+        v.addWidget(self.liste)
+        self.b = QPushButton(_("Fermer sans attendre"))
+        self.b.clicked.connect(lambda: setattr(self, "presse", True))
+        v.addWidget(self.b, 0, Qt.AlignRight)
+        self.lignes = []
+        self.show()
+        self._peindre()
+
+    def _peindre(self):
+        self.liste.setText("<br>".join(self.lignes))
+        self.adjustSize()
+        for _i in range(3):
+            QApplication.processEvents()
+
+    def etape(self, texte, fonction):
+        self.lignes.append("… " + texte)
+        self._peindre()
+        try:
+            fonction()
+            self.lignes[-1] = "✓ " + texte
+        except Exception as ex:
+            self.lignes[-1] = "✕ " + texte + f" <span style='color:#a33'>({str(ex)[:80]})</span>"
+        self._peindre()
+
+    def attendre(self, tache, ms, texte=None):
+        if texte:
+            self.lignes.append("… " + texte)
+            self._peindre()
+        import time
+        fin = time.time() + ms / 1000
+        while tache.isRunning() and time.time() < fin and not self.presse:
+            tache.wait(100)
+            QApplication.processEvents()
+        if texte:
+            self.lignes[-1] = ("✓ " if not tache.isRunning() else "– ") + texte
+            self._peindre()
+
+
 class Notification(QFrame):
     """Petite bulle non bloquante en bas a droite de la fenetre, disparait seule."""
 
@@ -663,25 +718,35 @@ class Fenetre(QMainWindow):
                     e.ignore()
                     self._redemarrage = None
                     return
-        self._session()
-        self.params.enregistrer()
-        reglages.ecrire_drive(self.params)
-        self._ecrire_secrets()
+        fen = FenetreFermeture(self, self._lieu_court())
+        fen.etape(_("Session enregistrée (fichiers ouverts, pages, zoom)"), lambda: (self._session(), self.params.enregistrer()))
+        if reglages.chemin_drive(self.params):
+            fen.etape(_("Préférences envoyées vers {lieu}", lieu=fen.lieu), lambda: reglages.ecrire_drive(self.params))
+        if self.params.get("synchro_secrets"):
+            fen.etape(_("Mots de passe chiffrés envoyés"), self._ecrire_secrets)
         for t in self.taches:
             if isinstance(t, TacheSynchro):
                 t.stop = True
-                t.wait(2000)
+                fen.attendre(t, 2000)
         if miroir.compte_drive(self.params):         # derniere synchro avec le Drive (8 s au plus)
             t = getattr(self, "_t_miroir", None)
             if t and t.isRunning():
-                t.wait(8000)
+                fen.attendre(t, 8000, _("Synchronisation en cours avec {lieu}...", lieu=fen.lieu))
             t = TacheMiroir(self.params)
             t.start()
-            t.wait(8000)
+            fen.attendre(t, 8000, _("Dernière synchronisation avec {lieu} (8 s au plus)...", lieu=fen.lieu))
+        fen.close()
         e.accept()
         if getattr(self, "_redemarrage", None):
             from PySide6.QtCore import QProcess
             QProcess.startDetached(*self._redemarrage)
+
+    def _lieu_court(self):
+        try:
+            c = miroir.compte_drive(self.params)
+            return miroir.libelle_compte(c) if c else (self.params.get("drive") or _("votre emplacement de synchronisation"))
+        except Exception:
+            return _("votre emplacement de synchronisation")
 
     def synchro_miroir(self, au_demarrage=False):
         if not miroir.compte_drive(self.params) or getattr(self, "_t_miroir", None) and self._t_miroir.isRunning():
@@ -1420,6 +1485,7 @@ class Fenetre(QMainWindow):
         vc.addWidget(lc)
         vc.addWidget(PanneauComptes(w, self.params), 1)
         tabs.addTab(w, _("Comptes"))
+        tabs.currentChanged.connect(lambda _i: drive.rafraichir())   # comptes ajoutes : aussitot proposes pour la synchro
         if onglet == "comptes":
             tabs.setCurrentWidget(w)
 

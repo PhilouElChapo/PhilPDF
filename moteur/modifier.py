@@ -13,7 +13,7 @@ Principe (inverse d'Acrobat sur les points ou il se trompe) :
     la couleur et l'espacement entre lettres mesure sur la ligne.
  4. Si le texte s'allonge, la suite de la ligne est decalee, pas coupee.
 """
-import os, re, sys
+import json, os, re, sys
 import pymupdf as fitz
 
 _BASE = getattr(sys, "_MEIPASS", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -415,32 +415,131 @@ class Editeur:
                         "texte": "".join(c["c"] for c, _sp in chars).rstrip()})
         return out
 
-    def paragraphe_a(self, num_page, pt):
+    # ---- paragraphes ecrits par PhilPDF : gardes dans le PDF (texte exact, retours a la ligne compris)
+    CLE_PARAS = "PhilPDFParagraphes"
+
+    def _registre(self):
+        try:
+            t, v = self.doc.xref_get_key(self.doc.pdf_catalog(), self.CLE_PARAS)
+            return json.loads(v) if t == "string" and v else {}
+        except Exception:
+            return {}
+
+    def _ecrire_registre(self, reg):
+        try:
+            self.doc.xref_set_key(self.doc.pdf_catalog(), self.CLE_PARAS,
+                                  fitz.get_pdf_str(json.dumps(reg, ensure_ascii=True)))
+        except Exception:
+            pass
+
+    def _retenir_paragraphe(self, num_page, rect, texte, ancien=None):
+        reg = self._registre()
+        cle = str(self.doc[num_page].xref)
+        l = [e for e in reg.get(cle, []) if not (ancien is not None and fitz.Rect(e["r"]).intersects(ancien))
+             and not fitz.Rect(e["r"]).intersects(rect)]
+        l.append({"r": [round(v, 2) for v in rect], "t": texte})
+        reg[cle] = l
+        self._ecrire_registre(reg)
+
+    @staticmethod
+    def _norm(t):
+        return " ".join(t.split())
+
+    def _paragraphes_retenus(self, page, lignes):
+        """[(lignes, texte exact, rect)] des paragraphes ecrits par PhilPDF encore intacts sur la page."""
+        out = []
+        for e in self._registre().get(str(page.xref), []):
+            r = fitz.Rect(e["r"]) + (-2, -2, 2, 2)
+            dedans = sorted([l for l in lignes if r.contains(fitz.Point((l["rect"].x0 + l["rect"].x1) / 2,
+                                                                       (l["rect"].y0 + l["rect"].y1) / 2))],
+                            key=lambda l: l["base"])
+            if dedans and self._norm(self._texte_paragraphe(dedans)[0]) == self._norm(e["t"]):
+                out.append((dedans, e["t"], r))
+        return out
+
+    def _bords_horizontaux(self, page):
+        """Traits et bords de fonds (tableaux, bandeaux) : un paragraphe ne les traverse pas."""
+        if getattr(self, "_bords_cache", (None,))[0] is page.xref:
+            return self._bords_cache[1]
+        bords = []
+        try:
+            for d in page.get_drawings():
+                for it in d.get("items", []):
+                    if it[0] == "re":
+                        rr = fitz.Rect(it[1])
+                        if rr.height > 2 and d.get("fill") is not None:
+                            bords += [(rr.x0, rr.x1, rr.y0), (rr.x0, rr.x1, rr.y1)]
+                        elif rr.height <= 2:
+                            bords.append((rr.x0, rr.x1, (rr.y0 + rr.y1) / 2))
+                    elif it[0] == "l":
+                        a, b = it[1], it[2]
+                        if abs(a.y - b.y) < 1:
+                            bords.append((min(a.x, b.x), max(a.x, b.x), a.y))
+        except Exception:
+            pass
+        self._bords_cache = (page.xref, bords)
+        return bords
+
+    def paragraphes_page(self, num_page):
+        """Rectangles des paragraphes de plusieurs lignes (pour les signaler par un trait a gauche)."""
+        page = self.doc[num_page]
+        lignes = self._infos_lignes(page)
+        vus, out = set(), []
+        retenus = self._paragraphes_retenus(page, lignes)
+        for l in lignes:
+            if id(l) in vus:
+                continue
+            c = fitz.Point(l["rect"].x0 + 1, (l["rect"].y0 + l["rect"].y1) / 2)
+            p = self.paragraphe_a(num_page, c, lignes, retenus)
+            if not p:
+                continue
+            for x in p["lignes"]:
+                vus.add(id(x))
+            if len(p["lignes"]) > 1:
+                out.append((p["rect"], bool(p.get("retenu"))))
+        return out
+
+    def paragraphe_a(self, num_page, pt, lignes=None, retenus=None):
         """Paragraphe sous le point : lignes de la meme colonne, de meme taille, regulierement espacees.
         Renvoie {"lignes": [...], "rect", "texte", "taille", "interligne", "justifie"} ou None."""
         page = self.doc[num_page]
-        lignes = self._infos_lignes(page)
+        lignes = lignes if lignes is not None else self._infos_lignes(page)
         pt = fitz.Point(pt)
-        dep = next((l for l in lignes if (l["rect"] + (-1, -2, 1, 2)).contains(pt)), None)
+        sous = [l for l in lignes if (l["rect"] + (-1, -2, 1, 2)).contains(pt)]
+        dep = min(sous, key=lambda l: abs((l["rect"].y0 + l["rect"].y1) / 2 - pt.y)) if sous else None
         if dep is None:
             return None
-        para = [dep]
+        retenus = retenus if retenus is not None else self._paragraphes_retenus(page, lignes)
+        exact = None
+        pris = {id(x) for ls, _t, _r in retenus for x in ls}
+        for ls, t, _r in retenus:
+            if any(x is dep for x in ls):
+                para, exact = list(ls), t
+                break
+        else:
+            para = [dep]
+        bords = self._bords_horizontaux(page)
+
+        def traverse_bord(a, b):
+            ya, yb = sorted(((a["rect"].y0 + a["rect"].y1) / 2, (b["rect"].y0 + b["rect"].y1) / 2))
+            g, d = min(a["x0"], b["x0"]) - 4, max(a["x1"], b["x1"]) + 4
+            return any(ya + 0.5 < y < yb - 0.5 and x0 <= g and x1 >= d for x0, x1, y in bords)
 
         def meme_colonne(a, b):
             inter = min(a["x1"], b["x1"]) - max(a["x0"], b["x0"])
             return inter > 0.4 * min(a["x1"] - a["x0"], b["x1"] - b["x0"]) and abs(a["x0"] - b["x0"]) < max(4 * a["taille"], 40)
 
         pas = None
-        for sens in (1, -1):
+        for sens in ((1, -1) if exact is None else ()):
             cur = dep
             while True:
-                cands = [l for l in lignes if l not in para and (l["base"] - cur["base"]) * sens > 0.5
+                cands = [l for l in lignes if l not in para and id(l) not in pris and (l["base"] - cur["base"]) * sens > 0.5
                          and meme_colonne(cur, l) and abs(l["taille"] - cur["taille"]) <= 0.8]
                 if not cands:
                     break
                 nxt = min(cands, key=lambda l: abs(l["base"] - cur["base"]))
                 d = abs(nxt["base"] - cur["base"])
-                if d > 1.8 * cur["taille"] or (pas and d > pas * 1.3):
+                if d > 1.8 * cur["taille"] or (pas and d > pas * 1.3) or traverse_bord(cur, nxt):
                     break
                 # un trou (autre texte entre les deux) arrete le paragraphe
                 if any(l is not nxt and meme_colonne(cur, l) and min(cur["base"], nxt["base"]) < l["base"] < max(cur["base"], nxt["base"])
@@ -458,7 +557,8 @@ class Editeur:
         interligne = ecarts[len(ecarts) // 2] if ecarts else dep["taille"] * 1.2
         droite = max(l["x1"] for l in para)
         justifie = len(para) >= 3 and all(droite - l["x1"] < 1.5 for l in para[:-1])
-        return {"lignes": para, "rect": r, "texte": self._texte_paragraphe(para)[0], "taille": dep["taille"],
+        return {"lignes": para, "rect": r, "texte": exact if exact is not None else self._texte_paragraphe(para)[0],
+                "retenu": exact is not None, "taille": dep["taille"],
                 "interligne": interligne, "justifie": justifie, "x0": min(l["x0"] for l in para), "x1": droite,
                 "retrait": para[0]["x0"] - min(l["x0"] for l in para)}
 
@@ -491,6 +591,8 @@ class Editeur:
         import difflib
         page = self.doc[num_page]
         ancien, styles = self._texte_paragraphe(para["lignes"])
+        if para.get("retenu") and len(para["texte"]) == len(ancien):
+            ancien = para["texte"]                     # meme longueur : retours a la ligne exacts, styles alignes
         if nouveau == ancien and not (taille or couleur or police):
             return None
         k = (taille / para["taille"]) if taille else 1.0
@@ -595,6 +697,9 @@ class Editeur:
         page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE,
                               text=fitz.PDF_REDACT_TEXT_REMOVE)
         self._ecrire(page, plan, para["lignes"][0]["base"])
+        haut = min(l["rect"].y0 for l in para["lignes"][:1])
+        tmax = max((l[2] for lg, _f in lignes for l in lg), default=para["taille"])
+        self._retenir_paragraphe(num_page, fitz.Rect(x0, haut, x1, y - pas + tmax * 0.3), nouveau.rstrip("\n"), para["rect"])
         en_plus = len(lignes) - len(para["lignes"])
         self.journal.append(f"paragraphe réécrit : {len(lignes)} ligne(s)" +
                             (f" ({en_plus:+d} par rapport à avant)" if en_plus else ""))
@@ -807,7 +912,7 @@ class Editeur:
             mesure = mesure or PoliceIncorporee("Liberation Sans", os.path.join(FONT_DIR, "LiberationSans-Regular.ttf"))
         espace = mesure.avance(" ") * taille if mesure.a(" ") else taille * 0.28
         y = coin[1] + taille * 0.9
-        n = 0
+        n, droite = 0, coin[0]
         for bloc in texte.split("\n"):
             ligne, larg = [], 0.0
             mots = bloc.split(" ")
@@ -816,12 +921,16 @@ class Editeur:
                 if m is None or (ligne and larg + espace + lm > largeur):
                     if ligne or m is None:
                         self.ajouter_texte(num_page, fitz.Point(coin[0], y), " ".join(ligne), taille, couleur, police)
+                        droite = max(droite, coin[0] + larg)
                         y += taille * 1.22
                         n += 1
                     ligne, larg = ([m], lm) if m is not None else ([], 0.0)
                 else:
                     larg += (espace if ligne else 0) + lm
                     ligne.append(m)
+        if n > 1:
+            self._retenir_paragraphe(num_page, fitz.Rect(coin[0] - 0.5, coin[1], max(droite, coin[0] + 5) + 1,
+                                                         y - taille * 1.22 + taille * 0.3), texte.rstrip("\n"))
         self.journal.append(f"bloc de texte ajouté : {n} ligne(s)")
         return n
 

@@ -520,13 +520,23 @@ fp_.setCurrentIndex(i_)
 ed_.valider()
 pol_ = {sp["font"] for b in op.doc[0].get_text("dict")["blocks"] for l in b.get("lines", []) for sp in l["spans"]
         if "prestations" in sp["text"]}
-verif(pol_, f"polices : police appliquée au paragraphe ({fp_.itemText(i_)} → {pol_})")
+verif(pol_ and all("Liberation" in x for x in pol_), f"polices : police appliquée au paragraphe ({fp_.itemText(i_)} → {pol_})")
 fp_.setCurrentIndex(0)
 op.changer_mode("ajout_texte")
 pw_.editeur = D.EditeurParagraphe(pw_, None, fitz.Point(72, 300))
 pw_.editeur.zone.setPlainText("Bloc ajouté\nsur deux lignes")
 pw_.editeur.valider()
 verif("Bloc ajouté\nsur deux lignes" in op.doc[0].get_text(), "ajouter du texte : bloc sur plusieurs lignes")
+op.changer_mode("modifier")
+verif(any(r.y0 < 305 < r.y1 for r, _x in op.paragraphes_page(0)), "paragraphe : signalé par un trait à gauche")
+verif(pw_.ouvrir_paragraphe(fitz.Point(76, 306)), "paragraphe ajouté : rouvert")
+verif(pw_.editeur.zone.toPlainText() == "Bloc ajouté\nsur deux lignes", f"paragraphe ajouté : retours à la ligne exacts ({pw_.editeur.zone.toPlainText()!r})")
+capture(w, "42_barre_format.png")
+pw_.editeur.couleur, pw_.editeur.couleur_modifiee = D.QColor("#c00000"), True
+pw_.editeur.sp_taille.setValue(16)
+pw_.editeur.valider()
+sp_ = [sp for b in op.doc[0].get_text("dict")["blocks"] for l in b.get("lines", []) for sp in l["spans"] if "Bloc" in sp["text"]]
+verif(sp_ and sp_[0]["color"] == 0xc00000 and abs(sp_[0]["size"] - 16) < 0.6, f"barre de format : couleur et taille appliquées ({sp_ and (hex(sp_[0]['color']), sp_[0]['size'])})")
 op.changer_mode(None)
 w.onglets.setCurrentWidget(o)
 
@@ -546,7 +556,20 @@ verif(w.minimumSizeHint().width() < 900, f"fenêtre réductible ({w.minimumSizeH
 w.params["barre"] = ["volet", "|", "pivoter_gauche", "ouvrir"]
 o.construire_barre(); app.processEvents()
 ordre_ = [o.flux_barre.itemAt(i).widget() for i in range(o.flux_barre.count())]
-verif(ordre_[0] is o.b_volet and len(ordre_) == 4, "barre : ordre personnalisé respecté")
+verif(len(ordre_) == 3 and o.flux_barre.droite and o.flux_barre.droite.widget() is o.b_volet, "barre : ordre personnalisé respecté, volet à droite")
+w.params["barre"] = []
+o.construire_barre()
+w.resize(1500, 800); app.processEvents()
+verif(o.b_volet.geometry().right() >= o.barre.width() - 12, f"barre : volet à l'extrême droite ({o.b_volet.geometry().right()} / {o.barre.width()})")
+h_large = o.barre.height()
+w.resize(900, 700)
+for _k in range(5):
+    app.processEvents()
+verif(o._mode_compact and o.barre.height() <= h_large * 1.3, f"barre étroite : icônes seules, hauteur réduite ({o.barre.height()} px contre {h_large})")
+capture(w, "41_barre_etroite.png")
+w.resize(1500, 800); app.processEvents()
+w.params["barre"] = ["volet", "|", "pivoter_gauche", "ouvrir"]
+o.construire_barre()
 r0_ = o.doc[o.page_courante()].rotation
 o.pivoter_courante(-90)
 verif(o.doc[o.page_courante()].rotation == (r0_ - 90) % 360, "pivoter : sens anti-horaire")
@@ -572,6 +595,13 @@ w.choisir_reglages_distants(_ch, [])
 F.reglages.appliquer_communs = _ecrire0
 F.QDialog.exec = _exec0
 verif(_vu_cles == ["auteur", "theme"], "synchro : fenêtre des réglages à cocher (tout coché par défaut)")
+from app import synchro_choix as SC
+_cb = SC.combo_emplacements(w, w.params)
+_n0 = _cb.count()
+w.params["comptes"] = list(w.params.get("comptes", [])) + [{"id": "zz1", "type": "ftp", "nom": "FTP essai", "adresse": "ftp.exemple.org"}]
+_cb.rafraichir()
+verif(_cb.findData("compte:zz1") >= 0 and _cb.count() == _n0 + 1, "synchro : compte créé aussitôt proposé dans la liste")
+w.params["comptes"] = [c for c in w.params["comptes"] if c["id"] != "zz1"]
 from app import apprentissage as AP
 import datetime as _dt
 demain_ = (_dt.date.today() + _dt.timedelta(days=3)).isoformat()
@@ -593,5 +623,14 @@ o.modifie = True
 w.fermer_onglet(w.onglets.indexOf(o))
 verif(vu.get("b") == ["Enregistrer", "Ne pas enregistrer", "Annuler"], f"fermeture : {vu.get('b')}")
 
+# --- fermeture : une fenetre explique l'attente (preferences, synchronisation)
+ff_ = F.FenetreFermeture(w, "Google Drive (exemple)")
+ff_.etape("Préférences envoyées vers Google Drive (exemple)", lambda: None)
+ff_.etape("Etape en échec", lambda: 1 / 0)
+capture(ff_, "43_fermeture.png")
+verif(ff_.lignes[0].startswith("✓") and ff_.lignes[1].startswith("✕"), "fermeture : étapes affichées")
+ff_.close()
+w.onglets.setCurrentWidget(w.outils); app.processEvents()
+capture(w, "44_outils.png")
 print(f"\n{sum(c for c, _ in ok)}/{len(ok)} vérifications réussies")
 sys.exit(0 if all(c for c, _ in ok) else 1)

@@ -27,6 +27,7 @@ TRAITS = {
     "motdepasse": '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
     "biffer": '<path d="M4 7h16M4 17h10"/><rect x="4" y="10" width="16" height="4" rx="1"/>',
     "archiver": '<rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/>',
+    "comparer_ia": '<rect x="2" y="7" width="7" height="14" rx="1"/><rect x="12" y="7" width="7" height="14" rx="1"/><path d="M9 13h3"/><path d="M19 1.5l1 2.3 2.3 1-2.3 1-1 2.3-1-2.3-2.3-1 2.3-1z"/>',
     "comparer": '<rect x="3" y="4" width="7" height="16" rx="1"/><rect x="14" y="4" width="7" height="16" rx="1"/><path d="M10 10h4M12 8l2 2-2 2"/>',
     "lot": '<path d="M12 2l10 5-10 5L2 7z"/><path d="M2 12l10 5 10-5M2 17l10 5 10-5"/>',
     "ia": '<path d="M4 6h9M4 12h7M4 18h5"/><path d="M18 8l1.2 2.8L22 12l-2.8 1.2L18 16l-1.2-2.8L14 12l2.8-1.2z"/>',

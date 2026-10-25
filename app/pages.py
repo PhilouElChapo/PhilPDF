@@ -76,7 +76,7 @@ class Tuile(QFrame):
         self.oid, self.titre, self.texte = oid, titre, (titre + " " + sous + " " + aide).lower()
         self.setObjectName("tuile")
         self.setCursor(Qt.PointingHandCursor)
-        self.setFixedSize(236, 148)
+        self.setFixedSize(236, 160)
         self.setToolTip(_('<b>{titre}</b><br>{aide}', titre=titre, aide=aide) + ("" if dispo else _('<br><i>Prévu dans une prochaine version.</i>')))
         self.setStyleSheet(f"#tuile{{background:#fff;border:1px solid #e2e2e2;border-radius:12px}}"
                            f"#tuile:hover{{border:2px solid {coul}}}"
@@ -107,6 +107,7 @@ class Tuile(QFrame):
         h.addWidget(self.etoile, 0, Qt.AlignTop)
         v.addLayout(h)
         t = QLabel(titre)
+        t.setWordWrap(True)                          # titre long : sur deux lignes plutot que coupe
         t.setStyleSheet("font-size:15px;font-weight:600;color:#1f1f1f")
         v.addWidget(t)
         s = QLabel(sous)

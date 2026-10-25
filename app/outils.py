@@ -8,7 +8,7 @@ FAMILLES = [
     ("scans", _('Scans et OCR'), "#2a7a3b", "#e7f4ea"),
     ("formulaires", _('Formulaires'), "#a35c00", "#fdf1e2"),
     ("comparer", _('Comparer et automatiser'), "#0b7a80", "#e2f4f4"),
-    ("ia", _('Assistant IA'), "#0b5e63", "#e2f0f0"),
+    ("ia", _('Assistant IA'), "#4338ca", "#ecebfd"),
     ("optimiser", _('Optimiser et protéger'), "#1462c2", "#e6f0fc"),
 ]
 
@@ -60,7 +60,7 @@ OUTILS = [
     ("ia_classer", "ia", "archiver", _('Renommer et classer'), _('Nom et dossier proposés, appris'),
      _("L'IA lit le document et propose un nom (date, expéditeur, objet) et le dossier où le ranger ; "
        "PhilPDF retient vos choix pour chaque expéditeur, sur tous vos postes."), True),
-    ("ia_comparer", "ia", "comparer", _('Comparer avec explication'), _('Différences surlignées et expliquées'),
+    ("ia_comparer", "ia", "comparer_ia", _('Comparer avec explication'), _('Différences surlignées et expliquées'),
      _("Deux versions d'un document : différences surlignées, puis expliquées en français par l'IA."), True),
     ("ia_traduire", "ia", "langue", _('Traduire le document'), _('Mise en page conservée'),
      _("Traduit le texte de chaque page et le remet à sa place, dans un nouveau fichier (ex. « Contrat (EN).pdf »). "

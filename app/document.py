@@ -3,7 +3,7 @@ mode Modifier facon Acrobat (deplacer, editer dans la page), objets deplacables
 (tampons, signatures, annotations), organisation des pages."""
 import os, sys
 import pymupdf as fitz
-from PySide6.QtCore import Qt, Signal, QRectF, QPointF, QTimer, QSize, QPoint, QRect
+from PySide6.QtCore import Qt, Signal, QObject, QRectF, QPointF, QTimer, QSize, QPoint, QRect
 from PySide6.QtGui import QImage, QPainter, QColor, QPen, QPixmap, QGuiApplication, QFont, QIcon
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QFrame, QLayout, QLabel, QToolButton,
                                QListWidget, QListWidgetItem, QSplitter, QPushButton, QInputDialog, QMenu,
@@ -89,6 +89,9 @@ class PageWidget(QWidget):
             self.image, self.image_zoom = img, self.o.zoom
         p.drawImage(0, 0, self.image)
         o = self.o
+        ed = getattr(self, "editeur", None)
+        if ed is not None and getattr(ed, "para", None):      # pendant la saisie, l'ancien paragraphe est masque
+            p.fillRect(self.vers_ecran(fitz.Rect(ed.para["rect"]) + (-1, -1, 1, 1)), QColor(255, 255, 255))
         champs = list(o.doc[self.num].widgets()) if o.mode in (None, "formulaire") else []
         for w in champs:
             choisi = o.mode == "formulaire" and o.champ_choisi == (self.num, w.xref)
@@ -114,6 +117,11 @@ class PageWidget(QWidget):
                 p.setBrush(QColor(255, 210, 0, 110) if (pg, r) != o.resultat_courant else QColor(255, 140, 0, 150))
                 p.drawRect(self.vers_ecran(r))
         if o.mode == "modifier":
+            for r, _retenu in o.paragraphes_page(self.num):   # un trait continu a gauche : ces lignes forment un paragraphe
+                re_ = self.vers_ecran(fitz.Rect(r))
+                p.setPen(Qt.NoPen)
+                p.setBrush(QColor(20, 98, 194, 170))
+                p.drawRoundedRect(QRectF(re_.x() - 7, re_.y(), 3.5, re_.height()), 1.5, 1.5)
             for r, _t in o.lignes_page(self.num):
                 actif = self.survol is not None and fitz.Rect(r).contains(self.survol)
                 p.setPen(QPen(QColor("#1462c2"), 2 if actif else 1, Qt.SolidLine if actif else Qt.DotLine))
@@ -417,8 +425,13 @@ class EditeurParagraphe(QFrame):
         self.poignee.setToolTip(_("Glissez pour élargir ou rétrécir la zone de texte"))
         self.poignee.setStyleSheet("QLabel{background:#1462c2;color:#fff;border-radius:3px;font-weight:700}")
         self.poignee.installEventFilter(self)
-        self.aide = QLabel(_("Entrée : nouvelle ligne · Ctrl+Entrée ou clic ailleurs : valider · Echap : annuler"), self)
-        self.aide.setStyleSheet("QLabel{background:#1462c2;color:#fff;font-size:10px;padding:1px 6px;border-radius:3px}")
+        # aide : posee sur la page mais laisse passer les clics (on peut cliquer la ligne en dessous) ; disparait seule
+        self.aide = QLabel(_("Entrée : nouvelle ligne · Ctrl+Entrée ou clic ailleurs : valider · Echap : annuler"), pw)
+        self.aide.setStyleSheet("QLabel{background:rgba(20,98,194,200);color:#fff;font-size:10px;padding:1px 6px;border-radius:3px}")
+        self.aide.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.aide.show()
+        QTimer.singleShot(6000, lambda: self._fini or self.aide.hide())
+        self._barre_format(o, para)
         self.largeur = max(80.0, r.width() + 6)
         self.x, self.y = r.x() - 3, r.y() - 3
         self.zone.document().contentsChanged.connect(self._ajuster)
@@ -429,6 +442,83 @@ class EditeurParagraphe(QFrame):
         c = self.zone.textCursor()
         c.movePosition(c.MoveOperation.End)
         self.zone.setTextCursor(c)
+
+    def _barre_format(self, o, para):
+        """Petite barre au-dessus de la zone : police (du document ou toutes), taille, couleur — appliquees en direct."""
+        from PySide6.QtWidgets import QDoubleSpinBox
+        from .polices import combo as combo_polices
+        self.fmt = QFrame(self.pw)
+        self.fmt.setObjectName("fmt")
+        self.fmt.setStyleSheet("#fmt{background:#ffffff;border:1px solid #1462c2;border-radius:6px}"
+                               "QComboBox,QDoubleSpinBox,QPushButton{font-size:11px}")
+        h = QHBoxLayout(self.fmt)
+        h.setContentsMargins(5, 3, 5, 3)
+        h.setSpacing(4)
+        self.cb_police = combo_polices(self.fmt, automatique=True, doc=o.doc)
+        self.cb_police.portee.setMaximumWidth(150)
+        self.cb_police.setMinimumWidth(190)
+        self.cb_police.apercu.connect(self.apercu_police)
+        if not para and o.format_police.currentData():
+            i = self.cb_police.findData(o.format_police.currentData())
+            if i < 0:
+                self.cb_police.portee.setCurrentIndex(1)
+                i = self.cb_police.findData(o.format_police.currentData())
+            self.cb_police.setCurrentIndex(max(0, i))
+        h.addWidget(self.cb_police.portee)
+        h.addWidget(self.cb_police)
+        self.sp_taille = QDoubleSpinBox()
+        self.sp_taille.setRange(4, 96)
+        self.sp_taille.setDecimals(1)
+        self.sp_taille.setSuffix(" pt")
+        self.sp_taille.setValue(round(self.taille, 1))
+        self.taille_depart = round(self.taille, 1)
+        self.sp_taille.valueChanged.connect(self._nouvelle_taille)
+        h.addWidget(self.sp_taille)
+        coul = None
+        if para:
+            try:
+                sp = next(sp for c, sp in para["lignes"][0]["chars"] if c["c"].strip())
+                coul = QColor(f"#{sp['color']:06x}")
+            except Exception:
+                coul = None
+        self.couleur = coul or QColor(o.format_couleur)
+        self.couleur_modifiee = not para
+        self.b_coul = QPushButton()
+        self.b_coul.setToolTip(_("Couleur du texte"))
+        self.b_coul.setFixedSize(26, 22)
+        self.b_coul.clicked.connect(self._choisir_couleur)
+        h.addWidget(self.b_coul)
+        self._maj_couleur()
+        self.fmt.show()
+
+    def _nouvelle_taille(self, v):
+        self.taille = v
+        f = self.zone.font()
+        f.setPixelSize(max(8, int(v * self.e * 0.98)))
+        self.zone.setFont(f)
+        self._ajuster()
+
+    def _choisir_couleur(self):
+        from PySide6.QtWidgets import QColorDialog
+        c = QColorDialog.getColor(self.couleur, self, _("Couleur du texte"))
+        if c.isValid():
+            self.couleur, self.couleur_modifiee = c, True
+            self._maj_couleur()
+        self.zone.setFocus()
+
+    def _maj_couleur(self):
+        self.b_coul.setStyleSheet(f"QPushButton{{background:{self.couleur.name()};border:1px solid #888;border-radius:4px}}")
+        self.zone.setStyleSheet("QPlainTextEdit{background:rgb(240,246,254);border:1.5px solid #1462c2;"
+                                f"border-radius:3px;padding:0px;color:{self.couleur.name()}}}")
+
+    def _fermer_annexes(self):
+        try:                                            # fermer la liste ne doit plus changer la police choisie
+            self.cb_police.apercu.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        for w in (self.aide, self.fmt):
+            w.hide()
+            w.deleteLater()
 
     def apercu_police(self, p):
         """Police survolee ou choisie dans la liste : appliquee tout de suite au texte en cours (WYSIWYG)."""
@@ -465,6 +555,8 @@ class EditeurParagraphe(QFrame):
         return QFont()
 
     def _ajuster(self):
+        if not hasattr(self, "largeur") or not hasattr(self, "fmt"):
+            return
         doc = self.zone.document()
         doc.setTextWidth(self.largeur - 6)
         lignes = 0                                    # hauteur : nombre de lignes affichees x interligne
@@ -476,8 +568,13 @@ class EditeurParagraphe(QFrame):
         self.zone.setGeometry(0, 0, int(self.largeur), h)
         self.poignee.setGeometry(int(self.largeur), 0, 10, h)
         self.aide.adjustSize()
-        self.aide.move(0, h + 2)
-        self.setGeometry(int(self.x), int(self.y), int(max(self.largeur + 12, self.aide.width())), h + self.aide.height() + 4)
+        self.aide.move(int(self.x), int(self.y) + h + 2)
+        self.setGeometry(int(self.x), int(self.y), int(self.largeur + 12), h)
+        self.fmt.adjustSize()
+        hb = self.fmt.sizeHint().height()
+        yb = self.y - hb - 3 if self.y - hb - 3 >= 0 else self.y + h + self.aide.height() + 4
+        self.fmt.move(int(max(0, min(self.x, self.pw.width() - self.fmt.width()))), int(yb))
+        self.fmt.raise_()
 
     def eventFilter(self, obj, ev):
         t = ev.type()
@@ -503,6 +600,7 @@ class EditeurParagraphe(QFrame):
 
     def annuler(self):
         self._fini = True
+        self._fermer_annexes()
         self.pw.editeur = None
         self.hide()
         self.deleteLater()
@@ -513,19 +611,25 @@ class EditeurParagraphe(QFrame):
             return
         self._fini = True
         texte = self.zone.toPlainText().rstrip()
+        police_choisie = self.police_choisie
+        self._fermer_annexes()
+        self.police_choisie = police_choisie
         self.pw.editeur = None
         self.hide()
         self.deleteLater()
         o = self.pw.o
         largeur_pt = (self.largeur - 6) / self.e
+        taille = self.sp_taille.value() if abs(self.sp_taille.value() - self.taille_depart) > 0.05 else None
+        couleur = self.couleur.getRgbF()[:3] if self.couleur_modifiee else None
         if self.para:
             elargi = abs(largeur_pt - (self.para["x1"] - self.para["x0"])) > 2
-            if texte != self.initial or elargi or self.police_choisie:
+            if texte != self.initial or elargi or self.police_choisie or taille or couleur:
                 if elargi:
                     self.para["x1"] = self.para["x0"] + largeur_pt
-                o.modifier_paragraphe(self.pw.num, self.para, texte, police=self.police_choisie)
+                o.modifier_paragraphe(self.pw.num, self.para, texte, taille=taille, couleur=couleur, police=self.police_choisie)
         elif texte.strip():
-            o.ajouter_paragraphe(self.pw.num, self.coin, texte, largeur_pt)
+            o.ajouter_paragraphe(self.pw.num, self.coin, texte, largeur_pt, taille=self.sp_taille.value(),
+                                 couleur=self.couleur.getRgbF()[:3], police=self.police_choisie)
         self.pw.update()
 
 
@@ -715,6 +819,18 @@ class Loupe(QLabel):
         self.facteur = 1.0
 
 
+class _SurveilleTaille(QObject):
+    def __init__(self, w, rappel):
+        super().__init__(w)
+        self.rappel = rappel
+        w.installEventFilter(self)
+
+    def eventFilter(self, obj, ev):
+        if ev.type() == ev.Type.Resize:
+            QTimer.singleShot(0, self.rappel)
+        return False
+
+
 class FluxLayout(QLayout):
     """Disposition « en flux » : les elements vont a la ligne quand la place manque (barre d'outils sur plusieurs
     lignes quand la fenetre est etroite, au lieu d'icones cachees)."""
@@ -722,11 +838,21 @@ class FluxLayout(QLayout):
     def __init__(self, parent=None, marge=6, espace=2):
         super().__init__(parent)
         self._items = []
+        self.droite = None                            # element colle a droite (volet), hors du flux
         self.setContentsMargins(marge, 2, marge, 2)
         self.setSpacing(espace)
 
     def addItem(self, item):
         self._items.append(item)
+
+    def set_droite(self, w):
+        from PySide6.QtWidgets import QWidgetItem
+        if w is None:
+            self.droite = None
+        else:
+            self.addChildWidget(w)
+            self.droite = QWidgetItem(w)
+        self.invalidate()
 
     def count(self):
         return len(self._items)
@@ -765,6 +891,13 @@ class FluxLayout(QLayout):
         zone = r.adjusted(m.left(), m.top(), -m.right(), -m.bottom())
         x, y, haut_ligne = zone.x(), zone.y(), 0
         e = self.spacing()
+        bas_droite = zone.y()
+        if self.droite is not None and not self.droite.widget().isHidden():
+            td = self.droite.sizeHint()
+            if not simuler:
+                self.droite.setGeometry(QRect(QPoint(zone.right() - td.width() + 1, zone.y()), td))
+            zone = zone.adjusted(0, 0, -(td.width() + e), 0)
+            bas_droite = zone.y() + td.height()
         for it in self._items:
             if it.widget() is not None and it.widget().isHidden():
                 continue
@@ -777,7 +910,7 @@ class FluxLayout(QLayout):
                 it.setGeometry(QRect(QPoint(x, y), t))
             x += t.width() + e
             haut_ligne = max(haut_ligne, t.height())
-        return y + haut_ligne - r.y() + m.bottom()
+        return max(y + haut_ligne, bas_droite) - r.y() + m.bottom()
 
 
 def defilable(w):
@@ -1131,6 +1264,7 @@ class OngletDocument(QWidget):
         b.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         b.setAutoRaise(True)
         b.setMinimumWidth(60)
+        b.setProperty("texte_dessous", True)          # barre etroite : icone seule (barre moins haute)
         b.clicked.connect(f)
         return b
 
@@ -1176,6 +1310,8 @@ class OngletDocument(QWidget):
         w.setObjectName("barre")
         w.setStyleSheet("QFrame#barre{background:#fff;border-bottom:1px solid #e2e2e2} QToolButton{font-size:11px;color:#444}")
         self.flux_barre = FluxLayout(w, marge=6, espace=2)
+        self.barre_w = w
+        self._surveille = _SurveilleTaille(w, self._adapter_barre)
         w.setContextMenuPolicy(Qt.CustomContextMenu)
         w.customContextMenuRequested.connect(lambda p: self._menu_barre(w.mapToGlobal(p)))
         # elements toujours crees (d'autres parties de l'onglet s'en servent), places seulement s'ils sont choisis
@@ -1235,6 +1371,8 @@ class OngletDocument(QWidget):
                 if wd not in permanents:
                     wd.setParent(None)
                     wd.deleteLater()
+        fl.set_droite(None)
+        self.b_volet.hide()
         for cle in self.params.get("barre") or self.barre_par_defaut():
             wd = None
             if cle == "vignettes":
@@ -1271,8 +1409,10 @@ class OngletDocument(QWidget):
                 wd.setFrameShape(QFrame.VLine)
                 wd.setFixedSize(8, 40)
                 wd.setStyleSheet("color:#e2e2e2")
-            elif cle == "volet":
-                wd = self.b_volet
+            elif cle == "volet":                     # toujours a l'extreme droite, en haut
+                fl.set_droite(self.b_volet)
+                self.b_volet.show()
+                continue
             else:
                 o = outil(cle)
                 if o:
@@ -1282,7 +1422,33 @@ class OngletDocument(QWidget):
             if wd is not None:
                 fl.addWidget(wd)
                 wd.show()
+        self._mode_compact = None
+        self._style_barre(False)
+        e = fl.spacing()
+        m = fl.contentsMargins()
+        elems = [fl.itemAt(i).widget() for i in range(fl.count())] + ([fl.droite.widget()] if fl.droite else [])
+        self._largeur_pleine = sum(x.sizeHint().width() + e for x in elems if x is not None) + m.left() + m.right() + 4
+        self._adapter_barre()
         fl.invalidate()
+
+    def _style_barre(self, compact):
+        for b in self.barre_w.findChildren(QToolButton):
+            if b.property("texte_dessous"):
+                if b.property("larg_mini") is None:
+                    b.setProperty("larg_mini", b.minimumWidth())
+                b.setToolButtonStyle(Qt.ToolButtonIconOnly if compact else Qt.ToolButtonTextUnderIcon)
+                b.setMinimumWidth(0 if compact else b.property("larg_mini"))
+                b.setIconSize(QSize(20, 20) if compact else QSize(22, 22))
+
+    def _adapter_barre(self):
+        """Tout tient sur une ligne : icones avec texte ; sinon icones seules (barre plus basse), puis plusieurs lignes."""
+        if not hasattr(self, "_largeur_pleine"):
+            return
+        compact = self.barre_w.width() < self._largeur_pleine
+        if compact != getattr(self, "_mode_compact", None):
+            self._mode_compact = compact
+            self._style_barre(compact)
+            self.flux_barre.invalidate()
 
     def remplir_favoris(self):
         """Compatibilite : sans barre personnalisee, la barre suit les outils epingles du volet."""
@@ -1555,6 +1721,7 @@ class OngletDocument(QWidget):
         f.addRow(t)
         self.format_info = QLabel(_('Cliquez sur une ligne pour la sélectionner, glissez pour la déplacer, double-cliquez pour corriger dans la page.'))
         self.format_info.setWordWrap(True)
+        self.format_info.setMinimumHeight(self.format_info.fontMetrics().lineSpacing() * 4)
         self.format_info.setStyleSheet("color:#555;font-size:12px")
         f.addRow(self.format_info)
         from .polices import combo as combo_polices
@@ -1706,6 +1873,7 @@ class OngletDocument(QWidget):
     def _vider_caches(self):
         self.__dict__.get("_cache_loupe", {}).clear()
         self._cache_lignes.clear()
+        self.__dict__.setdefault("_cache_paras", {}).clear()
         self._cache_mots.clear()
         self._cache_images.clear()
 
@@ -1803,6 +1971,16 @@ class OngletDocument(QWidget):
                         out.append((tuple(l["bbox"]), t))
             self._cache_lignes[n] = out
         return self._cache_lignes[n]
+
+    def paragraphes_page(self, n):
+        """[(rect, ecrit_par_philpdf)] des paragraphes de plusieurs lignes (trait continu a gauche en mode Modifier)."""
+        c = self.__dict__.setdefault("_cache_paras", {})
+        if n not in c:
+            try:
+                c[n] = Editeur(self.doc).paragraphes_page(n)
+            except Exception:
+                c[n] = []
+        return c[n]
 
     def images_page(self, n):
         if n not in self._cache_images:
@@ -2307,12 +2485,12 @@ class OngletDocument(QWidget):
                     "Elargissez la zone (poignée à droite), réduisez la taille ou raccourcissez le texte ; Ctrl+Z annule.",
                     n=res["en_plus"]))
 
-    def ajouter_paragraphe(self, n, coin, texte, largeur):
+    def ajouter_paragraphe(self, n, coin, texte, largeur, taille=None, couleur=None, police=None):
         self.memoriser(_("Ajout de texte"))
         ed = Editeur(self.doc)
-        police = self.format_police.currentData()
-        coul = self.format_couleur.getRgbF()[:3] if police else None
-        ed.ajouter_paragraphe(n, coin, texte, largeur, self.format_taille.value(), coul, police)
+        police = police or self.format_police.currentData()
+        coul = couleur or self.format_couleur.getRgbF()[:3]
+        ed.ajouter_paragraphe(n, coin, texte, largeur, taille or self.format_taille.value(), coul, police)
         self.apres_modif(ed.journal)
 
     def appliquer_format(self):

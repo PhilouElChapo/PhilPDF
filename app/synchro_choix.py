@@ -29,6 +29,24 @@ def combo_emplacements(parent, params):
     from .dialogues_distant import ICONES
     from . import oauth
     cb = QComboBox()
+    _remplir(cb, params)
+    cb._precedent = cb.currentIndex()
+
+    def rafraichir():
+        """Comptes ajoutes ou retires ailleurs (onglet Comptes) : liste refaite, choix en cours garde."""
+        garde = cb.currentData()
+        cb.blockSignals(True)
+        cb.clear()
+        _remplir(cb, params, garde)
+        cb._precedent = cb.currentIndex()
+        cb.blockSignals(False)
+    cb.rafraichir = rafraichir
+    return _brancher(cb, parent, params)
+
+
+def _remplir(cb, params, garde=None):
+    from .dialogues_distant import ICONES
+    from . import oauth
     cb.addItem(_("(aucun : chaque poste reste indépendant)"), "")
     for c in params.get("comptes", []):
         cb.addItem(icone(ICONES.get(c["type"], "ouvrir"), "#0f6cbd"), libelle_compte(c), "compte:" + c["id"])
@@ -46,8 +64,13 @@ def combo_emplacements(parent, params):
     if params.get("drive") and not params.get("drive_compte"):     # ancien reglage : on le montre tel quel
         cb.insertItem(1, icone("ouvrir", "#c8a000"), params["drive"], params["drive"])
     actuel = "compte:" + params["drive_compte"] if params.get("drive_compte") else params.get("drive", "")
+    if garde is not None and cb.findData(garde) >= 0:
+        actuel = garde
     cb.setCurrentIndex(max(0, cb.findData(actuel)))
-    cb._precedent = cb.currentIndex()
+
+
+def _brancher(cb, parent, params):
+    from .dialogues_distant import ICONES
 
     def remettre():
         cb.blockSignals(True)

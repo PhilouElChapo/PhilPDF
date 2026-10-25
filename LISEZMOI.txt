@@ -49,6 +49,18 @@ Verification manuelle : Aide > Rechercher les mises a jour.
 3. CE QUE FAIT LA VERSION 0.3
 -----------------------------
 
+  Nouveau en 0.6.8 : zone de texte : petite barre police / taille / couleur
+    au-dessus (appliquees en direct) ; l'aide ne bloque plus les clics ;
+    paragraphes ecrits par PhilPDF retenus dans le PDF (retours a la ligne
+    exacts quand on les rouvre) et signales par un trait bleu a gauche ;
+    un paragraphe ne deborde plus sur la rangee suivante d'un tableau ;
+    barre d'outils : Volet toujours a l'extreme droite, icones seules (barre
+    moins haute) si la fenetre est etroite ; comptes crees dans les
+    Preferences aussitot proposes pour la synchronisation ; fermeture :
+    une fenetre montre ce qui est envoye (preferences, synchronisation) ;
+    outils de l'assistant IA dans leur propre couleur, icone distincte pour
+    "Comparer avec explication", titres des tuiles sur deux lignes.
+
   Nouveau en 0.6.7 : reglages des autres postes jamais repris en silence :
     une fenetre montre chaque changement (avant -> apres) a cocher ou non ;
     emplacement de synchronisation modifiable a tout moment (lien
