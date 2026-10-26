@@ -420,10 +420,10 @@ class EditeurParagraphe(QFrame):
         self._orthographe(o.params)
         self.police_choisie = None                    # fichier choisi dans le volet Format pendant la saisie
         self.zone.installEventFilter(self)
-        self.poignee = QLabel("⋮", self)
+        self.poignee = QLabel("↔", self)
         self.poignee.setAlignment(Qt.AlignCenter)
         self.poignee.setCursor(Qt.SizeHorCursor)
-        self.poignee.setToolTip(_("Glissez pour élargir ou rétrécir la zone de texte"))
+        self.poignee.setToolTip(_("Glissez pour élargir ou rétrécir la zone de texte (le bouton … au-dessus ouvre la boîte de dialogue)"))
         self.poignee.setStyleSheet("QLabel{background:#1462c2;color:#fff;border-radius:3px;font-weight:700}")
         self.poignee.installEventFilter(self)
         # aide : posee sur la page mais laisse passer les clics (on peut cliquer la ligne en dessous) ; disparait seule
@@ -499,8 +499,9 @@ class EditeurParagraphe(QFrame):
         h.setContentsMargins(5, 3, 5, 3)
         h.setSpacing(4)
         self.cb_police = combo_polices(self.fmt, automatique=True, doc=o.doc)
-        self.cb_police.portee.setMaximumWidth(150)
-        self.cb_police.setMinimumWidth(190)
+        self.cb_police.portee.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+        self.cb_police.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.cb_police.setMinimumContentsLength(26)
         self.cb_police.apercu.connect(self.apercu_police)
         if not para and o.format_police.currentData():
             i = self.cb_police.findData(o.format_police.currentData())
@@ -527,13 +528,73 @@ class EditeurParagraphe(QFrame):
                 coul = None
         self.couleur = coul or QColor(o.format_couleur)
         self.couleur_modifiee = not para
-        self.b_coul = QPushButton()
+        self.b_coul = QPushButton(_("Couleur"))
         self.b_coul.setToolTip(_("Couleur du texte"))
-        self.b_coul.setFixedSize(26, 22)
         self.b_coul.clicked.connect(self._choisir_couleur)
         h.addWidget(self.b_coul)
+        b_dlg = QPushButton("…")
+        b_dlg.setFixedWidth(30)
+        b_dlg.setToolTip(_("Ouvrir la boîte de dialogue (texte, police, taille, couleur)"))
+        b_dlg.clicked.connect(self._boite_dialogue)
+        h.addWidget(b_dlg)
         self._maj_couleur()
         self.fmt.show()
+
+    def _boite_dialogue(self):
+        """La boite d'avant : texte sur plusieurs lignes, police, taille et couleur, puis valider."""
+        from PySide6.QtWidgets import QPlainTextEdit, QDoubleSpinBox, QColorDialog
+        from .polices import combo as combo_polices
+        d = QDialog(self)
+        d.setWindowTitle(_('Texte'))
+        d.resize(520, 360)
+        f = QFormLayout(d)
+        f.setRowWrapPolicy(QFormLayout.WrapLongRows)
+        texte = QPlainTextEdit(self.zone.toPlainText())
+        f.addRow(_('Texte'), texte)
+        pol = combo_polices(d, automatique=True, doc=self.pw.o.doc)
+        if self.police_choisie:
+            i = pol.findData(self.police_choisie)
+            if i < 0:
+                pol.portee.setCurrentIndex(1)
+                i = pol.findData(self.police_choisie)
+            pol.setCurrentIndex(max(0, i))
+        f.addRow(_('Police'), pol.ligne())
+        taille = QDoubleSpinBox()
+        taille.setRange(4, 96)
+        taille.setSuffix(" pt")
+        taille.setValue(self.sp_taille.value())
+        f.addRow(_('Taille'), taille)
+        coul = [QColor(self.couleur)]
+        bc = QPushButton(_("Couleur du texte..."))
+
+        def maj_bc():
+            pm = QPixmap(18, 18)
+            pm.fill(coul[0])
+            bc.setIcon(QIcon(pm))
+
+        def choisir():
+            c = QColorDialog.getColor(coul[0], d, _("Couleur du texte"))
+            if c.isValid():
+                coul[0] = c
+                maj_bc()
+        maj_bc()
+        bc.clicked.connect(choisir)
+        f.addRow(_('Couleur'), bc)
+        bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
+        bb.accepted.connect(d.accept)
+        bb.rejected.connect(d.reject)
+        f.addRow(bb)
+        if d.exec() != QDialog.Accepted:
+            return
+        self.zone.setPlainText(texte.toPlainText())
+        self.sp_taille.setValue(taille.value())
+        if coul[0] != self.couleur:
+            self.couleur, self.couleur_modifiee = coul[0], True
+            self._maj_couleur()
+        p = pol.police()
+        if (p["fichier"] if p else None) != self.police_choisie:
+            self.apercu_police(p)
+        self.valider()
 
     def _nouvelle_taille(self, v):
         self.taille = v
@@ -551,7 +612,9 @@ class EditeurParagraphe(QFrame):
         self.zone.setFocus()
 
     def _maj_couleur(self):
-        self.b_coul.setStyleSheet(f"QPushButton{{background:{self.couleur.name()};border:1px solid #888;border-radius:4px}}")
+        pm = QPixmap(14, 14)
+        pm.fill(self.couleur)
+        self.b_coul.setIcon(QIcon(pm))
         self.zone.setStyleSheet("QPlainTextEdit{background:rgb(240,246,254);border:1.5px solid #1462c2;"
                                 f"border-radius:3px;padding:0px;color:{self.couleur.name()}}}")
 
@@ -861,6 +924,37 @@ class Loupe(QLabel):
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setStyleSheet("QLabel{background:#fff;border:1px solid #9a9a9a;border-radius:4px}")
         self.facteur = 1.0
+
+
+class BoutonVolet(QPushButton):
+    """Bouton des volets dont le texte passe a la ligne au lieu d'etre coupe quand le volet est etroit."""
+
+    def __init__(self, texte, aide=None, parent=None):
+        super().__init__(parent)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(8, 5, 8, 5)
+        self.lib = QLabel(texte)
+        self.lib.setWordWrap(True)
+        self.lib.setAlignment(Qt.AlignCenter)
+        self.lib.setAttribute(Qt.WA_TransparentForMouseEvents)
+        lay.addWidget(self.lib)
+        self.setToolTip(aide or texte)
+        self.setMinimumWidth(40)
+
+    def setText(self, t):
+        self.lib.setText(t)
+
+    def text(self):
+        return self.lib.text()
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        h = self.lib.heightForWidth(max(10, self.width() - 16)) + 12
+        if self.minimumHeight() != h:
+            self.setMinimumHeight(h)
+
+    def sizeHint(self):
+        return QSize(120, self.lib.sizeHint().height() + 12)
 
 
 class _SurveilleTaille(QObject):
@@ -1287,6 +1381,7 @@ class OngletDocument(QWidget):
         self.sp.addWidget(self.centre)
         self.volet = self._volet()
         self.sp.addWidget(self.volet)
+        self.sp.splitterMoved.connect(self._volet_glisse)
         self.sp.setStretchFactor(1, 1)
         self.sp.setSizes([140, 900, 320])
         v.addWidget(self.sp, 1)
@@ -1683,12 +1778,12 @@ class OngletDocument(QWidget):
         """'complet', 'icones' ou 'masque' (memorise pour tous les documents)."""
         tailles = self.sp.sizes()
         total = tailles[1] + tailles[2]
-        if self.modes_volet.currentIndex() == 0 and tailles[2] > 60:
+        if self.modes_volet.currentIndex() == 0 and tailles[2] >= 200:
             self._taille_volet = tailles[2]
         if mode == "icones":
             self.modes_volet.setCurrentIndex(1)
             self.volet.setMinimumWidth(48)
-            self.volet.setMaximumWidth(56)
+            self.volet.setMaximumWidth(16777215)       # on peut encore l'elargir a la souris : il redevient complet
             self.volet.show()
             self.sp.setSizes([tailles[0], total - 52, 52])
         elif mode == "masque":
@@ -1696,7 +1791,7 @@ class OngletDocument(QWidget):
         else:
             self.modes_volet.setCurrentIndex(0)
             self.volet.setMaximumWidth(16777215)
-            self.volet.setMinimumWidth(200)
+            self.volet.setMinimumWidth(48)
             self.volet.show()
             t = getattr(self, "_taille_volet", 300)
             self.sp.setSizes([tailles[0], max(300, total - t), t])
@@ -1704,6 +1799,19 @@ class OngletDocument(QWidget):
         if memoriser:
             self.params["volet"] = mode
             self.params.enregistrer()
+
+    def _volet_glisse(self, *_a):
+        """En retrecissant le volet a la souris, il passe en icones seules ; en l'elargissant, il redevient complet."""
+        if not self.volet.isVisible():
+            return
+        lv = self.sp.sizes()[2]
+        mode = getattr(self, "_mode_volet", "complet")
+        if mode == "complet" and lv < 175:
+            self._taille_volet = 300
+            self.mode_volet("icones")
+        elif mode == "icones" and lv > 140:
+            self._taille_volet = max(lv, 240)
+            self.mode_volet("complet")
 
     def basculer_volet(self):
         suivant = {"complet": "icones", "icones": "masque", "masque": "complet"}
@@ -1792,6 +1900,7 @@ class OngletDocument(QWidget):
         f.addRow(self.format_info)
         from .polices import combo as combo_polices
         self.format_police = combo_polices(doc=lambda: getattr(self, "doc", None))
+        f.setRowWrapPolicy(QFormLayout.WrapAllRows)      # libelles au-dessus : les listes gardent toute la largeur
         f.addRow(_('Police'), self.format_police.ligne())
         self.format_police.apercu.connect(self._apercu_police)
         self.format_taille = QDoubleSpinBox()
@@ -1800,19 +1909,25 @@ class OngletDocument(QWidget):
         self.format_taille.setSuffix(" pt")
         f.addRow(_('Taille'), self.format_taille)
         self.format_couleur = QColor("#000000")
-        self.b_couleur = QPushButton()
+        self.b_couleur = QPushButton(_("Couleur du texte..."))
         self._maj_b_couleur()
         self.b_couleur.clicked.connect(self._choisir_couleur)
         f.addRow(_('Couleur'), self.b_couleur)
-        self.b_appliquer = QPushButton(_('Appliquer à la ligne sélectionnée'))
+        self.b_appliquer = BoutonVolet(_('Appliquer à la ligne sélectionnée'),
+                                       _("Applique la taille et la couleur ci-dessus à la ligne choisie sur la page"))
         self.b_appliquer.clicked.connect(self.appliquer_format)
         f.addRow(self.b_appliquer)
         t2 = QLabel(_('OBJETS'))
         t2.setStyleSheet("font-size:12px;font-weight:600;color:#555;letter-spacing:1px;margin-top:12px")
         f.addRow(t2)
-        for txt, fn in [(_("Supprimer l'objet sélectionné"), self.supprimer),
-                        (_("Remplacer l'image..."), self.remplacer_image)]:
-            b = QPushButton(txt)
+        n2 = QLabel(_("Un objet = une image, un tampon, une signature ou une ligne de texte : cliquez-le sur la page "
+                      "(il s'entoure de poignées), puis :"))
+        n2.setWordWrap(True)
+        n2.setStyleSheet("color:#666;font-size:11px")
+        f.addRow(n2)
+        for txt, aide, fn in [(_("Supprimer l'objet sélectionné"), _("Retire de la page l'objet entouré de poignées (Suppr fait pareil)"), self.supprimer),
+                              (_("Remplacer l'image..."), _("Remplace l'image sélectionnée par une autre image de ce PC, à la même place et à la même taille"), self.remplacer_image)]:
+            b = BoutonVolet(txt, aide)
             b.clicked.connect(fn)
             f.addRow(b)
         return w
@@ -1824,7 +1939,10 @@ class OngletDocument(QWidget):
                 ed.apercu_police(p)
 
     def _maj_b_couleur(self):
-        self.b_couleur.setStyleSheet(f"background:{self.format_couleur.name()};min-height:22px;border:1px solid #999;border-radius:4px")
+        pm = QPixmap(18, 18)
+        pm.fill(self.format_couleur)
+        self.b_couleur.setIcon(QIcon(pm))
+        self.b_couleur.setStyleSheet("QPushButton{text-align:left;padding:4px 8px}")
 
     def _choisir_couleur(self):
         c = QColorDialog.getColor(self.format_couleur, self)
@@ -1843,12 +1961,18 @@ class OngletDocument(QWidget):
         aide.setWordWrap(True)
         aide.setStyleSheet("color:#555;font-size:12px")
         l.addWidget(aide)
-        self.liste_biblio = QListWidget()
-        self.liste_biblio.setIconSize(QSize(240, 60))
-        self.liste_biblio.setSpacing(4)
+        from PySide6.QtWidgets import QTreeWidget
+        self.liste_biblio = QTreeWidget()
+        self.liste_biblio.setHeaderHidden(True)
+        self.liste_biblio.setIconSize(QSize(120, 44))
+        self.liste_biblio.setWordWrap(True)
+        self.liste_biblio.setIndentation(12)
+        self.liste_biblio.setStyleSheet("QTreeWidget{border:1px solid #e2e2e2;border-radius:6px} QTreeWidget::item{padding:3px}")
         self.liste_biblio.itemClicked.connect(self._choisir_biblio)
+        self.liste_biblio.itemExpanded.connect(lambda it: self._memo_groupe(it, True))
+        self.liste_biblio.itemCollapsed.connect(lambda it: self._memo_groupe(it, False))
         l.addWidget(self.liste_biblio, 1)
-        b = QPushButton(_('Gérer, importer, dessiner...'))
+        b = BoutonVolet(_('Gérer, importer, dessiner...'), _("Ajouter, renommer, classer vos tampons et signatures"))
         b.clicked.connect(self._gerer_biblio)
         l.addWidget(b)
         b = QPushButton(_('Fermer'))
@@ -1860,33 +1984,81 @@ class OngletDocument(QWidget):
         self.genre_biblio = genre
         self.titre_biblio.setText(_('MES TAMPONS') if genre == "tampons" else _('MES SIGNATURES'))
         self.liste_biblio.clear()
-        auteur = self.params.get("machine", "")
+        from PySide6.QtWidgets import QTreeWidgetItem
+        replies = set(self.params.get("biblio_replies", ["predefinis"]))
+
+        def groupe(parent, cle, titre):
+            g = QTreeWidgetItem([titre])
+            f = g.font(0)
+            f.setBold(True)
+            g.setFont(0, f)
+            g.setData(0, Qt.UserRole + 1, cle)
+            (parent.addChild(g) if parent else self.liste_biblio.addTopLevelItem(g))
+            g.setExpanded(cle not in replies)
+            return g
+        perso = self.biblio.elements(genre)
+        titre = _("Mes tampons") if genre == "tampons" else _("Mes signatures")
+        g_perso = groupe(None, "perso", f"{titre} ({len(perso)})")
+        cats = {}
+        for e in sorted(perso, key=lambda x: (x.get("categorie", "").lower(), x["nom"].lower())):
+            c = e.get("categorie", "")
+            parent = g_perso
+            if c:
+                if c not in cats:
+                    cats[c] = groupe(g_perso, "cat:" + c, c)
+                parent = cats[c]
+            self._ajout_item_biblio(parent, e["nom"], None, e,
+                                    _("Date ajoutée à la pose") if e.get("horodatage", "non") != "non" else None)
         if genre == "tampons":
+            g_pre = groupe(None, "predefinis", _("Tampons prêts à l'emploi ({n})", n=len(objets.PREDEFINIS)))
             for nom, t, c in objets.PREDEFINIS:
                 pdf = objets.tampon_predefini(t, c, self.params.get("auteur", ""))
-                self._ajout_item_biblio(nom, pdf, {"nom": nom, "dynamique": True, "texte": t, "couleur": list(c)},
+                self._ajout_item_biblio(g_pre, nom, pdf, {"nom": nom, "dynamique": True, "texte": t, "couleur": list(c)},
                                         _('Tampon daté : la date est choisie au moment de le poser'))
-        for e in self.biblio.elements(genre):
-            self._ajout_item_biblio(e["nom"], None, e)
         self.pile_volet.setCurrentIndex(2)
         self._montrer_volet()
         if genre == "signatures" and not self.biblio.elements("signatures"):
             self._gerer_biblio()
 
-    def _ajout_item_biblio(self, nom, pdf, e, aide=None):
+    def _ajout_item_biblio(self, parent, nom, pdf, e, aide=None):
+        from PySide6.QtWidgets import QTreeWidgetItem
         pdf = pdf or self.biblio.lire(e)
         pm = QPixmap()
         pm.loadFromData(objets.apercu(pdf, 60), "PNG")
-        it = QListWidgetItem(QIcon(pm), "" if aide else nom)
-        it.setToolTip(nom + (f" — {aide}" if aide else ""))
-        it.setData(Qt.UserRole, e)
-        self.liste_biblio.addItem(it)
+        it = QTreeWidgetItem([nom])
+        it.setIcon(0, QIcon(pm))
+        it.setToolTip(0, nom + (f" — {aide}" if aide else ""))
+        it.setData(0, Qt.UserRole, e)
+        parent.addChild(it)
+        return it
 
-    def _choisir_biblio(self, it):
-        e = it.data(Qt.UserRole)
-        if e.get("dynamique"):
+    def _memo_groupe(self, it, ouvert):
+        cle = it.data(0, Qt.UserRole + 1)
+        if not cle:
+            return
+        r = set(self.params.get("biblio_replies", ["predefinis"]))
+        (r.discard if ouvert else r.add)(cle)
+        self.params["biblio_replies"] = sorted(r)
+        self.params.enregistrer()
+
+    def items_biblio(self):
+        """Elements posables de la liste (dans l'ordre affiche), sans les titres de groupes."""
+        from PySide6.QtWidgets import QTreeWidgetItemIterator
+        out, itr = [], QTreeWidgetItemIterator(self.liste_biblio)
+        while itr.value():
+            if itr.value().data(0, Qt.UserRole):
+                out.append(itr.value())
+            itr += 1
+        return out
+
+    def _choisir_biblio(self, it, *_col):
+        e = it.data(0, Qt.UserRole)
+        if not e:                                    # titre de groupe : on ouvre ou on replie
+            it.setExpanded(not it.isExpanded())
+            return
+        if e.get("dynamique") or e.get("horodatage", "non") != "non":
             from .dialogues import tampon_a_poser
-            pdf = tampon_a_poser(self, e, self.params.get("auteur", ""))
+            pdf = tampon_a_poser(self, e, self.params.get("auteur", ""), self.biblio)
             if not pdf:
                 return
         else:

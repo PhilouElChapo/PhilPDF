@@ -4,7 +4,7 @@ import datetime, os
 import pymupdf as fitz
 from PySide6.QtCore import Qt, Signal, QRectF, QPointF, QSize, QPoint
 from PySide6.QtGui import QImage, QPainter, QColor, QPen, QPixmap, QPainterPath, QIcon
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QListWidgetItem,
+from PySide6.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QListWidgetItem,
                                QFileDialog, QInputDialog, QDialogButtonBox, QCheckBox, QComboBox, QSpinBox,
                                QLineEdit, QFormLayout, QWidget, QColorDialog, QSlider, QRadioButton, QButtonGroup,
                                QGroupBox, QMessageBox, QScrollArea, QDoubleSpinBox, QTabWidget)
@@ -247,6 +247,11 @@ class PanneauBibliotheque(QWidget):
         b.setToolTip(_('Image (PNG, JPG…) ou PDF de ce PC, avec choix de la zone'))
         b.clicked.connect(self.importer)
         h.addWidget(b)
+        if genre == "tampons":
+            b = QPushButton(_('Catégorie et date...'))
+            b.setToolTip(_("Ranger le tampon dans une catégorie, et choisir s'il porte la date (jamais, toujours, ou demandée à chaque pose) et où"))
+            b.clicked.connect(self.proprietes)
+            h.addWidget(b)
         for txt, f in [(_('Renommer'), self.renommer), (_('Supprimer'), self.supprimer), (_('Par défaut'), self.defaut)]:
             b = QPushButton(txt)
             b.clicked.connect(f)
@@ -260,7 +265,9 @@ class PanneauBibliotheque(QWidget):
         defaut = self.b.par_defaut(self.genre)
         for e in self.b.elements(self.genre):
             it = QListWidgetItem(QIcon(_pix_depuis_png(objets.apercu(self.b.lire(e), 70), 70)),
-                                 e["nom"] + ("  ★" if defaut and e["id"] == defaut["id"] else ""))
+                                 e["nom"] + ("  ★" if defaut and e["id"] == defaut["id"] else "")
+                                 + (f"\n[{e['categorie']}]" if e.get("categorie") else "")
+                                 + ("  🕓" if e.get("horodatage", "non") != "non" else ""))
             it.setData(Qt.UserRole, e)
             self.liste.addItem(it)
             if choisir and e["id"] == choisir["id"]:
@@ -326,7 +333,69 @@ class PanneauBibliotheque(QWidget):
             self.b.par_defaut(self.genre, e)
             self.rafraichir(e)
 
+    def proprietes(self):
+        e = self.courant()
+        if not e:
+            QMessageBox.information(self, _("Tampons"), _("Choisissez d'abord un tampon dans la liste."))
+            return
+        d = QDialog(self)
+        d.setWindowTitle(_("Tampon « {nom} »", nom=e["nom"]))
+        f = QFormLayout(d)
+        cat = QComboBox()
+        cat.setEditable(True)
+        cat.addItem("")
+        cat.addItems(self.b.categories(self.genre))
+        cat.setCurrentText(e.get("categorie", ""))
+        cat.lineEdit().setPlaceholderText(_("ex. Pharmacie, SCI, Personnel (vide = sans catégorie)"))
+        f.addRow(_("Catégorie"), cat)
+        hor = QComboBox()
+        for k, t in (("non", _("Sans date")), ("auto", _("Date du jour, automatiquement")),
+                     ("demander", _("Demander la date à chaque pose"))):
+            hor.addItem(t, k)
+        hor.setCurrentIndex(max(0, hor.findData(e.get("horodatage", "non"))))
+        f.addRow(_("Date"), hor)
+        pos = QComboBox()
+        for k, t in (("dessous", _("Sous le tampon")), ("dessus", _("Au-dessus")), ("droite", _("A droite"))):
+            pos.addItem(t, k)
+        pos.setCurrentIndex(max(0, pos.findData(e.get("position_date", "dessous"))))
+        f.addRow(_("Position de la date"), pos)
+        ap = QLabel()
+        ap.setAlignment(Qt.AlignCenter)
+        ap.setMinimumHeight(90)
+        ap.setStyleSheet("background:#fff;border:1px solid #e5e5e5;border-radius:6px")
+        f.addRow(ap)
+
+        def maj(*_a):
+            brut = self.b.lire(e)
+            pdf = objets.horodater(brut, hor.currentData() != "non", self.auteur, pos.currentData())
+            ap.setPixmap(_pix_depuis_png(objets.apercu(pdf, 80), 80))
+            pos.setEnabled(hor.currentData() != "non")
+        hor.currentIndexChanged.connect(maj)
+        pos.currentIndexChanged.connect(maj)
+        maj()
+        bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
+        bb.accepted.connect(d.accept)
+        bb.rejected.connect(d.reject)
+        f.addRow(bb)
+        if d.exec() == QDialog.Accepted:
+            self.b.modifier(e, categorie=cat.currentText().strip(), horodatage=hor.currentData(), position_date=pos.currentData())
+            self.rafraichir(e)
+
     def synchroniser(self):
+        from . import miroir, distant
+        from PySide6.QtGui import QCursor
+        c = miroir.compte_drive(self.b.params)
+        if c:                           # Drive en direct, NAS, FTP : on envoie et on recoit tout de suite
+            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+            try:
+                self.b.synchroniser_drive()
+                miroir.synchroniser(self.b.params, c)
+            except distant.ErreurDistant as ex:
+                QApplication.restoreOverrideCursor()
+                QMessageBox.warning(self, "Drive", _("Emplacement de synchronisation injoignable : {raison}", raison=ex))
+                return
+            finally:
+                QApplication.restoreOverrideCursor()
         r = self.b.synchroniser_drive()
         if r is None:
             QMessageBox.information(self, "Drive", _("Choisissez d'abord votre Drive (Préférences › Drive et dossiers)."))
@@ -339,14 +408,25 @@ class PanneauBibliotheque(QWidget):
         e = self.courant() or self.b.par_defaut(self.genre)
         if not e:
             return None, None
-        if e.get("dynamique"):
-            pdf = tampon_a_poser(self, e, self.auteur)
+        if e.get("dynamique") or (self.genre == "tampons" and e.get("horodatage", "non") != "non"):
+            pdf = tampon_a_poser(self, e, self.auteur, self.b)
             return (e, pdf) if pdf else (None, None)
         return e, self.b.lire(e)
 
 
-def tampon_a_poser(parent, e, auteur=""):
-    """PDF du tampon a poser. Tampon date : on demande la date (du jour, autre, ou aucune). None si abandon."""
+def tampon_a_poser(parent, e, auteur="", biblio=None):
+    """PDF du tampon a poser. Tampon date : on demande la date (du jour, autre, ou aucune). None si abandon.
+    Tampon perso : selon son reglage, sans date, date du jour automatique, ou date demandee a chaque pose."""
+    if not e.get("dynamique"):
+        brut = biblio.lire(e)
+        mode = e.get("horodatage", "non")
+        if mode == "auto":
+            return objets.horodater(brut, True, auteur, e.get("position_date", "dessous"))
+        if mode != "demander":
+            return brut
+        d = DialogueDateTampon(parent, e, auteur,
+                               fabriquer=lambda date: objets.horodater(brut, date, auteur, e.get("position_date", "dessous")))
+        return d.resultat() if d.exec() == QDialog.Accepted else None
     if not e.get("date", True):
         return objets.tampon_predefini(e["texte"], tuple(e["couleur"]), auteur, False)
     d = DialogueDateTampon(parent, e, auteur)
@@ -359,11 +439,12 @@ class DialogueDateTampon(QDialog):
     """Au moment de poser un tampon date : date du jour (par defaut), autre date ou sans date ; apercu."""
     memoire = "jour"
 
-    def __init__(self, parent, e, auteur=""):
+    def __init__(self, parent, e, auteur="", fabriquer=None):
         super().__init__(parent)
         from PySide6.QtWidgets import QDateEdit
         from PySide6.QtCore import QDate
         self.e, self.auteur = e, auteur
+        self.fabriquer = fabriquer or (lambda date: objets.tampon_predefini(e["texte"], tuple(e["couleur"]), auteur, date))
         self.setWindowTitle(_("Date du tampon « {nom} »", nom=e.get("nom", "")))
         self.setMinimumWidth(380)
         v = QVBoxLayout(self)
@@ -406,8 +487,11 @@ class DialogueDateTampon(QDialog):
 
     def _maj(self, *_a):
         DialogueDateTampon.memoire = "sans" if self.r_sans.isChecked() else "autre" if self.r_autre.isChecked() else "jour"
-        pdf = objets.tampon_predefini(self.e["texte"], tuple(self.e["couleur"]), self.auteur, self.date_choisie())
+        pdf = self.fabriquer(self.date_choisie())
         self.apercu.setPixmap(_pix_depuis_png(objets.apercu(pdf, 70), 70))
+
+    def resultat(self):
+        return self.fabriquer(self.date_choisie())
 
 
 class DialogueTamponTexte(QDialog):
@@ -1028,3 +1112,45 @@ class DialogueSynchro(QDialog):
     def done(self, r):
         self._arreter()
         super().done(r)
+
+
+
+def oeil(champ):
+    """Champ de mot de passe masque, avec un oeil a droite pour l'afficher ou le masquer."""
+    from .icones import icone
+    champ.setEchoMode(QLineEdit.Password)
+    a = champ.addAction(icone("oeil", "#555555"), QLineEdit.TrailingPosition)
+    a.setToolTip(_("Afficher le mot de passe"))
+
+    def basculer():
+        visible = champ.echoMode() == QLineEdit.Password
+        champ.setEchoMode(QLineEdit.Normal if visible else QLineEdit.Password)
+        a.setIcon(icone("oeil_barre" if visible else "oeil", "#555555"))
+        a.setToolTip(_("Masquer le mot de passe") if visible else _("Afficher le mot de passe"))
+    a.triggered.connect(basculer)
+    return champ
+
+
+def demander_secret(parent, titre, texte, indice=""):
+    """Comme QInputDialog.getText en mode mot de passe, avec l'oeil et un indice eventuel. Renvoie (texte, ok)."""
+    d = QDialog(parent)
+    d.setWindowTitle(titre)
+    d.setMinimumWidth(420)
+    v = QVBoxLayout(d)
+    lb = QLabel(texte)
+    lb.setWordWrap(True)
+    v.addWidget(lb)
+    if indice:
+        li = QLabel(_("Indice : {indice}", indice=indice))
+        li.setWordWrap(True)
+        li.setStyleSheet("color:#8a5a00")
+        v.addWidget(li)
+    champ = oeil(QLineEdit())
+    v.addWidget(champ)
+    bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
+    bb.accepted.connect(d.accept)
+    bb.rejected.connect(d.reject)
+    v.addWidget(bb)
+    champ.setFocus()
+    ok = d.exec() == QDialog.Accepted
+    return champ.text(), ok

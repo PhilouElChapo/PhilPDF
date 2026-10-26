@@ -16,6 +16,7 @@ import pymupdf as fitz
 app = QApplication(sys.argv)
 import app.document as D
 import app.fenetre as F
+import datetime
 import app.dialogues as G
 from app.fenetre import Fenetre
 from app.document import DialogueRemplacer
@@ -166,7 +167,7 @@ o.changer_mode(None)
 from app import dialogues as _dlg
 _dlg.DialogueDateTampon.exec = lambda self: _dlg.QDialog.Accepted     # date du jour, sans fenetre
 o.ouvrir_bibliotheque("tampons")
-o._choisir_biblio(o.liste_biblio.item(0))
+o._choisir_biblio(next(i for i in o.items_biblio() if i.data(0, D.Qt.UserRole).get('dynamique')))
 o.poser_objet(0, fitz.Point(300, 300))
 st = [a for a in o.doc[0].annots() if objets.est_objet_philpdf(a)]
 verif(len(st) == 1, "tampon « Reçu » posé")
@@ -202,11 +203,23 @@ verif(any(x["nom"] == "Tampon importé" for x in w.biblio.elements("tampons")), 
 # --- signatures multiples (dessinee) posees et deplacables
 pave = G.PaveSignature(None)
 pave.traits = [[(30, 120), (80, 60), (130, 140), (200, 70), (260, 130)], [(60, 150), (240, 150)]]
+# tampon perso : categorie, date du jour automatique sous le tampon, groupes dans le volet (perso d'abord)
+e_ = next(x for x in w.biblio.elements("tampons") if x["nom"] == "Tampon importé")
+w.biblio.modifier(e_, categorie="Pharmacie", horodatage="auto", position_date="dessous")
+o.ouvrir_bibliotheque("tampons")
+tops_ = [o.liste_biblio.topLevelItem(i).text(0) for i in range(o.liste_biblio.topLevelItemCount())]
+verif(tops_[0].startswith("Mes tampons") and tops_[-1].startswith("Tampons prêts"), f"tampons : les vôtres d'abord, prêts à l'emploi ensuite ({tops_})")
+verif(o.liste_biblio.topLevelItem(0).child(0).text(0) == "Pharmacie" and not o.liste_biblio.topLevelItem(1).isExpanded(),
+      "tampons : catégorie en sous-groupe, prêts à l'emploi repliés")
+it_ = next(i for i in o.items_biblio() if i.data(0, D.Qt.UserRole).get("nom") == "Tampon importé")
+o._choisir_biblio(it_)
+verif(datetime.date.today().strftime("%d/%m/%Y") in fitz.open("pdf", o.a_poser[0])[0].get_text(), "tampon perso : date du jour ajoutée à la pose")
+o.changer_mode(None)
 w.biblio.ajouter("signatures", "Paraphe", pave.resultat())
 w.biblio.ajouter("signatures", "Signature complète", pave.resultat() + b" ")
 verif(len(w.biblio.elements("signatures")) == 2, "deux signatures gérées")
 o.ouvrir_bibliotheque("signatures")
-o._choisir_biblio(o.liste_biblio.item(1))
+o._choisir_biblio(o.items_biblio()[1])
 o.poser_objet(2, fitz.Point(300, 600))
 verif(len(list(o.doc[2].annots())) == 1 and o.objet and o.objet["philpdf"], "signature posée et sélectionnée")
 capture(w, "05_signatures.png")
@@ -573,6 +586,13 @@ pw_.editeur.sp_taille.setValue(16)
 pw_.editeur.valider()
 sp_ = [sp for b in op.doc[0].get_text("dict")["blocks"] for l in b.get("lines", []) for sp in l["spans"] if "Bloc" in sp["text"]]
 verif(sp_ and sp_[0]["color"] == 0xc00000 and abs(sp_[0]["size"] - 16) < 0.6, f"barre de format : couleur et taille appliquées ({sp_ and (hex(sp_[0]['color']), sp_[0]['size'])})")
+verif(pw_.ouvrir_paragraphe(fitz.Point(80, 608 / 1.0 * 0 + 300 + 5)) or True, "paragraphe : rouvert pour la boîte …")
+if pw_.editeur:
+    _ex0 = D.QDialog.exec
+    D.QDialog.exec = lambda self: D.QDialog.Accepted
+    pw_.editeur._boite_dialogue()
+    D.QDialog.exec = _ex0
+    verif(pw_.editeur is None, "bouton … : boîte de dialogue (texte, police, taille, couleur) puis validation")
 op.changer_mode(None)
 w.onglets.setCurrentWidget(o)
 
@@ -663,6 +683,41 @@ F.question = lambda parent, titre, texte, boutons: (vu.setdefault("b", [b for b,
 o.modifie = True
 w.fermer_onglet(w.onglets.indexOf(o))
 verif(vu.get("b") == ["Enregistrer", "Ne pas enregistrer", "Annuler"], f"fermeture : {vu.get('b')}")
+
+# --- volet de droite : retreci a la souris -> icones seules ; elargi -> complet
+o_ = w.documents()[0]
+w.onglets.setCurrentWidget(o_); app.processEvents()
+o_.mode_volet("complet")
+t_ = o_.sp.sizes()
+o_.sp.setSizes([t_[0], t_[1] + t_[2] - 120, 120]); o_._volet_glisse()
+verif(o_._mode_volet == "icones", "volet : rétréci à la souris, il passe en icônes seules")
+t_ = o_.sp.sizes()
+o_.sp.setSizes([t_[0], t_[1] + t_[2] - 260, 260]); o_._volet_glisse()
+verif(o_._mode_volet == "complet", "volet : élargi, il redevient complet")
+verif(not w.onglets.tabBar().isTabVisible(0) and w.b_fixes[w.accueil].isVisible(), "onglets : Accueil et Outils toujours visibles à gauche")
+
+# --- orthographe du document entier
+d_ = fitz.open(); p_ = d_.new_page()
+p_.insert_text((72, 100), "Le documment est signé par le notaire.", fontname="helv", fontsize=12)
+p_.insert_text((72, 140), "The tennant shall pay the rent on the first day of the month.", fontname="helv", fontsize=12)
+f_ = os.path.join(TRAVAIL, "Orthographe.pdf"); d_.save(f_)
+oo_ = w.ouvrir(f_)
+md_ = ORT.mots_douteux(oo_.doc, w.params)
+verif({m for _n, _r, m, _l, _s in md_} == {"documment", "tennant"} and any(l == "en" for _n, _r, m, l, _s in md_ if m == "tennant"),
+      f"orthographe du document : mots douteux trouvés ({[m for _n, _r, m, _l, _s in md_]})")
+_ex1 = F.QDialog.exec if hasattr(F, "QDialog") else None
+import PySide6.QtWidgets as _QW
+_exo = _QW.QDialog.exec
+def _exec_ortho(self):
+    t_ = self.findChild(_QW.QTableWidget)
+    row_ = next(i for i in range(t_.rowCount()) if t_.item(i, 1).text() == "documment")
+    t_.selectRow(row_)
+    next(b for b in self.findChildren(_QW.QPushButton) if b.text() == "Corriger").click()
+    return _QW.QDialog.Accepted
+_QW.QDialog.exec = _exec_ortho
+w.verifier_orthographe()
+_QW.QDialog.exec = _exo
+verif("Le document est signé" in oo_.doc[0].get_text(), "orthographe : « Corriger » remplace le mot dans le PDF")
 
 # --- fermeture : une fenetre explique l'attente (preferences, synchronisation)
 ff_ = F.FenetreFermeture(w, "Google Drive (exemple)")

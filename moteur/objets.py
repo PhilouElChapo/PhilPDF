@@ -60,6 +60,33 @@ def tampon_predefini(texte, couleur, auteur="", date=True):
     return d.tobytes(garbage=3, deflate=True)
 
 
+def horodater(pdf_octets, date=True, auteur="", position="dessous", couleur=(0.1, 0.25, 0.6)):
+    """Tampon perso + ligne de date (« le 26/10/2026 par ... ») dessous, dessus ou a droite. date : True = aujourd'hui,
+    une datetime.date, ou None / False = sans date (tampon tel quel)."""
+    if not date:
+        return pdf_octets
+    jour = datetime.date.today() if date is True else date
+    ligne = _("le {date}", date=jour.strftime("%d/%m/%Y")) + (_("  par {auteur}", auteur=auteur) if auteur else "")
+    src = fitz.open("pdf", pdf_octets)
+    r = src[0].rect
+    corps = max(8.0, min(14.0, r.height * 0.16))
+    lt = fitz.Font("helv").text_length(ligne, fontsize=corps)
+    d = fitz.open()
+    if position == "droite":
+        p = d.new_page(width=r.width + lt + 12, height=r.height)
+        p.show_pdf_page(fitz.Rect(0, 0, r.width, r.height), src, 0)
+        p.insert_text((r.width + 6, r.height / 2 + corps / 3), ligne, fontname="helv", fontsize=corps, color=couleur)
+    else:
+        larg = max(r.width, lt + 8)
+        h = r.height + corps * 1.6
+        p = d.new_page(width=larg, height=h)
+        y0 = corps * 1.6 if position == "dessus" else 0
+        p.show_pdf_page(fitz.Rect((larg - r.width) / 2, y0, (larg + r.width) / 2, y0 + r.height), src, 0)
+        yt = corps * 1.1 if position == "dessus" else h - corps * 0.45
+        p.insert_text(((larg - lt) / 2, yt), ligne, fontname="helv", fontsize=corps, color=couleur)
+    return d.tobytes(garbage=3, deflate=True)
+
+
 def pdf_depuis_image(chemin_ou_octets, blanc_transparent=True, zone=None):
     """Image (scan de tampon, signature photographiee) -> PDF d'une page, fond blanc retire."""
     from PIL import Image

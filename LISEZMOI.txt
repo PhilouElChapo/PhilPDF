@@ -49,6 +49,18 @@ Verification manuelle : Aide > Rechercher les mises a jour.
 3. CE QUE FAIT LA VERSION 0.3
 -----------------------------
 
+  Nouveau en 0.7.2 : une seule fenetre PhilPDF (un 2e lancement passe son
+    fichier a la fenetre ouverte) ; Accueil et Outils toujours visibles ;
+    volet de droite en icones des qu'on le retrecit, textes non coupes ;
+    zone de texte : les listes et montants gardent leurs retours a la
+    ligne, barre police / taille / couleur lisible, bouton … pour la boite
+    de dialogue ; tampons : les votres d'abord, groupes repliables,
+    categories, date automatique ou demandee (et sa position), envoi
+    immediat au Drive ; IA : si Gemini est surcharge, autre modele Gemini
+    puis Claude ; Edition > Verifier l'orthographe (F7) : mots douteux du
+    document, correction dans le PDF ; oeil sur tous les mots de passe ;
+    indice pour la phrase secrete.
+
   Nouveau en 0.7.1 : resume IA : chaque date reperee (rendez-vous avec
     l'heure si le document la donne, echeance) se valide ligne par ligne
     pour l'Accueil (rien de coche d'office) ; bouton « Agenda » qui ouvre

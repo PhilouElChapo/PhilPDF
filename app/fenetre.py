@@ -1,9 +1,9 @@
 """Fenetre principale de PhilPDF : menus, onglets, aiguillage des outils."""
 import os, sys
 import pymupdf as fitz
-from PySide6.QtCore import Qt, QThread, Signal, QSize
+from PySide6.QtCore import Qt, QThread, Signal, QSize, QTimer
 from PySide6.QtGui import QAction, QKeySequence, QImage, QPainter
-from PySide6.QtWidgets import (QMainWindow, QTabWidget, QFileDialog, QMessageBox, QDialog, QFormLayout,
+from PySide6.QtWidgets import (QToolButton, QMainWindow, QTabWidget, QFileDialog, QMessageBox, QDialog, QFormLayout,
                                QLineEdit, QCheckBox, QComboBox, QDialogButtonBox, QListWidget, QVBoxLayout,
                                QHBoxLayout, QPushButton, QLabel, QProgressDialog, QApplication, QInputDialog,
                                QListWidgetItem, QWidget, QFrame, QGroupBox)
@@ -17,7 +17,7 @@ from .bibliotheque import Bibliotheque, detecter_clouds
 from . import distant, miroir, reglages, coffre
 from .dialogues_distant import DialogueParcourir, PanneauComptes, ouvrir_emplacement, erreur as erreur_distant
 from .session import session_de, date_fr, nb_fichiers, dossiers_connus, DELAI_SILENCIEUX
-from .dialogues import (boutons_fr, DialogueFiligrane, DialogueEntete, DialogueNumeriser, DialogueExporter,
+from .dialogues import (boutons_fr, oeil, demander_secret, DialogueFiligrane, DialogueEntete, DialogueNumeriser, DialogueExporter,
                         DialogueBibliotheque, DialogueSynchro, DialogueFond)
 from .langue import _
 
@@ -259,7 +259,10 @@ class Fenetre(QMainWindow):
         self.onglets.addTab(self.outils, _('Outils'))
         for i in (0, 1):
             self.onglets.tabBar().setTabButton(i, self.onglets.tabBar().ButtonPosition.RightSide, None)
+        self._onglets_fixes()
         self.setCentralWidget(self.onglets)
+        from . import bibliotheque as _bib
+        _bib.RAPPEL_ENVOI[:] = [lambda: QTimer.singleShot(800, self.synchro_miroir)]   # tampons envoyes tout de suite
         self._menus()
         self.statusBar().showMessage(_('PhilPDF {VERSION}', VERSION=VERSION) + (_(' · version portable') if est_portable() else ""))
         self.taches = []
@@ -361,6 +364,7 @@ class Fenetre(QMainWindow):
         act(m, _('Modifier le texte et les images'), lambda: self.lancer_outil("modifier"), None, "modifier")
         act(m, _('Rechercher et remplacer...'), lambda: self.lancer_outil("remplacer"), "Ctrl+F", "rechercher")
         m.addSeparator()
+        act(m, _("Vérifier l'orthographe..."), self.verifier_orthographe, "F7", "modifier")
         act(m, _('Préférences...'), self.preferences, "Ctrl+K", "parametres")
         act(m, _('Emplacement de synchronisation...'), lambda: self.bienvenue(seulement_synchro=True), None, "synchro")
 
@@ -396,6 +400,14 @@ class Fenetre(QMainWindow):
         act(m, _('Rechercher les mises à jour...'), lambda: self.verifier_maj(silencieux=False), None, "mise_a_jour")
         act(m, _('Journal des échanges (Drives, NAS, IA)...'), self.journal_echanges, None, "lot")
         act(m, _('A propos de PhilPDF'), self.a_propos, None, "aide")
+
+    def verifier_orthographe(self):
+        o = self.doc_courant()
+        if not o:
+            QMessageBox.information(self, _("Orthographe"), _("Ouvrez d'abord un fichier PDF."))
+            return
+        from .orthographe import verifier_document
+        verifier_document(self, o)
 
     def personnaliser_barre(self):
         """Choisir et ordonner les boutons de la barre d'outils des documents (independante du volet de droite)."""
@@ -575,8 +587,39 @@ class Fenetre(QMainWindow):
         if o is self.doc_courant():
             self.setWindowTitle(_('{nom}{x} – PhilPDF Editeur PDF', nom=o.nom, x=' *' if o.modifie else ''))
 
+    def _onglets_fixes(self):
+        """Accueil et Outils toujours visibles a gauche, meme quand beaucoup de fichiers sont ouverts
+        (les onglets des fichiers defilent avec les fleches, pas ces deux-la)."""
+        coin = QWidget()
+        h = QHBoxLayout(coin)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(0)
+        self.b_fixes = {}
+        style = ("QToolButton{padding:10px 18px;font-size:14px;background:#ececec;border:none;color:#1f1f1f}"
+                 "QToolButton:checked{background:#fff;border-top:3px solid #c9252d;font-weight:600}"
+                 "QToolButton:hover:!checked{background:#e2e2e2}")
+        for w, texte in ((self.accueil, _('Accueil')), (self.outils, _('Outils'))):
+            b = QToolButton()
+            b.setText(texte)
+            b.setCheckable(True)
+            b.setAutoRaise(True)
+            b.setStyleSheet(style)
+            b.clicked.connect(lambda _c=False, w=w: self.onglets.setCurrentWidget(w))
+            h.addWidget(b)
+            self.b_fixes[w] = b
+        sep = QFrame()
+        sep.setFrameShape(QFrame.VLine)
+        sep.setStyleSheet("color:#d0d0d0")
+        h.addWidget(sep)
+        self.onglets.setCornerWidget(coin, Qt.TopLeftCorner)
+        for i in (0, 1):
+            self.onglets.tabBar().setTabVisible(i, False)
+        self.b_fixes[self.accueil].setChecked(True)
+
     def _onglet_change(self, i):
         w = self.onglets.widget(i)
+        for page, b in getattr(self, "b_fixes", {}).items():
+            b.setChecked(page is w)
         if isinstance(w, OngletDocument):
             self.dernier_doc = w
         o = w if isinstance(w, OngletDocument) else None
@@ -652,7 +695,7 @@ class Fenetre(QMainWindow):
             QMessageBox.warning(self, "PhilPDF", _("Impossible d'ouvrir ce fichier :\n{e}", e=e))
             return None
         if o.doc.needs_pass:
-            mdp, ok = QInputDialog.getText(self, _('Mot de passe'), _('Ce PDF est protégé. Mot de passe :'), QLineEdit.Password)
+            mdp, ok = demander_secret(self, _('Mot de passe'), _('Ce PDF est protégé. Mot de passe :'))
             if not ok or not o.doc.authenticate(mdp):
                 return None
             o.construire_pages()
@@ -736,6 +779,9 @@ class Fenetre(QMainWindow):
             t.start()
             fen.attendre(t, 8000, _("Dernière synchronisation avec {lieu} (8 s au plus)...", lieu=fen.lieu))
         fen.close()
+        srv = getattr(self, "serveur_instance", None)
+        if srv is not None:                            # le PhilPDF relance (redemarrage) devient l'instance principale
+            srv.close()
         e.accept()
         if getattr(self, "_redemarrage", None):
             from PySide6.QtCore import QProcess
@@ -1263,9 +1309,9 @@ class Fenetre(QMainWindow):
         d.setWindowTitle(_('Protéger par mot de passe'))
         f = QFormLayout(d)
         ouv = QLineEdit()
-        ouv.setEchoMode(QLineEdit.Password)
+        oeil(ouv)
         prop = QLineEdit()
-        prop.setEchoMode(QLineEdit.Password)
+        oeil(prop)
         imp = QCheckBox(_("Interdire l'impression"))
         cop = QCheckBox(_('Interdire la copie du texte'))
         f.addRow(_("Mot de passe d'ouverture (facultatif)"), ouv)
@@ -1552,15 +1598,12 @@ class Fenetre(QMainWindow):
         moteur.addItems(["Claude", "Gemini", _("Claude, puis Gemini s'il ne répond pas")])
         moteur.setCurrentIndex({"claude": 0, "gemini": 1, "deux": 2}.get(self.params["ia_moteur"], 0))
         kc = QLineEdit(self.params["clef_claude"])
-        kc.setEchoMode(QLineEdit.Password)
+        oeil(kc)
         kg = QLineEdit(self.params["clef_gemini"])
-        kg.setEchoMode(QLineEdit.Password)
+        oeil(kg)
         f.addRow(_('Moteur IA'), moteur)
         f.addRow(_('Clef API Claude'), kc)
         f.addRow(_('Clef API Gemini'), kg)
-        for k in (kc, kg):
-            oe = k.addAction(icone("oeil", "#555"), QLineEdit.TrailingPosition)
-            oe.triggered.connect(lambda _c=False, k=k: k.setEchoMode(QLineEdit.Normal if k.echoMode() == QLineEdit.Password else QLineEdit.Password))
         bt = QPushButton(_("Tester les clefs"))
 
         def tester_ia():
@@ -1578,8 +1621,8 @@ class Fenetre(QMainWindow):
                             lignes.append(_("{nom} : pas de clef.", nom=nom))
                             t.noter(lignes[-1])
                             continue
-                        ia.DELAI = 60
-                        t.avancer(_("Test de {nom} (60 s au plus)...", nom=nom), k, len(moteurs_))
+                        ia.DELAI = 30
+                        t.avancer(_("Test de {nom} (30 s au plus par modèle)...", nom=nom), k, len(moteurs_))
                         import time as _t
                         debut = _t.time()
                         p = {"ia_moteur": m, "clef_" + m: clef}
@@ -1660,9 +1703,9 @@ class Fenetre(QMainWindow):
         existe = bool(reglages.chemin_secrets(self.params) and os.path.exists(reglages.chemin_secrets(self.params)))
         while True:
             if existe:
-                ph, ok = QInputDialog.getText(parent, _("Phrase secrète"), _(
+                ph, ok = demander_secret(parent, _("Phrase secrète"), _(
                     "Un autre de vos postes synchronise déjà ses mots de passe.\nEntrez la même phrase secrète :"),
-                    QLineEdit.Password)
+                    reglages.lire_indice(self.params))
                 if not ok:
                     return False
                 try:
@@ -1685,9 +1728,17 @@ class Fenetre(QMainWindow):
             fl.addRow(lb)
             p1, p2 = QLineEdit(), QLineEdit()
             for p in (p1, p2):
-                p.setEchoMode(QLineEdit.Password)
+                oeil(p)
             fl.addRow(_("Phrase secrète"), p1)
             fl.addRow(_("Confirmation"), p2)
+            ind = QLineEdit()
+            ind.setPlaceholderText(_("ex. « la phrase du carnet bleu », « titre de chanson + année » (jamais la phrase elle-même)"))
+            fl.addRow(_("Indice (facultatif)"), ind)
+            ni = QLabel(_("L'indice est enregistré en clair à côté du fichier chiffré : il vous aide à vous souvenir, "
+                          "il ne doit pas permettre de deviner la phrase."))
+            ni.setWordWrap(True)
+            ni.setStyleSheet("color:#666;font-size:11px")
+            fl.addRow(ni)
             bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
             bb.accepted.connect(d.accept)
             bb.rejected.connect(d.reject)
@@ -1697,9 +1748,13 @@ class Fenetre(QMainWindow):
             if len(p1.text()) < 8 or p1.text() != p2.text():
                 QMessageBox.warning(parent, _("Phrase secrète"), _("Phrase trop courte (8 caractères au moins) ou différente de sa confirmation."))
                 continue
+            if ind.text().strip() and p1.text().lower() in ind.text().lower():
+                QMessageBox.warning(parent, _("Phrase secrète"), _("L'indice ne doit pas contenir la phrase elle-même."))
+                continue
             coffre.enregistrer(reglages.PHRASE, p1.text())
             self.params["synchro_secrets"] = True
             self.params.enregistrer()
+            reglages.ecrire_indice(self.params, ind.text().strip())
             self._ecrire_secrets()
             return True
 
@@ -1829,7 +1884,7 @@ class Fenetre(QMainWindow):
         f.addRow(sec)
         p1, p2 = QLineEdit(), QLineEdit()
         for p in (p1, p2):
-            p.setEchoMode(QLineEdit.Password)
+            oeil(p)
             p.setEnabled(False)
         sec.toggled.connect(lambda on: (p1.setEnabled(on), p2.setEnabled(on)))
         f.addRow(_("Phrase secrète"), p1)
@@ -1870,8 +1925,7 @@ class Fenetre(QMainWindow):
                     donnees = reglages.importer(chemin, phrase)
                     break
                 except reglages.PhraseRequise:
-                    phrase, ok = QInputDialog.getText(self, _("Importer des préférences"),
-                                                      _("Ce fichier est chiffré. Phrase secrète :"), QLineEdit.Password)
+                    phrase, ok = demander_secret(self, _("Importer des préférences"), _("Ce fichier est chiffré. Phrase secrète :"))
                     if not ok:
                         return
                 except (OSError, ValueError, KeyError):

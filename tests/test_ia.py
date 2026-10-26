@@ -63,7 +63,9 @@ class S(BaseHTTPRequestHandler):
             return self._json({"content": [{"type": "text", "text": "Réponse à : " + texte[:20]}]})
         if u.path.startswith("/gemini/models/"):
             modele = u.path.split("/")[-1].split(":")[0]
-            if modele != "gemini-9.5-flash":
+            if modele in ETAT.get("surcharges", ()):
+                return self._json({"error": {"message": "This model is currently experiencing high demand."}}, 503)
+            if modele != "gemini-9.5-flash" and modele not in ETAT.get("acceptes", ()):
                 return self._json({"error": {"message": "not found"}}, 404)
             ETAT["appels"].append(("gemini", modele, corps["system_instruction"]["parts"][0]["text"]))
             return self._json({"candidates": [{"content": {"parts": [{"text": '{"ok": true}'}]}}]})
@@ -87,6 +89,18 @@ r = ia.demander({"ia_moteur": "gemini", "clef_gemini": "G"}, "Consigne", "x", js
 verifie(r == {"ok": True} and ETAT["appels"][-1][1] == "gemini-9.5-flash", "Gemini : JSON, modèle le plus récent choisi")
 r = ia.demander({"ia_moteur": "deux", "clef_claude": "FAUX", "clef_gemini": "G"}, "c", "t", json_attendu=True)
 verifie(r == {"ok": True}, "deux moteurs : Gemini prend le relais si Claude échoue")
+ETAT["surcharges"], ETAT["acceptes"] = {"gemini-9.5-flash"}, {"gemini-8.0-flash"}
+ia._modeles_trouves.pop("gemini_secours", None)
+r = ia.demander({"ia_moteur": "gemini", "clef_gemini": "G"}, "Consigne", "x", json_attendu=True)
+verifie(r == {"ok": True} and ETAT["appels"][-1][1] == "gemini-8.0-flash" and ia.dernier["modele"] == "gemini-8.0-flash",
+        "Gemini surchargé (503) : un autre modèle Gemini répond")
+ETAT["surcharges"] = {"gemini-9.5-flash", "gemini-8.0-flash"}
+ia._modeles_trouves["gemini"] = "gemini-9.5-flash"
+r = ia.demander({"ia_moteur": "gemini", "clef_gemini": "G", "clef_claude": "CLEF-C"}, "Consigne", "Bonjour")
+verifie(r.startswith("Réponse à") and ia.dernier["moteur"] == "claude" and ia.dernier["secours"],
+        "tout Gemini surchargé : Claude prend le relais et on le dit")
+ETAT["surcharges"], ETAT["acceptes"] = set(), set()
+ia._modeles_trouves["gemini"] = "gemini-9.5-flash"
 try:
     ia.demander({}, "c", "t"); verifie(False, "sans clef")
 except ia.ErreurIA as e:

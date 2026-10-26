@@ -9,6 +9,7 @@ if sys.stderr is None:
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QFont, QPalette, QColor
+from PySide6.QtCore import Qt
 from app.fenetre import Fenetre
 
 
@@ -103,11 +104,70 @@ def main():
         debloquer()
     except Exception:
         pass
+    fichiers = [os.path.abspath(a) for a in sys.argv[1:] if a.lower().endswith(".pdf") and os.path.exists(a)]
+    if "--nouvelle-instance" not in sys.argv and confier_a_instance_ouverte(fichiers):
+        sys.exit(0)                                   # PhilPDF tourne deja : il ouvre les fichiers lui-meme
     preparer(app)
-    fichiers = [a for a in sys.argv[1:] if a.lower().endswith(".pdf") and os.path.exists(a)]
     w = Fenetre(fichiers)
+    ecouter_autres_lancements(w)
     w.show()
     sys.exit(app.exec())
+
+
+def _nom_instance():
+    """Un PhilPDF par utilisateur et par dossier de donnees (la version portable reste independante)."""
+    import hashlib
+    from app.config import dossier_donnees
+    return "PhilPDF-" + hashlib.sha1(dossier_donnees().encode("utf-8")).hexdigest()[:12]
+
+
+def confier_a_instance_ouverte(fichiers):
+    """Si PhilPDF est deja ouvert, lui passe les fichiers (ou lui demande de se montrer) et renvoie True."""
+    import json
+    from PySide6.QtNetwork import QLocalSocket
+    s = QLocalSocket()
+    s.connectToServer(_nom_instance())
+    if not s.waitForConnected(400):
+        return False
+    s.write((json.dumps({"ouvrir": fichiers}) + "\n").encode("utf-8"))
+    s.flush()
+    s.waitForBytesWritten(1000)
+    ok = s.waitForReadyRead(2000) and s.readAll().data().startswith(b"ok")
+    s.disconnectFromServer()
+    return ok
+
+
+def ecouter_autres_lancements(fenetre):
+    import json
+    from PySide6.QtNetwork import QLocalServer
+    QLocalServer.removeServer(_nom_instance())        # reste d'un PhilPDF arrete brutalement
+    serveur = QLocalServer(fenetre)
+    if not serveur.listen(_nom_instance()):
+        return
+
+    def connexion():
+        c = serveur.nextPendingConnection()
+
+        def lire():
+            if not c.canReadLine():
+                return
+            try:
+                d = json.loads(bytes(c.readLine()).decode("utf-8"))
+            except ValueError:
+                d = {}
+            c.write(b"ok\n")
+            c.flush()
+            for f in d.get("ouvrir") or []:
+                fenetre.ouvrir(f)
+            fenetre.setWindowState((fenetre.windowState() & ~Qt.WindowMinimized) | Qt.WindowActive)
+            fenetre.show()
+            fenetre.raise_()
+            fenetre.activateWindow()
+        c.readyRead.connect(lire)
+        if c.bytesAvailable():
+            lire()
+    serveur.newConnection.connect(connexion)
+    fenetre.serveur_instance = serveur
 
 
 def preparer(app):

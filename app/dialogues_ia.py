@@ -185,6 +185,13 @@ class DialogueResume(QDialog):
         self.setWindowTitle(_("Résumé — {nom}", nom=onglet.nom))
         self.resize(720, 620)
         v = QVBoxLayout(self)
+        d = ia.dernier
+        if d.get("moteur"):
+            noms = {"claude": "Claude", "gemini": "Gemini"}
+            src = QLabel(_("Résumé fait par {ia} (modèle {modele})", ia=noms.get(d["moteur"], d["moteur"]), modele=d.get("modele", "?"))
+                         + (_(" — {autre} était surchargé ou injoignable", autre=noms.get(d.get("premier"), "?")) if d.get("secours") else ""))
+            src.setStyleSheet("color:#666;font-size:11px")
+            v.addWidget(src)
         self.texte = QTextBrowser()
         self.texte.setMarkdown(resultat.get("resume", ""))
         v.addWidget(self.texte, 1)

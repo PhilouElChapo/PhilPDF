@@ -187,3 +187,130 @@ def menu_langue(menu, params, langue_detectee, rappel):
         g.addAction(a)
         a.triggered.connect(lambda _c=False, k=code: rappel(k))
     return sm
+
+
+# ------------------------------------------------------------------ verification d'un document entier
+def mots_douteux(doc, params, pages=None):
+    """[(page, rect, mot, langue, suggestions)] des mots inconnus du document (langue detectee page par page)."""
+    import pymupdf as fitz
+    out = []
+    for n in (pages if pages is not None else range(len(doc))):
+        p = doc[n]
+        texte_page = p.get_text()
+        l = langue_pour(texte_page, params)
+        lignes = {}
+        for x0, y0, x1, y1, w, b, li, _k in p.get_text("words"):
+            lignes.setdefault((b, li), []).append((fitz.Rect(x0, y0, x1, y1), w))
+        for mots in lignes.values():
+            texte = " ".join(w for _r, w in mots)
+            positions, pos = [], 0
+            for r, w in mots:
+                positions.append((pos, pos + len(w), r))
+                pos += len(w) + 1
+            choix = (params or {}).get("orthographe_langue") or "auto"
+            ll = choix if choix != "auto" else detecter(texte, l)     # ligne par ligne : un document peut melanger
+            for a, b, mot in fautes(texte, params, ll):
+                r = next((rr for d, f, rr in positions if d <= a < f), None)
+                if r is not None:
+                    out.append((n, r, mot, ll, suggestions(mot, params, 4, ll)))
+    return out
+
+
+def verifier_document(fenetre, onglet):
+    """Fenetre « Orthographe » : mots douteux du document ; double-clic = aller au mot ; Corriger remplace le mot
+    dans le PDF en gardant sa police ; Ajouter au dictionnaire = mot connu partout (correcteur et OCR, tous vos postes)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, QTableWidgetItem,
+                                   QPushButton, QHeaderView, QComboBox, QApplication, QMessageBox)
+    from PySide6.QtGui import QCursor
+    from .langue import _
+    from .apprentissage import ajouter_mot
+    from moteur.modifier import Editeur
+    params = fenetre.params
+    QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+    try:
+        liste = mots_douteux(onglet.doc, params)
+    finally:
+        QApplication.restoreOverrideCursor()
+    if not liste:
+        QMessageBox.information(fenetre, _("Orthographe"), _("Aucun mot douteux dans ce document."))
+        return
+    d = QDialog(fenetre)
+    d.setWindowTitle(_("Orthographe — {nom}", nom=onglet.nom))
+    d.resize(640, 480)
+    v = QVBoxLayout(d)
+    lb = QLabel(_("{n} mot(s) inconnu(s) du dictionnaire. Double-cliquez pour voir le mot dans la page. "
+                  "« Corriger » remplace le mot dans le PDF en gardant sa police ; un nom propre ou un terme du métier : "
+                  "« Ajouter au dictionnaire ».", n=len(liste)))
+    lb.setWordWrap(True)
+    v.addWidget(lb)
+    t = QTableWidget(len(liste), 4)
+    t.setHorizontalHeaderLabels([_("Page"), _("Mot"), _("Langue"), _("Remplacer par")])
+    t.verticalHeader().hide()
+    t.setSelectionBehavior(QTableWidget.SelectRows)
+    for i, (n, r, mot, l, sugg) in enumerate(liste):
+        for c, val in enumerate((str(n + 1), mot, NOMS.get(l, l))):
+            it = QTableWidgetItem(val)
+            it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+            t.setItem(i, c, it)
+        cb = QComboBox()
+        cb.setEditable(True)
+        cb.addItems(sugg or [mot])
+        t.setCellWidget(i, 3, cb)
+    hh = t.horizontalHeader()
+    hh.setSectionResizeMode(3, QHeaderView.Stretch)
+    v.addWidget(t, 1)
+    faits = set()
+
+    def voir(i, *_a):
+        n, r = liste[i][0], liste[i][1]
+        onglet.resultats = [(n, r)]
+        onglet.resultat_courant = (n, r)
+        onglet.aller_a(n, r)
+        onglet.rafraichir_pages()
+
+    def lignes_choisies():
+        return sorted({x.row() for x in t.selectedIndexes()} - faits)
+
+    def corriger():
+        rows = lignes_choisies()
+        if not rows:
+            return
+        onglet.memoriser(_("Correction d'orthographe"))
+        ed = Editeur(onglet.doc)
+        for i in rows:
+            n, r, mot = liste[i][0], liste[i][1], liste[i][2]
+            nouveau = t.cellWidget(i, 3).currentText().strip()
+            if nouveau and nouveau != mot:
+                try:
+                    ed.remplacer(n, mot, nouveau, zone=r + (-1, -1, 1, 1))
+                except Exception as ex:
+                    ed.journal.append(str(ex))
+                    continue
+                faits.add(i)
+                for c in range(3):
+                    t.item(i, c).setForeground(Qt.darkGreen)
+        onglet.apres_modif(ed.journal or [_("Aucun changement.")])
+
+    def ajouter():
+        for i in lignes_choisies():
+            ajouter_mot(params, liste[i][2])
+            faits.add(i)
+            for c in range(3):
+                t.item(i, c).setForeground(Qt.gray)
+        correcteur(params)
+    t.cellDoubleClicked.connect(voir)
+    h = QHBoxLayout()
+    for txt, f in ((_("Corriger"), corriger), (_("Ajouter au dictionnaire"), ajouter)):
+        b = QPushButton(txt)
+        b.clicked.connect(f)
+        h.addWidget(b)
+    h.addStretch(1)
+    bf = QPushButton(_("Fermer"))
+    bf.clicked.connect(d.accept)
+    h.addWidget(bf)
+    v.addLayout(h)
+    fenetre._dlg_ortho = d
+    d.exec()
+    onglet.resultats, onglet.resultat_courant = [], None
+    onglet.rafraichir_pages()

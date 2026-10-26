@@ -11,6 +11,8 @@ import hashlib, json, os, shutil, string, sys, time, uuid
 from .config import dossier_donnees
 
 GENRES = ("tampons", "signatures", "filigranes")
+PROPRIETES = ("nom", "categorie", "horodatage", "position_date")   # suivent les autres postes (la plus recente gagne)
+RAPPEL_ENVOI = []          # fonction appelee apres une modification : envoi immediat vers un Drive en direct
 
 
 # ------------------------------------------------------------------ Drive
@@ -94,9 +96,19 @@ class Bibliotheque:
         return e
 
     def renommer(self, e, nom):
-        e["nom"] = nom
+        self.modifier(e, nom=nom)
+
+    def modifier(self, e, **champs):
+        """Nom, categorie, horodatage ('non', 'auto', 'demander'), position de la date ('dessous', 'dessus', 'droite')."""
+        for x in self.index:
+            if x["id"] == e["id"]:
+                x.update(champs, maj=time.strftime("%Y-%m-%d %H:%M:%S"))
+                e.update(x)
         self._ecrire()
         self._auto()
+
+    def categories(self, genre="tampons"):
+        return sorted({e.get("categorie", "") for e in self.elements(genre) if e.get("categorie")}, key=str.lower)
 
     def supprimer(self, e):
         try:
@@ -165,6 +177,15 @@ class Bibliotheque:
             except OSError:
                 pass
         self.index = [x for x in self.index if x.get("hash") not in supp]
+        # renommages, categories, horodatage changes ailleurs plus recemment
+        par_hash = {e.get("hash"): e for e in distant}
+        for e in self.index:
+            dd = par_hash.get(e.get("hash"))
+            if dd and dd.get("maj", "") > e.get("maj", ""):
+                for k in PROPRIETES + ("maj",):
+                    if k in dd:
+                        e[k] = dd[k]
+                recus += 1
         # ajouts faits ailleurs
         ici = {e.get("hash") for e in self.index}
         for e in distant:
@@ -194,6 +215,11 @@ class Bibliotheque:
                 self.synchroniser_drive()
             except OSError:
                 pass
+            for f in RAPPEL_ENVOI:          # Drive en direct, NAS, FTP : on envoie tout de suite, sans attendre la fermeture
+                try:
+                    f()
+                except Exception:
+                    pass
 
     # anciens noms
     def sauvegarder_drive(self, silencieux=False):

@@ -20,7 +20,7 @@ from . import coffre
 COMMUNS = ["auteur", "langue", "outils_epingles", "barre_rapide", "volet", "vignettes", "fixer_objets",
            "filigranes_perso", "ia_moteur", "maj_source", "maj_auto", "synchro", "comptes", "defaut_tampons",
            "defaut_signatures", "theme", "synchro_secrets", "barre", "couleurs_annotations",
-           "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "agenda", "messagerie"]
+           "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "agenda", "messagerie", "biblio_replies"]
 POSTE = ["machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
 CLEFS_IA = ["clef_claude", "clef_gemini"]
 FICHIER_DRIVE = "preferences.json"
@@ -160,6 +160,34 @@ def chemin_secrets(params):
     from .bibliotheque import dossier_philpdf_drive
     d = dossier_philpdf_drive(params)
     return os.path.join(d, FICHIER_SECRETS) if d else None
+
+
+FICHIER_INDICE = "indice_phrase.json"
+
+
+def ecrire_indice(params, indice):
+    """Indice (en clair, facultatif) de la phrase secrete, a cote du fichier chiffre : vu sur les autres postes."""
+    p = chemin_secrets(params)
+    if not p:
+        return
+    f = os.path.join(os.path.dirname(p), FICHIER_INDICE)
+    try:
+        if indice:
+            with open(f, "w", encoding="utf-8") as fh:
+                json.dump({"indice": indice, "maj": maintenant(), "par": params.get("machine", "")}, fh, ensure_ascii=False)
+        elif os.path.exists(f):
+            os.remove(f)
+    except OSError:
+        pass
+
+
+def lire_indice(params):
+    p = chemin_secrets(params)
+    try:
+        with open(os.path.join(os.path.dirname(p), FICHIER_INDICE), encoding="utf-8") as fh:
+            return json.load(fh).get("indice", "")
+    except (OSError, ValueError, TypeError):
+        return ""
 
 
 def _secrets_partageables(params):

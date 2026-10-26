@@ -564,8 +564,22 @@ class Editeur:
 
     @staticmethod
     def _texte_paragraphe(lignes):
-        """Texte continu (lignes recollees, cesures retirees) et style de chaque caractere."""
+        """Texte continu (lignes recollees, cesures retirees) et style de chaque caractere.
+        Une ligne qui s'arrete bien avant la marge alors que le premier mot de la suivante y tenait : c'etait un
+        vrai retour a la ligne (liste, montants...), garde tel quel."""
         texte, styles = "", []
+        droite = max((l["x1"] for l in lignes), default=0)
+
+        def premier_mot(l):
+            vis = [c for c, _sp in l["chars"]]
+            while vis and not vis[0]["c"].strip():
+                vis.pop(0)
+            fin = next((k for k, c in enumerate(vis) if not c["c"].strip()), len(vis))
+            return (vis[fin - 1]["bbox"][2] - vis[0]["bbox"][0]) if fin else 0
+        precedente = None
+        largeurs = [l["x1"] - l["x0"] for l in lignes[:-1]]
+        # lignes de longueurs tres inegales (hors derniere) : c'est une liste, pas un texte qui revient a la ligne
+        liste = len(largeurs) >= 2 and (max(largeurs) - min(largeurs)) > 0.3 * max(largeurs)
         for l in lignes:
             chars = [(c, sp) for c, sp in l["chars"]]
             while chars and not chars[-1][0]["c"].strip():
@@ -575,14 +589,19 @@ class Editeur:
             if not chars:
                 continue
             if texte:
+                place = droite - precedente["x1"]
                 if texte.endswith("-") and chars[0][0]["c"].islower() and len(texte) > 1 and texte[-2].isalpha():
                     texte, styles = texte[:-1], styles[:-1]
+                elif liste or place > premier_mot(l) + precedente["taille"] * 0.6:
+                    texte += "\n"
+                    styles.append(styles[-1])
                 else:
                     texte += " "
                     styles.append(styles[-1])
             for c, sp in chars:
                 texte += c["c"]
                 styles.append(sp)
+            precedente = l
         return texte, styles
 
     def modifier_paragraphe(self, num_page, para, nouveau, taille=None, couleur=None, police=None):

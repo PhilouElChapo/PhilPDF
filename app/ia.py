@@ -132,7 +132,9 @@ def _http(url, corps=None, entetes=None, methode=None, delai=None):
         err.code = e.code
         raise err
     except OSError as e:
-        raise ErreurIA(_("Service injoignable : {raison}", raison=e))
+        err = ErreurIA(_("Service injoignable : {raison}", raison=e))
+        err.delai = "timed out" in str(e).lower() or isinstance(e, TimeoutError)
+        raise err
 
 
 def _entetes_claude(clef, autre=False):
@@ -174,6 +176,33 @@ def _modele_gemini(clef, params, forcer=False):
     return _modeles_trouves["gemini"]
 
 
+TRANSITOIRES = (429, 500, 502, 503, 504)
+dernier = {}                                   # qui a vraiment repondu a la derniere demande (moteur, modele)       # surcharge ou panne passagere chez le fournisseur
+
+
+def _modeles_gemini_secours(clef):
+    """Autres modeles Gemini a essayer quand le premier est surcharge : flash recents, puis flash-lite, puis pro."""
+    if "gemini_secours" in _modeles_trouves:
+        return _modeles_trouves["gemini_secours"]
+    try:
+        d = _http(f"{GEMINI_API}/models?pageSize=200&key={clef}", delai=20)
+        ids = [m["name"].split("/")[-1] for m in d.get("models", [])
+               if "generateContent" in m.get("supportedGenerationMethods", [])]
+    except ErreurIA:
+        ids = []
+
+    def version(i):
+        m = re.search(r"gemini-(\d+(?:\.\d+)?)", i)
+        return float(m.group(1)) if m else 0
+    stables = [i for i in ids if i.startswith("gemini") and "exp" not in i and "preview" not in i
+               and not any(x in i for x in ("embedding", "tts", "image", "audio", "live"))]
+    flash = sorted([i for i in stables if "flash" in i and "lite" not in i], key=version, reverse=True)
+    lite = sorted([i for i in stables if "flash-lite" in i], key=version, reverse=True)
+    pro = sorted([i for i in stables if "pro" in i], key=version, reverse=True)
+    _modeles_trouves["gemini_secours"] = (flash + lite + pro)[:5] or ["gemini-flash-latest", "gemini-flash-lite-latest"]
+    return _modeles_trouves["gemini_secours"]
+
+
 def _claude(clef, params, consignes, texte, images, max_jetons):
     contenu = [{"type": "image", "source": {"type": "base64", "media_type": "image/png",
                                              "data": base64.b64encode(i).decode()}} for i in images or []]
@@ -210,19 +239,30 @@ def _gemini(clef, params, consignes, texte, images, max_jetons, json_attendu):
              "generationConfig": {"maxOutputTokens": max_jetons}}
     if json_attendu:
         corps["generationConfig"]["responseMimeType"] = "application/json"
-    for essai in (False, True):
-        modele = _modele_gemini(clef, params, forcer=essai)
+    from .journal import ecrire
+    essais = [_modele_gemini(clef, params)]
+    deja_liste = False
+    while essais:
+        modele = essais.pop(0)
         try:
             d = _http(f"{GEMINI_API}/models/{modele}:generateContent?key={clef}", corps)
             cands = d.get("candidates") or []
             if not cands:
                 raise ErreurIA(_("Gemini n'a pas répondu ({raison}).", raison=(d.get("promptFeedback") or {}).get("blockReason", "?")))
+            _modeles_trouves["gemini"] = modele
             return "".join(p.get("text", "") for p in (cands[0].get("content") or {}).get("parts", []))
         except ErreurIA as e:
-            if getattr(e, "code", 0) == 404 and not essai:
-                continue
-            if getattr(e, "code", 0) in (400, 403) and "API key" in str(e):
+            code = getattr(e, "code", 0)
+            if code in (400, 403) and "API key" in str(e):
                 raise ErreurIA(_("Clef Gemini refusée : vérifiez-la dans Edition › Préférences › IA."))
+            # modele inconnu, surcharge ou delai depasse : on essaie un autre modele Gemini
+            if code == 404 or code in TRANSITOIRES or getattr(e, "delai", False):
+                ecrire("IA gemini", f"modèle {modele} : {e} → essai d'un autre modèle")
+                if not deja_liste:
+                    deja_liste = True
+                    essais += [m for m in _modeles_gemini_secours(clef) if m != modele and m not in essais][:3]
+                if essais:
+                    continue
             raise
 
 
@@ -241,14 +281,16 @@ def demander(params, consignes, texte, images=None, json_attendu=False, max_jeto
         try:
             r = _claude(clef, params, consignes, texte, images, max_jetons) if m == "claude" else \
                 _gemini(clef, params, consignes, texte, images, max_jetons, json_attendu)
+            dernier.update(moteur=m, modele=_modeles_trouves.get(m, "?"), secours=m != ms[0][0], premier=ms[0][0])
             ecrire("IA " + m, f"réponse en {_t.time() - debut:.1f} s, modèle {_modeles_trouves.get(m, '?')}, "
                               f"{len(texte)} car. envoyés{', ' + str(len(images)) + ' image(s)' if images else ''}")
             return lire_json(r) if json_attendu else r.strip()
         except ErreurIA as e:
             ecrire("IA " + m, f"✕ après {_t.time() - debut:.1f} s : {e}")
             derniere = e
-            if params.get("ia_moteur") != "deux":
-                break
+            passager = getattr(e, "code", 0) in TRANSITOIRES or getattr(e, "delai", False)
+            if params.get("ia_moteur") != "deux" and not passager:
+                break                                    # surcharge passagere : on passe a l'autre IA si elle a une clef
     raise derniere
 
 
