@@ -45,6 +45,16 @@ def detecter_clouds():
 
 
 def dossier_philpdf_drive(params):
+    """Dossier PhilPDF du lieu de synchronisation. Drive en direct, NAS, FTP : TOUJOURS la copie locale du compte
+    (celle que PhilPDF envoie et recoit), jamais un ancien chemin reste dans les reglages (version portable ou
+    installee, ancien PC...)."""
+    try:
+        from . import miroir
+        c = miroir.compte_drive(params)
+    except Exception:
+        c = None
+    if c:
+        return os.path.join(miroir.dossier_miroir(c), "PhilPDF")
     racine = params.get("drive") or ""
     if not racine or not os.path.isdir(racine):
         return None

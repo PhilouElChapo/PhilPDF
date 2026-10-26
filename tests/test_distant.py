@@ -159,6 +159,32 @@ def miroir_scenario(nom, compte, mdp):
     with open(os.path.join(lb, "sauvegarde", "tampons", "t1.json"), encoding="utf-8") as f:
         verifie(json.load(f) == {"t": 1}, f"{nom} : poste B les reçoit (dossiers créés sur le serveur)")
     verifie(miroir.synchroniser(pb, emplacement=distant.emplacement(compte, mdp)) == (0, 0), f"{nom} : plus rien à faire ensuite")
+    # conflit : les deux postes modifient la session entre deux synchros -> les deux entrees sont gardees partout
+    import time as _t; _t.sleep(1.1)
+    ecrire(lb, "session.json", {"A": {"maj": "2026-10-24T10:00", "fichiers": ["a.pdf"]}, "B": {"maj": "2026-10-25T10:00", "fichiers": ["b.pdf"]}})
+    miroir.synchroniser(pb, emplacement=distant.emplacement(compte, mdp))
+    _t.sleep(1.1)
+    os.environ["HOME"] = os.environ["APPDATA"] = os.path.join(base, nom.replace(" ", "_"), "A")
+    ecrire(la, "session.json", {"A": {"maj": "2026-10-26T10:00", "fichiers": ["a2.pdf"]}})
+    miroir.synchroniser(pa, emplacement=distant.emplacement(compte, mdp))
+    with open(os.path.join(la, "session.json"), encoding="utf-8") as f:
+        s = json.load(f)
+    verifie(set(s) == {"A", "B"} and s["A"]["fichiers"] == ["a2.pdf"], f"{nom} : conflit fusionné, rien de l'autre poste n'est perdu")
+    verifie(not os.path.exists(os.path.join(la, "session.json.distant")), f"{nom} : aucun fichier temporaire laissé")
+    # conflit avec une copie du Drive illisible : on garde la version du Drive, on ne l'ecrase jamais
+    _t.sleep(1.1)
+    os.environ["HOME"] = os.environ["APPDATA"] = os.path.join(base, nom.replace(" ", "_"), "B")
+    miroir.synchroniser(pb, emplacement=distant.emplacement(compte, mdp))   # B recupere d'abord la fusion de A
+    _t.sleep(1.1)
+    q = os.path.join(lb, "session.json")
+    with open(q, "w", encoding="utf-8") as f: f.write("{abime")
+    miroir.synchroniser(pb, emplacement=distant.emplacement(compte, mdp))
+    _t.sleep(1.1)
+    os.environ["HOME"] = os.environ["APPDATA"] = os.path.join(base, nom.replace(" ", "_"), "A")
+    ecrire(la, "session.json", {"A": {"maj": "2026-10-27T10:00", "fichiers": ["a3.pdf"]}})
+    miroir.synchroniser(pa, emplacement=distant.emplacement(compte, mdp))
+    with open(os.path.join(la, "session.json"), encoding="utf-8") as f:
+        verifie(f.read() == "{abime", f"{nom} : fusion impossible -> version du Drive gardée, pas écrasée")
     os.environ["HOME"] = os.environ["APPDATA"] = base
 
 cr = distant.nouveau_compte("reseau"); cr["adresse"] = os.path.join(base, "partage"); os.makedirs(cr["adresse"])

@@ -7,7 +7,7 @@ et rien n'est ecrit ailleurs sur le PC ni dans le registre.
 import json, os, platform, sys
 
 APP = "PhilPDF"
-VERSION = "0.7.4"
+VERSION = "0.7.5"
 
 
 def dossier_programme():
@@ -97,9 +97,12 @@ class Parametres(dict):
     # ---- session partagee : voir app/session.py
     def chemin_session(self):
         """La session (emplacements des fichiers ouverts, pas les fichiers) vit sur le Drive."""
-        racine = self.get("drive") or ""
-        if racine and os.path.isdir(racine):
-            d = os.path.join(racine, "PhilPDF")
+        try:
+            from .bibliotheque import dossier_philpdf_drive
+            d = dossier_philpdf_drive(self)          # copie locale du compte de synchronisation, jamais un ancien chemin
+        except Exception:
+            d = None
+        if d:
             os.makedirs(d, exist_ok=True)
             return os.path.join(d, "session.json")
         return os.path.join(dossier_donnees(), "session.json")

@@ -341,6 +341,15 @@ class Fenetre(QMainWindow):
             self.onglets.tabBar().setTabButton(i, self.onglets.tabBar().ButtonPosition.RightSide, None)
         self._onglets_fixes()
         self.setCentralWidget(self.onglets)
+        try:                                         # ancien chemin reste dans les reglages : on le remet sur la copie du compte
+            c_ = miroir.compte_drive(self.params)
+            if c_ and self.params.get("drive") != miroir.dossier_miroir(c_):
+                from .journal import ecrire as _ecr
+                _ecr("synchro", f"chemin de synchronisation corrigé : {self.params.get('drive')} → {miroir.dossier_miroir(c_)}")
+                self.params["drive"] = miroir.dossier_miroir(c_)
+                self.params.enregistrer()
+        except Exception:
+            pass
         from . import bibliotheque as _bib
         _bib.RAPPEL_ENVOI[:] = [lambda: QTimer.singleShot(800, self.synchro_miroir)]   # tampons envoyes tout de suite
         self._menus()

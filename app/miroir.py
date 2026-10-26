@@ -18,6 +18,14 @@ RACINE_DISTANTE = "/PhilPDF"
 TEMPORAIRES = (".distant", ".tmp", ".part")
 
 
+def journal(texte):
+    try:
+        from .journal import ecrire
+        ecrire("synchro", texte)
+    except Exception:
+        pass
+
+
 def racine_distante(compte):
     return posixpath.join(compte.get("dossier") or "/", "PhilPDF")
 
@@ -140,24 +148,44 @@ def synchroniser(params, compte=None, emplacement=None):
                     continue                                # supprime ici : on laisse (pas de suppression distante)
                 e.telecharger(dp, lp)
                 recus += 1
-            elif local_modifie and distant_modifie:         # conflit
+            elif local_modifie and distant_modifie:         # conflit : les deux postes ont change ce fichier
                 tmp = lp + ".distant"
-                e.telecharger(dp, tmp)
+                try:
+                    e.telecharger(dp, tmp)
+                except Exception:
+                    if os.path.exists(tmp):
+                        os.remove(tmp)                      # telechargement coupe : on ne touche a rien, on reessaiera
+                    raise
+                try:
+                    attendu = int(d[0] or 0)
+                except (TypeError, ValueError):
+                    attendu = 0
+                if attendu and os.path.getsize(tmp) == 0:      # copie du Drive recue vide : on ne decide rien
+                    os.remove(tmp)
+                    journal(f"conflit sur {rel} : copie du Drive reçue vide ({attendu} octets attendus), on réessaiera")
+                    if avant:
+                        nouvel_etat[rel] = avant
+                    continue
                 if nom.endswith(".json"):
                     try:
                         with open(lp, encoding="utf-8") as f:
                             a = json.load(f)
                         with open(tmp, encoding="utf-8") as f:
                             b = json.load(f)
+                    except (OSError, ValueError):
+                        # fusion impossible : on garde la version du Drive (celle de l'autre poste), jamais l'inverse
+                        os.replace(tmp, lp)
+                        journal(f"conflit sur {rel} : fusion impossible, version du Drive gardée")
+                        recus += 1
+                    else:
                         with open(lp, "w", encoding="utf-8") as f:
                             json.dump(_fusion(a, b), f, ensure_ascii=False, indent=1)
-                    except (OSError, ValueError):
-                        pass
-                    os.remove(tmp)
-                    e.envoyer(lp, dp)
-                    envoyes += 1
-                    envoye = True
-                    recus += 1
+                        os.remove(tmp)
+                        e.envoyer(lp, dp)
+                        journal(f"conflit sur {rel} : les deux versions fusionnées")
+                        envoyes += 1
+                        envoye = True
+                        recus += 1
                 else:
                     os.replace(tmp, lp)
                     recus += 1
@@ -177,4 +205,6 @@ def synchroniser(params, compte=None, emplacement=None):
     parcourir("")
     with open(chemin_etat, "w", encoding="utf-8") as f:
         json.dump(nouvel_etat, f, indent=1)
+    journal(f"synchro {libelle_compte(compte)} : dossier local {local_racine} ↔ {RACINE_DISTANTE} ; "
+            f"{recus} reçu(s), {envoyes} envoyé(s), {len(nouvel_etat)} fichier(s) suivis")
     return recus, envoyes
