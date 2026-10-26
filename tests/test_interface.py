@@ -288,7 +288,26 @@ import datetime as _dt
 dans_20 = (_dt.date.today() + _dt.timedelta(days=20)).isoformat()
 reponses.append({"resume": "Facture **Dupontel**.\n\n## Points clefs\n- montant", "echeances": [{"date": dans_20, "libelle": "payer la facture"}]})
 vus_dlg = []
-DIA.DialogueResume.exec = lambda self: (vus_dlg.append(self), capture(self, "30_resume_ia.png"), self.done(QDialog.Accepted))
+import app.agenda as AG
+ouverts_ = []
+AG.ouvrir = lambda cible: ouverts_.append(cible) or True
+def _exec_resume(self):
+    vus_dlg.append(self)
+    capture(self, "30_resume_ia.png")
+    verif(self.table.item(0, 0).checkState() == D.Qt.Unchecked, "IA : rien n'est retenu sans accord (case décochée)")
+    self.cb_agenda.setCurrentIndex(self.cb_agenda.findData("google"))
+    self.table.cellWidget(0, 4).click()
+    verif(ouverts_ and ouverts_[-1].startswith("https://calendar.google.com/") and "payer+la+facture" in ouverts_[-1],
+          "IA : rendez-vous pré-rempli dans Google Agenda")
+    self.cb_agenda.setCurrentIndex(self.cb_agenda.findData("ics"))
+    self.table.cellWidget(0, 4).click()
+    verif(ouverts_[-1].endswith(".ics") and "SUMMARY:payer la facture" in open(ouverts_[-1], encoding="utf-8").read(),
+          "IA : fichier .ics pour un autre agenda")
+    self.cb_mail.setCurrentIndex(self.cb_mail.findData("mailto")); self._message()
+    verif(ouverts_[-1].startswith("mailto:") and "Dupontel" in ouverts_[-1], "IA : résumé envoyé vers la messagerie (à valider)")
+    self.table.item(0, 0).setCheckState(D.Qt.Checked)
+    self.done(QDialog.Accepted)
+DIA.DialogueResume.exec = _exec_resume
 w.lancer_outil("ia_resume")
 verif(vus_dlg and "Dupontel" in vus_dlg[0].texte.toPlainText(), "IA : résumé affiché")
 verif(consignes_vues and consignes_vues[-1].endswith("insiste sur les montants"), "IA : consigne personnelle ajoutée au résumé")

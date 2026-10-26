@@ -49,6 +49,14 @@ Verification manuelle : Aide > Rechercher les mises a jour.
 3. CE QUE FAIT LA VERSION 0.3
 -----------------------------
 
+  Nouveau en 0.7.1 : resume IA : chaque date reperee (rendez-vous avec
+    l'heure si le document la donne, echeance) se valide ligne par ligne
+    pour l'Accueil (rien de coche d'office) ; bouton « Agenda » qui ouvre
+    Google Agenda, Outlook ou un fichier .ics avec le rendez-vous
+    pre-rempli ; « M'envoyer ce resume » ouvre Gmail, Outlook ou la
+    messagerie par defaut, message pre-rempli : vous enregistrez et
+    envoyez vous-meme ; resume dans la langue de l'interface.
+
   Nouveau en 0.7.0 : PhilPDF en allemand, espagnol et italien (en plus du
     francais et de l'anglais : Edition > Preferences > Langue) ; correcteur
     d'orthographe dans la langue du texte (detectee, ou choisie au clic

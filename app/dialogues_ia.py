@@ -164,9 +164,18 @@ def _date_valide(d):
 CONSIGNES_RESUME = """Tu es l'assistant d'un éditeur PDF. Résume le document en français, de façon claire et utile pour
 quelqu'un de pressé. Réponds en JSON : {"resume": "<texte en Markdown : un paragraphe de résumé, puis une section
 'Points clefs' en liste à puces, puis 'Action attendue' si le document demande quelque chose>",
-"echeances": [{"date": "AAAA-MM-JJ", "libelle": "<ce qui est dû à cette date>"}]}.
-'echeances' ne contient que les dates limites réelles (délai de recours, date de paiement, rendez-vous...),
-calculées si le document donne un délai à partir d'une date. Liste vide s'il n'y en a pas."""
+"echeances": [{"date": "AAAA-MM-JJ", "heure": "HH:MM ou vide", "type": "rendez-vous ou échéance",
+"libelle": "<ce qui est dû ou prévu à cette date, avec le lieu pour un rendez-vous>"}]}.
+'echeances' ne contient que les dates réelles (rendez-vous, convocation, délai de recours, date de paiement...),
+calculées si le document donne un délai à partir d'une date. 'heure' seulement si le document la donne.
+Liste vide s'il n'y en a pas."""
+
+
+def consignes_resume():
+    """Consigne du resume dans la langue de l'interface (le resume est lu par l'utilisateur)."""
+    from .langue import LANGUE, NOMS
+    nom = {"fr": "français", "en": "anglais", "de": "allemand", "es": "espagnol", "it": "italien"}.get(LANGUE, NOMS.get(LANGUE, "français"))
+    return CONSIGNES_RESUME.replace("Résume le document en français", f"Résume le document en {nom}")
 
 
 class DialogueResume(QDialog):
@@ -181,16 +190,58 @@ class DialogueResume(QDialog):
         v.addWidget(self.texte, 1)
         self.echeances = [e for e in resultat.get("echeances") or [] if _date_valide(e.get("date"))]
         self.case = None
+        self.table = None
+        from . import agenda
         if self.echeances:
-            lst = QListWidget()
-            for e in self.echeances:
-                lst.addItem(QListWidgetItem(f"{_date_fr(e['date'])} — {e.get('libelle', '')}"))
-            lst.setMaximumHeight(min(120, 24 * len(self.echeances) + 8))
-            v.addWidget(QLabel(_("<b>Echéances repérées</b>")))
-            v.addWidget(lst)
-            self.case = QCheckBox(_("Me les rappeler (Accueil, sur tous mes postes)"))
-            self.case.setChecked(True)
-            v.addWidget(self.case)
+            from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView
+            lb = QLabel(_("<b>Dates repérées</b> — rien n'est retenu sans votre accord : cochez ce qui doit apparaître "
+                          "sur l'Accueil (sur tous vos postes), corrigez le texte si besoin, et « Agenda » ouvre votre agenda "
+                          "avec le rendez-vous pré-rempli, à enregistrer vous-même."))
+            lb.setWordWrap(True)
+            v.addWidget(lb)
+            t = self.table = QTableWidget(len(self.echeances), 5)
+            t.setHorizontalHeaderLabels([_("Accueil"), _("Date"), _("Heure"), _("Ce qui est prévu"), _("Agenda")])
+            t.verticalHeader().hide()
+            for r, e in enumerate(self.echeances):
+                c = QTableWidgetItem()
+                c.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                c.setCheckState(Qt.Unchecked)
+                t.setItem(r, 0, c)
+                for col, val in ((1, _date_fr(e["date"])), (2, (e.get("heure") or "").strip())):
+                    it = QTableWidgetItem(val)
+                    it.setFlags(Qt.ItemIsEnabled)
+                    t.setItem(r, col, it)
+                t.setItem(r, 3, QTableWidgetItem(e.get("libelle", "")))
+                b = QPushButton(_("Agenda..."))
+                b.setToolTip(_("Ouvre votre agenda avec ce rendez-vous pré-rempli : vous vérifiez et enregistrez."))
+                b.clicked.connect(lambda _c=False, r=r: self._agenda(r))
+                t.setCellWidget(r, 4, b)
+            hh = t.horizontalHeader()
+            for col in (0, 1, 2, 4):
+                hh.setSectionResizeMode(col, QHeaderView.ResizeToContents)
+            hh.setSectionResizeMode(3, QHeaderView.Stretch)
+            t.setMaximumHeight(min(200, 32 * len(self.echeances) + 34))
+            v.addWidget(t)
+        ha = QHBoxLayout()
+        ha.addWidget(QLabel(_("Agenda :")))
+        self.cb_agenda = QComboBox()
+        for k, nom in agenda.AGENDAS:
+            self.cb_agenda.addItem(_("Fichier .ics (autre agenda)") if k == "ics" else nom, k)
+        self.cb_agenda.setCurrentIndex(max(0, self.cb_agenda.findData(params.get("agenda") or "google")))
+        ha.addWidget(self.cb_agenda)
+        ha.addSpacing(12)
+        ha.addWidget(QLabel(_("Messagerie :")))
+        self.cb_mail = QComboBox()
+        for k, nom in agenda.MESSAGERIES:
+            self.cb_mail.addItem(_("Messagerie par défaut") if k == "mailto" else nom, k)
+        self.cb_mail.setCurrentIndex(max(0, self.cb_mail.findData(params.get("messagerie") or "gmail")))
+        ha.addWidget(self.cb_mail)
+        bm = QPushButton(_("M'envoyer ce résumé..."))
+        bm.setToolTip(_("Ouvre un nouveau message pré-rempli (résumé et dates) : vous choisissez le destinataire et l'envoyez vous-même."))
+        bm.clicked.connect(self._message)
+        ha.addWidget(bm)
+        ha.addStretch(1)
+        v.addLayout(ha)
         h = QHBoxLayout()
         b = QPushButton(_("Copier"))
         b.clicked.connect(lambda: QApplication.clipboard().setText(self.texte.toPlainText()))
@@ -199,10 +250,9 @@ class DialogueResume(QDialog):
         b.clicked.connect(self._note)
         h.addWidget(b)
         h.addStretch(1)
-        bb = QDialogButtonBox(QDialogButtonBox.Close)
-        bb.rejected.connect(self.reject)
-        bb.accepted.connect(self.accept)
-        h.addWidget(bb)
+        bf = QPushButton(_("Fermer"))
+        bf.clicked.connect(self.accept)
+        h.addWidget(bf)
         v.addLayout(h)
         self.finished.connect(self._retenir)
 
@@ -214,10 +264,39 @@ class DialogueResume(QDialog):
         a.update()
         self.onglet.apres_modif([_("Note de résumé ajoutée en haut de la page 1.")])
 
+    def _libelle(self, r):
+        return self.table.item(r, 3).text().strip() if self.table else self.echeances[r].get("libelle", "")
+
+    def _memoriser_choix(self):
+        self.params.update(agenda=self.cb_agenda.currentData(), messagerie=self.cb_mail.currentData())
+        self.params.enregistrer()
+
+    def _agenda(self, r):
+        from . import agenda
+        e = self.echeances[r]
+        self._memoriser_choix()
+        details = _("D'après « {nom} » (résumé PhilPDF).", nom=self.onglet.nom)
+        cible = agenda.lien_agenda(self.cb_agenda.currentData(), self._libelle(r), _date_valide(e["date"]),
+                                   (e.get("heure") or "").strip() or None, details)
+        agenda.ouvrir(cible)
+
+    def _message(self):
+        from . import agenda
+        self._memoriser_choix()
+        dates = "".join(f"\n- {_date_fr(e['date'])}{' ' + e['heure'] if e.get('heure') else ''} : {self._libelle(r)}"
+                        for r, e in enumerate(self.echeances))
+        corps = self.texte.toPlainText() + (("\n\n" + _("Dates :") + dates) if dates else "")
+        agenda.ouvrir(agenda.lien_message(self.cb_mail.currentData(), _("Résumé — {nom}", nom=self.onglet.nom), corps[:1800]))
+
     def _retenir(self, *_a):
-        if self.case and self.case.isChecked():
-            for e in self.echeances:
-                apprentissage.ajouter_echeance(self.params, _date_valide(e["date"]), e.get("libelle", ""), self.onglet.chemin or self.onglet.nom)
+        if not self.table:
+            return
+        for r, e in enumerate(self.echeances):
+            if self.table.item(r, 0).checkState() == Qt.Checked:
+                libelle = self._libelle(r)
+                if e.get("heure"):
+                    libelle = f"{e['heure']} — {libelle}"
+                apprentissage.ajouter_echeance(self.params, _date_valide(e["date"]), libelle, self.onglet.chemin or self.onglet.nom)
 
 
 def libelle_dossier(d, params):
@@ -297,12 +376,12 @@ def resumer(fenetre, onglet):
         QMessageBox.information(fenetre, _("Résumer avec l'IA"), _(
             "Ce document ne contient pas de texte (scan ?) : lancez d'abord « Reconnaître le texte »."))
         return
-    perso = demander_consigne(fenetre, params, _("Résumer avec l'IA"), "ia_consignes_resume", CONSIGNES_RESUME)
+    perso = demander_consigne(fenetre, params, _("Résumer avec l'IA"), "ia_consignes_resume", consignes_resume())
     if perso is None:
         return
     if not preparer_envoi(fenetre, params, texte):
         return
-    consignes = ajouter_consigne(CONSIGNES_RESUME + f"\nDate du jour : {datetime.date.today().isoformat()}.", perso)
+    consignes = ajouter_consigne(consignes_resume() + f"\nDate du jour : {datetime.date.today().isoformat()}.", perso)
     try:
         r = executer(fenetre, _("L'IA lit le document..."),
                      lambda: ia.demander(params, consignes, texte, json_attendu=True))
