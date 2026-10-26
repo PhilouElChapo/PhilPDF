@@ -371,7 +371,7 @@ class PageAccueil(QWidget):
                 it.setForeground(Qt.gray)
             self.liste.addItem(it)
         self.bandeau.setText(_('Poste : <b>{machine}</b>. ', machine=self.params['machine']) + (
-                _('Synchronisation : ') + self._lieu_synchro() + " &nbsp;<a href='changer_synchro'>" + _("changer") + "</a>"
+                _('Synchronisation : ') + self._lieu_synchro() + self._etat_synchro() + " &nbsp;<a href='changer_synchro'>" + _("changer") + "</a>"
                 if (self.params.get("drive") or self.params.get("drive_compte")) else
             _('Choisissez un emplacement de synchronisation (bouton à droite) pour retrouver vos fichiers ouverts, préférences et tampons sur vos autres PC.')))
         try:
@@ -402,6 +402,18 @@ class PageAccueil(QWidget):
             return
         marquer_echeance(self.params, cle, retirer=(action == "retirer"))
         self.rafraichir()
+
+    def _etat_synchro(self):
+        """Derniere synchronisation de ce poste : reussie (heure) ou echec (raison), visible sur l'Accueil."""
+        e = self.params.get("synchro_etat") or {}
+        if not e.get("quand"):
+            return ""
+        import html
+        j, _t, h = e["quand"].partition("T")
+        quand = h[:5] if j == __import__("datetime").date.today().isoformat() else f"{j[8:10]}/{j[5:7]} {h[:5]}"
+        if e.get("ok"):
+            return " · <span style='color:#1d7a35'>" + _("✓ synchronisé à {h}", h=quand) + "</span>"
+        return " · <span style='color:#c9252d'>" + _("✕ échec à {h} : {raison}", h=quand, raison=html.escape(e.get("erreur", "")[:90])) + "</span>"
 
     def _lieu_synchro(self):
         cid = self.params.get("drive_compte")
@@ -439,10 +451,14 @@ class PageAccueil(QWidget):
         act("fermer", _("Retirer de la liste"), "retirer")
         m.exec(self.liste.viewport().mapToGlobal(pos))
 
-    def montrer_synchro(self, machine, date, fichiers, resultats):
+    def montrer_synchro(self, machine, date, fichiers, resultats, plus_recente=True):
         from .session import date_fr, nb_fichiers
         n = sum(1 for c, _x in resultats if c)
-        self.carte_titre.setText(_('<b>Session plus récente sur {machine}</b> (le {date}) : {nb}, {n} retrouvé{x} sur ce poste.', machine=machine, date=date_fr(date), nb=nb_fichiers(len(fichiers)), n=n, x='s' if n > 1 else ''))
+        if plus_recente:
+            self.carte_titre.setText(_('<b>Session plus récente sur {machine}</b> (le {date}) : {nb}, {n} retrouvé{x} sur ce poste.', machine=machine, date=date_fr(date), nb=nb_fichiers(len(fichiers)), n=n, x='s' if n > 1 else ''))
+        else:
+            self.carte_titre.setText(_("<b>Ouverts sur {machine}</b> (le {date}) : {nb}, {n} retrouvé(s) sur ce poste (les autres sont grisés).",
+                                       machine=machine, date=date_fr(date), nb=nb_fichiers(len(fichiers)), n=n))
         self.carte_liste.clear()
         for e, (c, cm) in zip(fichiers, resultats):
             it = QListWidgetItem(f"{e['nom']}  —  {c}" if c else

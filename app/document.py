@@ -433,6 +433,13 @@ class EditeurParagraphe(QFrame):
         self.aide.show()
         QTimer.singleShot(6000, lambda: self._fini or self.aide.hide())
         self._barre_format(o, para)
+        # la barre suit la partie visible quand on fait defiler la page ou qu'on redimensionne la fenetre
+        try:
+            for barre in (o.zone.horizontalScrollBar(), o.zone.verticalScrollBar()):
+                barre.valueChanged.connect(lambda *_a: self._fini or self._ajuster())
+            self._suivi_taille = _SurveilleTaille(o.zone.viewport(), lambda: self._fini or self._ajuster())
+        except (AttributeError, RuntimeError):
+            pass
         self.largeur = max(80.0, r.width() + 6)
         self.x, self.y = r.x() - 3, r.y() - 3
         self.zone.document().contentsChanged.connect(self._ajuster)
@@ -495,9 +502,7 @@ class EditeurParagraphe(QFrame):
         self.fmt.setObjectName("fmt")
         self.fmt.setStyleSheet("#fmt{background:#ffffff;border:1px solid #1462c2;border-radius:6px}"
                                "QComboBox,QDoubleSpinBox,QPushButton{font-size:11px}")
-        h = QHBoxLayout(self.fmt)
-        h.setContentsMargins(5, 3, 5, 3)
-        h.setSpacing(4)
+        h = FluxLayout(self.fmt, marge=5, espace=4)       # passe sur deux lignes si la fenetre est etroite
         self.cb_police = combo_polices(self.fmt, automatique=True, doc=o.doc)
         self.cb_police.portee.setSizeAdjustPolicy(QComboBox.AdjustToContents)
         self.cb_police.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
@@ -532,8 +537,9 @@ class EditeurParagraphe(QFrame):
         self.b_coul.setToolTip(_("Couleur du texte"))
         self.b_coul.clicked.connect(self._choisir_couleur)
         h.addWidget(self.b_coul)
-        b_dlg = QPushButton("…")
-        b_dlg.setFixedWidth(30)
+        b_dlg = QPushButton("...")
+        b_dlg.setStyleSheet("QPushButton{padding:2px 6px;font-weight:700}")
+        b_dlg.setFixedWidth(36)
         b_dlg.setToolTip(_("Ouvrir la boîte de dialogue (texte, police, taille, couleur)"))
         b_dlg.clicked.connect(self._boite_dialogue)
         h.addWidget(b_dlg)
@@ -544,7 +550,7 @@ class EditeurParagraphe(QFrame):
         """La boite d'avant : texte sur plusieurs lignes, police, taille et couleur, puis valider."""
         from PySide6.QtWidgets import QPlainTextEdit, QDoubleSpinBox, QColorDialog
         from .polices import combo as combo_polices
-        d = QDialog(self)
+        d = QDialog(self.window())
         d.setWindowTitle(_('Texte'))
         d.resize(520, 360)
         f = QFormLayout(d)
@@ -677,10 +683,18 @@ class EditeurParagraphe(QFrame):
         self.aide.adjustSize()
         self.aide.move(int(self.x), int(self.y) + h + 2)
         self.setGeometry(int(self.x), int(self.y), int(self.largeur + 12), h)
-        self.fmt.adjustSize()
-        hb = self.fmt.sizeHint().height()
-        yb = self.y - hb - 3 if self.y - hb - 3 >= 0 else self.y + h + self.aide.height() + 4
-        self.fmt.move(int(max(0, min(self.x, self.pw.width() - self.fmt.width()))), int(yb))
+        # la barre reste dans la partie visible de la fenetre ; trop etroite, elle passe sur deux lignes
+        vis = self.pw.visibleRegion().boundingRect()
+        if vis.width() < 50:
+            vis = self.pw.rect()
+        lay = self.fmt.layout()
+        pleine = sum(lay.itemAt(i).sizeHint().width() + lay.spacing() for i in range(lay.count())) + 14
+        larg = int(min(pleine, max(160, vis.width() - 8)))
+        hb = lay.heightForWidth(larg)
+        self.fmt.resize(larg, hb)
+        yb = self.y - hb - 3 if self.y - hb - 3 >= vis.top() else self.y + h + self.aide.height() + 4
+        x = min(max(self.x, vis.left() + 4), vis.right() - larg - 4)
+        self.fmt.move(int(max(0, x)), int(yb))
         self.fmt.raise_()
 
     def eventFilter(self, obj, ev):
@@ -1806,6 +1820,11 @@ class OngletDocument(QWidget):
             return
         lv = self.sp.sizes()[2]
         mode = getattr(self, "_mode_volet", "complet")
+        if self.pile_volet.currentIndex() != 0:      # volet Format ou Tampons ouvert : il garde son contenu
+            if lv < 200:
+                t = self.sp.sizes()
+                self.sp.setSizes([t[0], t[1] + t[2] - 200, 200])
+            return
         if mode == "complet" and lv < 175:
             self._taille_volet = 300
             self.mode_volet("icones")

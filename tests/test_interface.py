@@ -569,6 +569,12 @@ verif(any(r.y0 < 305 < r.y1 for r, _x in op.paragraphes_page(0)), "paragraphe : 
 verif(pw_.ouvrir_paragraphe(fitz.Point(76, 306)), "paragraphe ajouté : rouvert")
 verif(pw_.editeur.zone.toPlainText() == "Bloc ajouté\nsur deux lignes", f"paragraphe ajouté : retours à la ligne exacts ({pw_.editeur.zone.toPlainText()!r})")
 capture(w, "42_barre_format.png")
+w.resize(760, 700); app.processEvents(); pw_.editeur._ajuster(); app.processEvents()
+vis_ = pw_.visibleRegion().boundingRect()
+verif(pw_.editeur.fmt.geometry().right() <= vis_.right() + 1 and pw_.editeur.fmt.height() > 40,
+      f"barre de format : reste dans la fenêtre étroite, sur deux lignes ({pw_.editeur.fmt.geometry()} / {vis_})")
+capture(w, "46_barre_format_etroite.png")
+w.resize(1440, 900); app.processEvents()
 from app import orthographe as ORT
 pw_.editeur.zone.setPlainText("Un documment signé")
 app.processEvents()
@@ -725,6 +731,19 @@ _QW.QDialog.exec = _exec_ortho
 w.verifier_orthographe()
 _QW.QDialog.exec = _exo
 verif("Le document est signé" in oo_.doc[0].get_text(), "orthographe : « Corriger » remplace le mot dans le PDF")
+
+# --- synchronisation : encart visible, raison de l'echec et « Autoriser » si ce poste n'est pas autorise
+ps_ = F.PanneauSynchro(w, "Google Drive Phil")
+capture(w, "47_synchro_en_cours.png")
+ps_.terminer({"ok": False, "recus": 0, "envoyes": 0, "erreur": "Google Drive pas encore autorisé sur ce poste",
+              "quand": "2026-10-26T21:58"}, {"id": "x", "type": "gdrive", "nom": "Google Drive Phil"})
+textes_ = [b.text() for b in ps_.findChildren(F.QPushButton)]
+verif("Autoriser..." in textes_ and "Réessayer" in textes_, f"synchro : échec expliqué, bouton Autoriser ({textes_})")
+capture(w, "48_synchro_echec.png")
+ps_.deleteLater()
+w.params["synchro_etat"] = {"quand": "2026-10-26T21:58", "ok": False, "erreur": "pas encore autorisé"}
+w.params["drive_compte"] = w.params.get("drive_compte") or ""
+w.accueil.rafraichir()
 
 # --- fermeture : une fenetre explique l'attente (preferences, synchronisation)
 ff_ = F.FenetreFermeture(w, "Google Drive (exemple)")

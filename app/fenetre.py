@@ -3,7 +3,7 @@ import os, sys
 import pymupdf as fitz
 from PySide6.QtCore import Qt, QThread, Signal, QSize, QTimer
 from PySide6.QtGui import QAction, QKeySequence, QImage, QPainter
-from PySide6.QtWidgets import (QToolButton, QMainWindow, QTabWidget, QFileDialog, QMessageBox, QDialog, QFormLayout,
+from PySide6.QtWidgets import (QProgressBar, QToolButton, QMainWindow, QTabWidget, QFileDialog, QMessageBox, QDialog, QFormLayout,
                                QLineEdit, QCheckBox, QComboBox, QDialogButtonBox, QListWidget, QVBoxLayout,
                                QHBoxLayout, QPushButton, QLabel, QProgressDialog, QApplication, QInputDialog,
                                QListWidgetItem, QWidget, QFrame, QGroupBox)
@@ -121,14 +121,94 @@ class TacheSynchro(QThread):
     def run(self):
         try:
             d = self.s.discordance(self.ouverts)
+            plus_recente = bool(d)
+            if not d:                     # pas plus recente : on montre quand meme sur l'Accueil ce qui est ouvert ailleurs
+                autres = self.s.autres_machines()
+                if autres:
+                    m, date, _n = autres[0]
+                    d = (m, date, self.s.lire()[m]["fichiers"])
             if d:
                 m, date, fichiers = d
-                self.resultat.emit((m, date, fichiers, self.s.retrouver_tous(m, fichiers, arret=lambda: self.stop, delai=DELAI_SILENCIEUX)))
+                self.resultat.emit((m, date, fichiers, self.s.retrouver_tous(m, fichiers, arret=lambda: self.stop, delai=DELAI_SILENCIEUX),
+                                    plus_recente))
         except Exception:
             pass
 
 
 EXTENSIONS_OUVRABLES = (".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp")
+
+
+class PanneauSynchro(QFrame):
+    """Encart en bas a droite pendant la synchronisation avec le Drive (ou NAS, FTP) : ce qui se passe, combien de
+    fichiers recus et envoyes, et en cas d'echec la raison, avec « Autoriser » si ce poste n'a pas l'autorisation."""
+
+    def __init__(self, fenetre, lieu):
+        super().__init__(fenetre)
+        self.f, self.lieu = fenetre, lieu
+        self.setObjectName("psync")
+        self.setStyleSheet("#psync{background:#ffffff;border:1px solid #b9c9de;border-left:4px solid #2b6cb0;border-radius:8px}"
+                           "QToolTip{background:#2b2b2b;color:#fff}")
+        v = QVBoxLayout(self)
+        v.setContentsMargins(12, 10, 12, 10)
+        self.titre = QLabel(_("<b>Synchronisation avec {lieu}</b>", lieu=lieu))
+        self.titre.setWordWrap(True)
+        v.addWidget(self.titre)
+        self.texte = QLabel(_("Envoi de vos réglages, tampons et fichiers ouverts, réception de ceux de vos autres postes..."))
+        self.texte.setWordWrap(True)
+        self.texte.setStyleSheet("color:#444")
+        v.addWidget(self.texte)
+        self.barre = QProgressBar()
+        self.barre.setRange(0, 0)
+        self.barre.setMaximumHeight(6)
+        self.barre.setTextVisible(False)
+        v.addWidget(self.barre)
+        self.boutons = QHBoxLayout()
+        v.addLayout(self.boutons)
+        self.setFixedWidth(420)
+        self._placer()
+        self.show()
+        self.raise_()
+
+    def _placer(self):
+        m = self.layout().contentsMargins()
+        lw = self.width() - m.left() - m.right() - 4
+        h = m.top() + m.bottom() + self.titre.heightForWidth(lw) + self.texte.heightForWidth(lw) + 12
+        h += (self.barre.sizeHint().height() + 6) if self.barre.isVisibleTo(self) else 0
+        h += 36 if self.boutons.count() else 0
+        self.setFixedHeight(max(60, h))
+        p = self.f.rect()
+        self.move(p.width() - self.width() - 16, p.height() - self.height() - 36)
+
+    def _bouton(self, texte, f):
+        b = QPushButton(texte)
+        b.clicked.connect(f)
+        self.boutons.addWidget(b)
+
+    def terminer(self, etat, compte):
+        self.barre.hide()
+        if etat["ok"]:
+            self.texte.setText(_("✓ Terminé : {r} élément(s) reçu(s) de vos autres postes, {e} envoyé(s).",
+                                 r=etat["recus"], e=etat["envoyes"]))
+            QTimer.singleShot(5000, self.deleteLater)
+        else:
+            self.setStyleSheet(self.styleSheet().replace("#2b6cb0", "#c9252d"))
+            err = etat["erreur"]
+            non_autorise = any(x in err.lower() for x in ("autoris", "401", "invalid_grant", "jeton", "token"))
+            self.texte.setTextFormat(Qt.RichText)
+            self.texte.setText(_("✕ Echec : {raison}", raison=err) + (
+                "<br>" + _("Ce poste n'a pas (ou plus) l'autorisation d'accéder à {lieu} : cliquez sur « Autoriser ».",
+                           lieu=self.lieu) if non_autorise else ""))
+            if non_autorise:
+                def autoriser():
+                    from .dialogues_distant import autoriser_compte
+                    if autoriser_compte(self.f, compte):
+                        self.deleteLater()
+                        self.f.synchro_miroir(au_demarrage=True)
+                self._bouton(_("Autoriser..."), autoriser)
+            self._bouton(_("Journal"), lambda: self.f.journal_echanges())
+            self._bouton(_("Réessayer"), lambda: (self.deleteLater(), self.f.synchro_miroir(montrer=True)))
+            self._bouton(_("Fermer"), self.deleteLater)
+        self._placer()
 
 
 class FenetreFermeture(QDialog):
@@ -806,15 +886,26 @@ class Fenetre(QMainWindow):
         except Exception:
             return _("votre emplacement de synchronisation")
 
-    def synchro_miroir(self, au_demarrage=False):
-        if not miroir.compte_drive(self.params) or getattr(self, "_t_miroir", None) and self._t_miroir.isRunning():
+    def synchro_miroir(self, au_demarrage=False, montrer=None):
+        c = miroir.compte_drive(self.params)
+        if not c or getattr(self, "_t_miroir", None) and self._t_miroir.isRunning():
             return
         t = self._t_miroir = TacheMiroir(self.params)
         self.taches.append(t)
+        montrer = au_demarrage if montrer is None else montrer
+        panneau = PanneauSynchro(self, miroir.libelle_compte(c)) if montrer else None
 
         def fini(res, err):
-            if err:
-                self.statusBar().showMessage(_("Emplacement de synchronisation injoignable : {raison}", raison=err[:120]), 8000)
+            import datetime
+            etat = {"quand": datetime.datetime.now().isoformat(timespec="minutes"), "ok": not err,
+                    "recus": res[0] if res else 0, "envoyes": res[1] if res else 0, "erreur": (err or "")[:300]}
+            self.params["synchro_etat"] = etat
+            self.params.enregistrer()
+            self.accueil.rafraichir()
+            if panneau is not None:
+                panneau.terminer(etat, c)
+            elif err:
+                PanneauSynchro(self, miroir.libelle_compte(c)).terminer(etat, c)
             if au_demarrage:
                 self._synchro_biblio()
                 self.communs_au_demarrage()
@@ -832,10 +923,12 @@ class Fenetre(QMainWindow):
         t.start()
 
     def _synchro_trouvee(self, r):
-        self.synchro = r
-        m, date, fichiers, res = r
-        self.accueil.montrer_synchro(m, date, fichiers, res)
+        m, date, fichiers, res, plus_recente = r
+        self.synchro = (m, date, fichiers, res)
+        self.accueil.montrer_synchro(m, date, fichiers, res, plus_recente)
         n = sum(1 for c, _x in res if c)
+        if not plus_recente:
+            return
         Notification(self, _('Session plus récente sur {m} ({date}) : {nb}, {n} retrouvé{x} ici.', m=m, date=date_fr(date), nb=nb_fichiers(len(fichiers)), n=n, x='s' if n > 1 else ''), _('Voir'),
                      lambda: self.onglets.setCurrentWidget(self.accueil))
 

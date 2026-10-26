@@ -49,6 +49,16 @@ Verification manuelle : Aide > Rechercher les mises a jour.
 3. CE QUE FAIT LA VERSION 0.3
 -----------------------------
 
+  Nouveau en 0.7.4 : synchronisation visible : un encart montre l'envoi et
+    la reception (et en cas d'echec la raison, avec « Autoriser » si ce
+    poste n'est pas autorise) ; l'Accueil indique la derniere synchro
+    reussie ou l'echec, et montre toujours les fichiers ouverts sur
+    l'autre poste (introuvables grises) ; fichiers temporaires plus
+    envoyes au Drive ; tampons sans « par <nom> » ; calendrier du tampon
+    complet ; volet Tampons / Format ne se transforme plus en icones ;
+    barre de format dans la partie visible, sur deux lignes si besoin ;
+    bulles d'aide et bouton … lisibles.
+
   Nouveau en 0.7.3 : correction : sans fichier ouvert, les onglets Accueil
     et Outils avaient disparu (PhilPDF s'ouvrait sur Outils, sans les
     fichiers recents ni la synchronisation) ; ils sont de retour, et ne

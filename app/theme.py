@@ -176,3 +176,22 @@ QMenu::icon { padding-left: 8px; }
 QMenu::separator { height: 1px; background: %(bord_leger)s; margin: 4px 8px; }
 QStatusBar { background: %(fond)s; color: %(texte2)s; }
 """ % c
+
+
+BULLE = "QToolTip{background:#2b2b2b;color:#ffffff;border:none;padding:6px 8px;border-radius:6px}"
+
+
+def proteger_bulles():
+    """Une feuille de style locale avec une regle QLabel{...} s'appliquait aussi aux bulles d'aide (ce sont des QLabel) :
+    blanc sur blanc. On ajoute a chacune la regle des bulles, qui passe apres et l'emporte."""
+    from PySide6.QtWidgets import QWidget
+    if getattr(QWidget, "_bulles_protegees", False):
+        return
+    origine = QWidget.setStyleSheet
+
+    def avec_bulles(self, css):
+        if css and "QLabel" in css and "QToolTip" not in css:
+            css = css + " " + BULLE
+        origine(self, css)
+    QWidget.setStyleSheet = avec_bulles
+    QWidget._bulles_protegees = True

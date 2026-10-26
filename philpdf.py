@@ -192,7 +192,8 @@ def preparer(app):
     pal.setColor(QPalette.ToolTipText, QColor("#ffffff"))
     app.setPalette(pal)
     app.setFont(QFont("Segoe UI" if sys.platform == "win32" else "Inter", 10))
-    from app.theme import feuille
+    from app.theme import feuille, proteger_bulles
+    proteger_bulles()
     from app.config import dossier_donnees
     app.setStyleSheet(feuille(dossier_donnees()))
 

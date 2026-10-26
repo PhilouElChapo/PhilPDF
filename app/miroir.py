@@ -15,6 +15,9 @@ from . import distant
 RACINE_DISTANTE = "/PhilPDF"
 
 
+TEMPORAIRES = (".distant", ".tmp", ".part")
+
+
 def racine_distante(compte):
     return posixpath.join(compte.get("dossier") or "/", "PhilPDF")
 
@@ -103,6 +106,13 @@ def synchroniser(params, compte=None, emplacement=None):
         os.makedirs(ld, exist_ok=True)
         locaux = {n for n in os.listdir(ld)}
         for nom in sorted(set(distants) | locaux):
+            if nom.endswith(TEMPORAIRES):            # restes d'un transfert interrompu : jamais envoyes ni recus
+                if nom in locaux and nom not in distants:
+                    try:
+                        os.remove(local_de(f"{rel_dossier}/{nom}" if rel_dossier else nom))
+                    except OSError:
+                        pass
+                continue
             rel = f"{rel_dossier}/{nom}" if rel_dossier else nom
             lp = local_de(rel)
             dp = posixpath.join(RACINE_DISTANTE, rel)

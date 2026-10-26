@@ -454,6 +454,8 @@ class DialogueDateTampon(QDialog):
         self.quand = QDateEdit(QDate.currentDate())
         self.quand.setCalendarPopup(True)
         self.quand.setDisplayFormat("dd/MM/yyyy")
+        self.quand.setMinimumWidth(150)
+        self.quand.calendarWidget().setMinimumSize(320, 240)     # le calendrier deroulant n'est plus coupe
         v.addWidget(self.r_jour)
         h = QHBoxLayout()
         h.addWidget(self.r_autre)

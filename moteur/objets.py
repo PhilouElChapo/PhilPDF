@@ -42,7 +42,7 @@ def tampon_predefini(texte, couleur, auteur="", date=True):
     ligne2 = ""
     if date:
         jour = datetime.date.today() if date is True else date
-        ligne2 = _("le {date}", date=jour.strftime("%d/%m/%Y")) + (_("  par {auteur}", auteur=auteur) if auteur else "")
+        ligne2 = _("le {date}", date=jour.strftime("%d/%m/%Y"))          # la date seule (le nom n'est pas demande)
     elif auteur and date is None:
         ligne2 = ""
     haut = 44 + (16 if ligne2 else 0)
@@ -66,7 +66,7 @@ def horodater(pdf_octets, date=True, auteur="", position="dessous", couleur=(0.1
     if not date:
         return pdf_octets
     jour = datetime.date.today() if date is True else date
-    ligne = _("le {date}", date=jour.strftime("%d/%m/%Y")) + (_("  par {auteur}", auteur=auteur) if auteur else "")
+    ligne = _("le {date}", date=jour.strftime("%d/%m/%Y"))
     src = fitz.open("pdf", pdf_octets)
     r = src[0].rect
     corps = max(8.0, min(14.0, r.height * 0.16))
