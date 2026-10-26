@@ -142,7 +142,7 @@ class PanneauSynchro(QFrame):
     """Encart en bas a droite pendant la synchronisation avec le Drive (ou NAS, FTP) : ce qui se passe, combien de
     fichiers recus et envoyes, et en cas d'echec la raison, avec « Autoriser » si ce poste n'a pas l'autorisation."""
 
-    def __init__(self, fenetre, lieu):
+    def __init__(self, fenetre, lieu, compte=None):
         super().__init__(fenetre)
         self.f, self.lieu = fenetre, lieu
         self.setObjectName("psync")
@@ -152,7 +152,18 @@ class PanneauSynchro(QFrame):
         v.setContentsMargins(12, 10, 12, 10)
         self.titre = QLabel(_("<b>Synchronisation avec {lieu}</b>", lieu=lieu))
         self.titre.setWordWrap(True)
-        v.addWidget(self.titre)
+        ht = QHBoxLayout()
+        ht.setSpacing(8)
+        self.ic = QLabel()
+        self.ic.setFixedSize(28, 28)
+        if compte:
+            from . import avatars
+            self.ic.setPixmap(avatars.icone_compte(compte, fenetre.params, 28).pixmap(28, 28))
+        else:
+            self.ic.setPixmap(icone("synchro", "#2b6cb0").pixmap(28, 28))
+        ht.addWidget(self.ic, 0, Qt.AlignTop)
+        ht.addWidget(self.titre, 1)
+        v.addLayout(ht)
         self.texte = QLabel(_("Envoi de vos réglages, tampons et fichiers ouverts, réception de ceux de vos autres postes..."))
         self.texte.setWordWrap(True)
         self.texte.setStyleSheet("color:#444")
@@ -172,7 +183,7 @@ class PanneauSynchro(QFrame):
     def _placer(self):
         m = self.layout().contentsMargins()
         lw = self.width() - m.left() - m.right() - 4
-        h = m.top() + m.bottom() + self.titre.heightForWidth(lw) + self.texte.heightForWidth(lw) + 12
+        h = m.top() + m.bottom() + max(28, self.titre.heightForWidth(lw - 36)) + self.texte.heightForWidth(lw) + 12
         h += (self.barre.sizeHint().height() + 6) if self.barre.isVisibleTo(self) else 0
         h += 36 if self.boutons.count() else 0
         self.setFixedHeight(max(60, h))
@@ -902,7 +913,7 @@ class Fenetre(QMainWindow):
         t = self._t_miroir = TacheMiroir(self.params)
         self.taches.append(t)
         montrer = au_demarrage if montrer is None else montrer
-        panneau = PanneauSynchro(self, miroir.libelle_compte(c)) if montrer else None
+        panneau = PanneauSynchro(self, miroir.libelle_compte(c), c) if montrer else None
 
         def fini(res, err):
             import datetime
@@ -914,7 +925,7 @@ class Fenetre(QMainWindow):
             if panneau is not None:
                 panneau.terminer(etat, c)
             elif err:
-                PanneauSynchro(self, miroir.libelle_compte(c)).terminer(etat, c)
+                PanneauSynchro(self, miroir.libelle_compte(c), c).terminer(etat, c)
             if au_demarrage:
                 self._synchro_biblio()
                 self.communs_au_demarrage()

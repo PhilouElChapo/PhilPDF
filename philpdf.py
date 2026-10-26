@@ -32,6 +32,16 @@ def verifier(sortie):
         lignes.append(f"orthographe: {ex}")
     ok &= bon
     lignes.append(f"orthographe: {'OK' if bon else 'ECHEC'}")
+    try:                                         # icones des comptes (module charge a la demande : present dans l'exe ?)
+        from app import avatars
+        from PySide6.QtWidgets import QApplication
+        _qa = QApplication.instance() or QApplication([])
+        bon = not avatars.icone_compte({"id": "verif", "type": "gdrive"}, {"comptes_icone": "pastille"}).isNull()
+    except Exception as ex:
+        bon = False
+        lignes.append(f"icones des comptes: {ex}")
+    ok &= bon
+    lignes.append(f"icones des comptes: {'OK' if bon else 'ECHEC'}")
     d = fitz.open(); p = d.new_page()
     p.insert_text((72, 100), "Net à payer : 130,00 EUR", fontname="hebo", fontsize=12)
     tmp = tempfile.mkdtemp(); src = os.path.join(tmp, "t.pdf"); d.save(src)

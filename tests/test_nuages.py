@@ -12,6 +12,14 @@ for t in ("ONEDRIVE", "DROPBOX", "BOX"):
     os.environ[f"PHILPDF_{t}_ID"] = "id-" + t.lower()
 os.environ["PHILPDF_BOX_SECRET"] = "secret-box"
 from app import distant, oauth, coffre
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QBuffer, QIODevice
+from PySide6.QtGui import QImage, QColor
+appli = QApplication.instance() or QApplication([])
+_img = QImage(40, 40, QImage.Format_RGB32); _img.fill(QColor("#ff8800"))
+_buf = QBuffer(); _buf.open(QIODevice.WriteOnly); _img.save(_buf, "PNG"); PHOTO = bytes(_buf.data())
+from app import avatars
 
 ok = 0
 def verifie(cond, msg):
@@ -63,8 +71,10 @@ class Serveur(BaseHTTPRequestHandler):
             self.send_header("Location", q["redirect_uri"] + ("&" if "?" in q["redirect_uri"] else "?") +
                              urllib.parse.urlencode({"code": "CODE", "state": q["state"]}))
             self.end_headers(); return
+        if p == "/photo.png": return self._octets(PHOTO)          # adresse publique (Dropbox)
         if not self._auth(): return
         if p == "/graph/me": return self._json({"mail": "phil@outlook.fr"})
+        if p in ("/graph/me/photos/96x96/$value", "/box/2.0/users/me/avatar"): return self._octets(PHOTO)
         m = re.match(r"/graph/me/drive/root(?::(.*?):)?/(children|content)$", p)
         if m:
             c = m.group(1) or "/"
@@ -104,7 +114,8 @@ class Serveur(BaseHTTPRequestHandler):
             at = "AT" + uuid.uuid4().hex[:6]; JETONS["valides"].add(at)
             return self._json({"access_token": at, "refresh_token": rt, "expires_in": 3600})
         if not self._auth(): return
-        if p == "/dbx/2/users/get_current_account": return self._json({"email": "phil@dropbox.fr"})
+        if p == "/dbx/2/users/get_current_account":
+            return self._json({"email": "phil@dropbox.fr", "profile_photo_url": f"http://127.0.0.1:{P}/photo.png"})
         if p == "/dbx/2/files/list_folder":
             c = json.loads(corps)["path"] or "/"
             if c not in DOSSIERS: return self._json({"error_summary": "path/not_found/"}, 409)
@@ -162,6 +173,11 @@ for t, qui in (("onedrive", "phil@outlook.fr"), ("dropbox", "phil@dropbox.fr"), 
     dst = os.path.join(base, "g.pdf"); e.telecharger("/PhilPDF/Factures/a.pdf", dst)
     verifie(open(dst, "rb").read() == b"%PDF version 2", f"{nom} : téléchargement")
     verifie(set(e.modifies("/PhilPDF/Factures")) == {"a.pdf"} and e.modifies("/Absent") == {}, f"{nom} : état pour la synchronisation")
+    verifie(avatars.recuperer_photo(c, e) and os.path.exists(avatars.chemin_photo(c)), f"{nom} : photo du compte récupérée")
+    pm = avatars.icone_compte(c, {"comptes_icone": "photo"}, 48).pixmap(48, 48).toImage()
+    verifie(pm.pixelColor(24, 24).name() == "#ff8800", f"{nom} : la photo est au centre de la roue")
+    pm = avatars.icone_compte(c, {"comptes_icone": "pastille"}, 48).pixmap(48, 48).toImage()
+    verifie(pm.pixelColor(17, 17).name() == avatars.PASTILLES[t][1], f"{nom} : pastille de couleur du service")
     if t == "box":
         JETONS["valides"].clear(); e2 = distant.emplacement(c); e2.lister("/")
         JETONS["valides"].clear(); e3 = distant.emplacement(c); e3.lister("/")

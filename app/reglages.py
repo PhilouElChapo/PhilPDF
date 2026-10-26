@@ -18,7 +18,7 @@ import datetime, json, os
 from . import coffre
 
 COMMUNS = ["auteur", "langue", "outils_epingles", "barre_rapide", "volet", "vignettes", "fixer_objets",
-           "filigranes_perso", "ia_moteur", "maj_source", "maj_auto", "synchro", "comptes", "defaut_tampons",
+           "filigranes_perso", "ia_moteur", "maj_source", "maj_auto", "synchro", "comptes", "comptes_icone", "defaut_tampons",
            "defaut_signatures", "theme", "synchro_secrets", "barre", "couleurs_annotations",
            "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "agenda", "messagerie", "biblio_replies"]
 POSTE = ["synchro_etat", "machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
@@ -274,6 +274,7 @@ def libelle_commun(k):
             "filigranes_perso": _("Filigranes personnels"), "ia_moteur": _("IA utilisée"),
             "maj_source": _("Source des mises à jour"), "maj_auto": _("Mises à jour automatiques"),
             "synchro": _("Synchronisation des fichiers"), "comptes": _("Comptes (NAS, FTP, Drives)"),
+            "comptes_icone": _("Style des icônes des comptes"),
             "defaut_tampons": _("Tampons par défaut"), "defaut_signatures": _("Signatures par défaut"),
             "theme": _("Thème"), "synchro_secrets": _("Synchroniser les mots de passe"),
             "barre": _("Barre d'outils des documents"), "couleurs_annotations": _("Couleurs des annotations"),

@@ -207,4 +207,10 @@ def synchroniser(params, compte=None, emplacement=None):
         json.dump(nouvel_etat, f, indent=1)
     journal(f"synchro {libelle_compte(compte)} : dossier local {local_racine} ↔ {RACINE_DISTANTE} ; "
             f"{recus} reçu(s), {envoyes} envoyé(s), {len(nouvel_etat)} fichier(s) suivis")
+    try:                                               # photo du compte pour son icone (une fois)
+        from . import avatars
+        if avatars.photo_a_demander(compte):
+            avatars.recuperer_photo(compte, e)
+    except Exception:
+        pass
     return recus, envoyes

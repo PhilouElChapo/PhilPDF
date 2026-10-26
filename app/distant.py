@@ -570,6 +570,16 @@ class _DriveOAuth(_Http):
             return contenu
         return json.loads(contenu or b"{}")
 
+    def _image_publique(self, url):
+        """Photo de profil a une adresse publique (sans jeton)."""
+        if not url:
+            return None
+        with self._ouvrir(urllib.request.Request(url)) as f:
+            return f.read()
+
+    def photo(self):
+        return None
+
 
 class GoogleDrive(_DriveOAuth):
     """Google Drive en direct (autorisation drive.file : PhilPDF ne voit que les fichiers qu'il a crees ou
@@ -655,6 +665,10 @@ class GoogleDrive(_DriveOAuth):
         u = self._appel("GET", f"{DRIVE_API}/about?fields=user(emailAddress,displayName)").get("user", {})
         return u.get("emailAddress") or u.get("displayName") or "?"
 
+    def photo(self):
+        u = self._appel("GET", f"{DRIVE_API}/about?fields=user(photoLink)").get("user", {})
+        return self._image_publique(u.get("photoLink"))
+
     def tester(self):
         qui = self.qui()
         n = len(self.lister("/"))
@@ -718,6 +732,9 @@ class OneDrive(_DriveOAuth):
         u = self._appel("GET", f"{GRAPH}/me?$select=userPrincipalName,mail,displayName")
         return u.get("mail") or u.get("userPrincipalName") or u.get("displayName") or "?"
 
+    def photo(self):
+        return self._appel("GET", f"{GRAPH}/me/photos/96x96/$value", brut=True)
+
     def tester(self):
         return _("Connexion réussie au OneDrive de {qui} : {n} élément(s) à la racine.", qui=self.qui(), n=len(self.lister("/")))
 
@@ -770,6 +787,10 @@ class Dropbox(_DriveOAuth):
     def qui(self):
         u = self._appel("POST", f"{DROPBOX_API}/users/get_current_account", None)
         return u.get("email") or (u.get("name") or {}).get("display_name") or "?"
+
+    def photo(self):
+        u = self._appel("POST", f"{DROPBOX_API}/users/get_current_account", None)
+        return self._image_publique(u.get("profile_photo_url"))
 
     def tester(self):
         return _("Connexion réussie au Dropbox de {qui} : {n} élément(s) à la racine.", qui=self.qui(), n=len(self.lister("/")))
@@ -853,6 +874,9 @@ class Box(_DriveOAuth):
     def qui(self):
         u = self._appel("GET", f"{BOX_API}/users/me?fields=login,name")
         return u.get("login") or u.get("name") or "?"
+
+    def photo(self):
+        return self._appel("GET", f"{BOX_API}/users/me/avatar", brut=True)
 
     def tester(self):
         return _("Connexion réussie au Box de {qui} : {n} élément(s) à la racine.", qui=self.qui(), n=len(self.lister("/")))

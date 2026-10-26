@@ -159,4 +159,10 @@ sa = lire(la, "session.json")
 verifie(sa["A"]["fichiers"] == ["a2.pdf"] and sa["B"]["fichiers"] == ["b.pdf"], "modifs des deux côtés : session fusionnée, rien de perdu")
 verifie(miroir.synchroniser(pa) == (0, 0), "plus rien à faire ensuite")
 srv.shutdown()
+from PySide6.QtGui import QGuiApplication
+_app = QGuiApplication.instance() or QGuiApplication([])
+from app import avatars
+verifie(not avatars.recuperer_photo(c, distant.emplacement(c)) and not avatars.photo_a_demander(c),
+        "compte sans photo : pastille, et on ne redemande pas à chaque synchro")
+verifie(not avatars.icone_compte(c, {"comptes_icone": "photo"}).isNull(), "icône du compte dessinée quand même")
 print(f"\n{ok} vérifications Google Drive réussies")

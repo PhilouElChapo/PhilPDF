@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, Q
                                QInputDialog, QApplication, QWidget, QMenu, QToolButton)
 from .langue import _
 from .icones import icone
-from . import distant, coffre
+from . import distant, coffre, avatars
 
 ICONES = {"reseau": "ouvrir", "synology": "archiver", "webdav": "lot", "ftp": "exporter", "gdrive": "synchro",
           "onedrive": "synchro", "dropbox": "synchro", "box": "synchro"}
@@ -189,9 +189,10 @@ EXEMPLES = {"reseau": r"\\NAS\partage", "synology": "http://monnas.exemple.org:5
 
 
 class DialogueCompte(QDialog):
-    def __init__(self, parent, compte):
+    def __init__(self, parent, compte, params=None):
         super().__init__(parent)
         self.c = dict(compte)
+        self.params = params if params is not None else getattr(parent, "params", None)
         self.setWindowTitle(_("Compte"))
         self.setMinimumWidth(560)
         f = self.f = QFormLayout(self)
@@ -206,6 +207,24 @@ class DialogueCompte(QDialog):
         f.addRow(self.aide)
         self.nom = QLineEdit(self.c.get("nom", ""))
         f.addRow(_("Nom affiché"), self.nom)
+        wi = QWidget()
+        hi = QHBoxLayout(wi)
+        hi.setContentsMargins(0, 0, 0, 0)
+        self.apercu_icone = QLabel()
+        self.apercu_icone.setFixedSize(40, 40)
+        hi.addWidget(self.apercu_icone)
+        for txt, bulle, fn in ((_("Image..."), _("Choisir une image (logo, photo...) pour ce compte ; elle suit le compte sur tous vos postes."), self._icone_image),
+                               (_("Couleur..."), _("Couleur de la roue et de la pastille"), self._icone_couleur),
+                               (_("Photo du compte"), _("Redemander la photo du profil au service"), self._icone_photo),
+                               (_("Par défaut"), _("Revenir à l'icône automatique"), self._icone_defaut)):
+            b = QPushButton(txt)
+            b.setToolTip(bulle)
+            b.clicked.connect(fn)
+            hi.addWidget(b)
+            if fn == self._icone_photo:
+                self.b_photo = b
+        hi.addStretch()
+        f.addRow(_("Icône"), wi)
         # adresse (+ bouton Choisir pour un dossier reseau)
         self.adresse = QLineEdit(self.c.get("adresse", ""))
         self.b_choisir = QPushButton(_("Choisir..."))
@@ -293,6 +312,9 @@ class DialogueCompte(QDialog):
         c = self.compte()
         if autoriser_compte(self, c):
             self._maj_auth()
+            avatars.oublier_photo(c)              # autre compte peut-etre : nouvelle photo
+            avatars.recuperer_photo(c, forcer=True)
+            self._maj_icone()
             self.b_test.setEnabled(True)
             try:
                 qui = distant.emplacement(c).qui()
@@ -300,6 +322,48 @@ class DialogueCompte(QDialog):
                     self.nom.setText(f"{distant.TYPES[c['type']]} ({qui})")
             except distant.ErreurDistant:
                 pass
+
+    def _maj_icone(self):
+        self.apercu_icone.setPixmap(avatars.icone_compte(self.c, self.params, 40).pixmap(40, 40))
+        self.b_photo.setVisible(self.c.get("type") in distant.NUAGES)
+
+    def _icone_image(self):
+        from PySide6.QtWidgets import QFileDialog
+        p, _f = QFileDialog.getOpenFileName(self, _("Image du compte"), "", _("Images") + " (*.png *.jpg *.jpeg *.bmp *.gif *.svg *.ico *.webp)")
+        if p:
+            b = avatars.image_en_texte(p)
+            if b:
+                self.c["image"] = b
+                self._maj_icone()
+            else:
+                QMessageBox.warning(self, _("Image du compte"), _("Image illisible."))
+
+    def _icone_couleur(self):
+        from PySide6.QtWidgets import QColorDialog
+        from PySide6.QtGui import QColor
+        col = QColorDialog.getColor(QColor(avatars.couleur(self.c)), self, _("Couleur du compte"))
+        if col.isValid():
+            self.c["couleur"] = col.name()
+            self._maj_icone()
+
+    def _icone_photo(self):
+        if not coffre.lire(self.c["id"] + ".jeton"):
+            QMessageBox.information(self, _("Photo du compte"), _("Autorisez d'abord l'accès au compte."))
+            return
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            ok = avatars.recuperer_photo(self.compte(), forcer=True)
+        finally:
+            QApplication.restoreOverrideCursor()
+        if not ok:
+            QMessageBox.information(self, _("Photo du compte"), _("Ce compte n'a pas de photo de profil (ou le service ne la donne pas) : "
+                                                                  "la pastille est utilisée. Vous pouvez choisir une image."))
+        self._maj_icone()
+
+    def _icone_defaut(self):
+        self.c.pop("image", None)
+        self.c.pop("couleur", None)
+        self._maj_icone()
 
     def _basculer_mdp(self):
         visible = self.mdp.echoMode() == QLineEdit.Password
@@ -323,6 +387,7 @@ class DialogueCompte(QDialog):
             self.f.setRowVisible(w, vis)
         if t in distant.NUAGES:
             self._maj_auth()
+        self._maj_icone()
         self.b_choisir.setVisible(t == "reseau")
         self.port.setToolTip(PORTS.get(t, ""))
         from . import oauth
@@ -393,9 +458,20 @@ class PanneauComptes(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
         self.liste = QListWidget()
-        self.liste.setIconSize(QSize(22, 22))
+        self.liste.setIconSize(QSize(28, 28))
         self.liste.itemDoubleClicked.connect(lambda _it: self.modifier())
         v.addWidget(self.liste, 1)
+        hs = QHBoxLayout()
+        hs.addWidget(QLabel(_("Icônes des comptes :")))
+        self.style_icones = QComboBox()
+        for k, lib in avatars.modes().items():
+            self.style_icones.addItem(lib, k)
+        self.style_icones.setCurrentIndex(max(0, self.style_icones.findData(self.params.get("comptes_icone", "photo"))))
+        self.style_icones.setToolTip(_("Chaque compte peut aussi recevoir sa propre image ou sa couleur : Modifier... > Icône."))
+        self.style_icones.currentIndexChanged.connect(self._style_icones)
+        hs.addWidget(self.style_icones)
+        hs.addStretch()
+        v.addLayout(hs)
         h = QHBoxLayout()
         ajout = QPushButton(_("Ajouter un compte..."))
         m = QMenu(ajout)
@@ -415,14 +491,27 @@ class PanneauComptes(QWidget):
     def comptes(self):
         return list(self.params.get("comptes", []))
 
+    def _style_icones(self, _i=None):
+        self.params["comptes_icone"] = self.style_icones.currentData()
+        self.params.enregistrer()
+        if self.params["comptes_icone"] == "photo":           # photos manquantes : demandees en arriere-plan, sans attendre
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                for c in self.comptes():
+                    if avatars.photo_a_demander(c) and coffre.lire(c["id"] + ".jeton"):
+                        avatars.recuperer_photo(c)
+            finally:
+                QApplication.restoreOverrideCursor()
+        self.remplir()
+
     def remplir(self):
         self.liste.clear()
         for c in self.comptes():
             detail = c.get("adresse") or ""
             if c.get("utilisateur"):
                 detail = f"{c['utilisateur']} @ {detail}"
-            it = QListWidgetItem(icone(ICONES.get(c["type"], "ouvrir"), "#0f6cbd"),
-                                 f"{distant.libelle(c)}   —   {_(distant.TYPES[c['type']])}   {detail}")
+            it = QListWidgetItem(avatars.icone_compte(c, self.params),
+                                 f"{distant.libelle(c)}   —   " + (f"{_(distant.TYPES[c['type']])}   " if distant.libelle(c) != _(distant.TYPES[c['type']]) else "") + detail)
             it.setData(Qt.UserRole, c["id"])
             self.liste.addItem(it)
 
@@ -438,14 +527,14 @@ class PanneauComptes(QWidget):
         self.remplir()
 
     def ajouter(self, t):
-        d = DialogueCompte(self, distant.nouveau_compte(t))
+        d = DialogueCompte(self, distant.nouveau_compte(t), self.params)
         if d.exec() == QDialog.Accepted:
             self._enregistrer(d.compte())
 
     def modifier(self):
         c = self._courant()
         if c:
-            d = DialogueCompte(self, c)
+            d = DialogueCompte(self, c, self.params)
             if d.exec() == QDialog.Accepted:
                 self._enregistrer(d.compte())
 
@@ -478,7 +567,7 @@ class DialogueParcourir(QDialog):
         h.addWidget(QLabel(_("Emplacement :")))
         self.comptes = QComboBox()
         for c in params.get("comptes", []):
-            self.comptes.addItem(icone(ICONES.get(c["type"], "ouvrir"), "#0f6cbd"), distant.libelle(c), c["id"])
+            self.comptes.addItem(avatars.icone_compte(c, params), distant.libelle(c), c["id"])
         h.addWidget(self.comptes, 1)
         self.b_haut = QToolButton()
         self.b_haut.setIcon(icone("precedente", "#444444"))

@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QComboBox, QDialog, QFileDialog, QMessageBox
 
 from .langue import _
 from .icones import icone
-from . import distant
+from . import distant, avatars
 
 AJOUTABLES = ("synology", "webdav", "ftp", "reseau")
 
@@ -49,7 +49,7 @@ def _remplir(cb, params, garde=None):
     from . import oauth
     cb.addItem(_("(aucun : chaque poste reste indépendant)"), "")
     for c in params.get("comptes", []):
-        cb.addItem(icone(ICONES.get(c["type"], "ouvrir"), "#0f6cbd"), libelle_compte(c), "compte:" + c["id"])
+        cb.addItem(avatars.icone_compte(c, params), libelle_compte(c), "compte:" + c["id"])
     deja = {c["type"] for c in params.get("comptes", []) if c["type"] in distant.NUAGES}
     for t in distant.NUAGES:
         if t in deja:
@@ -81,7 +81,7 @@ def _brancher(cb, parent, params):
         params["comptes"] = [x for x in params.get("comptes", []) if x["id"] != c["id"]] + [c]
         params.enregistrer()
         cb.blockSignals(True)
-        cb.insertItem(1, icone(ICONES.get(c["type"], "ouvrir"), "#0f6cbd"), libelle_compte(c), "compte:" + c["id"])
+        cb.insertItem(1, avatars.icone_compte(c, params), libelle_compte(c), "compte:" + c["id"])
         cb.setCurrentIndex(1)
         cb.blockSignals(False)
 
