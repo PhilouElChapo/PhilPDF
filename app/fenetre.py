@@ -611,15 +611,26 @@ class Fenetre(QMainWindow):
         sep.setFrameShape(QFrame.VLine)
         sep.setStyleSheet("color:#d0d0d0")
         h.addWidget(sep)
+        self.coin_fixe = coin
         self.onglets.setCornerWidget(coin, Qt.TopLeftCorner)
+        self._maj_onglets_fixes()
+
+    def _maj_onglets_fixes(self):
+        """Sans fichier ouvert : Accueil et Outils sont des onglets ordinaires. Avec des fichiers : ils deviennent
+        deux boutons fixes a gauche (les onglets des fichiers defilent seuls)."""
+        if not hasattr(self, "coin_fixe"):
+            return
+        docs = self.onglets.count() > 2
         for i in (0, 1):
-            self.onglets.tabBar().setTabVisible(i, False)
-        self.b_fixes[self.accueil].setChecked(True)
+            self.onglets.tabBar().setTabVisible(i, not docs)
+        self.coin_fixe.setVisible(docs)
+        w = self.onglets.currentWidget()
+        for page, b in self.b_fixes.items():
+            b.setChecked(page is w)
 
     def _onglet_change(self, i):
         w = self.onglets.widget(i)
-        for page, b in getattr(self, "b_fixes", {}).items():
-            b.setChecked(page is w)
+        self._maj_onglets_fixes()
         if isinstance(w, OngletDocument):
             self.dernier_doc = w
         o = w if isinstance(w, OngletDocument) else None
@@ -740,6 +751,7 @@ class Fenetre(QMainWindow):
             if r == 2 or (r == 0 and not self.enregistrer(w)):
                 return
         self.onglets.removeTab(i)
+        self._maj_onglets_fixes()
         w.deleteLater()
         self._session(toucher=True)
 

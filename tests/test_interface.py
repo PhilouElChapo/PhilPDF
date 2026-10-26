@@ -80,6 +80,8 @@ w.resize(1440, 900)
 w.show()
 QTest.qWait(900)
 verif(vu_bienvenue == [1], "première installation : assistant de bienvenue montré")
+verif(w.onglets.currentWidget() is w.accueil and w.onglets.tabBar().isTabVisible(0) and w.onglets.tabBar().isTabVisible(1)
+      and not w.coin_fixe.isVisible(), "sans fichier ouvert : onglets Accueil et Outils visibles, Accueil affiché")
 
 # --- assistant : emplacement de synchronisation = un dossier partagé (compte « dossier réseau »)
 from app import distant as _dist, miroir as _mir
@@ -695,6 +697,11 @@ t_ = o_.sp.sizes()
 o_.sp.setSizes([t_[0], t_[1] + t_[2] - 260, 260]); o_._volet_glisse()
 verif(o_._mode_volet == "complet", "volet : élargi, il redevient complet")
 verif(not w.onglets.tabBar().isTabVisible(0) and w.b_fixes[w.accueil].isVisible(), "onglets : Accueil et Outils toujours visibles à gauche")
+for _d in list(w.documents()):
+    _d.modifie = False
+w.fermer_tout(); app.processEvents()
+verif(w.onglets.tabBar().isTabVisible(0) and w.onglets.tabBar().height() > 10 and not w.coin_fixe.isVisible(),
+      "tous les fichiers fermés : Accueil et Outils redeviennent des onglets visibles")
 
 # --- orthographe du document entier
 d_ = fitz.open(); p_ = d_.new_page()
