@@ -1990,6 +1990,8 @@ class OngletDocument(QWidget):
         self.liste_biblio.itemClicked.connect(self._choisir_biblio)
         self.liste_biblio.itemExpanded.connect(lambda it: self._memo_groupe(it, True))
         self.liste_biblio.itemCollapsed.connect(lambda it: self._memo_groupe(it, False))
+        self.liste_biblio.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.liste_biblio.customContextMenuRequested.connect(self._menu_biblio)
         l.addWidget(self.liste_biblio, 1)
         b = BoutonVolet(_('Gérer, importer, dessiner...'), _("Ajouter, renommer, classer vos tampons et signatures"))
         b.clicked.connect(self._gerer_biblio)
@@ -2015,6 +2017,15 @@ class OngletDocument(QWidget):
             (parent.addChild(g) if parent else self.liste_biblio.addTopLevelItem(g))
             g.setExpanded(cle not in replies)
             return g
+        from .dialogues import etoile_jaune
+        perso = self.biblio.elements(genre)
+        favoris = self.biblio.favoris(genre)
+        if favoris:                                  # en tete, ouverts : un clic pour poser, categories repliees ou non
+            g_fav = groupe(None, "favoris", _("Favoris ({n})", n=len(favoris)))
+            g_fav.setIcon(0, QIcon(etoile_jaune(16)))
+            for e in favoris:
+                self._ajout_item_biblio(g_fav, e["nom"], None, e,
+                                        _("Date ajoutée à la pose") if e.get("horodatage", "non") != "non" else None)
         perso = self.biblio.elements(genre)
         titre = _("Mes tampons") if genre == "tampons" else _("Mes signatures")
         g_perso = groupe(None, "perso", f"{titre} ({len(perso)})")
@@ -2024,7 +2035,11 @@ class OngletDocument(QWidget):
             parent = g_perso
             if c:
                 if c not in cats:
+                    nf = sum(1 for x in perso if x.get("categorie", "") == c and x.get("favori"))
                     cats[c] = groupe(g_perso, "cat:" + c, c)
+                    if nf:                           # etoile sur la categorie : elle contient des favoris
+                        cats[c].setIcon(0, QIcon(etoile_jaune(14)))
+                        cats[c].setToolTip(0, _("{n} favori(s) dans cette catégorie, aussi en tête du volet", n=nf))
                 parent = cats[c]
             self._ajout_item_biblio(parent, e["nom"], None, e,
                                     _("Date ajoutée à la pose") if e.get("horodatage", "non") != "non" else None)
@@ -2044,12 +2059,29 @@ class OngletDocument(QWidget):
         pdf = pdf or self.biblio.lire(e)
         pm = QPixmap()
         pm.loadFromData(objets.apercu(pdf, 60), "PNG")
+        if e.get("favori") and e.get("id"):
+            from .dialogues import avec_etoile
+            pm = avec_etoile(pm.scaledToHeight(44, Qt.SmoothTransformation), 16)
         it = QTreeWidgetItem([nom])
         it.setIcon(0, QIcon(pm))
         it.setToolTip(0, nom + (f" — {aide}" if aide else ""))
         it.setData(0, Qt.UserRole, e)
         parent.addChild(it)
         return it
+
+    def _menu_biblio(self, pos):
+        """Clic droit sur un tampon ou une signature du volet : ajouter aux favoris ou les retirer."""
+        it = self.liste_biblio.itemAt(pos)
+        e = it.data(0, Qt.UserRole) if it else None
+        if not e or not e.get("id"):
+            return
+        from PySide6.QtWidgets import QMenu
+        from .dialogues import etoile_jaune
+        m = QMenu(self)
+        a = m.addAction(QIcon(etoile_jaune(16)), _("Retirer des favoris") if e.get("favori") else _("Ajouter aux favoris"))
+        if m.exec(self.liste_biblio.viewport().mapToGlobal(pos)) == a:
+            self.biblio.basculer_favori(e)
+            self.ouvrir_bibliotheque(self.genre_biblio)
 
     def _memo_groupe(self, it, ouvert):
         cle = it.data(0, Qt.UserRole + 1)

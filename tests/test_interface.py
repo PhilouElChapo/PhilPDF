@@ -217,6 +217,20 @@ it_ = next(i for i in o.items_biblio() if i.data(0, D.Qt.UserRole).get("nom") ==
 o._choisir_biblio(it_)
 verif(datetime.date.today().strftime("%d/%m/%Y") in fitz.open("pdf", o.a_poser[0])[0].get_text(), "tampon perso : date du jour ajoutée à la pose")
 o.changer_mode(None)
+# favoris : etoile jaune, groupe en tete toujours a portee de clic, meme categorie repliee
+w.biblio.basculer_favori(e_)
+o.liste_biblio.topLevelItem(0).setExpanded(False)          # « Mes tampons » replie
+o.ouvrir_bibliotheque("tampons")
+g_ = o.liste_biblio.topLevelItem(0)
+verif(g_.text(0).startswith("Favoris") and g_.isExpanded() and g_.child(0).text(0) == "Tampon importé",
+      f"favoris : groupe en tête, ouvert ({g_.text(0)})")
+o.a_poser = None
+o._choisir_biblio(g_.child(0))
+verif(o.a_poser and o.a_poser[1] == "Tampon importé", "favori : un clic et il est prêt à poser")
+capture(w, "05b_favoris.png")
+o.changer_mode(None)
+w.biblio.basculer_favori(e_)
+o.liste_biblio.topLevelItem(0).setExpanded(True)
 w.biblio.ajouter("signatures", "Paraphe", pave.resultat())
 w.biblio.ajouter("signatures", "Signature complète", pave.resultat() + b" ")
 verif(len(w.biblio.elements("signatures")) == 2, "deux signatures gérées")

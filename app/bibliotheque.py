@@ -11,7 +11,7 @@ import hashlib, json, os, shutil, string, sys, time, uuid
 from .config import dossier_donnees
 
 GENRES = ("tampons", "signatures", "filigranes")
-PROPRIETES = ("nom", "categorie", "horodatage", "position_date")   # suivent les autres postes (la plus recente gagne)
+PROPRIETES = ("nom", "categorie", "horodatage", "position_date", "favori")   # suivent les autres postes (la plus recente gagne)
 RAPPEL_ENVOI = []          # fonction appelee apres une modification : envoi immediat vers un Drive en direct
 
 
@@ -133,14 +133,29 @@ class Bibliotheque:
             self.params.enregistrer()
         self._auto()
 
-    def par_defaut(self, genre, e=None):
-        cle = f"defaut_{genre}"
-        if e is not None:
-            self.params[cle] = e["id"]
-            self.params.enregistrer()
-        ident = self.params.get(cle)
+    def favoris(self, genre):
+        """Tampons ou signatures marques d'une etoile : proposes en tete, accessibles d'un clic. L'ancien
+        « par defaut » devient le premier favori (une seule fois)."""
         el = self.elements(genre)
-        return next((x for x in el if x["id"] == ident), el[0] if el else None)
+        if not any("favori" in x for x in el):
+            ancien = self.params.get(f"defaut_{genre}")
+            x = next((x for x in el if x["id"] == ancien), None)
+            if x is not None:
+                self.modifier(x, favori=True)
+        return [x for x in self.elements(genre) if x.get("favori")]
+
+    def basculer_favori(self, e):
+        self.modifier(e, favori=not e.get("favori"))
+        return e.get("favori")
+
+    def par_defaut(self, genre, e=None):
+        """Premier favori (sinon le premier de la liste) : propose quand rien n'est choisi."""
+        if e is not None:
+            if not e.get("favori"):
+                self.modifier(e, favori=True)
+        f = self.favoris(genre)
+        el = self.elements(genre)
+        return f[0] if f else (el[0] if el else None)
 
     # ---- synchronisation avec le Drive (dans les deux sens)
     def _distant(self):

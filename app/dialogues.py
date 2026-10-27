@@ -19,6 +19,37 @@ def _pix_depuis_png(octets, h=56):
     return pm.scaledToHeight(h, Qt.SmoothTransformation) if not pm.isNull() else pm
 
 
+def etoile_jaune(taille=16):
+    """Petite etoile jaune (favori), dessinee : aucune police ni emoji necessaires."""
+    import math
+    from PySide6.QtGui import QPainter, QPolygonF, QColor, QPen
+    from PySide6.QtCore import QPointF
+    pm = QPixmap(taille, taille)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    c, r1, r2 = taille / 2, taille / 2 - 0.8, taille / 5
+    pts = [QPointF(c + (r1 if i % 2 == 0 else r2) * math.sin(i * math.pi / 5),
+                   c + 0.6 - (r1 if i % 2 == 0 else r2) * math.cos(i * math.pi / 5)) for i in range(10)]
+    p.setPen(QPen(QColor("#b07800"), 1))
+    p.setBrush(QColor("#f5b800"))
+    p.drawPolygon(QPolygonF(pts))
+    p.end()
+    return pm
+
+
+def avec_etoile(pm, taille=16):
+    """Apercu d'un tampon avec l'etoile jaune des favoris en haut a gauche."""
+    from PySide6.QtGui import QPainter
+    out = QPixmap(max(pm.width(), taille) + 4, max(pm.height(), taille))
+    out.fill(Qt.transparent)
+    p = QPainter(out)
+    p.drawPixmap(4, 0, pm)
+    p.drawPixmap(0, 0, etoile_jaune(taille))
+    p.end()
+    return out
+
+
 def boutons_fr(bb):
     """Libelles francais pour les boutons standard."""
     noms = {QDialogButtonBox.Ok: "OK", QDialogButtonBox.Cancel: _('Annuler'), QDialogButtonBox.Save: _('Enregistrer'),
@@ -254,10 +285,17 @@ class PanneauBibliotheque(QWidget):
             b.setToolTip(_("Ranger le tampon dans une catégorie, et choisir s'il porte la date (jamais, toujours, ou demandée à chaque pose) et où"))
             b.clicked.connect(self.proprietes)
             h.addWidget(b)
-        for txt, f in [(_('Renommer'), self.renommer), (_('Supprimer'), self.supprimer), (_('Par défaut'), self.defaut)]:
+        for txt, f in [(_('Renommer'), self.renommer), (_('Supprimer'), self.supprimer)]:
             b = QPushButton(txt)
             b.clicked.connect(f)
             h.addWidget(b)
+        self.b_favori = QPushButton(QIcon(etoile_jaune(16)), _(" Favori"))
+        self.b_favori.setToolTip(_("Ajouter aux favoris ou les retirer : les favoris sont en tête du volet, "
+                                   "un clic suffit pour les poser, même si leur catégorie est repliée"))
+        self.b_favori.clicked.connect(self.defaut)
+        h.addWidget(self.b_favori)
+        self.liste.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.liste.customContextMenuRequested.connect(self._menu)
         h.addStretch()
         v.addLayout(h)
         if compact:                                  # la colonne de boutons n'est jamais coupee en bas
@@ -266,15 +304,16 @@ class PanneauBibliotheque(QWidget):
 
     def rafraichir(self, choisir=None):
         self.liste.clear()
-        defaut = self.b.par_defaut(self.genre)
+        self.b.favoris(self.genre)                    # ancien « par defaut » devenu favori
         for e in self.b.elements(self.genre):
-            est_defaut = bool(defaut and e["id"] == defaut["id"])
+            est_defaut = bool(e.get("favori"))
             date = e.get("horodatage", "non") != "non"
-            it = QListWidgetItem(QIcon(_pix_depuis_png(objets.apercu(self.b.lire(e), 70), 70)),
-                                 ("★ " if est_defaut else "") + e["nom"] + (" 🕓" if date else "")
+            pm = _pix_depuis_png(objets.apercu(self.b.lire(e), 70), 70)
+            it = QListWidgetItem(QIcon(avec_etoile(pm, 18) if est_defaut else pm),
+                                 e["nom"] + (" 🕓" if date else "")
                                  + (f"\n{e['categorie']}" if e.get("categorie") else ""))
             it.setToolTip("<b>" + e["nom"] + "</b>"
-                          + ("<br>" + _("Par défaut") if est_defaut else "")
+                          + ("<br>★ " + _("Favori") if est_defaut else "")
                           + ("<br>" + _("Catégorie : {c}", c=e["categorie"]) if e.get("categorie") else "")
                           + ("<br>" + _("Porte la date") if date else ""))
             it.setData(Qt.UserRole, e)
@@ -337,10 +376,27 @@ class PanneauBibliotheque(QWidget):
             self.rafraichir()
 
     def defaut(self):
+        """Etoile : ajoute aux favoris ou les retire."""
         e = self.courant()
         if e:
-            self.b.par_defaut(self.genre, e)
+            self.b.basculer_favori(e)
             self.rafraichir(e)
+
+    def _menu(self, pos):
+        it = self.liste.itemAt(pos)
+        if not it:
+            return
+        self.liste.setCurrentItem(it)
+        e = it.data(Qt.UserRole)
+        from PySide6.QtWidgets import QMenu
+        m = QMenu(self)
+        m.addAction(QIcon(etoile_jaune(16)), _("Retirer des favoris") if e.get("favori") else _("Ajouter aux favoris"), self.defaut)
+        m.addAction(_("Renommer"), self.renommer)
+        if self.genre == "tampons":
+            m.addAction(_("Catégorie et date..."), self.proprietes)
+        m.addSeparator()
+        m.addAction(_("Supprimer"), self.supprimer)
+        m.exec(self.liste.mapToGlobal(pos))
 
     def proprietes(self):
         e = self.courant()
