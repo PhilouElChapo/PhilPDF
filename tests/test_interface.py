@@ -879,6 +879,16 @@ pb_.liste.dropEvent(ev_)
 apres_ = [e["nom"] for e in w.biblio.elements("tampons")]
 verif(apres_.index("T-un") > apres_.index("T-deux") and len(apres_) == len(avant_),
       f"tampons : glissé à une autre place, ordre gardé ({avant_} → {apres_})")
+w.biblio.ajouter("tampons", "T-trois", objets.tampon_predefini("T-trois", (0.1, 0.2, 0.6), "X"))
+pb_.rafraichir(); app.processEvents()
+noms_ = [pb_.liste.item(i).data(D.Qt.UserRole)["nom"] for i in range(pb_.liste.count())]
+ra_, rb_ = pb_.liste.visualItemRect(pb_.liste.item(noms_.index("T-deux"))), pb_.liste.visualItemRect(pb_.liste.item(noms_.index("T-un")))
+entre_ = __import__("PySide6.QtCore", fromlist=["QPointF"]).QPointF((ra_.right() + rb_.left()) / 2, ra_.center().y())
+pb_.liste.setCurrentRow(noms_.index("T-trois"))
+pb_.liste.dropEvent(_QDE(entre_, D.Qt.MoveAction, _QMD(), D.Qt.LeftButton, D.Qt.NoModifier))
+apres_ = [e["nom"] for e in w.biblio.elements("tampons")]
+verif(apres_.index("T-deux") + 1 == apres_.index("T-trois") == apres_.index("T-un") - 1,
+      f"tampons : déposé entre deux, il s'y place ({apres_})")
 pb_.close()
 
 # --- largeur du volet droit reglee a la souris : gardee pour les documents suivants et apres redemarrage

@@ -741,12 +741,130 @@ class Editeur:
             return dict(stream=info["image"])
         return dict(pixmap=fitz.Pixmap(self.doc, xref))
 
-    def deplacer_image(self, num_page, xref, nouveau_rect):
+    def geometrie_image(self, num_page, xref):
+        """(centre, largeur, hauteur, angle) d'une image de la page ; angle en degres, sens inverse des aiguilles."""
+        import math
+        for info in self.doc[num_page].get_image_info(xrefs=True):
+            if info.get("xref") == xref:
+                # MuPDF donne le placement avec le carre unite retourne et en coordonnees d'ecran : on revient au PDF
+                t = fitz.Matrix(1, 0, 0, -1, 0, 1) * fitz.Matrix(info["transform"]) * ~self.doc[num_page].transformation_matrix
+                bb = fitz.Rect(info["bbox"])
+                return (fitz.Point((bb.x0 + bb.x1) / 2, (bb.y0 + bb.y1) / 2), math.hypot(t.a, t.b), math.hypot(t.c, t.d),
+                        round(math.degrees(math.atan2(t.b, t.a)), 2))
+        raise ValueError("Image introuvable")
+
+    def _placer(self, num_page, xref, centre, w, h, angle):
+        """Change la place, la taille et l'angle d'une image sans la recopier : seule la matrice qui la place
+        dans le contenu de la page est reecrite (image intacte, aucune recompression). False si introuvable."""
+        import math, re
         page = self.doc[num_page]
-        src = self._pixmap_image(xref)
-        page.delete_image(xref)
-        page.insert_image(fitz.Rect(nouveau_rect), keep_proportion=False, **src)
+        noms = [im[7] for im in page.get_images(full=True) if im[0] == xref]
+        info = next((i for i in page.get_image_info(xrefs=True) if i.get("xref") == xref), None)
+        if not noms or info is None:
+            return False
+        tpdf = fitz.Matrix(1, 0, 0, -1, 0, 1) * fitz.Matrix(info["transform"]) * ~page.transformation_matrix   # en PDF
+        cp = centre * ~page.transformation_matrix
+        a = math.radians(angle)
+        flip = 1 if (tpdf.a * tpdf.d - tpdf.b * tpdf.c) >= 0 else -1          # image retournee : elle le reste
+        voulu = fitz.Matrix(w, 0, 0, h * flip, -w / 2, -h * flip / 2) * \
+            fitz.Matrix(math.cos(a), math.sin(a), -math.sin(a), math.cos(a), 0, 0) * fitz.Matrix(1, 0, 0, 1, cp.x, cp.y)
+        motif = re.compile(r"([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+cm\s*/("
+                           + "|".join(re.escape(n) for n in noms) + r")\s+Do")
+        for cx in page.get_contents():
+            flux = self.doc.xref_stream(cx).decode("latin-1")
+            m = list(motif.finditer(flux))
+            if len(m) != 1:
+                continue
+            local = fitz.Matrix(*[float(x) for x in m[0].groups()[:6]])
+            exterieur = ~local * tpdf                      # transformations deja en place autour (q ... cm)
+            nl = voulu * ~exterieur
+            nouveau = f"{nl.a:.5f} {nl.b:.5f} {nl.c:.5f} {nl.d:.5f} {nl.e:.4f} {nl.f:.4f} cm /{m[0].group(7)} Do"
+            self.doc.update_stream(cx, (flux[:m[0].start()] + nouveau + flux[m[0].end():]).encode("latin-1"))
+            return True
+        return False
+
+    def deplacer_image(self, num_page, xref, nouveau_rect):
+        """Deplace ou agrandit une image ; une image tournee garde son angle (le cadre donne est son encombrement)."""
+        import math
+        page = self.doc[num_page]
+        centre, w, h, angle = self.geometrie_image(num_page, xref)
+        nr = fitz.Rect(nouveau_rect)
+        a = math.radians(angle)
+        if abs(angle) < 0.01:
+            nw, nh = nr.width, nr.height
+        else:
+            k = nr.width / max(0.01, abs(w * math.cos(a)) + abs(h * math.sin(a)))
+            nw, nh = w * k, h * k
+        if not self._placer(num_page, xref, fitz.Point((nr.x0 + nr.x1) / 2, (nr.y0 + nr.y1) / 2), nw, nh, angle):
+            src = self._pixmap_image(xref)                     # image dans un sous-objet : ancienne methode
+            page.delete_image(xref)
+            page.insert_image(nr, keep_proportion=False, **src)
         self.journal.append("image déplacée")
+
+    def tourner_image(self, num_page, xref, delta):
+        """Tourne une image de la page autour de son centre (delta en degres, sens inverse des aiguilles)."""
+        centre, w, h, angle = self.geometrie_image(num_page, xref)
+        nouvel = (angle + delta) % 360
+        if not self._placer(num_page, xref, centre, w, h, nouvel):
+            raise ValueError("Cette image est rangée dans un sous-objet de la page : rotation impossible ici")
+        self.journal.append(f"image tournée ({nouvel:.0f}°)")
+        return nouvel
+
+    def tourner_lignes(self, num_page, zones, delta, centre=None):
+        """Tourne une ligne ou un bloc de lignes autour de son centre, chaque lettre gardant police, taille et couleur
+        (delta en degres, sens inverse des aiguilles d'une montre). Renvoie l'encombrement apres rotation."""
+        import math
+        page = self.doc[num_page]
+        d = page.get_text("rawdict", flags=fitz.TEXT_PRESERVE_WHITESPACE)
+        choisies = []
+        for b in d["blocks"]:
+            for l in b.get("lines", []):
+                chars = [(c, s) for s in l["spans"] for c in s["chars"]]
+                if not chars:
+                    continue
+                r = fitz.Rect(l["bbox"])
+                for z in zones:
+                    z = fitz.Rect(z)
+                    if r.intersects(z) and (r & z).get_area() >= 0.4 * min(r.get_area(), z.get_area()):
+                        choisies.append((l, chars, r))
+                        break
+        if not choisies:
+            raise ValueError("Texte introuvable à cet endroit")
+        tout = fitz.Rect()
+        for _l, _c, r in choisies:
+            tout |= r
+        cx, cy = (centre.x, centre.y) if centre else ((tout.x0 + tout.x1) / 2, (tout.y0 + tout.y1) / 2)
+        a = math.radians(delta)
+        ca, sa = math.cos(a), math.sin(a)
+        plans = []
+        for l, chars, r in choisies:
+            dx_, dy_ = l["dir"]
+            angle0 = math.degrees(math.atan2(-dy_, dx_))
+            plan, repli = [], None
+            for c, s in chars:
+                ch = c["c"]
+                p = self._police_du_span(page, s)
+                cible = p if p and p.a(ch) else next((q for q in self._polices(page).values()
+                                                      if p and q.famille() == p.famille() and q.a(ch)), None)
+                if cible is None and ch != " ":
+                    if repli is None:
+                        repli = self._police_par_nom(p) or PoliceIncorporee(*self._choisir_par_rendu(page, chars[:12])[1:])
+                    cible = repli
+                ox, oy = c["origin"]
+                nx = cx + (ox - cx) * ca + (oy - cy) * sa
+                ny = cy - (ox - cx) * sa + (oy - cy) * ca
+                plan.append((ch, cible, s["size"], fitz.sRGB_to_pdf(s["color"]), nx, "", ny, angle0 + delta))
+            plans.append(plan)
+            page.add_redact_annot(fitz.Quad(l["bbox"]) if False else fitz.Rect(r.x0 + 0.3, r.y0 + 0.3, r.x1 - 0.3, r.y1 - 0.3),
+                                  fill=False)
+        page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE,
+                              text=fitz.PDF_REDACT_TEXT_REMOVE)
+        for plan in plans:
+            self._ecrire(page, [x for x in plan if x[1] is not None], plan[0][6])
+        self.journal.append(f"texte tourné de {delta:+.0f}°, polices d'origine conservées")
+        pts = [fitz.Point(cx + (x0 - cx) * ca + (y0 - cy) * sa, cy - (x0 - cx) * sa + (y0 - cy) * ca)
+               for x0, y0 in ((tout.x0, tout.y0), (tout.x1, tout.y0), (tout.x0, tout.y1), (tout.x1, tout.y1))]
+        return fitz.Rect(min(q.x for q in pts), min(q.y for q in pts), max(q.x for q in pts), max(q.y for q in pts))
 
     def supprimer_image(self, num_page, xref):
         self.doc[num_page].delete_image(xref)
@@ -865,6 +983,7 @@ class Editeur:
             ch, cible, sz, coul, x, how = entree[:6]
             if len(entree) > 6:
                 y = entree[6]
+            angle = entree[7] if len(entree) > 7 else 0
             if ch == " ":
                 continue
             if isinstance(cible, PoliceIncorporee):
@@ -874,12 +993,23 @@ class Editeur:
                     page.insert_font(fontname=alias, fontfile=cible.fichier)
                     incorporees[cible.fichier] = alias
                 flux.append(None)  # marqueur : on ecrira via insert_text apres
-                page.insert_text((x, y), ch, fontname=alias, fontsize=sz, color=coul)
+                if angle:
+                    page.insert_text((x, y), ch, fontname=alias, fontsize=sz, color=coul,
+                                     morph=(fitz.Point(x, y), fitz.Matrix(angle)))
+                else:
+                    page.insert_text((x, y), ch, fontname=alias, fontsize=sz, color=coul)
                 continue
             pt = fitz.Point(x, y) * inv
             # espace glyphe deja remis a l'endroit par la FontMatrix : toujours positif ici
             d = sz
             code = cible.code_of[ch].to_bytes(cible.octets, "big").hex()
+            if angle:
+                import math
+                ra = math.radians(angle)
+                ca_, sa_ = math.cos(ra), math.sin(ra)
+                flux.append(f"BT /{cible.ref} 1 Tf {sz * ca_:.4f} {sz * sa_:.4f} {-d * sa_:.4f} {d * ca_:.4f} {pt.x:.3f} {pt.y:.3f} Tm "
+                            f"{coul[0]:.3f} {coul[1]:.3f} {coul[2]:.3f} rg <{code}> Tj ET")
+                continue
             flux.append(f"BT /{cible.ref} 1 Tf {sz:.3f} 0 0 {d:.3f} {pt.x:.3f} {pt.y:.3f} Tm "
                         f"{coul[0]:.3f} {coul[1]:.3f} {coul[2]:.3f} rg <{code}> Tj ET")
         flux = [f for f in flux if f] + ["Q"]

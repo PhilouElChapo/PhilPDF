@@ -179,6 +179,44 @@ def poser(doc, num_page, rect, pdf_octets, nom=_('Tampon'), auteur="", genre="ta
     return a.xref
 
 
+def angle_objet(doc, xref):
+    """Angle (degres, sens inverse des aiguilles d'une montre) d'un objet PhilPDF tourne, 0 sinon."""
+    t, v = doc.xref_get_key(xref, "PhilPDF_Angle")
+    try:
+        return float(v) if t != "null" else 0.0
+    except ValueError:
+        return 0.0
+
+
+def tourner(doc, num_page, xref, delta):
+    """Tourne un tampon, une signature ou une image posee par PhilPDF autour de son centre (delta en degres,
+    sens inverse des aiguilles d'une montre). La taille vue reste la meme ; le cadre englobe l'objet tourne.
+    Fait comme Acrobat le lit : matrice de l'apparence + cadre recalcule (rien n'est redessine)."""
+    import math
+    page = doc[num_page]
+    angle = (angle_objet(doc, xref) + delta) % 360
+    t, v = doc.xref_get_key(xref, "PhilPDF_Taille")         # taille vue, droite (avant toute rotation)
+    t_r, v_r = doc.xref_get_key(xref, "Rect")
+    x0, y0, x1, y1 = [float(x) for x in v_r.strip("[]").split()]
+    if t != "null":
+        w, h = [float(x) for x in v.strip("[]").split()]
+    else:
+        w, h = x1 - x0, y1 - y0
+        doc.xref_set_key(xref, "PhilPDF_Taille", f"[{w:.2f} {h:.2f}]")
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    a = math.radians(angle)
+    lw = abs(w * math.cos(a)) + abs(h * math.sin(a))
+    lh = abs(w * math.sin(a)) + abs(h * math.cos(a))
+    doc.xref_set_key(xref, "Rect", f"[{cx - lw / 2:.2f} {cy - lh / 2:.2f} {cx + lw / 2:.2f} {cy + lh / 2:.2f}]")
+    t_ap, ap = doc.xref_get_key(xref, "AP/N")
+    if t_ap == "xref":
+        form = int(ap.split()[0])
+        c, s = math.cos(a), math.sin(a)
+        doc.xref_set_key(form, "Matrix", f"[{c:.5f} {s:.5f} {-s:.5f} {c:.5f} 0 0]")
+    doc.xref_set_key(xref, "PhilPDF_Angle", f"{angle:.2f}")
+    return angle
+
+
 def est_objet_philpdf(annot):
     return (annot.info.get("subject") or "").startswith(SUJET)
 
@@ -188,6 +226,13 @@ def deplacer(doc, num_page, xref, nouveau_rect):
     page = doc[num_page]
     r = fitz.Rect(nouveau_rect) * page.transformation_matrix  # vers coordonnees PDF
     r.normalize()
+    t_r, v_r = doc.xref_get_key(xref, "Rect")
+    t, v = doc.xref_get_key(xref, "PhilPDF_Taille")
+    if t != "null":                                           # objet tourne : sa taille vue suit l'agrandissement
+        x0, y0, x1, y1 = [float(x) for x in v_r.strip("[]").split()]
+        k = r.width / max(0.01, x1 - x0)
+        w, h = [float(x) for x in v.strip("[]").split()]
+        doc.xref_set_key(xref, "PhilPDF_Taille", f"[{w * k:.2f} {h * k:.2f}]")
     doc.xref_set_key(xref, "Rect", f"[{r.x0:.2f} {r.y0:.2f} {r.x1:.2f} {r.y1:.2f}]")
 
 

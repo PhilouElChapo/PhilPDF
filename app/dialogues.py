@@ -254,17 +254,31 @@ class _ListeOrdonnable(QListWidget):
         self.setDragDropMode(QListWidget.InternalMove)
         self.setDefaultDropAction(Qt.MoveAction)
 
+    def place_depot(self, pos):
+        """(index d'insertion, element voisin) pour un depot a cet endroit : sur un element, ou entre deux
+        (l'element le plus proche ; a gauche de son milieu = avant lui, a droite = apres)."""
+        if self.count() == 0:
+            return 0, None
+        proche, dmin = None, None
+        for i in range(self.count()):
+            r = self.visualItemRect(self.item(i))
+            c = r.center()
+            dist = (c.x() - pos.x()) ** 2 + ((c.y() - pos.y()) * 2) ** 2      # la rangee compte plus que la colonne
+            if dmin is None or dist < dmin:
+                proche, dmin = i, dist
+        r = self.visualItemRect(self.item(proche))
+        return (proche if pos.x() < r.center().x() else proche + 1), self.item(proche)
+
     def dropEvent(self, ev):
         src = self.currentRow()
-        it = self.itemAt(ev.position().toPoint())
-        dst = self.row(it) if it is not None else self.count() - 1
+        dst, it = self.place_depot(ev.position().toPoint())
         ev.setDropAction(Qt.IgnoreAction)
         ev.accept()
-        if src < 0 or dst == src:
+        if src < 0 or dst in (src, src + 1):
             return
         ids = [self.item(i).data(Qt.UserRole)["id"] for i in range(self.count())]
         x = ids.pop(src)
-        ids.insert(dst, x)
+        ids.insert(dst - 1 if dst > src else dst, x)
         cat = (it.data(Qt.UserRole) or {}).get("categorie", "") if it is not None else None
         self.rappel(ids, x, cat)
 
