@@ -91,6 +91,19 @@ reglages.appliquer_communs(neuf, ch, ["outils_epingles"])
 verifie(neuf["outils_epingles"] == ["alleger", "ocr"] and neuf["auteur"] == av_auteur and len(neuf["comptes"]) != 2,
         "seuls les réglages cochés sont repris")
 verifie(reglages.changements_communs(neuf) is None, "refusés : la question ne revient pas")
+# --- un poste aux reglages plus recents n'ecrase pas en silence ceux d'un autre poste qu'il n'a jamais vus
+x = P(machine="Cannes", drive=drive, outils_epingles=["x"], auteur="Autre", communs_maj="2030-01-01T00:00:00")
+reglages.ecrire_drive(x)
+dd = reglages.lire_drive(os.path.join(drive, "PhilPDF", "preferences.json"))
+verifie(dd["communs"]["par"] != "Cannes", "réglages d'un autre poste jamais vus : pas écrasés, même par un poste plus récent")
+ch = reglages.changements_communs(x)
+verifie(ch and ch["items"] and not ch["plus_recent_ailleurs"] and not any(it["coche"] for it in ch["items"]),
+        "proposés quand même, décochés d'avance car ce poste est le plus récent")
+reglages.appliquer_communs(x, ch, [])
+reglages.ecrire_drive(x)
+dd = reglages.lire_drive(os.path.join(drive, "PhilPDF", "preferences.json"))
+verifie(dd["communs"]["par"] == "Cannes" and dd["communs"]["outils_epingles"] == ["x"] and reglages.changements_communs(x) is None,
+        "vus et gardés : ce poste devient la référence, plus de question")
 coffre.supprimer("c1")
 autre2 = P(machine="Labo", drive=drive, comptes=[{"id": "c1", "type": "webdav", "nom": "NAS maison"}], clef_claude="")
 nv = reglages.secrets_nouveaux(autre2, "ma phrase secrète")

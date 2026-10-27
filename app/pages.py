@@ -249,6 +249,9 @@ class PageAccueil(QWidget):
     action_fichier = Signal(str, str)     # chemin, action (menu clic droit des fichiers recents)
     reprendre = Signal()          # reprendre la session proposee (remplace les fichiers ouverts)
     synchroniser = Signal()       # fenetre de synchronisation manuelle
+    synchro_drive = Signal()      # synchroniser maintenant (fenetre a cocher)
+    session_vue = Signal()        # Reprendre ou Ignorer : on ne remontre le bandeau qu'apres un changement sur l'autre poste
+    doublon_choisi = Signal(str, object, str)   # machine, fichier de l'autre poste, chemin choisi ici
     rechercher = Signal()         # rechercher dans tous mes PDF
     changer_synchro = Signal()    # changer l'emplacement de synchronisation
 
@@ -319,7 +322,8 @@ class PageAccueil(QWidget):
         hb.addStretch()
         b3 = QPushButton(_('Ignorer'))
         b3.setFlat(True)
-        b3.clicked.connect(self.cacher_synchro)
+        b3.clicked.connect(lambda: (self.session_vue.emit(), self.cacher_synchro()))
+        self.carte_liste.itemDoubleClicked.connect(lambda it: self.choisir_doublon(it.data(Qt.UserRole)))
         hb.addWidget(b3)
         vc.addLayout(hb)
         self.carte.hide()
@@ -337,13 +341,14 @@ class PageAccueil(QWidget):
         self.bandeau.setWordWrap(True)
         self.bandeau.setStyleSheet("color:#555")
         self.bandeau.setTextFormat(Qt.RichText)
-        self.bandeau.linkActivated.connect(lambda _l: self.changer_synchro.emit())
+        self.bandeau.linkActivated.connect(lambda l: self.revoir_autre() if l == "autre" else self.changer_synchro.emit())
         hl.addWidget(self.bandeau, 1)
         bs = QPushButton()
         bs.setIcon(icone("synchro", "#2b6cb0"))
-        bs.setToolTip(_('Synchroniser les fichiers ouverts avec vos autres postes'))
+        bs.setToolTip(_('Synchroniser maintenant avec vos autres postes (réglages, tampons, fichiers ouverts) : '
+                        'vous voyez d\'abord ce qui va être fait'))
         bs.setFlat(True)
-        bs.clicked.connect(self.synchroniser)
+        bs.clicked.connect(lambda: self.synchro_drive.emit() if self.params.get("drive_compte") else self.synchroniser.emit())
         hl.addWidget(bs)
         v.addLayout(hl)
         r = QLabel(_('Récents'))
@@ -372,6 +377,7 @@ class PageAccueil(QWidget):
             self.liste.addItem(it)
         self.bandeau.setText(_('Poste : <b>{machine}</b>. ', machine=self.params['machine']) + (
                 _('Synchronisation : ') + self._lieu_synchro() + self._etat_synchro() + " &nbsp;<a href='changer_synchro'>" + _("changer") + "</a>"
+                + self._rappel_autre()
                 if (self.params.get("drive") or self.params.get("drive_compte")) else
             _('Choisissez un emplacement de synchronisation (bouton à droite) pour retrouver vos fichiers ouverts, préférences et tampons sur vos autres PC.')))
         try:
@@ -415,6 +421,20 @@ class PageAccueil(QWidget):
             return " · <span style='color:#1d7a35'>" + _("✓ synchronisé à {h}", h=quand) + "</span>"
         return " · <span style='color:#c9252d'>" + _("✕ échec à {h} : {raison}", h=quand, raison=html.escape(e.get("erreur", "")[:90])) + "</span>"
 
+    def _rappel_autre(self):
+        """Fichiers ouverts sur l'autre poste deja vus (bandeau ferme) : une simple mention, cliquable."""
+        a = getattr(self, "_autre", None)
+        if not a or self.carte.isVisible():
+            return ""
+        m, _d, fichiers = a[0], a[1], a[2]
+        return " &nbsp;·&nbsp; " + _("Sur {m} : {n} fichier(s) ouvert(s)", m=m, n=len(fichiers)) + \
+            " <a href='autre'>" + _("voir") + "</a>"
+
+    def revoir_autre(self):
+        a = getattr(self, "_autre", None)
+        if a:
+            self.montrer_synchro(*a, forcer=True)
+
     def _lieu_synchro(self):
         cid = self.params.get("drive_compte")
         c = next((x for x in self.params.get("comptes", []) if x["id"] == cid), None) if cid else None
@@ -451,8 +471,14 @@ class PageAccueil(QWidget):
         act("fermer", _("Retirer de la liste"), "retirer")
         m.exec(self.liste.viewport().mapToGlobal(pos))
 
-    def montrer_synchro(self, machine, date, fichiers, resultats, plus_recente=True):
+    def montrer_synchro(self, machine, date, fichiers, resultats, plus_recente=True, doublons=None, deja_vu=False, forcer=False):
         from .session import date_fr, nb_fichiers
+        self._autre = (machine, date, fichiers, resultats, plus_recente, doublons)
+        self.doublons = doublons or {}
+        if deja_vu and not forcer:                 # deja traite (Reprendre ou Ignorer) : simple mention sur la ligne d'etat
+            self.carte.hide()
+            self.rafraichir()
+            return
         n = sum(1 for c, _x in resultats if c)
         if plus_recente:
             self.carte_titre.setText(_('<b>Session plus récente sur {machine}</b> (le {date}) : {nb}, {n} retrouvé{x} sur ce poste.', machine=machine, date=date_fr(date), nb=nb_fichiers(len(fichiers)), n=n, x='s' if n > 1 else ''))
@@ -460,16 +486,55 @@ class PageAccueil(QWidget):
             self.carte_titre.setText(_("<b>Ouverts sur {machine}</b> (le {date}) : {nb}, {n} retrouvé(s) sur ce poste (les autres sont grisés).",
                                        machine=machine, date=date_fr(date), nb=nb_fichiers(len(fichiers)), n=n))
         self.carte_liste.clear()
-        for e, (c, cm) in zip(fichiers, resultats):
-            it = QListWidgetItem(f"{e['nom']}  —  {c}" if c else
-                                 _('{nom}  —  introuvable sur {machine} (ouvert sur {machine2} le {date})', nom=e['nom'], machine=self.params['machine'], machine2=machine, date=date_fr(date)))
+        for i, (e, (c, cm)) in enumerate(zip(fichiers, resultats)):
+            if i in self.doublons:
+                it = QListWidgetItem(_("{nom}  —  trouvé à {n} endroits sur ce poste : double-cliquez pour choisir lequel",
+                                       nom=e['nom'], n=len(self.doublons[i])))
+                it.setForeground(Qt.darkYellow)
+            else:
+                it = QListWidgetItem(f"{e['nom']}  —  {c}" if c else
+                                     _('{nom}  —  introuvable sur {machine} (ouvert sur {machine2} le {date})', nom=e['nom'], machine=self.params['machine'], machine2=machine, date=date_fr(date)))
             it.setToolTip(cm)
+            it.setData(Qt.UserRole, i)
             if not c:
                 it.setForeground(Qt.gray)
             self.carte_liste.addItem(it)
         self.carte_liste.setFixedHeight(min(150, self.carte_liste.sizeHintForRow(0) * len(fichiers) + 6))
         self.b_reprendre.setEnabled(n > 0)
         self.carte.show()
+        self.rafraichir()
 
     def cacher_synchro(self):
         self.carte.hide()
+        self.rafraichir()
+
+    def choisir_doublon(self, i):
+        """Le meme fichier est a plusieurs endroits ici : on choisit une fois, PhilPDF retient le dossier."""
+        chemins = (self.doublons or {}).get(i)
+        if not chemins:
+            return None
+        import datetime
+        from PySide6.QtWidgets import QInputDialog
+        lignes = []
+        for p in chemins:
+            try:
+                q = datetime.datetime.fromtimestamp(os.path.getmtime(p)).strftime("%d/%m/%Y %H:%M")
+            except OSError:
+                q = "?"
+            lignes.append(_("{chemin}   (modifié le {date})", chemin=p, date=q))
+        a = self._autre
+        nom = a[2][i]["nom"]
+        choix, ok = QInputDialog.getItem(self, _("Fichier à plusieurs endroits"),
+                                         _("« {nom} » est à {n} endroits sur ce poste. Lequel correspond à celui de {m} ?\n"
+                                           "PhilPDF retiendra ce dossier et ne posera plus la question.", nom=nom, n=len(chemins), m=a[0]),
+                                         lignes, 0, False)
+        if not ok:
+            return None
+        p = chemins[lignes.index(choix)]
+        res = list(a[3])
+        res[i] = (p, _("choisi par vous"))
+        self.doublon_choisi.emit(a[0], a[2][i], p)
+        d = dict(self.doublons)
+        d.pop(i, None)
+        self.montrer_synchro(a[0], a[1], a[2], res, a[4], d, forcer=True)
+        return p

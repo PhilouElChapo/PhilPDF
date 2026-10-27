@@ -20,8 +20,8 @@ from . import coffre
 COMMUNS = ["auteur", "langue", "outils_epingles", "barre_rapide", "volet", "vignettes", "fixer_objets",
            "filigranes_perso", "ia_moteur", "maj_source", "maj_auto", "synchro", "comptes", "comptes_icone", "defaut_tampons",
            "defaut_signatures", "theme", "synchro_secrets", "barre", "couleurs_annotations",
-           "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "agenda", "messagerie", "biblio_replies"]
-POSTE = ["synchro_etat", "machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
+           "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "agenda", "messagerie"]
+POSTE = ["biblio_replies", "sessions_vues", "synchro_etat", "machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
 CLEFS_IA = ["clef_claude", "clef_gemini"]
 FICHIER_DRIVE = "preferences.json"
 
@@ -126,9 +126,12 @@ def ecrire_drive(params):
     i = instantane(params)
     d["philpdf"] = 1
     local = params.get("communs_maj") or ""
-    sur_drive = (d.get("communs") or {}).get("maj") or ""
-    # les reglages communs de ce poste ne remplacent ceux du Drive que s'ils ont ete changes plus recemment
-    if local and local > sur_drive:
+    dc = d.get("communs") or {}
+    sur_drive = dc.get("maj") or ""
+    # ceux d'un autre poste que vous n'avez pas encore vus (fenetre de choix) ne sont jamais remplaces en silence
+    pas_vus = bool(dc) and dc.get("par") not in ("", None, i["machine"]) and sur_drive != (params.get("communs_drive_vu") or "")
+    # sinon, les reglages communs de ce poste remplacent ceux du Drive s'ils ont ete changes plus recemment
+    if local and local > sur_drive and not pas_vus:
         d["communs"] = dict(i["communs"], maj=local, par=i["machine"])
     d.setdefault("postes", {})[i["machine"]] = dict(i["poste"], maj=i["date"])
     try:
@@ -255,6 +258,7 @@ def reprendre_communs_drive(params):
         if k in COMMUNS:
             params[k] = v
     params["communs_maj"] = maj
+    params["communs_drive_vu"] = maj
     params._communs_vus = params._empreinte_communs() if hasattr(params, "_empreinte_communs") else ""
     params.enregistrer()
     nouveaux = [x for x in params.get("comptes", []) if x["id"] not in comptes_ici]
@@ -337,22 +341,31 @@ def changements_communs(params):
         return None
     c = (lire_drive(p).get("communs") or {})
     maj, par = c.get("maj") or "", c.get("par") or ""
-    if not maj or maj <= (params.get("communs_maj") or "") or par == params.get("machine"):
+    # proposes des qu'un autre poste les a ecrits et que vous ne les avez pas encore vus, quelle que soit la date :
+    # la case est cochee d'avance seulement si l'autre poste est le plus recent
+    if not maj or par == params.get("machine") or maj == (params.get("communs_drive_vu") or ""):
         return None
+    local = params.get("communs_maj") or ""
+    plus_recent_ailleurs = maj > local
     items = []
     for k in COMMUNS:
         if k in c and c[k] != params.get(k):
             items.append({"cle": k, "libelle": libelle_commun(k), "detail": decrire_changement(k, params.get(k), c[k]),
-                          "valeur": c[k]})
-    return {"par": par, "maj": maj, "items": items}
+                          "valeur": c[k], "coche": plus_recent_ailleurs})
+    return {"par": par, "maj": maj, "local": local, "items": items, "plus_recent_ailleurs": plus_recent_ailleurs}
 
 
 def appliquer_communs(params, changements, cles):
     """Reprend seulement les reglages choisis ; les autres restent ceux de ce poste. On ne redemande pas ensuite."""
+    garde_ici = False
     for it in changements["items"]:
         if it["cle"] in cles:
             params[it["cle"]] = it["valeur"]
-    params["communs_maj"] = changements["maj"]
+        else:
+            garde_ici = True
+    params["communs_drive_vu"] = changements["maj"]
+    # tout repris : ce poste est a egalite avec le Drive ; sinon ses valeurs gardees deviennent la reference (envoyees)
+    params["communs_maj"] = datetime.datetime.now().isoformat(timespec="seconds") if garde_ici else changements["maj"]
     params._communs_vus = params._empreinte_communs() if hasattr(params, "_empreinte_communs") else ""
     params.enregistrer()
 

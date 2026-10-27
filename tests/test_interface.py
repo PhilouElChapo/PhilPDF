@@ -745,6 +745,65 @@ w.params["synchro_etat"] = {"quand": "2026-10-26T21:58", "ok": False, "erreur": 
 w.params["drive_compte"] = w.params.get("drive_compte") or ""
 w.accueil.rafraichir()
 
+# --- synchronisation a cocher : rien n'est recu sans accord, ce qui est decoche revient la fois suivante
+import json as _json, hashlib as _hl
+from app import distant as _D, synchro_plan as _SP
+part_ = os.path.join(TRAVAIL, "partage")
+os.makedirs(os.path.join(part_, "PhilPDF", "sauvegarde", "tampons"))
+cr_ = _D.nouveau_compte("reseau")
+cr_.update(adresse=part_, nom="Partage test")
+w.params["comptes"] = list(w.params.get("comptes", [])) + [cr_]
+w.params["drive_compte"] = cr_["id"]
+w.params.enregistrer()
+pdf_t = objets.tampon_predefini("CANNES", (0.1, 0.2, 0.6), "X")
+open(os.path.join(part_, "PhilPDF", "sauvegarde", "tampons", "ab12cd34ef56.pdf"), "wb").write(pdf_t)
+_json.dump({"elements": [{"id": "ab12cd34ef56", "genre": "tampons", "nom": "Tampon de Cannes", "ext": ".pdf",
+                          "hash": _hl.sha1(pdf_t).hexdigest(), "date": "2026-10-27 10:00", "machine": "Cannes",
+                          "categorie": "SCI", "maj": "2026-10-27 10:00"}], "supprimes": []},
+           open(os.path.join(part_, "PhilPDF", "sauvegarde", "index.json"), "w", encoding="utf-8"))
+reponses_, vus_ = [_QW.QDialog.Rejected, _QW.QDialog.Accepted], []
+def _exec_plan(self):
+    if isinstance(self, _SP.DialoguePlan):
+        vus_.append([self.arbre.topLevelItem(0).child(i).text(0) for i in range(self.arbre.topLevelItem(0).childCount())])
+        if len(vus_) == 1:
+            capture(self, "49_synchro_a_cocher.png")
+        return reponses_.pop(0)
+    return _QW.QDialog.Rejected
+_QW.QDialog.exec = _exec_plan
+def _attendre_synchro():
+    for _i in range(100):
+        QTest.qWait(150)
+        t_ = getattr(w, "_t_miroir", None)
+        if t_ is not None and not t_.isRunning() and len(vus_) >= 1:
+            QTest.qWait(300)
+            t_ = getattr(w, "_t_miroir", None)
+            if not t_.isRunning():
+                return
+def _a_le_tampon():
+    return any(e["nom"] == "Tampon de Cannes" for e in w.biblio.elements("tampons"))
+w.synchro_manuelle()
+_attendre_synchro()
+verif(vus_ and any("Tampon" in x for x in vus_[0]) and not _a_le_tampon(),
+      f"synchro : la fenêtre annonce le tampon de l'autre poste ; « Plus tard » -> rien reçu ({vus_})")
+w.synchro_manuelle()
+_attendre_synchro()
+verif(len(vus_) == 2 and _a_le_tampon(), "synchro : proposé à nouveau, accepté -> tampon reçu avec sa catégorie")
+_QW.QDialog.exec = _exo
+w.params["drive_compte"] = ""
+w.params.enregistrer()
+# --- fichiers ouverts sur l'autre poste : le bandeau une fois, puis une simple mention
+autre_ = ("Cannes", "2026-10-27T00:19", [{"nom": "CR.pdf", "empreinte": "e1"}], [(None, "introuvable")], True, {})
+w._synchro_trouvee(autre_)
+verif(w.accueil.carte.isVisibleTo(w.accueil), "autre poste : bandeau montré la première fois")
+w.accueil.session_vue.emit()
+w.accueil.cacher_synchro()
+w._synchro_trouvee(("Cannes", "2026-10-27T09:00") + autre_[2:])
+verif(not w.accueil.carte.isVisibleTo(w.accueil) and "Sur Cannes" in w.accueil.bandeau.text(),
+      "autre poste : mêmes fichiers (session seulement redatée) -> plus de bandeau, une mention cliquable")
+w._synchro_trouvee(("Cannes", "2026-10-27T10:00", [{"nom": "Autre.pdf", "empreinte": "e2"}], [(None, "introuvable")], True, {}))
+verif(w.accueil.carte.isVisibleTo(w.accueil), "autre poste : d'autres fichiers ouverts -> bandeau à nouveau")
+w.accueil.cacher_synchro()
+
 # --- fermeture : une fenetre explique l'attente (preferences, synchronisation)
 ff_ = F.FenetreFermeture(w, "Google Drive (exemple)")
 ff_.etape("Préférences envoyées vers Google Drive (exemple)", lambda: None)

@@ -213,8 +213,16 @@ class Bibliotheque:
             if not os.path.exists(dst):
                 shutil.copy2(self.fichier(e), dst)
                 envoyes += 1
-        with open(os.path.join(cible, "index.json"), "w", encoding="utf-8") as f:
-            json.dump({"elements": self.index, "supprimes": sorted(supp)}, f, ensure_ascii=False, indent=1)
+        contenu = json.dumps({"elements": self.index, "supprimes": sorted(supp)}, ensure_ascii=False, indent=1)
+        p_index = os.path.join(cible, "index.json")
+        try:
+            with open(p_index, encoding="utf-8") as f:
+                identique = f.read() == contenu
+        except OSError:
+            identique = False
+        if not identique:                    # reecrit seulement s'il change (sinon il repartirait a chaque synchro)
+            with open(p_index, "w", encoding="utf-8") as f:
+                f.write(contenu)
         if recus or len(self.index) != avant:
             self._ecrire()
         return recus, envoyes

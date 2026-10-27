@@ -185,6 +185,25 @@ def miroir_scenario(nom, compte, mdp):
     miroir.synchroniser(pa, emplacement=distant.emplacement(compte, mdp))
     with open(os.path.join(la, "session.json"), encoding="utf-8") as f:
         verifie(f.read() == "{abime", f"{nom} : fusion impossible -> version du Drive gardée, pas écrasée")
+    # plan puis choix : rien n'est recu sans accord, ce qui est decoche reste en attente
+    _t.sleep(1.1)
+    os.environ["HOME"] = os.environ["APPDATA"] = os.path.join(base, nom.replace(" ", "_"), "B")
+    ecrire(lb, "sauvegarde/tampons/t2.json", {"t": 2})
+    miroir.synchroniser(pb, emplacement=distant.emplacement(compte, mdp), sens={"envoyer"})
+    os.environ["HOME"] = os.environ["APPDATA"] = os.path.join(base, nom.replace(" ", "_"), "A")
+    plan = miroir.planifier(pa, emplacement=distant.emplacement(compte, mdp))
+    verifie([(x["rel"], x["action"]) for x in plan] == [("sauvegarde/tampons/t2.json", "recevoir")],
+            f"{nom} : le plan annonce le nouveau tampon sans le recevoir")
+    t2 = os.path.join(la, "sauvegarde", "tampons", "t2.json")
+    verifie(not os.path.exists(t2), f"{nom} : rien reçu pendant le plan")
+    miroir.synchroniser(pa, emplacement=distant.emplacement(compte, mdp), choix=set())
+    verifie(not os.path.exists(t2) and len(miroir.planifier(pa, emplacement=distant.emplacement(compte, mdp))) == 1,
+            f"{nom} : décoché -> pas reçu, proposé à nouveau")
+    miroir.synchroniser(pa, emplacement=distant.emplacement(compte, mdp), choix={"sauvegarde/tampons/t2.json"})
+    verifie(os.path.exists(t2) and miroir.planifier(pa, emplacement=distant.emplacement(compte, mdp)) == [],
+            f"{nom} : coché -> reçu, plus rien en attente")
+    os.utime(t2, None)                                      # reecrit a l'identique : pas un changement
+    verifie(miroir.planifier(pa, emplacement=distant.emplacement(compte, mdp)) == [], f"{nom} : heure changée seule -> rien à envoyer")
     os.environ["HOME"] = os.environ["APPDATA"] = base
 
 cr = distant.nouveau_compte("reseau"); cr["adresse"] = os.path.join(base, "partage"); os.makedirs(cr["adresse"])

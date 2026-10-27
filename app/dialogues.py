@@ -224,7 +224,9 @@ class PanneauBibliotheque(QWidget):
         self.liste = QListWidget()
         self.liste.setViewMode(QListWidget.IconMode)
         self.liste.setIconSize(QSize(150, 50) if compact else QSize(200, 70))
-        self.liste.setGridSize(QSize(170, 84) if compact else QSize(220, 110))
+        self.liste.setGridSize(QSize(176, 104) if compact else QSize(220, 128))
+        self.liste.setWordWrap(True)                 # nom, etoile et categorie sur deux lignes, sans « ... »
+        self.liste.setTextElideMode(Qt.ElideNone)
         self.liste.setResizeMode(QListWidget.Adjust)
         self.liste.setMovement(QListWidget.Static)
         self.liste.itemDoubleClicked.connect(lambda _x: self.choisi_double.emit())
@@ -258,16 +260,23 @@ class PanneauBibliotheque(QWidget):
             h.addWidget(b)
         h.addStretch()
         v.addLayout(h)
+        if compact:                                  # la colonne de boutons n'est jamais coupee en bas
+            self.setMinimumHeight(h.sizeHint().height() + 4)
         self.rafraichir()
 
     def rafraichir(self, choisir=None):
         self.liste.clear()
         defaut = self.b.par_defaut(self.genre)
         for e in self.b.elements(self.genre):
+            est_defaut = bool(defaut and e["id"] == defaut["id"])
+            date = e.get("horodatage", "non") != "non"
             it = QListWidgetItem(QIcon(_pix_depuis_png(objets.apercu(self.b.lire(e), 70), 70)),
-                                 e["nom"] + ("  ★" if defaut and e["id"] == defaut["id"] else "")
-                                 + (f"\n[{e['categorie']}]" if e.get("categorie") else "")
-                                 + ("  🕓" if e.get("horodatage", "non") != "non" else ""))
+                                 ("★ " if est_defaut else "") + e["nom"] + (" 🕓" if date else "")
+                                 + (f"\n{e['categorie']}" if e.get("categorie") else ""))
+            it.setToolTip("<b>" + e["nom"] + "</b>"
+                          + ("<br>" + _("Par défaut") if est_defaut else "")
+                          + ("<br>" + _("Catégorie : {c}", c=e["categorie"]) if e.get("categorie") else "")
+                          + ("<br>" + _("Porte la date") if date else ""))
             it.setData(Qt.UserRole, e)
             self.liste.addItem(it)
             if choisir and e["id"] == choisir["id"]:
@@ -385,6 +394,12 @@ class PanneauBibliotheque(QWidget):
         from . import miroir, distant
         from PySide6.QtGui import QCursor
         c = miroir.compte_drive(self.b.params)
+        f = self.parentWidget()
+        while f is not None and not hasattr(f, "synchro_manuelle"):
+            f = f.parentWidget()
+        if c and f is not None:         # meme fenetre que partout : ce qui va etre recu et envoye, a cocher
+            f.synchro_manuelle(parent=self.window(), apres=self.rafraichir)
+            return
         if c:                           # Drive en direct, NAS, FTP : on envoie et on recoit tout de suite
             QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
             try:
@@ -1133,8 +1148,9 @@ def oeil(champ):
     return champ
 
 
-def demander_secret(parent, titre, texte, indice=""):
-    """Comme QInputDialog.getText en mode mot de passe, avec l'oeil et un indice eventuel. Renvoie (texte, ok)."""
+def demander_secret(parent, titre, texte, indice="", avec_indice=False):
+    """Comme QInputDialog.getText en mode mot de passe, avec l'oeil et un indice eventuel. Renvoie (texte, ok) ;
+    avec_indice (aucun indice encore) : un champ pour en ecrire un, renvoie (texte, ok, indice)."""
     d = QDialog(parent)
     d.setWindowTitle(titre)
     d.setMinimumWidth(420)
@@ -1149,10 +1165,22 @@ def demander_secret(parent, titre, texte, indice=""):
         v.addWidget(li)
     champ = oeil(QLineEdit())
     v.addWidget(champ)
+    ind = None
+    if avec_indice and not indice:
+        li = QLabel(_("Indice pour vous en souvenir (facultatif, enregistré en clair et envoyé à vos autres postes ; "
+                      "jamais la phrase elle-même) :"))
+        li.setWordWrap(True)
+        li.setStyleSheet("color:#555;font-size:12px")
+        v.addWidget(li)
+        ind = QLineEdit()
+        ind.setPlaceholderText(_("ex. « la phrase du carnet bleu »"))
+        v.addWidget(ind)
     bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
     bb.accepted.connect(d.accept)
     bb.rejected.connect(d.reject)
     v.addWidget(bb)
     champ.setFocus()
     ok = d.exec() == QDialog.Accepted
+    if avec_indice:
+        return champ.text(), ok, (ind.text().strip() if ind is not None else "")
     return champ.text(), ok

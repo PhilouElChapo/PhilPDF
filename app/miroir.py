@@ -9,8 +9,11 @@ synchronise ordinaire. synchroniser() rapproche les deux, dans les deux sens :
     les autres prennent la version la plus recente ;
   - fichier supprime d'un cote depuis la derniere synchro : supprime de l'autre.
 """
-import json, os, posixpath, time
+import json, os, posixpath, threading, time
 from . import distant
+
+_VERROU = threading.RLock()          # jamais deux synchros en meme temps (demarrage, minute, envoi immediat...)
+RECEPTIONS = ("recevoir", "fusionner", "supprimer_ici")
 
 RACINE_DISTANTE = "/PhilPDF"
 
@@ -87,11 +90,26 @@ def _fusion(local, dist):
     return out
 
 
-def synchroniser(params, compte=None, emplacement=None):
-    """Renvoie (recus, envoyes). Leve distant.ErreurDistant si le Drive est injoignable."""
+def planifier(params, compte=None, emplacement=None):
+    """Ce que ferait la synchronisation, sans rien changer : [{rel, action, taille, date}].
+    action : « recevoir », « envoyer », « fusionner » (modifie des deux cotes) ou « supprimer_ici »."""
+    plan = []
+    synchroniser(params, compte, emplacement, plan=plan)
+    return plan
+
+
+def synchroniser(params, compte=None, emplacement=None, choix=None, sens=None, plan=None):
+    """Renvoie (recus, envoyes). Leve distant.ErreurDistant si le Drive est injoignable.
+    choix : ensemble des fichiers (rel) a traiter, None = tous ; sens : actions permises (ex. {"envoyer"}), None = toutes ;
+    ce qui n'est pas traite reste en attente pour la fois suivante. plan : liste a remplir sans rien faire."""
     compte = compte or compte_drive(params)
     if not compte:
         return 0, 0
+    with _VERROU:
+        return _synchroniser(params, compte, emplacement, choix, sens, plan)
+
+
+def _synchroniser(params, compte, emplacement, choix, sens, plan):
     e = emplacement or distant.emplacement(compte)
     base = dossier_miroir(compte)
     local_racine = os.path.join(base, "PhilPDF")
@@ -131,9 +149,30 @@ def synchroniser(params, compte=None, emplacement=None):
             avant = etat.get(rel, {})
             l_mtime = os.path.getmtime(lp) if os.path.exists(lp) else None
             # l'heure seule ne suffit pas (horloge des fichiers grossiere sous Windows) : on compare aussi l'empreinte
-            local_modifie = l_mtime is not None and (l_mtime != avant.get("local") or _empreinte(lp) != avant.get("empreinte"))
+            # l'empreinte decide : un fichier reecrit a l'identique (heure changee) n'est pas un changement
+            local_modifie = l_mtime is not None and _empreinte(lp) != avant.get("empreinte")
             distant_modifie = d is not None and d[1] != avant.get("distant")
             if d is None and l_mtime is None:
+                continue
+            # decision
+            if d is None:
+                action = "supprimer_ici" if (avant.get("distant") and not local_modifie) else "envoyer"
+            elif l_mtime is None:
+                action = None if (avant.get("local") and not distant_modifie) else "recevoir"
+            elif local_modifie and distant_modifie:
+                action = "fusionner" if nom.endswith(".json") else "recevoir"
+            elif distant_modifie:
+                action = "recevoir"
+            elif local_modifie:
+                action = "envoyer"
+            else:
+                action = None
+            if action and (plan is not None or (choix is not None and rel not in choix) or (sens is not None and action not in sens)):
+                if plan is not None:
+                    plan.append({"rel": rel, "action": action, "taille": (d[0] if d else (os.path.getsize(lp) if l_mtime else 0)),
+                                 "date": d[1] if d else ""})
+                if avant:
+                    nouvel_etat[rel] = avant                # en attente : propose a nouveau la prochaine fois
                 continue
             envoye = False
             if d is None:                                   # absent du Drive
@@ -203,6 +242,8 @@ def synchroniser(params, compte=None, emplacement=None):
                 nouvel_etat[rel] = {"local": os.path.getmtime(lp), "empreinte": _empreinte(lp), "distant": (d or (0, None))[1]}
 
     parcourir("")
+    if plan is not None:
+        return 0, 0
     with open(chemin_etat, "w", encoding="utf-8") as f:
         json.dump(nouvel_etat, f, indent=1)
     journal(f"synchro {libelle_compte(compte)} : dossier local {local_racine} ↔ {RACINE_DISTANTE} ; "

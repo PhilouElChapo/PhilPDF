@@ -302,6 +302,7 @@ class Session:
         Renvoie [(chemin ou None, comment)] dans l'ordre des fichiers."""
         res = [self.retrouver_direct(machine, e) for e in fichiers]
         manquants = [i for i, (c, _x) in enumerate(res) if not c]
+        self.doublons = {}                     # i -> [chemins] quand le meme fichier est a plusieurs endroits ici
         if progression:
             for i, (c, cm) in enumerate(res):
                 progression(i, c, cm or "")
@@ -328,10 +329,13 @@ class Session:
                     if fl in par_nom:
                         p = os.path.join(base, f)
                         for i in list(par_nom[fl]):
-                            if not res[i][0] and self._confirme(p, fichiers[i]):
-                                res[i] = (p, _("retrouvé par son nom"))
-                                par_nom[fl].remove(i)
-                                progression and progression(i, p, res[i][1])
+                            if self._confirme(p, fichiers[i]):
+                                self.doublons.setdefault(i, [])
+                                if _norm(p) not in {_norm(x) for x in self.doublons[i]}:
+                                    self.doublons[i].append(p)
+                                if not res[i][0]:
+                                    res[i] = (p, _("retrouvé par son nom"))
+                                    progression and progression(i, p, res[i][1])
                     if par_taille and fl.endswith(".pdf"):
                         p = os.path.join(base, f)
                         try:
@@ -342,17 +346,21 @@ class Session:
                             if not res[i][0] and empreinte(p) == fichiers[i]["empreinte"]:
                                 res[i] = (p, _("renommé, retrouvé par son contenu"))
                                 progression and progression(i, p, res[i][1])
-                if all(res[i][0] for i in manquants):
-                    return res
+                tout = all(res[i][0] for i in manquants)
+                if tout and time.monotonic() - debut > 2:
+                    break                               # tout est trouve ; on a continue 2 s pour reperer les doublons
                 if arret() or n > LIMITE_FICHIERS or (delai and time.monotonic() - debut > delai):
-                    complet = False
+                    complet = tout
                     break
-            if not complet:
+            if not complet or (all(res[i][0] for i in manquants) and time.monotonic() - debut > 2):
                 break
         for i in manquants:
             if not res[i][0]:
                 res[i] = (None, _("introuvable") if complet else _("introuvable (recherche limitée)"))
                 progression and progression(i, None, res[i][1])
+        self.doublons = {i: v for i, v in self.doublons.items() if len(v) > 1}
+        for i, v in self.doublons.items():
+            res[i] = (res[i][0], _("trouvé à {n} endroits : choisissez lequel", n=len(v)))
         return res
 
     def apprendre_depuis(self, machine, e, trouve):

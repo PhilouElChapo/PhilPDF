@@ -95,16 +95,31 @@ class TacheTelechargement(QThread):
 
 
 class TacheMiroir(QThread):
-    """Synchronise le dossier PhilPDF d'un Drive « en direct » avec son miroir local."""
+    """Synchronise le dossier PhilPDF d'un Drive « en direct » avec son miroir local.
+    mode : « tout » ; « plan » (ce qui changerait, decrit, sans rien faire) ; « choix » (seulement les fichiers choisis) ;
+    « envois » (ce que ce poste a change, puis la liste de ce qui attend d'etre recu) ; « envois_seuls »."""
     fini = Signal(object, str)
 
-    def __init__(self, params):
+    def __init__(self, params, mode="tout", choix=None):
         super().__init__()
-        self.params = params
+        self.params, self.mode, self.choix = params, mode, choix
 
     def run(self):
         try:
-            self.fini.emit(miroir.synchroniser(self.params), "")
+            if self.mode == "plan":
+                from .synchro_plan import decrire
+                plan = miroir.planifier(self.params)
+                self.fini.emit({"plan": plan, "lignes": decrire(plan, self.params) if plan else []}, "")
+            elif self.mode == "choix":
+                self.fini.emit(miroir.synchroniser(self.params, choix=self.choix), "")
+            elif self.mode in ("envois", "envois_seuls"):
+                r = miroir.synchroniser(self.params, sens={"envoyer"})
+                attente = []
+                if self.mode == "envois":
+                    attente = [a for a in miroir.planifier(self.params) if a["action"] in miroir.RECEPTIONS]
+                self.fini.emit({"res": r, "attente": attente}, "")
+            else:
+                self.fini.emit(miroir.synchroniser(self.params), "")
         except Exception as e:
             self.fini.emit(None, str(e))
 
@@ -129,8 +144,8 @@ class TacheSynchro(QThread):
                     d = (m, date, self.s.lire()[m]["fichiers"])
             if d:
                 m, date, fichiers = d
-                self.resultat.emit((m, date, fichiers, self.s.retrouver_tous(m, fichiers, arret=lambda: self.stop, delai=DELAI_SILENCIEUX),
-                                    plus_recente))
+                res = self.s.retrouver_tous(m, fichiers, arret=lambda: self.stop, delai=DELAI_SILENCIEUX)
+                self.resultat.emit((m, date, fichiers, res, plus_recente, dict(getattr(self.s, "doublons", {}))))
         except Exception:
             pass
 
@@ -195,11 +210,17 @@ class PanneauSynchro(QFrame):
         b.clicked.connect(f)
         self.boutons.addWidget(b)
 
-    def terminer(self, etat, compte):
+    def etape(self, texte):
+        self.texte.setText(texte)
+        self.barre.show()
+        self._placer()
+
+    def terminer(self, etat, compte, message=None):
         self.barre.hide()
         if etat["ok"]:
-            self.texte.setText(_("✓ Terminé : {r} élément(s) reçu(s) de vos autres postes, {e} envoyé(s).",
-                                 r=etat["recus"], e=etat["envoyes"]))
+            self.texte.setText(message or (_("✓ Tout est à jour.") if not (etat["recus"] or etat["envoyes"]) else
+                               _("✓ Terminé : {r} élément(s) reçu(s) de vos autres postes, {e} envoyé(s).",
+                                 r=etat["recus"], e=etat["envoyes"])))
             QTimer.singleShot(5000, self.deleteLater)
         else:
             self.setStyleSheet(self.styleSheet().replace("#2b6cb0", "#c9252d"))
@@ -340,6 +361,9 @@ class Fenetre(QMainWindow):
         self.accueil.action_fichier.connect(self.action_fichier)
         self.accueil.reprendre.connect(self.reprendre_proposee)
         self.accueil.synchroniser.connect(self.synchroniser)
+        self.accueil.session_vue.connect(self.marquer_session_vue)
+        self.accueil.synchro_drive.connect(self.synchro_manuelle)
+        self.accueil.doublon_choisi.connect(lambda m, e, p: session_de(self.params).apprendre_depuis(m, e, p))
         self.accueil.changer_synchro.connect(lambda: self.bienvenue(seulement_synchro=True))
         self.synchro = None              # (machine, date, fichiers, resultats) trouve au demarrage
         self._session_touchee = False    # on n'ecrit la session que si des fichiers ont ete ouverts ou fermes
@@ -392,14 +416,14 @@ class Fenetre(QMainWindow):
             QTimer.singleShot(2200, self.communs_au_demarrage)
             QTimer.singleShot(2500, self.secrets_au_demarrage)
 
-    def _synchro_biblio(self):
+    def _synchro_biblio(self, envoyer=True):
         try:
             r = self.biblio.synchroniser_drive()
         except OSError:
             r = None
         if r and r[0]:
             self.statusBar().showMessage(_('{x} tampon(s) / signature(s) reçu(s) de vos autres postes.', x=r[0]), 8000)
-        if r and r[1] and miroir.compte_drive(self.params):
+        if envoyer and r and r[1] and miroir.compte_drive(self.params):
             from PySide6.QtCore import QTimer
             QTimer.singleShot(1000, self.synchro_miroir)
 
@@ -421,7 +445,8 @@ class Fenetre(QMainWindow):
         self.menu_recents = m.addMenu(icone("recent"), _('Ouvrir un fichier récent'))
         self.menu_recents.aboutToShow.connect(self._remplir_recents)
         act(m, _("Ouvrir depuis un emplacement (NAS, FTP, Drive)..."), lambda: self.ouvrir_distant(), "Shift+Ctrl+O", "archiver")
-        act(m, _('Synchroniser avec les autres postes...'), self.synchroniser, None, "synchro")
+        act(m, _('Synchroniser maintenant...'), self.synchro_manuelle, None, "synchro")
+        act(m, _('Fichiers ouverts sur mes autres postes...'), self.synchroniser, None, "recent")
         sm = m.addMenu(icone("creer"), _('Créer un PDF'))
         act(sm, _('Page vierge'), lambda: self.creer("vierge"), None, "creer")
         act(sm, _("A partir d'images..."), lambda: self.creer("images"), None, "exporter")
@@ -887,9 +912,9 @@ class Fenetre(QMainWindow):
             t = getattr(self, "_t_miroir", None)
             if t and t.isRunning():
                 fen.attendre(t, 8000, _("Synchronisation en cours avec {lieu}...", lieu=fen.lieu))
-            t = TacheMiroir(self.params)
+            t = TacheMiroir(self.params, "envois_seuls")     # a la fermeture : seulement ce que ce poste a change
             t.start()
-            fen.attendre(t, 8000, _("Dernière synchronisation avec {lieu} (8 s au plus)...", lieu=fen.lieu))
+            fen.attendre(t, 8000, _("Envoi de vos derniers changements à {lieu} (8 s au plus)...", lieu=fen.lieu))
         fen.close()
         srv = getattr(self, "serveur_instance", None)
         if srv is not None:                            # le PhilPDF relance (redemarrage) devient l'instance principale
@@ -906,32 +931,107 @@ class Fenetre(QMainWindow):
         except Exception:
             return _("votre emplacement de synchronisation")
 
-    def synchro_miroir(self, au_demarrage=False, montrer=None):
-        c = miroir.compte_drive(self.params)
-        if not c or getattr(self, "_t_miroir", None) and self._t_miroir.isRunning():
-            return
-        t = self._t_miroir = TacheMiroir(self.params)
-        self.taches.append(t)
-        montrer = au_demarrage if montrer is None else montrer
-        panneau = PanneauSynchro(self, miroir.libelle_compte(c), c) if montrer else None
+    def _noter_synchro(self, ok, recus=0, envoyes=0, err=""):
+        import datetime
+        etat = {"quand": datetime.datetime.now().isoformat(timespec="minutes"), "ok": ok,
+                "recus": recus, "envoyes": envoyes, "erreur": (err or "")[:300]}
+        self.params["synchro_etat"] = etat
+        self.params.enregistrer()
+        self.accueil.rafraichir()
+        return etat
 
-        def fini(res, err):
-            import datetime
-            etat = {"quand": datetime.datetime.now().isoformat(timespec="minutes"), "ok": not err,
-                    "recus": res[0] if res else 0, "envoyes": res[1] if res else 0, "erreur": (err or "")[:300]}
-            self.params["synchro_etat"] = etat
-            self.params.enregistrer()
-            self.accueil.rafraichir()
-            if panneau is not None:
-                panneau.terminer(etat, c)
-            elif err:
-                PanneauSynchro(self, miroir.libelle_compte(c), c).terminer(etat, c)
-            if au_demarrage:
-                self._synchro_biblio()
-                self.communs_au_demarrage()
-                self.secrets_au_demarrage()
-                if self.params.get("synchro", True):
-                    self.verifier_synchro()
+    def _apres_synchro(self, au_demarrage, reglages_choisis=False):
+        """Ce qui est arrive dans la copie locale passe dans PhilPDF : tampons, reglages (a choisir), mots de passe."""
+        self._synchro_biblio(envoyer=False)
+        self.communs_au_demarrage(ouvrir=reglages_choisis)
+        self.secrets_au_demarrage()
+        if au_demarrage and self.params.get("synchro", True):
+            self.verifier_synchro()
+
+    def synchro_miroir(self, au_demarrage=False, montrer=None, manuel=False, parent=None, apres=None):
+        """Au demarrage et a la demande : on regarde d'abord ce qui a change, puis une fenetre montre ce qui va etre
+        recu et envoye, a cocher. Chaque minute (et juste apres un changement de tampon) : seuls les changements faits
+        sur ce poste partent ; ce qui arrive des autres postes attend votre accord (une bulle le signale)."""
+        c = miroir.compte_drive(self.params)
+        if not c:
+            return
+        t0 = getattr(self, "_t_miroir", None)
+        if t0 is not None and t0.isRunning():
+            if au_demarrage or manuel:
+                QTimer.singleShot(1500, lambda: self.synchro_miroir(au_demarrage, montrer, manuel, parent, apres))
+            return
+        if not (au_demarrage or manuel or montrer):
+            self._synchro_envois(c)
+            return
+        self._synchro_biblio(envoyer=False)          # tampons de ce poste copies dans la copie locale avant de regarder
+        lieu = miroir.libelle_compte(c)
+        panneau = PanneauSynchro(self, lieu, c)
+        panneau.etape(_("Recherche de ce qui a changé sur {lieu} et sur ce poste...", lieu=lieu))
+        t = self._t_miroir = TacheMiroir(self.params, "plan")
+        self.taches.append(t)
+
+        def finir(etat, message=None, choix=()):
+            panneau.terminer(etat, c, message)
+            self._apres_synchro(au_demarrage, "preferences.json" in choix)
+            if apres:
+                apres()
+
+        def plan_pret(obj, err):
+            if err:
+                return finir(self._noter_synchro(False, err=err))
+            plan, lignes = obj["plan"], obj["lignes"]
+            if not plan:
+                return finir(self._noter_synchro(True))
+            from .synchro_plan import merite_fenetre, DialoguePlan
+            if merite_fenetre(plan):
+                panneau.hide()
+                from . import avatars
+                d = DialoguePlan(parent or self, lignes, lieu, avatars.icone_compte(c, self.params))
+                self._dlg_plan = d                       # pour les tests
+                choix = d.choisis() if d.exec() == QDialog.Accepted else set()
+                panneau.show()
+                panneau.raise_()
+                if not choix:
+                    return finir(self._noter_synchro(True), _("Rien n'a été fait : ce sera proposé à la prochaine synchronisation."))
+            else:
+                choix = {a["rel"] for a in plan}           # seulement l'etat de ce poste a envoyer : pas besoin de demander
+            panneau.etape(_("Synchronisation de {n} élément(s) avec {lieu}...", n=len(choix), lieu=lieu))
+            t2 = self._t_miroir = TacheMiroir(self.params, "choix", choix)
+            self.taches.append(t2)
+
+            def fait(res, err2):
+                finir(self._noter_synchro(not err2, res[0] if res else 0, res[1] if res else 0, err2), choix=choix)
+            t2.fini.connect(fait)
+            t2.start()
+        t.fini.connect(plan_pret)
+        t.start()
+
+    def synchro_manuelle(self, parent=None, apres=None):
+        if not miroir.compte_drive(self.params):
+            return self.synchroniser()
+        self.synchro_miroir(manuel=True, parent=parent, apres=apres)
+        if self.params.get("synchro", True):
+            QTimer.singleShot(4000, self.verifier_synchro)
+
+    def _synchro_envois(self, c):
+        t = self._t_miroir = TacheMiroir(self.params, "envois")
+        self.taches.append(t)
+
+        def fini(obj, err):
+            if err:
+                self._noter_synchro(False, err=err)
+                PanneauSynchro(self, miroir.libelle_compte(c), c).terminer(self.params["synchro_etat"], c)
+                return
+            r = obj["res"]
+            if r[1]:
+                self._noter_synchro(True, 0, r[1])
+                self.statusBar().showMessage(_("{n} changement(s) de ce poste envoyé(s) à vos autres postes.", n=r[1]), 6000)
+            attente = obj["attente"]
+            sig = tuple(sorted((a["rel"], a.get("date", "")) for a in attente))
+            if attente and sig != getattr(self, "_attente_vue", None):
+                self._attente_vue = sig
+                Notification(self, _("{n} nouveauté(s) de vos autres postes attendent votre accord.", n=len(attente)),
+                             _("Voir et choisir..."), lambda: self.synchro_miroir(manuel=True))
         t.fini.connect(fini)
         t.start()
 
@@ -942,17 +1042,42 @@ class Fenetre(QMainWindow):
         self.taches.append(t)
         t.start()
 
+    @staticmethod
+    def _signature_session(m, fichiers):
+        return m + "|" + ",".join(sorted((e.get("empreinte") or e.get("nom") or "") for e in fichiers))
+
+    def marquer_session_vue(self):
+        """Reprendre ou Ignorer : le bandeau ne revient que si l'autre poste ouvre d'autres fichiers."""
+        if self.synchro:
+            m, _d, fichiers, _r = self.synchro
+            vues = dict(self.params.get("sessions_vues") or {})
+            vues[m] = self._signature_session(m, fichiers)
+            self.params["sessions_vues"] = vues
+            self.params.enregistrer()
+
     def _synchro_trouvee(self, r):
-        m, date, fichiers, res, plus_recente = r
+        m, date, fichiers, res, plus_recente = r[:5]
+        doublons = r[5] if len(r) > 5 else {}
         self.synchro = (m, date, fichiers, res)
-        self.accueil.montrer_synchro(m, date, fichiers, res, plus_recente)
+        ouverts = {os.path.normcase(o.chemin) for o in self.documents() if o.chemin}
+        deja_ouverts = all(c and os.path.normcase(c) in ouverts for c, _x in res) if res else True
+        deja_vu = deja_ouverts or (self.params.get("sessions_vues") or {}).get(m) == self._signature_session(m, fichiers)
+        self.accueil.montrer_synchro(m, date, fichiers, res, plus_recente, doublons, deja_vu=deja_vu)
         n = sum(1 for c, _x in res if c)
-        if not plus_recente:
+        if not plus_recente or deja_vu:
             return
         Notification(self, _('Session plus récente sur {m} ({date}) : {nb}, {n} retrouvé{x} ici.', m=m, date=date_fr(date), nb=nb_fichiers(len(fichiers)), n=n, x='s' if n > 1 else ''), _('Voir'),
                      lambda: self.onglets.setCurrentWidget(self.accueil))
 
     def reprendre_proposee(self):
+        if self.synchro and getattr(self.accueil, "doublons", None):     # d'abord choisir l'emplacement des doublons
+            for i in list(self.accueil.doublons):
+                if self.accueil.choisir_doublon(i) is None:
+                    return
+            m, date, fichiers, _r = self.synchro
+            self.synchro = (m, date, fichiers, self.accueil._autre[3])
+        self.marquer_session_vue()
+        self.accueil.cacher_synchro()
         if self.synchro:
             m, date, fichiers, res = self.synchro
             session = session_de(self.params)
@@ -1671,15 +1796,17 @@ class Fenetre(QMainWindow):
             t.setStyleSheet("font-weight:600;color:#616161")
             vt.addWidget(t)
             pb = PanneauBibliotheque(w, self.biblio, genre, self.params.get("auteur", ""), compact=True)
-            pb.setMinimumHeight(215)
+            pb.setMinimumHeight(max(215, pb.minimumHeight()))
             vt.addWidget(pb, 1)
             panneaux.append(pb)
         hb = QHBoxLayout()
         bsync = QPushButton(_(' Synchroniser avec le Drive maintenant'))
         bsync.setIcon(icone("synchro", "#0f6cbd"))
-        bsync.clicked.connect(lambda: (panneaux[0].synchroniser(), panneaux[1].rafraichir()))
+        bsync.clicked.connect(lambda: self.synchro_manuelle(parent=w.window(), apres=lambda: [x.rafraichir() for x in panneaux])
+                              if miroir.compte_drive(self.params) else (panneaux[0].synchroniser(), panneaux[1].rafraichir()))
         hb.addWidget(bsync)
-        ls = QLabel(_('Chaque ajout, renommage ou suppression est envoyé tout seul au Drive ; vos autres postes les reçoivent à leur démarrage.'))
+        ls = QLabel(_("Chaque ajout, renommage, catégorie ou suppression part tout seul sur le Drive dans la minute ; "
+                      "vos autres postes vous le proposent à leur démarrage (fenêtre à cocher)."))
         ls.setWordWrap(True)
         ls.setStyleSheet("color:#555;font-size:12px")
         hb.addWidget(ls, 1)
@@ -1828,9 +1955,9 @@ class Fenetre(QMainWindow):
         existe = bool(reglages.chemin_secrets(self.params) and os.path.exists(reglages.chemin_secrets(self.params)))
         while True:
             if existe:
-                ph, ok = demander_secret(parent, _("Phrase secrète"), _(
+                ph, ok, nouvel_indice = demander_secret(parent, _("Phrase secrète"), _(
                     "Un autre de vos postes synchronise déjà ses mots de passe.\nEntrez la même phrase secrète :"),
-                    reglages.lire_indice(self.params))
+                    reglages.lire_indice(self.params), avec_indice=True)
                 if not ok:
                     return False
                 try:
@@ -1841,6 +1968,9 @@ class Fenetre(QMainWindow):
                 coffre.enregistrer(reglages.PHRASE, ph)
                 self.params["synchro_secrets"] = True
                 self.params.enregistrer()
+                if nouvel_indice:                     # la phrase est la bonne : l'indice part vers vos autres postes
+                    reglages.ecrire_indice(self.params, nouvel_indice)
+                    self.synchro_miroir()
                 QMessageBox.information(parent, _("Phrase secrète"), _(
                     "{n} mot(s) de passe, autorisation(s) ou clef(s) repris de vos autres postes.", n=n))
                 return True
@@ -1883,7 +2013,7 @@ class Fenetre(QMainWindow):
             self._ecrire_secrets()
             return True
 
-    def communs_au_demarrage(self, manuel=False):
+    def communs_au_demarrage(self, manuel=False, ouvrir=False):
         """Rien n'est repris en silence : si un autre poste a change des reglages (ou ajoute des mots de passe),
         une bulle le signale et une fenetre montre chaque changement, a cocher ou non."""
         try:
@@ -1905,7 +2035,7 @@ class Fenetre(QMainWindow):
                 QMessageBox.information(self, _("Réglages de vos autres postes"), _("Rien de nouveau : ce poste est à jour."))
             return
         n = len(ch["items"] if ch else []) + len(sec)
-        if manuel:
+        if manuel or ouvrir:
             self.choisir_reglages_distants(ch, sec)
             return
         Notification(self, _("{n} réglage(s) modifié(s) sur vos autres postes{par}.", n=n,
@@ -1924,25 +2054,30 @@ class Fenetre(QMainWindow):
         v = QVBoxLayout(d)
         lb = QLabel(_("Voici ce qui a changé ailleurs. Cochez à droite ce que vous voulez reprendre sur ce poste ; "
                       "ce qui reste décoché garde la valeur de ce poste.") +
-                    (_("<br>Dernière modification par « {poste} » le {date}.", poste=ch["par"],
-                       date=_date_heure(ch["maj"])) if ch else ""))
+                    (_("<br>Réglages de « {poste} » : {date}. Réglages de ce poste ({ici}) : {date_ici}. "
+                       "Les cases du plus récent sont cochées d'avance.", poste=ch["par"], date=_date_heure(ch["maj"]),
+                       ici=self.params.get("machine", ""),
+                       date_ici=_date_heure(ch["local"]) if ch.get("local") else _("jamais modifiés"))
+                     + ("<br><b>" + _("« {poste} » est le plus récent.", poste=ch["par"]) + "</b>" if ch.get("plus_recent_ailleurs") else
+                        "<br><b>" + _("Ce poste est le plus récent : rien n'est coché, ses réglages seront gardés et envoyés.") + "</b>")
+                     if ch else ""))
         lb.setWordWrap(True)
         v.addWidget(lb)
-        lignes = [("c", it["cle"], it["libelle"], it["detail"]) for it in (ch["items"] if ch else [])] + \
-                 [("s", it["cle"], it["libelle"], _("nouveau, absent de ce poste (valeur chiffrée, non affichée)")) for it in sec]
+        lignes = [("c", it["cle"], it["libelle"], it["detail"], it.get("coche", True)) for it in (ch["items"] if ch else [])] + \
+                 [("s", it["cle"], it["libelle"], _("nouveau, absent de ce poste (valeur chiffrée, non affichée)"), True) for it in sec]
         t = QTableWidget(len(lignes), 3)
         t.setHorizontalHeaderLabels([_("Réglage"), _("Ce qui va changer sur ce poste"), _("Reprendre")])
         t.verticalHeader().hide()
         t.setEditTriggers(QTableWidget.NoEditTriggers)
         t.setWordWrap(True)
-        for r, (genre, cle, lib, detail) in enumerate(lignes):
+        for r, (genre, cle, lib, detail, coche) in enumerate(lignes):
             t.setItem(r, 0, QTableWidgetItem(lib))
             it = QTableWidgetItem(detail)
             it.setToolTip(detail)
             t.setItem(r, 1, it)
             c = QTableWidgetItem()
             c.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
-            c.setCheckState(Qt.Checked)
+            c.setCheckState(Qt.Checked if coche else Qt.Unchecked)
             c.setData(Qt.UserRole, (genre, cle))
             t.setItem(r, 2, c)
         h = t.horizontalHeader()
@@ -1975,6 +2110,8 @@ class Fenetre(QMainWindow):
         langue_avant = self.params.get("langue")
         if ch:
             reglages.appliquer_communs(self.params, ch, communs)
+            if reglages.ecrire_drive(self.params):    # ce poste a garde certaines valeurs : elles deviennent la reference
+                self.synchro_miroir()
         n_sec = reglages.reprendre_secrets_choisis(self.params, coffre.lire(reglages.PHRASE), secrets) if secrets else 0
         for o in self.documents():
             o.remplir_volet()
