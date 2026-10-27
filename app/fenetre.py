@@ -983,7 +983,7 @@ class Fenetre(QMainWindow):
             if not plan:
                 return finir(self._noter_synchro(True))
             from .synchro_plan import merite_fenetre, DialoguePlan
-            if merite_fenetre(plan):
+            if merite_fenetre(lignes):
                 panneau.hide()
                 from . import avatars
                 d = DialoguePlan(parent or self, lignes, lieu, avatars.icone_compte(c, self.params))

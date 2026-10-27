@@ -32,9 +32,11 @@ def date_locale(texte):
     return date_fr(d.isoformat(timespec="minutes"))
 
 
-def merite_fenetre(plan):
-    """Faut-il ouvrir la fenetre ? Oui des qu'il y a quelque chose a recevoir, ou un envoi autre que la routine."""
-    return any(a["action"] in miroir.RECEPTIONS or a["rel"] not in ROUTINE for a in plan)
+def merite_fenetre(lignes):
+    """Faut-il ouvrir la fenetre ? Seulement s'il y a un vrai changement pour vous : tampons, signatures, reglages
+    modifies sur un autre poste, mots de passe... Pas pour la routine (etat des autres postes, fichiers ouverts
+    ailleurs — montres sur l'Accueil —, etat de ce poste envoye) : elle se fait sans rien demander."""
+    return any(not l.get("routine") for l in lignes)
 
 
 def _lire_json(chemin):
@@ -90,6 +92,9 @@ def decrire(plan, params, compte=None, emplacement=None):
     for a in plan:
         rel, act = a["rel"], a["action"]
         recoit = act in miroir.RECEPTIONS
+        # envois : seuls les nouveaux tampons, signatures et filigranes de ce poste meritent la fenetre ; le reste
+        # (listes, reglages, apprentissage...) part sans rien demander, comme chaque minute
+        routine = not recoit and not (rel.startswith("sauvegarde/") and rel != "sauvegarde/index.json")
         titre, detail, famille = rel, "", "autre"
         if rel == "preferences.json":
             famille = "reglages"
@@ -103,6 +108,7 @@ def decrire(plan, params, compte=None, emplacement=None):
                                poste=par, date=date_locale(c.get("maj")) or "?")
                 else:
                     detail = _("état de vos autres postes (rien ne change sur ce poste)")
+                    routine = True
             else:
                 detail = _("réglages et état de ce poste")
         elif rel == "session.json":
@@ -113,6 +119,7 @@ def decrire(plan, params, compte=None, emplacement=None):
                 autres = [f"{m} : {len(v.get('fichiers', []))} ({date_locale(v.get('maj'))})"
                           for m, v in d.items() if m != machine and isinstance(v, dict)]
                 detail = _("sur vos autres postes — {liste}", liste=", ".join(autres) or "—")
+                routine = True                           # montres sur l'Accueil (bandeau une fois par changement)
             else:
                 detail = _("fichiers ouverts sur ce poste (emplacements seulement)")
         elif rel == "secrets.philpdf":
@@ -160,7 +167,8 @@ def decrire(plan, params, compte=None, emplacement=None):
         elif act == "supprimer_ici":
             detail = (detail + " — " if detail else "") + _("supprimé sur l'autre poste : sera retiré de la copie de ce poste")
         out.append({"rel": rel, "action": act, "groupe": "recevoir" if recoit else "envoyer", "titre": titre,
-                    "detail": detail, "date": date_locale(a.get("date")) if recoit else "", "famille": famille})
+                    "detail": detail, "date": date_locale(a.get("date")) if recoit else "", "famille": famille,
+                    "routine": routine})
     return out
 
 

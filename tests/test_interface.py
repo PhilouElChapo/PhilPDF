@@ -795,7 +795,8 @@ _json.dump({"elements": [{"id": "ab12cd34ef56", "genre": "tampons", "nom": "Tamp
 reponses_, vus_ = [_QW.QDialog.Rejected, _QW.QDialog.Accepted], []
 def _exec_plan(self):
     if isinstance(self, _SP.DialoguePlan):
-        vus_.append([self.arbre.topLevelItem(0).child(i).text(0) for i in range(self.arbre.topLevelItem(0).childCount())])
+        vus_.append([self.arbre.topLevelItem(g).child(i).text(0) for g in range(self.arbre.topLevelItemCount())
+                     for i in range(self.arbre.topLevelItem(g).childCount())])
         if len(vus_) == 1:
             capture(self, "49_synchro_a_cocher.png")
         return reponses_.pop(0)
@@ -819,6 +820,18 @@ verif(vus_ and any("Tampon" in x for x in vus_[0]) and not _a_le_tampon(),
 w.synchro_manuelle()
 _attendre_synchro()
 verif(len(vus_) == 2 and _a_le_tampon(), "synchro : proposé à nouveau, accepté -> tampon reçu avec sa catégorie")
+# routine (un autre poste a seulement note son etat, ses fichiers ouverts) : fait sans ouvrir la fenetre
+_json.dump({"philpdf": 1, "communs": {"maj": "2026-10-27T10:00:00", "par": w.params.get("machine")},
+            "postes": {"Cannes": {"machine": "Cannes", "maj": "2026-10-27T18:00"}}},
+           open(os.path.join(part_, "PhilPDF", "preferences.json"), "w", encoding="utf-8"))
+_json.dump({"Cannes": {"maj": "2026-10-27T18:00", "fichiers": []}},
+           open(os.path.join(part_, "PhilPDF", "session.json"), "w", encoding="utf-8"))
+reponses_.append(_QW.QDialog.Accepted)
+w.synchro_manuelle()
+for _i in range(40):
+    QTest.qWait(150)
+verif(len(vus_) == 2 and os.path.exists(os.path.join(_M_dossier_ := __import__("app.miroir", fromlist=["x"]).dossier_miroir(cr_), "PhilPDF", "session.json")),
+      f"synchro : rien de nouveau pour vous (état des autres postes) -> fait sans fenêtre ({vus_[2:]})")
 _QW.QDialog.exec = _exo
 w.params["drive_compte"] = ""
 w.params.enregistrer()
