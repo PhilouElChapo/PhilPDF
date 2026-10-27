@@ -140,11 +140,38 @@ class PageWidget(QWidget):
             p.setBrush(QColor("#ffffff"))
             for c in self._poignees(r):
                 p.drawRect(c)
+            pr = self._poignee_rotation(r)
+            if pr is not None:                       # poignee ronde de rotation, comme dans Word
+                p.setPen(QPen(QColor("#1462c2"), 1.2))
+                p.drawLine(QPointF(r.center().x(), r.top()), pr.center())
+                p.setBrush(QColor("#ffffff"))
+                p.drawEllipse(pr)
+                p.setPen(QPen(QColor("#1462c2"), 1.4))
+                p.drawArc(pr.adjusted(3, 3, -3, -3), 30 * 16, 270 * 16)
         for (pg, r) in o.marques_biffage:
             if pg == self.num:
                 p.setPen(QPen(QColor("#c9252d"), 2))
                 p.setBrush(QColor(0, 0, 0, 110))
                 p.drawRect(self.vers_ecran(r))
+        g = self.glisse
+        if g and g.get("genre") == "rotation" and g.get("angle") is not None:
+            import math
+            r = self.vers_ecran(g["rect0"])
+            c = r.center()
+            a = math.radians(-g["angle"])                 # ecran : y vers le bas
+            pts = []
+            for x, y in ((r.left(), r.top()), (r.right(), r.top()), (r.right(), r.bottom()), (r.left(), r.bottom())):
+                dx, dy = x - c.x(), y - c.y()
+                pts.append(QPointF(c.x() + dx * math.cos(a) - dy * math.sin(a), c.y() + dx * math.sin(a) + dy * math.cos(a)))
+            from PySide6.QtGui import QPolygonF
+            p.setPen(QPen(QColor("#1462c2"), 1.5, Qt.DashLine))
+            p.setBrush(QColor(20, 98, 194, 30))
+            p.drawPolygon(QPolygonF(pts))
+            p.setPen(QColor("#1462c2"))
+            fo = QFont()
+            fo.setBold(True)
+            p.setFont(fo)
+            p.drawText(QPointF(c.x() + 6, c.y() - 6), f"{g['angle']:+.0f}°")
         if self.glisse and self.glisse.get("fantome") is not None:
             p.setPen(QPen(QColor("#1462c2"), 1.5, Qt.DashLine))
             p.setBrush(QColor(20, 98, 194, 30))
@@ -181,6 +208,26 @@ class PageWidget(QWidget):
         h = POIGNEE / 2
         return [QRectF(x - h, y - h, POIGNEE, POIGNEE) for x, y in
                 ((r.left(), r.top()), (r.right(), r.top()), (r.left(), r.bottom()), (r.right(), r.bottom()))]
+
+    def _poignee_rotation(self, r):
+        obj = self.o.objet
+        if not obj or obj["page"] != self.num or obj["type"] not in ("annot", "image", "ligne"):
+            return None
+        if obj["type"] == "annot" and not obj.get("philpdf"):
+            return None
+        d = 11
+        return QRectF(r.center().x() - d / 2, r.top() - 24 - d / 2, d, d)
+
+    def _sur_rotation(self, pos):
+        obj = self.o.objet
+        if not obj or obj["page"] != self.num:
+            return False
+        pr = self._poignee_rotation(self.vers_ecran(obj["rect"]))
+        return pr is not None and pr.adjusted(-4, -4, 4, 4).contains(pos)
+
+    def _angle_souris(self, pos, centre):
+        import math
+        return math.degrees(math.atan2(-(pos.y() - centre.y()), pos.x() - centre.x()))
 
     def _sur_poignee(self, pos):
         obj = self.o.objet
@@ -229,6 +276,11 @@ class PageWidget(QWidget):
             if w:
                 o.remplir_champ(self, w)
                 return
+        if self._sur_rotation(e.position()):
+            r = self.vers_ecran(o.objet["rect"])
+            self.glisse = {"genre": "rotation", "centre": r.center(), "rect0": fitz.Rect(o.objet["rect"]),
+                           "depart": self._angle_souris(e.position(), r.center()), "angle": None}
+            return
         poignee = self._sur_poignee(e.position())
         if poignee is not None:
             self.glisse = {"genre": "redim", "coin": poignee, "debut": pt, "rect0": fitz.Rect(o.objet["rect"]), "fantome": None}
@@ -248,6 +300,14 @@ class PageWidget(QWidget):
         g = self.glisse
         if g and e.buttons() & Qt.LeftButton:
             d = pt - g["debut"]
+            if g["genre"] == "rotation":
+                a = self._angle_souris(e.position(), g["centre"]) - g["depart"]
+                a = (a + 180) % 360 - 180
+                if e.modifiers() & Qt.ShiftModifier:          # Maj : par pas de 15 degres
+                    a = round(a / 15) * 15
+                g["angle"] = a
+                self.update()
+                return
             if g["genre"] == "zone":
                 g["fantome"] = fitz.Rect(g["debut"], pt).normalize()
             elif g["genre"] == "deplacer":
@@ -278,7 +338,10 @@ class PageWidget(QWidget):
             return
         # curseurs
         self.survol = pt
-        if self._sur_poignee(e.position()) is not None:
+        if self._sur_rotation(e.position()):
+            self.setCursor(Qt.PointingHandCursor)
+            self.setToolTip(_("Glissez pour tourner (Maj : par pas de 15°) ; clic droit : 90°"))
+        elif self._sur_poignee(e.position()) is not None:
             self.setCursor(Qt.SizeFDiagCursor)
         elif o.mode in (None, "formulaire") and o.champ_sous(self.num, pt):
             self.setCursor(Qt.PointingHandCursor)
@@ -297,6 +360,11 @@ class PageWidget(QWidget):
         o = self.o
         g, self.glisse = self.glisse, None
         if g:
+            if g["genre"] == "rotation":
+                if g.get("angle"):
+                    o.tourner_objet(g["angle"])
+                self.update()
+                return
             if g["genre"] == "zone" and g["fantome"] is not None and g["fantome"].width > 4:
                 o.zone_tracee(self.num, g["fantome"])
             elif g["genre"] in ("deplacer", "redim") and g["fantome"] is not None:
@@ -2508,6 +2576,58 @@ class OngletDocument(QWidget):
             self.objet = {"type": "ligne", "page": n, "rect": nouveau, "texte": obj["texte"]}
             self.rafraichir_pages()
 
+    def tourner_objet(self, delta):
+        """Tourne l'objet choisi autour de son centre : delta en degres, sens inverse des aiguilles d'une montre
+        (comme la poignee : vers la gauche = positif). None = remettre droit."""
+        obj = self.objet
+        if not obj:
+            return
+        n = obj["page"]
+        try:
+            if delta is None:                             # angle actuel -> on annule
+                if obj["type"] == "annot":
+                    delta = -objets.angle_objet(self.doc, obj["xref"])
+                elif obj["type"] == "image":
+                    delta = -Editeur(self.doc).geometrie_image(n, obj["xref"])[3]
+                else:
+                    import math
+                    l = next((l for b in self.doc[n].get_text("dict")["blocks"] for l in b.get("lines", [])
+                              if fitz.Rect(l["bbox"]).intersects(obj["rect"])), None)
+                    delta = -math.degrees(math.atan2(-l["dir"][1], l["dir"][0])) if l else 0
+                if abs(delta) < 0.05:
+                    return
+            self.memoriser(_("Rotation"))
+            if obj["type"] == "annot":
+                if not obj.get("philpdf"):
+                    self.annulations.pop()
+                    return
+                objets.tourner(self.doc, n, obj["xref"], delta)
+                obj["rect"] = objets.rect_objet(self.doc, n, obj["xref"])
+                journal = [_("Objet tourné.")]
+            elif obj["type"] == "image":
+                ed = Editeur(self.doc)
+                ed.tourner_image(n, obj["xref"], delta)
+                obj["rect"] = fitz.Rect(next(r for x, r in ed.images(n) if x == obj["xref"]))
+                journal = ed.journal
+            else:
+                ed = Editeur(self.doc)
+                zones = [obj["rect"]]
+                for r, _x in self.paragraphes_page(n):        # ligne d'un paragraphe : tout le bloc tourne
+                    if fitz.Rect(r).contains(fitz.Rect(obj["rect"]).tl + (1, 1)):
+                        zones = [fitz.Rect(r)]
+                        break
+                obj["rect"] = ed.tourner_lignes(n, zones, delta)
+                journal = ed.journal
+        except Exception as e:
+            if self.annulations:
+                self.annulations.pop()
+                self.maj_historique()
+            self.message(_("Rotation impossible : {e}", e=e))
+            return
+        self.apres_modif(journal)
+        self.objet = obj
+        self.rafraichir_pages()
+
     def supprimer(self):
         obj = self.objet
         if not obj:
@@ -2582,6 +2702,10 @@ class OngletDocument(QWidget):
             m.addAction(icone("copier"), _('Copier'), self.copier)
             m.addAction(_('Couper'), self.couper)
             m.addAction(icone("fermer", "#c9252d"), _('Supprimer'), self.supprimer)
+            if self.objet["type"] in ("image", "ligne") or (self.objet["type"] == "annot" and self.objet.get("philpdf")):
+                m.addAction(icone("pivoter", "#444444"), _("Tourner de 90° à droite"), lambda: self.tourner_objet(-90))
+                m.addAction(_("Tourner de 90° à gauche"), lambda: self.tourner_objet(90))
+                m.addAction(_("Remettre droit"), lambda: self.tourner_objet(None))
             if self.objet["type"] == "image":
                 m.addAction(_("Remplacer l'image..."), self.remplacer_image)
             if self.objet["type"] == "ligne":

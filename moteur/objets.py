@@ -217,6 +217,14 @@ def tourner(doc, num_page, xref, delta):
     return angle
 
 
+def rect_objet(doc, num_page, xref):
+    """Cadre d'un objet en coordonnees de la page (lu dans le PDF, sans passer par l'annotation)."""
+    t, v = doc.xref_get_key(xref, "Rect")
+    r = fitz.Rect([float(x) for x in v.strip("[]").split()]) * ~doc[num_page].transformation_matrix
+    r.normalize()
+    return r
+
+
 def est_objet_philpdf(annot):
     return (annot.info.get("subject") or "").startswith(SUJET)
 

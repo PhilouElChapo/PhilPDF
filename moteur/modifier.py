@@ -192,6 +192,18 @@ class PoliceIncorporee:
 
 
 # ----------------------------------------------------------------- moteur
+def _effacer_lettres(page, chars):
+    """Marque chaque lettre a effacer par un petit carre en son centre : rien d'autre autour n'est touche
+    (une ligne penchee a un cadre qui deborde sur ses voisines)."""
+    for c, _s in chars:
+        b = fitz.Rect(c["bbox"])
+        if b.is_empty:
+            continue
+        m = fitz.Point((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2)
+        e = max(0.4, min(b.width, b.height) * 0.2)
+        page.add_redact_annot(fitz.Rect(m.x - e, m.y - e, m.x + e, m.y + e), fill=False)
+
+
 class Editeur:
     def __init__(self, chemin_ou_doc):
         self.doc = chemin_ou_doc if isinstance(chemin_ou_doc, fitz.Document) else fitz.open(chemin_ou_doc)
@@ -307,9 +319,15 @@ class Editeur:
 
     def deplacer_ligne(self, num_page, zone, dx, dy):
         """Deplace une ligne entiere, chaque lettre gardant sa police, sa taille et sa couleur."""
+        import math
         page = self.doc[num_page]
         zone = fitz.Rect(zone)
-        for chars in self._lignes(page):
+        lignes = [([(c, sp) for sp in l["spans"] for c in sp["chars"]], l["dir"])
+                  for b in page.get_text("rawdict", flags=fitz.TEXT_PRESERVE_WHITESPACE)["blocks"] for l in b.get("lines", [])]
+        for chars, direction in lignes:
+            if not chars:
+                continue
+            angle = math.degrees(math.atan2(-direction[1], direction[0]))    # une ligne tournee le reste
             r = fitz.Rect()
             for c, _ in chars:
                 r |= fitz.Rect(c["bbox"])
@@ -325,9 +343,13 @@ class Editeur:
                     if repli is None:
                         repli = self._police_par_nom(p) or PoliceIncorporee(*self._choisir_par_rendu(page, chars[:12])[1:])
                     cible = repli
-                plan.append((ch, cible, s["size"], fitz.sRGB_to_pdf(s["color"]), c["origin"][0] + dx, "", c["origin"][1] + dy))
+                plan.append((ch, cible, s["size"], fitz.sRGB_to_pdf(s["color"]), c["origin"][0] + dx, "", c["origin"][1] + dy,
+                             angle if abs(angle) > 0.05 else 0))
             h = r.height
-            page.add_redact_annot(fitz.Rect(r.x0 + 0.3, r.y0 + h * 0.25, r.x1 + 0.5, r.y1 - h * 0.25), fill=False)
+            if abs(angle) <= 0.05:
+                page.add_redact_annot(fitz.Rect(r.x0 + 0.3, r.y0 + h * 0.25, r.x1 + 0.5, r.y1 - h * 0.25), fill=False)
+            else:
+                _effacer_lettres(page, chars)
             page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE,
                                   text=fitz.PDF_REDACT_TEXT_REMOVE)
             self._ecrire(page, [x for x in plan if x[1] is not None], plan[0][6])
@@ -855,8 +877,7 @@ class Editeur:
                 ny = cy - (ox - cx) * sa + (oy - cy) * ca
                 plan.append((ch, cible, s["size"], fitz.sRGB_to_pdf(s["color"]), nx, "", ny, angle0 + delta))
             plans.append(plan)
-            page.add_redact_annot(fitz.Quad(l["bbox"]) if False else fitz.Rect(r.x0 + 0.3, r.y0 + 0.3, r.x1 - 0.3, r.y1 - 0.3),
-                                  fill=False)
+            _effacer_lettres(page, chars)
         page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE,
                               text=fitz.PDF_REDACT_TEXT_REMOVE)
         for plan in plans:

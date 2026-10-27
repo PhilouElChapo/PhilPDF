@@ -477,6 +477,10 @@ class PanneauComptes(QWidget):
         self.liste = QListWidget()
         self.liste.setIconSize(QSize(28, 28))
         self.liste.itemDoubleClicked.connect(lambda _it: self.modifier())
+        self.liste.setDragDropMode(QListWidget.InternalMove)      # glisser pour ranger les comptes dans l'ordre voulu
+        self.liste.setDefaultDropAction(Qt.MoveAction)
+        self.liste.setToolTip(_("Glissez un compte pour changer l'ordre (repris partout : synchronisation, Ouvrir, Enregistrer)"))
+        self.liste.model().rowsMoved.connect(lambda *_a: self._ordre_change())
         v.addWidget(self.liste, 1)
         hs = QHBoxLayout()
         hs.addWidget(QLabel(_("Icônes des comptes :")))
@@ -497,7 +501,8 @@ class PanneauComptes(QWidget):
             a.triggered.connect(lambda _x=False, t=t: self.ajouter(t))
         ajout.setMenu(m)
         h.addWidget(ajout)
-        for txt, f in ((_("Modifier..."), self.modifier), (_("Tester"), self.tester), (_("Supprimer"), self.supprimer)):
+        for txt, f in ((_("Modifier..."), self.modifier), (_("Tester"), self.tester), (_("Supprimer"), self.supprimer),
+                       ("▲", lambda: self.monter(-1)), ("▼", lambda: self.monter(1))):
             b = QPushButton(txt)
             b.clicked.connect(f)
             h.addWidget(b)
@@ -537,8 +542,28 @@ class PanneauComptes(QWidget):
         if it:
             return next((c for c in self.comptes() if c["id"] == it.data(Qt.UserRole)), None)
 
+    def _ordre_change(self):
+        ids = [self.liste.item(i).data(Qt.UserRole) for i in range(self.liste.count())]
+        par_id = {c["id"]: c for c in self.comptes()}
+        self.params["comptes"] = [par_id[i] for i in ids if i in par_id] + [c for c in self.comptes() if c["id"] not in ids]
+        self.params.enregistrer()
+
+    def monter(self, sens):
+        r = self.liste.currentRow()
+        cs = self.comptes()
+        if r < 0 or not (0 <= r + sens < len(cs)):
+            return
+        cs[r], cs[r + sens] = cs[r + sens], cs[r]
+        self.params["comptes"] = cs
+        self.params.enregistrer()
+        self.remplir()
+        self.liste.setCurrentRow(r + sens)
+
     def _enregistrer(self, c):
-        cs = [x for x in self.comptes() if x["id"] != c["id"]] + [c]
+        anciens = self.comptes()
+        pos = next((i for i, x in enumerate(anciens) if x["id"] == c["id"]), None)
+        cs = [x for x in anciens if x["id"] != c["id"]]
+        cs.insert(pos if pos is not None else len(cs), c)             # un compte modifie garde sa place
         self.params["comptes"] = cs
         self.params.enregistrer()
         self.remplir()

@@ -948,6 +948,44 @@ _QW.QDialog.exec = _exo
 verif(any("(ce poste)" in x for x in vus_postes) and any(x.startswith("Cannes") for x in vus_postes),
       f"mes postes : liste des postes ({vus_postes})")
 
+# --- rotation : texte (le bloc entier), image et tampon, poignee ronde ; clic droit 90 degres
+import math as _m
+rp_ = os.path.join(TRAVAIL, "Rotation.pdf")
+dr_ = fitz.open(); pr_ = dr_.new_page()
+pr_.insert_text((80, 120), "Texte à tourner", fontname="helv", fontsize=18)
+pm_ = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 80, 40), False); pm_.clear_with(120)
+pr_.insert_image(fitz.Rect(300, 300, 460, 380), pixmap=pm_)
+dr_.save(rp_)
+orot_ = w.ouvrir(rp_)
+orot_.changer_mode("modifier")
+ligne_ = next(x for x in [orot_.objet_sous(0, fitz.Point(100, 112))] if x)
+orot_.choisir_objet(ligne_)
+pw_ = orot_.page_widgets[0]
+verif(pw_._poignee_rotation(pw_.vers_ecran(ligne_["rect"])) is not None, "rotation : poignée ronde sur le texte choisi")
+orot_.tourner_objet(30)
+dirs_ = [round(_m.degrees(_m.atan2(-l["dir"][1], l["dir"][0]))) for b in orot_.doc[0].get_text("dict")["blocks"]
+         for l in b.get("lines", []) if "tourner" in "".join(s["text"] for s in l["spans"])]
+verif(dirs_ == [30], f"rotation : texte tourné de 30° ({dirs_})")
+orot_.tourner_objet(None)
+dirs_ = [round(_m.degrees(_m.atan2(-l["dir"][1], l["dir"][0]))) for b in orot_.doc[0].get_text("dict")["blocks"]
+         for l in b.get("lines", []) if "tourner" in "".join(s["text"] for s in l["spans"])]
+verif(dirs_ == [0], f"rotation : « Remettre droit » ({dirs_})")
+img_ = orot_.objet_sous(0, fitz.Point(380, 340))
+orot_.choisir_objet(img_)
+orot_.tourner_objet(-90)
+from moteur.modifier import Editeur as _Ed
+verif(round(_Ed(orot_.doc).geometrie_image(0, img_["xref"])[3]) in (-90, 270), "rotation : image tournée de 90° à droite")
+capture(w, "53_rotation.png")
+orot_.changer_mode(None)
+st_ = objets.tampon_predefini("PAYE", (0.8, 0, 0), "X")
+xr_ = objets.poser(orot_.doc, 0, fitz.Rect(100, 500, 260, 560), st_)
+orot_.choisir_objet({"type": "annot", "page": 0, "xref": xr_, "rect": objets.rect_objet(orot_.doc, 0, xr_), "philpdf": True,
+                     "garder_proportions": True})
+orot_.tourner_objet(-20)
+verif(round(objets.angle_objet(orot_.doc, xr_)) in (340, -20), "rotation : tampon tourné (relu par Acrobat : matrice de l'apparence)")
+orot_.modifie = False
+w.fermer_onglet(w.onglets.indexOf(orot_))
+
 # --- fermeture : une fenetre explique l'attente (preferences, synchronisation)
 ff_ = F.FenetreFermeture(w, "Google Drive (exemple)")
 ff_.etape("Préférences envoyées vers Google Drive (exemple)", lambda: None)
