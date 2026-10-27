@@ -42,6 +42,21 @@ def verifier(sortie):
         lignes.append(f"icones des comptes: {ex}")
     ok &= bon
     lignes.append(f"icones des comptes: {'OK' if bon else 'ECHEC'}")
+    try:                                         # signature numerique (pyHanko et ses modules, presents dans l'exe ?)
+        import tempfile
+        from moteur import signature_num as SN
+        t = tempfile.mkdtemp()
+        d0 = fitz.open(); d0.new_page(); d0.save(os.path.join(t, "a.pdf"))
+        pfx = SN.creer_identite("Verification", "verif-123")
+        SN.signer(os.path.join(t, "a.pdf"), os.path.join(t, "b.pdf"), pfx, "verif-123", page=0,
+                  rect=(72, 72, 252, 117), horodatage=False)
+        v = SN.verifier(os.path.join(t, "b.pdf"), [SN.exporter_cer(pfx, "verif-123")])
+        bon = len(v) == 1 and v[0]["intacte"] and v[0]["approuve"]
+    except Exception as ex:
+        bon = False
+        lignes.append(f"signature numerique: {ex}")
+    ok &= bon
+    lignes.append(f"signature numerique: {'OK' if bon else 'ECHEC'}")
     d = fitz.open(); p = d.new_page()
     p.insert_text((72, 100), "Net à payer : 130,00 EUR", fontname="hebo", fontsize=12)
     tmp = tempfile.mkdtemp(); src = os.path.join(tmp, "t.pdf"); d.save(src)

@@ -2,7 +2,7 @@
 filigrane, en-tete et pied de page, numerisation, export."""
 import datetime, os
 import pymupdf as fitz
-from PySide6.QtCore import Qt, Signal, QRectF, QPointF, QSize, QPoint
+from PySide6.QtCore import Qt, Signal, QRectF, QPointF, QSize, QPoint, QRect
 from PySide6.QtGui import QImage, QPainter, QColor, QPen, QPixmap, QPainterPath, QIcon
 from PySide6.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QListWidgetItem,
                                QFileDialog, QInputDialog, QDialogButtonBox, QCheckBox, QComboBox, QSpinBox,
@@ -269,7 +269,64 @@ class _ListeOrdonnable(QListWidget):
         r = self.visualItemRect(self.item(proche))
         return (proche if pos.x() < r.center().x() else proche + 1), self.item(proche)
 
+    # Qt refuse le depot quand la souris passe SUR un element (les elements ne sont pas « deposables ») : seul
+    # l'espace vide en fin de liste acceptait. On accepte partout et on dessine nous-memes la barre d'insertion.
+    def _interne(self, ev):
+        return ev.source() is self or (ev.source() is None and
+                                       ev.mimeData().hasFormat("application/x-qabstractitemmodeldatalist"))
+
+    def dragEnterEvent(self, ev):
+        if self._interne(ev):
+            ev.setDropAction(Qt.MoveAction)
+            ev.accept()
+        else:
+            super().dragEnterEvent(ev)
+
+    def dragMoveEvent(self, ev):
+        if not self._interne(ev):
+            return super().dragMoveEvent(ev)
+        ev.setDropAction(Qt.MoveAction)
+        ev.accept()
+        self._barre = self._rect_barre(ev.position().toPoint())
+        self.viewport().update()
+        # defilement automatique pres des bords
+        y, h = ev.position().y(), self.viewport().height()
+        sb = self.verticalScrollBar()
+        if y < 20:
+            sb.setValue(sb.value() - 12)
+        elif y > h - 20:
+            sb.setValue(sb.value() + 12)
+
+    def dragLeaveEvent(self, ev):
+        self._barre = None
+        self.viewport().update()
+        super().dragLeaveEvent(ev)
+
+    def _rect_barre(self, pos):
+        """Barre verticale bleue la ou l'element sera insere."""
+        i, _it = self.place_depot(pos)
+        if self.count() == 0:
+            return None
+        if i < self.count():
+            r = self.visualItemRect(self.item(i))
+            x = r.left() - 3
+        else:
+            r = self.visualItemRect(self.item(self.count() - 1))
+            x = r.right() + 3
+        return QRect(x - 2, r.top() + 4, 4, r.height() - 8)
+
+    def paintEvent(self, ev):
+        super().paintEvent(ev)
+        if getattr(self, "_barre", None) is not None:
+            p = QPainter(self.viewport())
+            p.fillRect(self._barre, QColor("#1462c2"))
+            p.end()
+
     def dropEvent(self, ev):
+        self._barre = None
+        self.viewport().update()
+        if not self._interne(ev):
+            return super().dropEvent(ev)
         src = self.currentRow()
         dst, it = self.place_depot(ev.position().toPoint())
         ev.setDropAction(Qt.IgnoreAction)

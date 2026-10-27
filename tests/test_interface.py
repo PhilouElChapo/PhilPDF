@@ -873,8 +873,10 @@ pb_.liste.setCurrentRow(r_un)
 from PySide6.QtGui import QDropEvent as _QDE
 from PySide6.QtCore import QMimeData as _QMD
 cible_ = pb_.liste.visualItemRect(pb_.liste.item(r_deux)).center()
+def _mime_(lst, row):
+    return lst.model().mimeData([lst.model().index(row, 0)])
 ev_ = _QDE(D.QPointF(cible_) if hasattr(D, "QPointF") else __import__("PySide6.QtCore", fromlist=["QPointF"]).QPointF(cible_),
-           D.Qt.MoveAction, _QMD(), D.Qt.LeftButton, D.Qt.NoModifier)
+           D.Qt.MoveAction, _mime_(pb_.liste, r_un), D.Qt.LeftButton, D.Qt.NoModifier)
 pb_.liste.dropEvent(ev_)
 apres_ = [e["nom"] for e in w.biblio.elements("tampons")]
 verif(apres_.index("T-un") > apres_.index("T-deux") and len(apres_) == len(avant_),
@@ -885,10 +887,33 @@ noms_ = [pb_.liste.item(i).data(D.Qt.UserRole)["nom"] for i in range(pb_.liste.c
 ra_, rb_ = pb_.liste.visualItemRect(pb_.liste.item(noms_.index("T-deux"))), pb_.liste.visualItemRect(pb_.liste.item(noms_.index("T-un")))
 entre_ = __import__("PySide6.QtCore", fromlist=["QPointF"]).QPointF((ra_.right() + rb_.left()) / 2, ra_.center().y())
 pb_.liste.setCurrentRow(noms_.index("T-trois"))
-pb_.liste.dropEvent(_QDE(entre_, D.Qt.MoveAction, _QMD(), D.Qt.LeftButton, D.Qt.NoModifier))
+pb_.liste.dropEvent(_QDE(entre_, D.Qt.MoveAction, _mime_(pb_.liste, noms_.index("T-trois")), D.Qt.LeftButton, D.Qt.NoModifier))
 apres_ = [e["nom"] for e in w.biblio.elements("tampons")]
 verif(apres_.index("T-deux") + 1 == apres_.index("T-trois") == apres_.index("T-un") - 1,
       f"tampons : déposé entre deux, il s'y place ({apres_})")
+# sur deux rangees : glisser au-dessus d'un element est accepte (avant : seul le vide en fin de liste l'etait)
+for n_ in ("T-4", "T-5", "T-6", "T-7", "T-8"):
+    w.biblio.ajouter("tampons", n_, objets.tampon_predefini(n_, (0.1, 0.2, 0.6), "X"))
+pb_.resize(760, 500); pb_.rafraichir(); app.processEvents()
+lst_ = pb_.liste
+noms_ = [lst_.item(i).data(D.Qt.UserRole)["nom"] for i in range(lst_.count())]
+rangs_ = sorted({lst_.visualItemRect(lst_.item(i)).top() for i in range(lst_.count())})
+verif(len(rangs_) >= 2, f"tampons : la liste tient sur plusieurs rangées ({len(rangs_)})")
+deux_ = [i for i in range(lst_.count()) if lst_.visualItemRect(lst_.item(i)).top() == rangs_[1]]
+QPF_ = __import__("PySide6.QtCore", fromlist=["QPointF"]).QPointF
+from PySide6.QtGui import QDragMoveEvent as _QDM
+r0_ = lst_.visualItemRect(lst_.item(deux_[0]))
+pt_ = QPF_(r0_.left() + 6, r0_.center().y())             # juste avant le 1er de la 2e rangee
+mv_ = _QDM(pt_.toPoint(), D.Qt.MoveAction, _mime_(lst_, 0), D.Qt.LeftButton, D.Qt.NoModifier)
+lst_.dragMoveEvent(mv_)
+verif(mv_.isAccepted() and lst_._barre is not None, "tampons : survol d'un élément de la 2e rangée accepté, barre d'insertion")
+src_ = lst_.count() - 1                                  # le dernier, glisse au debut de la 2e rangee
+deplace_ = noms_[src_]
+lst_.setCurrentRow(src_)
+lst_.dropEvent(_QDE(pt_, D.Qt.MoveAction, _mime_(lst_, src_), D.Qt.LeftButton, D.Qt.NoModifier))
+apres_ = [e["nom"] for e in w.biblio.elements("tampons")]
+verif(apres_.index(deplace_) + 1 == apres_.index(noms_[deux_[0]]),
+      f"tampons : déposé au début de la 2e rangée, il s'y place ({apres_})")
 pb_.close()
 
 # --- largeur du volet droit reglee a la souris : gardee pour les documents suivants et apres redemarrage

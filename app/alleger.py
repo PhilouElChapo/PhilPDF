@@ -237,6 +237,11 @@ class DialogueAlleger(QDialog):
         self.accept()
 
     def appliquer(self):
+        if self.o.est_signe() and QMessageBox.question(
+                self, _("Alléger le fichier"),
+                _("Ce document est signé. L'alléger réécrit tout le fichier : les signatures ne seront plus valides. "
+                  "Utilisez plutôt « Enregistrer une copie allégée ».\n\nAlléger quand même ?")) != QMessageBox.Yes:
+            return
         res = self._attendre()
         if not res:
             return

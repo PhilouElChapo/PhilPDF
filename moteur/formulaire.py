@@ -130,10 +130,15 @@ def creer(doc, champs_par_page):
             w = fitz.Widget()
             w.rect = fitz.Rect(c["rect"])
             w.field_name = nom
-            w.field_label = c["nom"]
+            w.field_label = c.get("info") or c["nom"]
             if c["genre"] == "case":
                 w.field_type = fitz.PDF_WIDGET_TYPE_CHECKBOX
                 w.field_value = False
+            elif c["genre"] in ("liste", "liste_multiple"):
+                w.field_type = fitz.PDF_WIDGET_TYPE_COMBOBOX if c["genre"] == "liste" else fitz.PDF_WIDGET_TYPE_LISTBOX
+                w.choice_values = list(c.get("choix") or [])
+                w.text_fontsize = 0
+                w.text_font = "Helv"
             else:
                 w.field_type = fitz.PDF_WIDGET_TYPE_TEXT
                 w.text_fontsize = 0 if not c.get("lignes") else 10
@@ -143,5 +148,117 @@ def creer(doc, champs_par_page):
             w.border_width = 0
             w.fill_color = None
             page.add_widget(w)
+            n += 1
+    normaliser(doc)
+    return n
+
+
+def creer_radio(doc, num_page, rect, groupe, choix, info=""):
+    """Bouton radio « choix » du groupe « groupe » (cree le groupe s'il n'existe pas) ; Acrobat : un seul coche."""
+    page = doc[num_page]
+    w = fitz.Widget()
+    w.field_type = fitz.PDF_WIDGET_TYPE_RADIOBUTTON
+    w.field_name = groupe
+    w.rect = fitz.Rect(rect)
+    if info:
+        w.field_label = info
+    w.border_width = 1
+    page.add_widget(w)
+    nouveau = max((x for x in page.widgets(types=[fitz.PDF_WIDGET_TYPE_RADIOBUTTON]) if x.field_name == groupe),
+                  key=lambda x: x.xref)
+    renommer_etat(doc, nouveau.xref, choix)
+    # PyMuPDF cree un groupe par bouton : on rattache le nouveau au premier groupe du meme nom
+    groupes = []
+    for p in doc:
+        for x in p.widgets(types=[fitz.PDF_WIDGET_TYPE_RADIOBUTTON]) or []:
+            if x.field_name == groupe:
+                t, par = doc.xref_get_key(x.xref, "Parent")
+                if t == "xref":
+                    groupes.append((int(par.split()[0]), x.xref))
+    if groupes:
+        premier = groupes[0][0]
+        tp, par = doc.xref_get_key(nouveau.xref, "Parent")
+        if tp == "xref" and int(par.split()[0]) != premier:
+            ancien = int(par.split()[0])
+            doc.xref_set_key(nouveau.xref, "Parent", f"{premier} 0 R")
+            t, kids = doc.xref_get_key(premier, "Kids")
+            doc.xref_set_key(premier, "Kids", kids.rstrip("]").rstrip() + f" {nouveau.xref} 0 R]")
+            racine = doc.pdf_catalog()
+            t, arr = doc.xref_get_key(racine, "AcroForm/Fields")
+            if t == "array":
+                doc.xref_set_key(racine, "AcroForm/Fields", re.sub(rf"\s*\b{ancien}\s+0\s+R", "", arr))
+            elif t == "xref":
+                fx = int(arr.split()[0])
+                doc.xref_set_key(fx, "Fields", re.sub(rf"\s*\b{ancien}\s+0\s+R", "", doc.xref_object(fx)))
+        doc.xref_set_key(premier, "Ff", str((1 << 15) | (1 << 14)))
+    return nouveau.xref
+
+
+def renommer_etat(doc, xref, choix):
+    """Etat « coche » d'une case ou d'un bouton radio = valeur exportee (au lieu du « Yes » / « None » par defaut)."""
+    nom = "".join(chr(b) if (chr(b).isascii() and (chr(b).isalnum() or chr(b) in "-_.")) else f"#{b:02X}"
+                  for b in (choix or "Oui").encode("utf-8"))
+    t, ap = doc.xref_get_key(xref, "AP/N")
+    if t != "dict":
+        return nom
+    refs = dict(re.findall(r"/([^\s/<>\[\]()]+)\s+(\d+\s+0\s+R)", ap))
+    on = next((k for k in refs if k != "Off"), None)
+    if on and on != nom:
+        refs[nom] = refs.pop(on)
+        doc.xref_set_key(xref, "AP/N", "<<" + "".join(f"/{k} {v}" for k, v in refs.items()) + ">>")
+        tD, apD = doc.xref_get_key(xref, "AP/D")
+        if tD == "dict":
+            rd = dict(re.findall(r"/([^\s/<>\[\]()]+)\s+(\d+\s+0\s+R)", apD))
+            ond = next((k for k in rd if k != "Off"), None)
+            if ond:
+                rd[nom] = rd.pop(ond)
+                doc.xref_set_key(xref, "AP/D", "<<" + "".join(f"/{k} {v}" for k, v in rd.items()) + ">>")
+    doc.xref_set_key(xref, "AS", "/Off")
+    return nom
+
+
+def normaliser(doc):
+    """Fusionne chaque champ a un seul widget avec ce widget, comme le fait Acrobat (PyMuPDF cree un champ « parent »
+    et un widget « enfant »). Sans cela, apres une signature, remplir un champ est compte comme une « autre
+    modification » par les outils de verification les plus stricts. Renvoie le nombre de champs fusionnes."""
+    racine = doc.pdf_catalog()
+    t, af = doc.xref_get_key(racine, "AcroForm")
+    if t == "null":
+        return 0
+    af_xref = int(af.split()[0]) if t == "xref" else None
+    n = 0
+    for p in doc:
+        for w in list(p.widgets() or []):
+            x = w.xref
+            if doc.xref_get_key(x, "T")[0] != "null":
+                continue
+            tp, par = doc.xref_get_key(x, "Parent")
+            if tp != "xref":
+                continue
+            px = int(par.split()[0])
+            tk, kids = doc.xref_get_key(px, "Kids")
+            if tk != "array" or len(re.findall(r"\d+\s+0\s+R", kids)) != 1:
+                continue
+            for k in doc.xref_get_keys(px):
+                if k in ("Kids", "Parent"):
+                    continue
+                if doc.xref_get_key(x, k)[0] != "null":
+                    continue
+                tv, v = doc.xref_get_key(px, k)
+                doc.xref_set_key(x, k, fitz.get_pdf_str(v) if tv == "string" else v)
+            tg, gp = doc.xref_get_key(px, "Parent")
+            doc.xref_set_key(x, "Parent", gp if tg == "xref" else "null")
+            ref_ancien, ref_nouveau = f"{px} 0 R", f"{x} 0 R"
+            # le champ prend la place du parent dans la liste des champs (ou chez le grand-parent)
+            cible, cle = (int(gp.split()[0]), "Kids") if tg == "xref" else (af_xref, "Fields")
+            if cible is None:
+                ta, arr = doc.xref_get_key(racine, "AcroForm/Fields")
+                if ta == "array":
+                    doc.xref_set_key(racine, "AcroForm/Fields", re.sub(rf"\b{px}\s+0\s+R", ref_nouveau, arr))
+            else:
+                ta, arr = doc.xref_get_key(cible, cle)
+                if ta == "array":
+                    doc.xref_set_key(cible, cle, re.sub(rf"\b{px}\s+0\s+R", ref_nouveau, arr))
+            del ref_ancien
             n += 1
     return n

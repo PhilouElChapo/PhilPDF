@@ -39,7 +39,7 @@ OUTILS = [
     ("remplir_signer", "annoter", "signer", _('Remplir et signer'), _('Signature manuscrite, coches, dates'),
      _('Vos signatures (dessinées ou importées), posées puis déplaçables et redimensionnables. Sauvegardées sur votre Drive.'), True),
     ("certificat", "annoter", "certificat", _('Signature numérique'), _('Certificat, reconnue par Acrobat'),
-     _("Signature PAdES avec votre identité exportée d'Acrobat (.pfx)."), False),
+     _("Signature PAdES avec votre identité exportée d'Acrobat (.pfx) ou créée dans PhilPDF ; vérification des signatures reçues."), True),
     ("numeriser", "scans", "numeriser", _('Numériser'), _('Depuis le scanner'),
      _('Numériser avec choix du mode, de la résolution et estimation de la taille.'), True),
     ("ocr", "scans", "ocr", _('Reconnaître le texte'), _('OCR français, texte recherchable'),
@@ -48,9 +48,10 @@ OUTILS = [
      _('Remettre au format, redresser, effacer traits et taches, noir et blanc net.'), True),
     ("formulaire", "formulaires", "formulaire", _('Créer un formulaire'), _('Champs détectés ou tracés'),
      _("Repère les zones à remplir (pointillés, traits, cases, cadres) et en fait de vrais champs, remplissables "
-       "ici, dans Acrobat ou tout lecteur PDF. Tracez un rectangle pour en ajouter un."), True),
+       "ici, dans Acrobat ou tout lecteur PDF. Tracez texte, case, radio, liste, date, montant ou signature ; "
+       "double-clic : format, date automatique, calculs, listes dépendantes, champs affichés selon une case."), True),
     ("champ_signature", "formulaires", "champ_signature", _('Champ de signature'), _("Faire signer quelqu'un d'autre"),
-     _('Poser un emplacement de signature que le destinataire remplira dans Acrobat ou PhilPDF.'), False),
+     _('Poser un emplacement de signature que le destinataire remplira dans Acrobat ou PhilPDF.'), True),
     ("comparer", "comparer", "comparer", _('Comparer deux fichiers'), _('Différences surlignées, sans IA'),
      _('Deux versions côte à côte, différences de texte surlignées. Sans IA, tout reste sur votre PC.'), True),
     ("lot", "comparer", "lot", _('Traitement par lot'), _('Une action sur tout un dossier'),

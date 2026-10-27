@@ -492,6 +492,7 @@ class Fenetre(QMainWindow):
         m.addSeparator()
         act(m, _("Vérifier l'orthographe..."), self.verifier_orthographe, "F7", "modifier")
         act(m, _('Préférences...'), self.preferences, "Ctrl+K", "parametres")
+        act(m, _('Identités numériques (signature)...'), self.identites_numeriques, None, "certificat")
         act(m, _('Emplacement de synchronisation...'), lambda: self.bienvenue(seulement_synchro=True), None, "synchro")
 
         m = mb.addMenu(_('&Affichage'))
@@ -838,6 +839,8 @@ class Fenetre(QMainWindow):
             mdp, ok = demander_secret(self, _('Mot de passe'), _('Ce PDF est protégé. Mot de passe :'))
             if not ok or not o.doc.authenticate(mdp):
                 return None
+            o.mdp_pdf = mdp
+            o.verifier_signe(chemin)
             o.construire_pages()
         self.params.ajouter_recent(chemin)
         self.params["dernier_dossier"] = os.path.dirname(chemin)
@@ -1375,6 +1378,10 @@ class Fenetre(QMainWindow):
             o.ouvrir_bibliotheque("tampons")
         elif oid in ("filigrane", "entete", "fond"):
             self.mise_en_page(o, oid)
+        elif oid == "certificat":
+            o.changer_mode("signer_num")
+        elif oid == "champ_signature":
+            o.changer_mode("champ_signature")
         elif oid == "formulaire":
             o.changer_mode("formulaire")
             if not o.nb_champs():
@@ -1600,7 +1607,19 @@ class Fenetre(QMainWindow):
         from .alleger import DialogueAlleger
         DialogueAlleger(self, o).exec()
 
+    def identites_numeriques(self):
+        from .dialogues_signature import DialogueIdentites
+        DialogueIdentites(self, self.params).exec()
+        o = self.doc_courant()
+        if o is not None and hasattr(o, "verifier_signatures"):
+            o.verifier_signatures()
+
     def mot_de_passe(self, o):
+        if o.est_signe() and QMessageBox.question(
+                self, _('Protéger par mot de passe'),
+                _("Ce document est signé. Le protéger réécrit tout le fichier : les signatures ne seront plus "
+                  "valides.\n\nContinuer quand même ?")) != QMessageBox.Yes:
+            return
         d = QDialog(self)
         d.setWindowTitle(_('Protéger par mot de passe'))
         f = QFormLayout(d)
@@ -1627,6 +1646,7 @@ class Fenetre(QMainWindow):
             perm |= fitz.PDF_PERM_COPY
         o.chiffrement = dict(encryption=fitz.PDF_ENCRYPT_AES_256, user_pw=ouv.text(),
                              owner_pw=prop.text() or ouv.text() or os.urandom(8).hex(), permissions=perm)
+        o.chiffrement_change = True
         o.modifie = True
         o.titre_change.emit()
         self.statusBar().showMessage(_("Protection appliquée à l'enregistrement (AES 256)."), 8000)

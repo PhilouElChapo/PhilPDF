@@ -7,3 +7,5 @@ pdf2docx
 pywin32; sys_platform == "win32"
 keyring
 pyspellchecker
+pyhanko>=0.25
+pyhanko-certvalidator

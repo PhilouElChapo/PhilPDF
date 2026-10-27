@@ -15,6 +15,8 @@ from .outils import outil, famille
 from .dialogues import boutons_fr, DialogueBibliotheque
 from moteur.modifier import Editeur, CANDIDATS
 from moteur import objets
+from .signature_doc import MixinSignature
+from .formulaire_doc import MixinFormulaire, types_a_tracer
 from .langue import _
 
 ECRAN = 96 / 72                 # points PDF -> pixels a 100 %
@@ -92,9 +94,35 @@ class PageWidget(QWidget):
         ed = getattr(self, "editeur", None)
         if ed is not None and getattr(ed, "para", None):      # pendant la saisie, l'ancien paragraphe est masque
             p.fillRect(self.vers_ecran(fitz.Rect(ed.para["rect"]) + (-1, -1, 1, 1)), QColor(255, 255, 255))
-        champs = list(o.doc[self.num].widgets()) if o.mode in (None, "formulaire") else []
+        champs = list(o.doc[self.num].widgets()) if o.mode in (None, "formulaire", "signer_num", "champ_signature") else []
         for w in champs:
+            if w.field_type == fitz.PDF_WIDGET_TYPE_SIGNATURE:
+                if w.is_signed and o.mode != "formulaire":
+                    continue                       # signature apposee : on la laisse telle qu'Acrobat la montre
+                if o.mode != "formulaire":
+                    r = self.vers_ecran(w.rect)
+                    p.setPen(QPen(QColor("#1462c2"), 1.5, Qt.DashLine))
+                    p.setBrush(QColor(20, 98, 194, 28))
+                    p.drawRect(r)
+                    p.setPen(QColor("#1462c2"))
+                    f = p.font()
+                    f.setPointSizeF(max(7.0, min(10.0, r.height() / 4)))
+                    p.setFont(f)
+                    sign = o.infos_champ_sig(w)["signataire"]
+                    p.drawText(r, Qt.AlignCenter | Qt.TextWordWrap,
+                               _("Signer ici") + (f"\n{sign}" if sign else ""))
+                    continue
+            elif o.mode in ("signer_num", "champ_signature"):
+                continue
+            if w.field_display == 1 and o.mode is None:
+                continue                           # champ masque (par une regle « afficher si... »)
             choisi = o.mode == "formulaire" and o.champ_choisi == (self.num, w.xref)
+            if (o.mode is None and w.field_flags & fitz.PDF_FIELD_IS_REQUIRED
+                    and (w.field_value or "") in ("", "Off")):
+                p.setPen(QPen(QColor("#d32f2f"), 1.5))
+                p.setBrush(QColor(255, 120, 120, 40))
+                p.drawRect(self.vers_ecran(w.rect))
+                continue
             p.setPen(QPen(QColor("#a35c00" if o.mode == "formulaire" else "#8fb4e3"), 2 if choisi else 1))
             p.setBrush(QColor(255, 196, 120, 90) if choisi else QColor(200, 220, 255, 70))
             p.drawRect(self.vers_ecran(w.rect))
@@ -280,13 +308,24 @@ class PageWidget(QWidget):
                 o.rafraichir_pages()
                 return
             o.champ_choisi = None
-        if o.mode in ("lien", "recadrer", "biffer", "formulaire"):
+        if o.mode in ("signer_num", "champ_signature"):
+            w = o.champ_sous(self.num, pt)
+            if w is not None and w.field_type == fitz.PDF_WIDGET_TYPE_SIGNATURE:
+                if o.mode == "signer_num":
+                    o.clic_champ_signature(self.num, w)
+                else:
+                    o.regler_champ_signature(self.num, w)
+                return
+        if o.mode in ("lien", "recadrer", "biffer", "formulaire", "signer_num", "champ_signature"):
             self.glisse = {"genre": "zone", "debut": pt, "fantome": fitz.Rect(pt, pt)}
             return
         if o.mode is None:
             w = o.champ_sous(self.num, pt)
             if w:
-                o.remplir_champ(self, w)
+                if w.field_type == fitz.PDF_WIDGET_TYPE_SIGNATURE:
+                    o.clic_champ_signature(self.num, w)
+                else:
+                    o.remplir_champ(self, w)
                 return
         if self._sur_rotation(e.position()):
             r = self.vers_ecran(o.objet["rect"])
@@ -359,11 +398,18 @@ class PageWidget(QWidget):
             self.setToolTip(_("Glissez pour tourner (Maj : par pas de 15°) ; clic droit : 90°"))
         elif self._sur_poignee(e.position()) is not None:
             self.setCursor(Qt.SizeFDiagCursor)
-        elif o.mode in (None, "formulaire") and o.champ_sous(self.num, pt):
+        elif o.mode in (None, "formulaire", "signer_num", "champ_signature") and o.champ_sous(self.num, pt):
             self.setCursor(Qt.PointingHandCursor)
+            w_ = o.champ_sous(self.num, pt)
+            if w_.field_type == fitz.PDF_WIDGET_TYPE_SIGNATURE:
+                self.setToolTip(_("Signature : cliquez pour voir qui a signé") if w_.is_signed else
+                                _("Cliquez pour signer avec votre identité numérique"))
+            elif o.champ_verrouille(w_):
+                self.setToolTip(_("Champ verrouillé par une signature"))
         elif o.objet_sous(self.num, pt, survol=True):
             self.setCursor(Qt.SizeAllCursor)
-        elif o.mode in ("poser", "ajout_texte", "ajout_image", "lien", "recadrer", "biffer", "formulaire"):
+        elif o.mode in ("poser", "ajout_texte", "ajout_image", "lien", "recadrer", "biffer", "formulaire",
+                        "signer_num", "champ_signature"):
             self.setCursor(Qt.CrossCursor)
         elif o.mode is None and o.mot_sous(self.num, pt) is not None:
             self.setCursor(Qt.IBeamCursor)
@@ -394,7 +440,8 @@ class PageWidget(QWidget):
         pt = self.vers_pdf(e.position())
         o = self.o
         if o.mode == "formulaire" and o.champ_sous(self.num, pt):
-            o.renommer_champ()
+            w_ = o.champ_sous(self.num, pt)
+            o.proprietes_champ(self.num, w_)
             return
         if o.mode == "modifier":
             if self.ouvrir_paragraphe(pt):
@@ -420,9 +467,35 @@ class PageWidget(QWidget):
         r = self.vers_ecran(w.rect).toRect()
         n, xref = self.num, w.xref
         multi = bool(w.field_flags & fitz.PDF_TX_FIELD_IS_MULTILINE) if w.field_type == fitz.PDF_WIDGET_TYPE_TEXT else False
-        if w.field_type in (fitz.PDF_WIDGET_TYPE_COMBOBOX, fitz.PDF_WIDGET_TYPE_LISTBOX):
+        regles = self.o.regles_champ(w)
+        fmt = regles.get("format") or {}
+        qt_date = {"dd/mm/yyyy": "dd/MM/yyyy", "dd/mm/yy": "dd/MM/yy", "dd.mm.yyyy": "dd.MM.yyyy",
+                   "yyyy-mm-dd": "yyyy-MM-dd", "mm/dd/yyyy": "MM/dd/yyyy", "d/m/yyyy": "d/M/yyyy"}.get(fmt.get("date"))
+        if w.field_type == fitz.PDF_WIDGET_TYPE_TEXT and fmt.get("genre") == "date" and qt_date:
+            from PySide6.QtWidgets import QDateEdit
+            from PySide6.QtCore import QDate
+            from moteur import champs as _C
+            ed = QDateEdit(self)
+            ed.setCalendarPopup(True)
+            ed.setDisplayFormat(qt_date)
+            d_ = _C.lire_date(fmt["date"], w.field_value or "")
+            ed.setDate(QDate(d_.year, d_.month, d_.day) if d_ else QDate.currentDate())
+            fini = []
+
+            def valider_date():
+                if not fini:
+                    fini.append(1)
+                    q = ed.date()
+                    import datetime as _dt
+                    self.o.valeur_champ(n, xref, _C.ecrire_date(fmt["date"], _dt.datetime(q.year(), q.month(), q.day())))
+                    ed.deleteLater()
+            ed.editingFinished.connect(valider_date)
+        elif w.field_type in (fitz.PDF_WIDGET_TYPE_COMBOBOX, fitz.PDF_WIDGET_TYPE_LISTBOX):
             ed = QComboBox(self)
             ed.addItems([c if isinstance(c, str) else c[0] for c in (w.choice_values or [])])
+            if w.field_type == fitz.PDF_WIDGET_TYPE_COMBOBOX and w.field_flags & fitz.PDF_CH_FIELD_IS_EDIT:
+                ed.setEditable(True)
+                ed.lineEdit().returnPressed.connect(lambda: (self.o.valeur_champ(n, xref, ed.currentText()), ed.deleteLater()))
             ed.setCurrentText(w.field_value or "")
             ed.activated.connect(lambda _i: (self.o.valeur_champ(n, xref, ed.currentText()), ed.deleteLater()))
         elif multi:
@@ -1366,7 +1439,21 @@ class GrillePages(QListWidget):
 
 
 # ================================================================ onglet
-class OngletDocument(QWidget):
+def _signe(doc):
+    """Le document contient-il au moins une signature numerique apposee ?"""
+    try:
+        if not doc.get_sigflags() > 0:
+            return False
+        for p in doc:
+            for w in p.widgets(types=[fitz.PDF_WIDGET_TYPE_SIGNATURE]) or []:
+                if w.is_signed:
+                    return True
+    except Exception:                                     # noqa: BLE001
+        pass
+    return False
+
+
+class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
     titre_change = Signal()
     outil_demande = Signal(str)
     statut = Signal(str)
@@ -1375,11 +1462,15 @@ class OngletDocument(QWidget):
         super().__init__()
         self.params, self.biblio = params, biblio
         self.chemin = chemin
+        self.mdp_pdf = None
+        self.travail = None        # document signe : copie de travail sur disque, enregistree en ajout seulement
         if doc is None:
             with open(chemin, "rb") as f:
                 donnees = f.read()
             doc = fitz.open(stream=donnees, filetype="pdf")
             self.poids_initial = len(donnees)
+            if _signe(doc):
+                doc = self._ouvrir_travail(donnees)
         else:
             self.poids_initial = 0
         self.doc = doc
@@ -1394,10 +1485,12 @@ class OngletDocument(QWidget):
         self.mode = None
         self.annulations, self.retablissements = [], []
         self.chiffrement = None
+        self.chiffrement_change = False
         self._cache_lignes, self._cache_mots, self._cache_images = {}, {}, {}
         self.objets_pdf = {}       # xref annotation -> (pdf, nom, genre) pour copier/coller
         self.distant = None        # {"compte", "cle", "chemin", "lieu"} si ouvert depuis un NAS, un FTP, un Drive
         self._construire()
+        QTimer.singleShot(0, self._verifier_signatures_tard)
         self.maj_historique()
 
     # ------------------------------------------------------------ interface
@@ -1443,8 +1536,19 @@ class OngletDocument(QWidget):
         self.lbl_form = QLabel()
         self.lbl_form.setWordWrap(True)
         hf.addWidget(self.lbl_form, 1)
+        hf.addWidget(QLabel(_("Tracer :")))
+        from PySide6.QtWidgets import QComboBox as _QCB
+        self.type_trace = _QCB()
+        self.type_trace.setObjectName("type_trace")
+        for k_, t_ in types_a_tracer():
+            self.type_trace.addItem(t_, k_)
+        self.type_trace.setToolTip(_("Type du champ que vous tracez (Automatique : petit carré = case à cocher)"))
+        hf.addWidget(self.type_trace)
         b = QPushButton(_("Détecter les champs"))
         b.clicked.connect(self.detecter_champs)
+        hf.addWidget(b)
+        b = QPushButton(_("Ordre de tabulation..."))
+        b.clicked.connect(self.ordre_tabulation)
         hf.addWidget(b)
         b = QPushButton(_("Terminer"))
         b.setProperty("primaire", True)
@@ -1452,6 +1556,7 @@ class OngletDocument(QWidget):
         hf.addWidget(b)
         self.bandeau_form.hide()
         v.addWidget(self.bandeau_form)
+        self._construire_bandeau_sig(v)
         self.champ_choisi = None           # (page, xref) du champ choisi en mode formulaire
         self.marques_biffage = []          # [(page, rect)] a biffer
         self.sp = QSplitter()
@@ -3308,6 +3413,16 @@ class OngletDocument(QWidget):
         if self.mode == "formulaire":
             self.ajouter_champ(n, fitz.Rect(r))
             return
+        if self.mode == "champ_signature":
+            self.ajouter_champ_signature(n, fitz.Rect(r))
+            return
+        if self.mode == "signer_num":
+            r = fitz.Rect(r)
+            if r.width < 40 or r.height < 14:
+                r = fitz.Rect(r.x0, r.y0, r.x0 + 180, r.y0 + 45)
+            if self.signer_numerique(None, n, r):
+                self.changer_mode(None)
+            return
         if self.mode == "biffer":
             self.marques_biffage.append((n, fitz.Rect(r)))
             self._maj_biffer()
@@ -3353,9 +3468,9 @@ class OngletDocument(QWidget):
         return sum(1 for p in self.doc for _w in p.widgets())
 
     def _maj_form(self):
-        self.lbl_form.setText(_("<b>Formulaire</b> — {n} champ(s). Tracez un rectangle pour ajouter un champ (petit carré = "
-                                "case à cocher) ; cliquez sur un champ pour le choisir, double-clic pour le renommer, Suppr "
-                                "pour l'enlever.", n=self.nb_champs()))
+        self.lbl_form.setText(_("<b>Formulaire</b> — {n} champ(s). Tracez un rectangle pour ajouter un champ du type "
+                                "choisi ; double-clic sur un champ : ses propriétés (format, date automatique, calcul, "
+                                "listes...) ; Suppr pour l'enlever.", n=self.nb_champs()))
 
     def detecter_champs(self):
         from moteur import formulaire as FO
@@ -3375,6 +3490,10 @@ class OngletDocument(QWidget):
         self._maj_form()
 
     def ajouter_champ(self, n, r):
+        genre = self.type_trace.currentData() if hasattr(self, "type_trace") else "auto"
+        if genre != "auto":
+            self.creer_champ_type(n, fitz.Rect(r), genre)
+            return
         from moteur import formulaire as FO
         case = r.width <= 20 and r.height <= 20
         if case:
@@ -3424,24 +3543,79 @@ class OngletDocument(QWidget):
     def remplir_champ(self, pw, w):
         """Clic sur un champ hors mode formulaire : case cochee/decochee, texte saisi sur place."""
         w = self._widget((pw.num, w.xref)) or w
-        if w.field_type in (fitz.PDF_WIDGET_TYPE_CHECKBOX, fitz.PDF_WIDGET_TYPE_RADIOBUTTON):
+        if self.champ_verrouille(w):
+            self.message(_("Le champ « {x} » est verrouillé par une signature : le modifier invaliderait la signature.",
+                           x=w.field_name))
+            return
+        if w.field_flags & fitz.PDF_FIELD_IS_READ_ONLY:
+            self.message(_("Le champ « {x} » est en lecture seule.", x=w.field_name))
+            return
+        if w.field_type == fitz.PDF_WIDGET_TYPE_RADIOBUTTON:
+            self.memoriser(_("Remplissage du formulaire"))
+            self.choisir_radio(w)
+            self._apres_valeur(w.field_name)
+            self.apres_modif([])
+            return
+        if w.field_type == fitz.PDF_WIDGET_TYPE_CHECKBOX:
             self.memoriser(_("Remplissage du formulaire"))
             on = w.on_state() if hasattr(w, "on_state") else True
             w.field_value = False if w.field_value not in (False, "Off", "", None) else (on or True)
-            w.update()
+            self._maj_widget(w)
+            self._apres_valeur(w.field_name)
             self.apres_modif([])
             return
         if w.field_type in (fitz.PDF_WIDGET_TYPE_TEXT, fitz.PDF_WIDGET_TYPE_COMBOBOX, fitz.PDF_WIDGET_TYPE_LISTBOX):
+            if self.regles_champ(w).get("calcul"):
+                self.message(_("Le champ « {x} » est calculé automatiquement.", x=w.field_name))
+                return
+            if self.valeur_auto(w):
+                w = self._widget((pw.num, w.xref)) or w
             pw.ouvrir_saisie_champ(w)
+
+    def choisir_radio(self, w):
+        """Coche ce bouton radio, decoche les autres du groupe (un seul choix)."""
+        etat = w.on_state()
+        groupe = self._widgets_nom(w.field_name)
+        deja = self.doc.xref_get_key(w.xref, "AS")[1] == "/" + etat
+        for x in groupe:
+            self.doc.xref_set_key(x.xref, "AS", "/" + etat if (x.xref == w.xref and not deja) else "/Off")
+        from moteur import champs as _C
+        fx = _C.xref_champ(self.doc, w)
+        self.doc.xref_set_key(fx, "V", "/Off" if deja else "/" + etat)
 
     def valeur_champ(self, n, xref, valeur):
         w = self._widget((n, xref))
-        if w is None or (w.field_value or "") == valeur:
+        if w is None:
+            return
+        if w.field_type == fitz.PDF_WIDGET_TYPE_TEXT or w.field_type == fitz.PDF_WIDGET_TYPE_COMBOBOX:
+            valeur = self.saisir_valeur(w, valeur)
+            if valeur is None:
+                return
+        if (w.field_value or "") == valeur:
             return
         self.memoriser(_("Remplissage du formulaire"))
-        w.field_value = valeur
-        w.update()
+        self._ecrire_valeur(w, valeur)
+        self._apres_valeur(w.field_name)
         self.apres_modif([])
+
+    # cles de presentation que PyMuPDF reecrit au passage (bordure...) : remplir ne doit changer que la valeur et
+    # l'apparence, sinon Acrobat compte une « autre modification » apres une signature
+    _PRESENTATION = ("BS", "MK", "Border")
+
+    def _maj_widget(self, w):
+        avant = {}
+        for k in self._PRESENTATION:
+            try:
+                avant[k] = self.doc.xref_get_key(w.xref, k)
+            except Exception:                             # noqa: BLE001
+                pass
+        w.update()
+        for k, (t, v) in avant.items():
+            try:
+                if self.doc.xref_get_key(w.xref, k) != (t, v):
+                    self.doc.xref_set_key(w.xref, k, "null" if t == "null" else v)
+            except Exception:                             # noqa: BLE001
+                pass
 
     # ---- poser tampon / signature
     def poser_objet(self, n, pt):
@@ -3515,6 +3689,9 @@ class OngletDocument(QWidget):
         if mode == "biffer":
             self._maj_biffer()
         self.bandeau_form.setVisible(mode == "formulaire")
+        if hasattr(self, "bandeau_sig"):
+            self.mode = mode
+            self._maj_bandeau_sig()
         self.champ_choisi = None
         if mode == "formulaire":
             self._maj_form()
@@ -3625,17 +3802,69 @@ class OngletDocument(QWidget):
         "alleger": _('Allègement du fichier'),
     }
 
+    # ---- document signe : tout en ajout (comme Acrobat), pour ne jamais casser une signature
+    def _ouvrir_travail(self, octets):
+        """Ouvre le document depuis une copie de travail sur disque (l'ajout incremental exige un fichier)."""
+        import tempfile
+        if not self.travail:
+            fd, self.travail = tempfile.mkstemp(prefix="philpdf-signe-", suffix=".pdf")
+            os.close(fd)
+        try:
+            if getattr(self, "doc", None) is not None and self.doc.name == self.travail:
+                self.doc.close()
+        except Exception:                                 # noqa: BLE001
+            pass
+        with open(self.travail, "wb") as f:
+            f.write(octets)
+        d = fitz.open(self.travail)
+        if d.needs_pass:
+            d.authenticate(getattr(self, "mdp_pdf", None) or (self.chiffrement or {}).get("owner_pw") or "")
+        return d
+
+    def verifier_signe(self, chemin):
+        """Apres le mot de passe d'un PDF protege : s'il est signe, passer en copie de travail."""
+        if not self.travail and _signe(self.doc):
+            with open(chemin, "rb") as f:
+                self.doc = self._ouvrir_travail(f.read())
+
+    def _octets(self):
+        """Etat actuel du document. Signe : ajout incremental sur la copie de travail, puis ses octets."""
+        if self.travail and self.doc.name == self.travail:
+            if self.doc.is_dirty or self.doc.can_save_incrementally():
+                try:
+                    self.doc.save(self.travail, incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP)
+                except Exception:                         # noqa: BLE001 (rien a ajouter)
+                    pass
+            with open(self.travail, "rb") as f:
+                return f.read()
+        return self.doc.tobytes()
+
+    def _depuis_octets(self, octets):
+        if self.travail:
+            return self._ouvrir_travail(octets)
+        return fitz.open(stream=octets, filetype="pdf")
+
+    def est_signe(self):
+        return bool(self.travail)
+
+    def _verifier_signatures_tard(self):
+        try:
+            if any(True for _n in self.widgets_signature()):
+                self.verifier_signatures()
+        except Exception:                                 # noqa: BLE001 (document ferme entre-temps)
+            pass
+
     def memoriser(self, libelle=None):
         """Photographie le document avant une modification, avec son nom pour l'historique."""
         if libelle is None:
             libelle = self.LIBELLES.get(sys._getframe(1).f_code.co_name, _('Modification'))
-        self.annulations.append((libelle, self.doc.tobytes()))
+        self.annulations.append((libelle, self._octets()))
         self.annulations = self.annulations[-30:]
         self.retablissements.clear()
         self.maj_historique()
 
     def _recharger(self, octets):
-        self.doc = fitz.open(stream=octets, filetype="pdf")
+        self.doc = self._depuis_octets(octets)
         self.objet = None
         self.modifie = True
         self.construire_pages()
@@ -3646,16 +3875,19 @@ class OngletDocument(QWidget):
         if not self.annulations:
             self.message(_('Rien à annuler.'))
             return
+        actuel = self._octets()
         for _x in range(min(fois, len(self.annulations))):
             lib, avant = self.annulations.pop()
-            self.retablissements.append((lib, self.doc.tobytes()))
-            self.doc = fitz.open(stream=avant, filetype="pdf")
-        self._recharger(self.doc.tobytes())
+            self.retablissements.append((lib, actuel))
+            actuel = avant
+        self._recharger(actuel)
         self.message(_('Annulé : {lib}', lib=lib) + (_(' (et {x} autre{x2})', x=fois - 1, x2='s' if fois > 2 else '') if fois > 1 else ""))
 
     def remplacer_document(self, octets):
-        """Remplace le contenu du document (apres un memoriser()) : allegement, traitement global..."""
-        self.doc = fitz.open(stream=octets, filetype="pdf")
+        """Remplace le contenu du document (apres un memoriser()) : allegement, traitement global...
+        Un document signe reecrit en entier perd ses signatures : il redevient un document ordinaire."""
+        if self.travail:
+            self.travail = None
         self._recharger(octets)
         self.modifie = True
         self.titre_change.emit()
@@ -3664,11 +3896,12 @@ class OngletDocument(QWidget):
         if not self.retablissements:
             self.message(_('Rien à rétablir.'))
             return
+        actuel = self._octets()
         for _x in range(min(fois, len(self.retablissements))):
             lib, apres = self.retablissements.pop()
-            self.annulations.append((lib, self.doc.tobytes()))
-            self.doc = fitz.open(stream=apres, filetype="pdf")
-        self._recharger(self.doc.tobytes())
+            self.annulations.append((lib, actuel))
+            actuel = apres
+        self._recharger(actuel)
         self.message(_('Rétabli : {lib}', lib=lib))
 
     def maj_historique(self):
@@ -3712,12 +3945,17 @@ class OngletDocument(QWidget):
                         if pm_doc:
                             page.show_pdf_page(r, fitz.open("pdf", pm_doc[0]), 0)
                             page.delete_annot(a)
-        opts = dict(garbage=3, deflate=True)
-        if self.chiffrement:
-            opts.update(self.chiffrement)
         tmp = chemin + ".philpdf-tmp"
-        self.doc.save(tmp, **opts)
+        if self.travail and self.doc.name == self.travail and not self.chiffrement_change:
+            with open(tmp, "wb") as f:                    # signe : ajout seulement, signatures intactes
+                f.write(self._octets())
+        else:
+            opts = dict(garbage=3, deflate=True)
+            if self.chiffrement:
+                opts.update(self.chiffrement)
+            self.doc.save(tmp, **opts)
         os.replace(tmp, chemin)
+        self.chiffrement_change = False
         self.chemin, self.nom, self.modifie = chemin, os.path.basename(chemin), False
         self.poids_initial = os.path.getsize(chemin)
         self.maj_info()

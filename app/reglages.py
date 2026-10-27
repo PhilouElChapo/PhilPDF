@@ -19,7 +19,8 @@ from . import coffre
 
 COMMUNS = ["auteur", "langue", "outils_epingles", "barre_rapide", "volet", "vignettes", "fixer_objets",
            "filigranes_perso", "ia_moteur", "maj_source", "maj_auto", "synchro", "comptes", "comptes_icone", "theme", "synchro_secrets", "barre", "couleurs_annotations",
-           "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "agenda", "messagerie", "ia_styles_perso"]
+           "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "agenda", "messagerie", "ia_styles_perso",
+           "identites", "certificats_approuves", "signature_reglages"]
 POSTE = ["disposition_vue", "volet_largeur", "vignettes_largeur", "biblio_replies", "sessions_vues", "synchro_etat", "machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
 CLEFS_IA = ["clef_claude", "clef_gemini"]
 FICHIER_DRIVE = "preferences.json"
@@ -40,6 +41,11 @@ def instantane(params, avec_secrets=False):
                 v = coffre.lire(c["id"] + suffixe)
                 if v:
                     s["coffre:" + c["id"] + suffixe] = v
+        try:
+            from . import identites
+            s.update(identites.secrets(params))
+        except Exception:                                 # noqa: BLE001
+            pass
         d["secrets"] = s
     return d
 
@@ -57,6 +63,9 @@ def appliquer(params, d, communs=True, poste=False, secrets=True):
         for k, v in (d.get("secrets") or {}).items():
             if k.startswith("coffre:"):
                 coffre.enregistrer(k[7:], v)
+            elif k.startswith("identite:") and v:
+                from . import identites
+                identites.reprendre_secret(params, k, v, ecraser=True)
             elif k in CLEFS_IA and v:
                 params[k] = v
     params.enregistrer()
@@ -238,6 +247,10 @@ def reprendre_secrets_drive(params, phrase, ecraser=False):
         elif k in CLEFS_IA and v and (ecraser or not params.get(k)):
             params[k] = v
             n += 1
+        elif k.startswith("identite:") and v:
+            from . import identites
+            if identites.reprendre_secret(params, k, v, ecraser=ecraser):
+                n += 1
     params.enregistrer()
     return n
 
@@ -285,7 +298,9 @@ def libelle_commun(k):
             "ia_consignes_resume": _("Consignes personnelles pour le résumé IA"),
             "agenda": _("Agenda pour les rendez-vous"), "messagerie": _("Messagerie pour les e-mails"),
             "orthographe": _("Correcteur d'orthographe"), "orthographe_langue": _("Langue du correcteur"),
-            "barre_style": _("Boutons de la barre (icône, nom)"), "ia_styles_perso": _("Mes styles d'image pour l'IA")}.get(k, k)
+            "barre_style": _("Boutons de la barre (icône, nom)"), "ia_styles_perso": _("Mes styles d'image pour l'IA"),
+            "identites": _("Identités numériques (signature)"), "certificats_approuves": _("Certificats approuvés"),
+            "signature_reglages": _("Réglages de la signature numérique")}.get(k, k)
 
 
 # valeur utilisee quand le reglage n'a jamais ete touche sur un poste (absent = cette valeur)
@@ -449,6 +464,10 @@ def secrets_nouveaux(params, phrase):
                 out.append({"cle": k, "libelle": f"{quoi} : {noms.get(cid, cid)}"})
         elif k in CLEFS_IA and v and not params.get(k):
             out.append({"cle": k, "libelle": _("clef IA : {x}", x="Claude" if "claude" in k else "Gemini")})
+        elif k.startswith("identite:") and v:
+            from . import identites
+            if not os.path.exists(identites._fichier(k.split(":", 1)[1])):
+                out.append({"cle": k, "libelle": _("identité numérique : {x}", x=identites.nom_identite(params, k))})
     return out
 
 
@@ -459,6 +478,9 @@ def reprendre_secrets_choisis(params, phrase, cles):
             continue
         if k.startswith("coffre:"):
             coffre.enregistrer(k[7:], v)
+        elif k.startswith("identite:"):
+            from . import identites
+            identites.reprendre_secret(params, k, v, ecraser=True)
         else:
             params[k] = v
         n += 1
