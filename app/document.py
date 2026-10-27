@@ -1519,7 +1519,16 @@ class OngletDocument(QWidget):
         hz.addWidget(self.lbl_zoom)
         hz.addWidget(self._bouton("zoom_plus", _('Zoom +'), lambda: self.changer_zoom(self.zoom * 1.2)))
         self.b_volet = self._bouton("volet_droit", _('Volet'), self.basculer_volet,
-                                    aide=_('Volet de droite : complet → icônes seules → masqué'))
+                                    aide=_('Volet de droite : complet → icônes seules → masqué. '
+                                           'Flèche : choisir ce qu\'il affiche (outils, format, tampons, signatures)'))
+        mv = __import__("PySide6.QtWidgets", fromlist=["QMenu"]).QMenu(self.b_volet)
+        for cle, lib, ic in self.CONTENUS_VOLET():
+            mv.addAction(icone(ic, "#444444"), lib, lambda c=cle: self.contenu_volet(c))
+        mv.addSeparator()
+        for lib, md in ((_('Complet'), "complet"), (_('Icônes seules'), "icones"), (_('Masqué'), "masque")):
+            mv.addAction(lib, lambda m=md: self.mode_volet(m))
+        self.b_volet.setMenu(mv)
+        self.b_volet.setPopupMode(QToolButton.MenuButtonPopup)
         self.zone_favoris = None
         self.construire_barre()
         return w
@@ -1866,6 +1875,21 @@ class OngletDocument(QWidget):
             self._taille_volet = max(lv, 240)
             self.mode_volet("complet")
 
+    @staticmethod
+    def CONTENUS_VOLET():
+        return (("outils", _("Mes outils"), "parametres"),
+                ("format", _("Format du texte"), "modifier"), ("tampons", _("Mes tampons"), "tampon"),
+                ("signatures", _("Mes signatures"), "signer"))
+
+    def contenu_volet(self, quoi):
+        """Ce que montre le volet de droite : vos outils, le format du texte, vos tampons ou vos signatures."""
+        if quoi in ("tampons", "signatures"):
+            self.ouvrir_bibliotheque(quoi)
+            return
+        self.pile_volet.setCurrentIndex(1 if quoi == "format" else 0)
+        self._montrer_volet()
+        self.mode_volet("complet", memoriser=False)
+
     def basculer_volet(self):
         suivant = {"complet": "icones", "icones": "masque", "masque": "complet"}
         self.mode_volet(suivant.get(getattr(self, "_mode_volet", "complet"), "complet"))
@@ -2083,10 +2107,28 @@ class OngletDocument(QWidget):
                 pdf = objets.tampon_predefini(t, c, self.params.get("auteur", ""))
                 self._ajout_item_biblio(g_pre, nom, pdf, {"nom": nom, "dynamique": True, "texte": t, "couleur": list(c)},
                                         _('Tampon daté : la date est choisie au moment de le poser'))
+        if getattr(self, "_reconstruction", False):   # simple mise a jour (renommage ailleurs) : rien d'autre
+            return
         self.pile_volet.setCurrentIndex(2)
         self._montrer_volet()
+        if not getattr(self, "_ecoute_biblio", None):  # renommage, categorie... faits ailleurs : le volet suit
+            from . import bibliotheque as _bib
+            self._ecoute_biblio = self._maj_volet_biblio
+            _bib.CHANGEMENTS.append(self._ecoute_biblio)
+            self.destroyed.connect(lambda *_a, f=self._ecoute_biblio: f in _bib.CHANGEMENTS and _bib.CHANGEMENTS.remove(f))
         if genre == "signatures" and not self.biblio.elements("signatures"):
             self._gerer_biblio()
+
+    def _maj_volet_biblio(self):
+        if self.pile_volet.currentIndex() != 2 or not getattr(self, "genre_biblio", None):
+            return
+        haut = self.liste_biblio.verticalScrollBar().value()
+        self._reconstruction = True
+        try:
+            self.ouvrir_bibliotheque(self.genre_biblio)
+        finally:
+            self._reconstruction = False
+        self.liste_biblio.verticalScrollBar().setValue(haut)
 
     def _ajout_item_biblio(self, parent, nom, pdf, e, aide=None):
         from PySide6.QtWidgets import QTreeWidgetItem
@@ -2109,13 +2151,26 @@ class OngletDocument(QWidget):
         e = it.data(0, Qt.UserRole) if it else None
         if not e or not e.get("id"):
             return
-        from PySide6.QtWidgets import QMenu
-        from .dialogues import etoile_jaune
+        from PySide6.QtWidgets import QMenu, QInputDialog
+        from .dialogues import etoile_jaune, PanneauBibliotheque
         m = QMenu(self)
         a = m.addAction(QIcon(etoile_jaune(16)), _("Retirer des favoris") if e.get("favori") else _("Ajouter aux favoris"))
-        if m.exec(self.liste_biblio.viewport().mapToGlobal(pos)) == a:
+        a_nom = m.addAction(_("Renommer..."))
+        a_cat = m.addAction(_("Catégorie et date...") if self.genre_biblio == "tampons" else _("Catégorie..."))
+        r = m.exec(self.liste_biblio.viewport().mapToGlobal(pos))
+        if r == a:
             self.biblio.basculer_favori(e)
-            self.ouvrir_bibliotheque(self.genre_biblio)
+        elif r == a_nom:
+            nom, ok = QInputDialog.getText(self, _('Renommer'), _('Nouveau nom :'), text=e["nom"])
+            if ok and nom.strip():
+                self.biblio.renommer(e, nom.strip())
+        elif r == a_cat:
+            p = PanneauBibliotheque(self, self.biblio, self.genre_biblio, self.params.get("auteur", ""))
+            p.hide()
+            p.courant = lambda: e
+            p.proprietes()
+            p.deleteLater()
+        self._maj_volet_biblio()
 
     def _memo_groupe(self, it, ouvert):
         cle = it.data(0, Qt.UserRole + 1)

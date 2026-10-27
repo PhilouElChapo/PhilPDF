@@ -1,5 +1,5 @@
 """Fenetre principale de PhilPDF : menus, onglets, aiguillage des outils."""
-import os, sys
+import json, os, sys
 import pymupdf as fitz
 from PySide6.QtCore import Qt, QThread, Signal, QSize, QTimer
 from PySide6.QtGui import QAction, QKeySequence, QImage, QPainter
@@ -468,7 +468,7 @@ class Fenetre(QMainWindow):
         act(m, _('Imprimer plusieurs documents...'), self.imprimer_plusieurs, None, "lot")
         m.addSeparator()
         act(m, _("Protéger à l'aide d'un mot de passe..."), lambda: self.lancer_outil("motdepasse"), None, "motdepasse")
-        act(m, _('Propriétés...'), self.proprietes, "Ctrl+D", "info")
+        act(m, _('Propriétés du document...'), self.proprietes, "Ctrl+D", "info")
         m.addSeparator()
         act(m, _('Fermer le fichier'), lambda: self.fermer_onglet(self.onglets.currentIndex()), "Ctrl+W", "fermer_doc")
         act(m, _('Quitter'), self.close, "Ctrl+Q", "quitter")
@@ -506,7 +506,10 @@ class Fenetre(QMainWindow):
         sm = m.addMenu(icone("volet_droit", "#444444"), _('Volet de droite'))
         for lib, mode in ((_('Complet'), "complet"), (_('Icônes seules'), "icones"), (_('Masqué'), "masque")):
             act(sm, lib, lambda _x=False, md=mode: [o.mode_volet(md) for o in self.documents()])
-        act(m, _('Changer le volet de droite'), lambda: self.doc_courant() and self.doc_courant().basculer_volet(), "Shift+F4")
+        sm2 = m.addMenu(icone("volet_droit", "#444444"), _('Contenu du volet de droite'))
+        for cle, lib, ic in OngletDocument.CONTENUS_VOLET():
+            act(sm2, lib, lambda _x=False, c=cle: self.doc_courant() and self.doc_courant().contenu_volet(c), None, ic)
+        act(m, _('Réduire ou afficher le volet de droite'), lambda: self.doc_courant() and self.doc_courant().basculer_volet(), "Shift+F4")
         m.addSeparator()
         a = act(m, _("Barre d'actions rapides sur sélection"), self._basculer_barre, None, "barre")
         a.setCheckable(True)
@@ -1691,12 +1694,115 @@ class Fenetre(QMainWindow):
             o.changer_zoom(w / (o.doc[0].rect.width * 96 / 72))
 
     def proprietes(self):
+        """Proprietes du document : description (titre, auteur, objet, mots-cles), application et dates, modifiables.
+        Ecrites a la fois dans le PDF et dans ses metadonnees XMP : Acrobat affiche bien les nouvelles valeurs."""
         o = self.doc_courant()
         if not o:
             return
-        m = o.doc.metadata or {}
+        from moteur import metadonnees as M
+        from PySide6.QtWidgets import QDateTimeEdit, QPlainTextEdit
+        from PySide6.QtCore import QDateTime
+        v = M.lire(o.doc)
+        d = QDialog(self)
+        d.setWindowTitle(_("Propriétés du document"))
+        d.setMinimumWidth(620)
+        vd = QVBoxLayout(d)
+        tabs = QTabWidget()
+        vd.addWidget(tabs)
+        w1 = QWidget()
+        f1 = QFormLayout(w1)
+        tabs.addTab(w1, _("Description"))
+        ch = {}
+        for cle, lib, aide in (("title", _("Titre"), _("Affiché dans la barre de titre d'Acrobat et par les moteurs de recherche")),
+                               ("author", _("Auteur"), _("Plusieurs auteurs : séparez-les par « ; »")),
+                               ("subject", _("Objet"), ""), ("keywords", _("Mots-clés"), _("Séparés par des virgules"))):
+            e = QLineEdit(v.get(cle) or "")
+            e.setObjectName("prop_" + cle)
+            e.setToolTip(aide)
+            e.setPlaceholderText(aide)
+            f1.addRow(lib, e)
+            ch[cle] = e
+        w2 = QWidget()
+        f2 = QFormLayout(w2)
+        tabs.addTab(w2, _("Application et dates"))
+        for cle, lib, aide in (("creator", _("Créé avec"), _("Logiciel d'origine (ex. Word, Acrobat)")),
+                               ("producer", _("Producteur PDF"), _("Programme qui a fabriqué le PDF"))):
+            e = QLineEdit(v.get(cle) or "")
+            e.setPlaceholderText(aide)
+            f2.addRow(lib, e)
+            ch[cle] = e
+        dates = {}
+        for cle, lib in (("creation", _("Créé le")), ("modification", _("Modifié le"))):
+            de = QDateTimeEdit()
+            de.setCalendarPopup(True)
+            de.setDisplayFormat("dd/MM/yyyy HH:mm")
+            x = v.get(cle)
+            de.setDateTime(QDateTime(x.replace(tzinfo=None)) if x else QDateTime.currentDateTime())
+            vide = QCheckBox(_("aucune"))
+            vide.setChecked(x is None)
+            de.setEnabled(x is not None)
+            vide.toggled.connect(lambda c, de=de: de.setEnabled(not c))
+            h = QHBoxLayout()
+            h.addWidget(de, 1)
+            h.addWidget(vide)
+            f2.addRow(lib, h)
+            dates[cle] = (de, vide)
+        maj_auto = QCheckBox(_("Mettre la date de modification à maintenant à l'enregistrement"))
+        f2.addRow(maj_auto)
+        w3 = QWidget()
+        f3 = QFormLayout(w3)
+        tabs.addTab(w3, _("Fichier"))
         polices = sorted({f[3] for p in o.doc for f in p.get_fonts()})
-        QMessageBox.information(self, _('Propriétés'), _('Fichier : {x}\nPages : {n}\nCréé par : {x2}\nProduit par : {x3}\nPolices : {x4}', x=o.chemin or o.nom, n=len(o.doc), x2=m.get('creator') or '-', x3=m.get('producer') or '-', x4=', '.join(polices[:12]) or 'aucune (scan)'))
+        taille = os.path.getsize(o.chemin) if o.chemin and os.path.exists(o.chemin) else 0
+        for lib, val in ((_("Fichier"), o.chemin or o.nom), (_("Pages"), str(len(o.doc))),
+                         (_("Taille"), f"{taille / 1024:.0f} Ko" if taille else "-"),
+                         (_("Format"), (o.doc.metadata or {}).get("format") or "PDF"),
+                         (_("Archivage PDF/A"), _("oui (conservé)") if v.get("pdfa") else _("non")),
+                         (_("Polices"), ", ".join(polices[:20]) or _("aucune (scan)"))):
+            lb = QLabel(val)
+            lb.setWordWrap(True)
+            lb.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            f3.addRow(lib, lb)
+        info = QLabel(_("Les valeurs sont écrites à la fois dans le PDF et dans ses métadonnées XMP (celles qu'Acrobat "
+                        "affiche en priorité) : c'est pourquoi elles changent vraiment, même sur un fichier créé par Adobe."))
+        info.setWordWrap(True)
+        info.setStyleSheet("color:#555;font-size:12px")
+        vd.addWidget(info)
+        hb = QHBoxLayout()
+        b_eff = QPushButton(icone("supprimer", "#a33"), _(" Tout effacer"))
+        b_eff.setToolTip(_("Retire toutes les métadonnées (auteur, logiciel, dates) : utile avant d'envoyer un document"))
+        hb.addWidget(b_eff)
+        hb.addStretch(1)
+        bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
+        hb.addWidget(bb)
+        vd.addLayout(hb)
+        bb.accepted.connect(d.accept)
+        bb.rejected.connect(d.reject)
+        efface = [False]
+
+        def tout_effacer():
+            if QMessageBox.question(d, _("Propriétés"), _("Effacer toutes les métadonnées de ce document ?")) == QMessageBox.Yes:
+                efface[0] = True
+                d.accept()
+        b_eff.clicked.connect(tout_effacer)
+        self._dlg_proprietes = d                         # pour les tests
+        if d.exec() != QDialog.Accepted:
+            return
+        o.memoriser(_("Propriétés du document"))
+        if efface[0]:
+            M.effacer(o.doc)
+        else:
+            nv = {k: e.text().strip() for k, e in ch.items()}
+            import datetime as _dt
+            for cle, (de, vide) in dates.items():
+                nv[cle] = None if vide.isChecked() else de.dateTime().toPython().astimezone()
+            if maj_auto.isChecked():
+                nv["modification"] = _dt.datetime.now().astimezone()
+            M.ecrire(o.doc, nv)
+        o.modifie = True
+        o.titre_change.emit()
+        o.maj_info()
+        self.statusBar().showMessage(_("Propriétés modifiées : enregistrez le document pour les garder."), 8000)
 
     def preferences(self, onglet=None):
         d = QDialog(self)
@@ -1759,8 +1865,9 @@ class Fenetre(QMainWindow):
                                     if ok else _("Aucun emplacement de synchronisation : choisissez-en un dans « Drive et dossiers »."))
         be_.clicked.connect(envoyer_reglages)
         hp.addWidget(be_)
-        bv_ = QPushButton(_("Voir les réglages de mes autres postes..."))
-        bv_.clicked.connect(lambda: self.communs_au_demarrage(manuel=True))
+        bv_ = QPushButton(_("Mes autres postes..."))
+        bv_.setToolTip(_("La liste de vos postes (dernière activité, synchronisation, fichiers ouverts) et leurs réglages"))
+        bv_.clicked.connect(lambda: self.mes_postes(d))
         hp.addWidget(bv_)
         hp.addStretch()
         f.addRow(_("Sauvegarde"), hp)
@@ -1770,7 +1877,7 @@ class Fenetre(QMainWindow):
         sync_sec = QCheckBox(_("Synchroniser aussi les mots de passe, autorisations des Drives et clefs IA (chiffrés)"))
         sync_sec.setChecked(bool(self.params.get("synchro_secrets")) and bool(coffre.lire(reglages.PHRASE)))
         hs_.addWidget(sync_sec, 1)
-        b_phrase = QPushButton(_("Phrase secrète..."))
+        b_phrase = QPushButton(_("Mot de passe principal..."))
         hs_.addWidget(b_phrase)
         f.addRow(hs_)
 
@@ -1782,14 +1889,22 @@ class Fenetre(QMainWindow):
                     sync_sec.blockSignals(False)
         sync_sec.toggled.connect(activer_secrets)
         b_phrase.clicked.connect(lambda: self.choisir_phrase(d) and sync_sec.setChecked(True))
-        note(f, _("Chiffrés en AES-256 par une phrase secrète que vous choisissez (la même sur tous vos postes) : "
-                  "sans elle, le fichier est illisible, même pour le Drive. Chaque poste la demande une seule fois."))
+        note(f, _("Chiffrés en AES-256 par un mot de passe principal que vous choisissez (le même sur tous vos postes) : "
+                  "sans lui, le fichier est illisible, même pour le Drive. Chaque poste le demande une seule fois ; "
+                  "un indice, que vous écrivez, vous aide à vous en souvenir."))
         note(f, _("Le changement de langue s'applique au prochain démarrage de PhilPDF. Pour ajouter une langue : "
                   "copier langues/en.json, le traduire et le renommer (es.json, de.json...)."))
         assoc = QCheckBox(_('Ouvrir les fichiers PDF avec PhilPDF (proposé dans « Ouvrir avec »)'))
         assoc.setChecked(self.params["association_pdf"])
-        assoc.setEnabled(sys.platform == "win32" and not est_portable())
+        assoc.setEnabled(sys.platform == "win32")
+        if est_portable():
+            assoc.setToolTip(_("Version portable : c'est l'emplacement actuel de PhilPDF qui est enregistré. "
+                               "Si vous déplacez le dossier, décochez puis recochez."))
         f.addRow(assoc)
+        if sys.platform == "win32":
+            note(f, _("Windows choisit ensuite le programme par défaut : clic droit sur un PDF › Ouvrir avec › "
+                      "Choisir une autre application › PhilPDF › Toujours.") +
+                 (_(" (Version portable : si vous déplacez le dossier de PhilPDF, décochez puis recochez.)") if est_portable() else ""))
 
         # ---------------- Drive et dossiers
         f = page(_('Drive et dossiers'))
@@ -1998,15 +2113,15 @@ class Fenetre(QMainWindow):
         existe = bool(reglages.chemin_secrets(self.params) and os.path.exists(reglages.chemin_secrets(self.params)))
         while True:
             if existe:
-                ph, ok, nouvel_indice = demander_secret(parent, _("Phrase secrète"), _(
-                    "Un autre de vos postes synchronise déjà ses mots de passe.\nEntrez la même phrase secrète :"),
+                ph, ok, nouvel_indice = demander_secret(parent, _("Mot de passe principal"), _(
+                    "Un autre de vos postes synchronise déjà ses mots de passe.\nEntrez le même mot de passe principal :"),
                     reglages.lire_indice(self.params), avec_indice=True)
                 if not ok:
                     return False
                 try:
                     n = reglages.reprendre_secrets_drive(self.params, ph)
                 except reglages.PhraseRequise:
-                    QMessageBox.warning(parent, _("Phrase secrète"), _("Phrase incorrecte."))
+                    QMessageBox.warning(parent, _("Mot de passe principal"), _("Mot de passe principal incorrect."))
                     continue
                 coffre.enregistrer(reglages.PHRASE, ph)
                 self.params["synchro_secrets"] = True
@@ -2014,26 +2129,27 @@ class Fenetre(QMainWindow):
                 if nouvel_indice:                     # la phrase est la bonne : l'indice part vers vos autres postes
                     reglages.ecrire_indice(self.params, nouvel_indice)
                     self.synchro_miroir()
-                QMessageBox.information(parent, _("Phrase secrète"), _(
+                QMessageBox.information(parent, _("Mot de passe principal"), _(
                     "{n} mot(s) de passe, autorisation(s) ou clef(s) repris de vos autres postes.", n=n))
                 return True
             d = QDialog(parent)
-            d.setWindowTitle(_("Phrase secrète"))
+            d.setWindowTitle(_("Mot de passe principal"))
             fl = QFormLayout(d)
-            lb = QLabel(_("Choisissez une phrase secrète (8 caractères au moins). Notez-la : il faudra la même sur vos "
-                          "autres postes, et personne ne peut la retrouver pour vous."))
+            lb = QLabel(_("Choisissez votre mot de passe principal (8 caractères au moins) : il protège tous les mots de passe que "
+                          "PhilPDF synchronise. Notez-le : il faudra le même sur vos autres postes, et personne ne peut le "
+                          "retrouver pour vous."))
             lb.setWordWrap(True)
             fl.addRow(lb)
             p1, p2 = QLineEdit(), QLineEdit()
             for p in (p1, p2):
                 oeil(p)
-            fl.addRow(_("Phrase secrète"), p1)
-            fl.addRow(_("Confirmation"), p2)
+            fl.addRow(_("Mot de passe principal"), p1)
+            fl.addRow(_("Confirmer le mot de passe"), p2)
             ind = QLineEdit()
-            ind.setPlaceholderText(_("ex. « la phrase du carnet bleu », « titre de chanson + année » (jamais la phrase elle-même)"))
-            fl.addRow(_("Indice (facultatif)"), ind)
+            ind.setPlaceholderText(_("ex. « le code du carnet bleu », « titre de chanson + année » (jamais le mot de passe lui-même)"))
+            fl.addRow(_("Indice pour vous en souvenir"), ind)
             ni = QLabel(_("L'indice est enregistré en clair à côté du fichier chiffré : il vous aide à vous souvenir, "
-                          "il ne doit pas permettre de deviner la phrase."))
+                          "il ne doit pas permettre de deviner le mot de passe."))
             ni.setWordWrap(True)
             ni.setStyleSheet("color:#666;font-size:11px")
             fl.addRow(ni)
@@ -2044,10 +2160,10 @@ class Fenetre(QMainWindow):
             if d.exec() != QDialog.Accepted:
                 return False
             if len(p1.text()) < 8 or p1.text() != p2.text():
-                QMessageBox.warning(parent, _("Phrase secrète"), _("Phrase trop courte (8 caractères au moins) ou différente de sa confirmation."))
+                QMessageBox.warning(parent, _("Mot de passe principal"), _("Mot de passe trop court (8 caractères au moins) ou différent de sa confirmation."))
                 continue
             if ind.text().strip() and p1.text().lower() in ind.text().lower():
-                QMessageBox.warning(parent, _("Phrase secrète"), _("L'indice ne doit pas contenir la phrase elle-même."))
+                QMessageBox.warning(parent, _("Mot de passe principal"), _("L'indice ne doit pas contenir le mot de passe lui-même."))
                 continue
             coffre.enregistrer(reglages.PHRASE, p1.text())
             self.params["synchro_secrets"] = True
@@ -2063,6 +2179,11 @@ class Fenetre(QMainWindow):
             ch = reglages.changements_communs(self.params)
         except Exception:
             ch = None
+        try:
+            dispo = reglages.disposition_autre(self.params)
+        except Exception:
+            dispo = None
+        self._dispo = dispo
         sec = []
         phrase = coffre.lire(reglages.PHRASE)
         if phrase:
@@ -2073,17 +2194,96 @@ class Fenetre(QMainWindow):
         if ch and not ch["items"] and not sec:       # meme contenu : on note juste la date
             reglages.appliquer_communs(self.params, ch, [])
             ch = None
-        if not ch and not sec:
+        if not ch and not sec and not dispo:
             if manuel:
                 QMessageBox.information(self, _("Réglages de vos autres postes"), _("Rien de nouveau : ce poste est à jour."))
             return
-        n = len(ch["items"] if ch else []) + len(sec)
+        n = len(ch["items"] if ch else []) + len(sec) + len(dispo["items"] if dispo else [])
         if manuel or ouvrir:
             self.choisir_reglages_distants(ch, sec)
             return
         Notification(self, _("{n} réglage(s) modifié(s) sur vos autres postes{par}.", n=n,
                              par=_(" (dernier : « {poste} »)", poste=ch["par"]) if ch else ""),
                      _("Voir et choisir..."), lambda: self.choisir_reglages_distants(ch, sec))
+
+    def mes_postes(self, parent=None):
+        """Liste de vos postes : derniere activite, derniere synchronisation, fichiers ouverts et recents ;
+        puis comparer les reglages, ou oublier un ancien poste."""
+        from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView
+        p = reglages.chemin_drive(self.params)
+        postes = (reglages.lire_drive(p).get("postes") if p else None) or {}
+        sess = session_de(self.params).lire()
+        moi = self.params.get("machine", "")
+        noms = sorted(set(postes) | {m for m in sess if isinstance(sess[m], dict)} | {moi},
+                      key=lambda m: (m != moi, m.lower()))
+        d = QDialog(parent or self)
+        d.setWindowTitle(_("Mes postes"))
+        d.resize(860, 380)
+        v = QVBoxLayout(d)
+        lb = QLabel(_("Les postes qui partagent le même emplacement de synchronisation ({lieu}).", lieu=self._lieu_court()))
+        lb.setWordWrap(True)
+        v.addWidget(lb)
+        t = QTableWidget(len(noms), 5)
+        t.setHorizontalHeaderLabels([_("Poste"), _("Dernière activité"), _("Dernière synchronisation"),
+                                     _("Fichiers ouverts"), _("Récents")])
+        t.verticalHeader().hide()
+        t.setEditTriggers(QTableWidget.NoEditTriggers)
+        t.setSelectionBehavior(QTableWidget.SelectRows)
+        for r, m in enumerate(noms):
+            pv, sv = postes.get(m) or {}, sess.get(m) if isinstance(sess.get(m), dict) else {}
+            se = pv.get("synchro_etat") or (self.params.get("synchro_etat") if m == moi else {}) or {}
+            synchro = (("✓ " if se.get("ok") else "✕ ") + date_fr(se["quand"])) if se.get("quand") else "—"
+            act = max(pv.get("maj") or "", sv.get("maj") or "")
+            for c, val in enumerate((m + (_("  (ce poste)") if m == moi else ""), date_fr(act) if act else "—", synchro,
+                                     str(len(sv.get("fichiers", []))), str(len(sv.get("recents", []))))):
+                it = QTableWidgetItem(val)
+                if m == moi:
+                    f_ = it.font()
+                    f_.setBold(True)
+                    it.setFont(f_)
+                t.setItem(r, c, it)
+        h = t.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.Stretch)
+        for c in range(1, 5):
+            h.setSectionResizeMode(c, QHeaderView.ResizeToContents)
+        v.addWidget(t, 1)
+        hb = QHBoxLayout()
+        b_cmp = QPushButton(_("Comparer les réglages avec ce poste..."))
+        b_cmp.clicked.connect(lambda: self.communs_au_demarrage(manuel=True))
+        hb.addWidget(b_cmp)
+        b_oub = QPushButton(_("Oublier le poste choisi"))
+        b_oub.setToolTip(_("Pour un ancien PC : il disparaît de la liste, de la session et des réglages partagés"))
+
+        def oublier():
+            r = t.currentRow()
+            if r < 0 or noms[r] == moi:
+                return
+            m = noms[r]
+            if QMessageBox.question(d, _("Mes postes"), _("Oublier le poste « {m} » ?", m=m)) != QMessageBox.Yes:
+                return
+            if p:
+                dd = reglages.lire_drive(p)
+                (dd.get("postes") or {}).pop(m, None)
+                with open(p, "w", encoding="utf-8") as fh:
+                    json.dump(dd, fh, ensure_ascii=False, indent=1)
+            s_ = session_de(self.params)
+            ds = s_.lire()
+            if ds.pop(m, None) is not None:
+                with open(s_.chemin, "w", encoding="utf-8") as fh:
+                    json.dump(ds, fh, ensure_ascii=False, indent=1)
+            t.removeRow(r)
+            noms.pop(r)
+            self.synchro_miroir()
+            self.accueil.rafraichir()
+        b_oub.clicked.connect(oublier)
+        hb.addWidget(b_oub)
+        hb.addStretch(1)
+        bf = QPushButton(_("Fermer"))
+        bf.clicked.connect(d.accept)
+        hb.addWidget(bf)
+        v.addLayout(hb)
+        self._dlg_postes = d                         # pour les tests
+        d.exec()
 
     def choisir_reglages_distants(self, ch, sec):
         def _date_heure(iso):
@@ -2107,7 +2307,9 @@ class Fenetre(QMainWindow):
         lb.setWordWrap(True)
         v.addWidget(lb)
         lignes = [("c", it["cle"], it["libelle"], it["detail"], it.get("coche", True)) for it in (ch["items"] if ch else [])] + \
-                 [("s", it["cle"], it["libelle"], _("nouveau, absent de ce poste (valeur chiffrée, non affichée)"), True) for it in sec]
+                 [("s", it["cle"], it["libelle"], _("nouveau, absent de ce poste (valeur chiffrée, non affichée)"), True) for it in sec] + \
+                 [("p", it["cle"], it["libelle"] + _(" (disposition de « {poste} »)", poste=self._dispo["poste"]), it["detail"], False)
+                  for it in ((getattr(self, "_dispo", None) or {}).get("items") or [])]
         t = QTableWidget(len(lignes), 3)
         t.setHorizontalHeaderLabels([_("Réglage"), _("Ce qui va changer sur ce poste"), _("Reprendre")])
         t.verticalHeader().hide()
@@ -2149,6 +2351,13 @@ class Fenetre(QMainWindow):
             return
         choisis = [t.item(r, 2).data(Qt.UserRole) for r in range(t.rowCount()) if t.item(r, 2).checkState() == Qt.Checked]
         communs = [k for g, k in choisis if g == "c"]
+        if getattr(self, "_dispo", None):              # disposition : reprise ou non, elle n'est plus proposee
+            reglages.appliquer_disposition(self.params, self._dispo, [k for g, k in choisis if g == "p"])
+            for o in self.documents():
+                if self.params.get("volet_largeur"):
+                    o._taille_volet = int(self.params["volet_largeur"])
+                    if getattr(o, "_mode_volet", "complet") == "complet":
+                        o.mode_volet("complet", memoriser=False)
         secrets = [k for g, k in choisis if g == "s"]
         langue_avant = self.params.get("langue")
         if ch:
@@ -2192,9 +2401,9 @@ class Fenetre(QMainWindow):
             oeil(p)
             p.setEnabled(False)
         sec.toggled.connect(lambda on: (p1.setEnabled(on), p2.setEnabled(on)))
-        f.addRow(_("Phrase secrète"), p1)
-        f.addRow(_("Confirmation"), p2)
-        n2 = QLabel(_("Avec les mots de passe, le fichier est chiffré (AES-256) par cette phrase : sans elle, il est illisible."))
+        f.addRow(_("Mot de passe du fichier"), p1)
+        f.addRow(_("Confirmer le mot de passe"), p2)
+        n2 = QLabel(_("Avec les mots de passe, le fichier est chiffré (AES-256) par ce mot de passe : sans lui, il est illisible."))
         n2.setWordWrap(True)
         n2.setStyleSheet("color:#555;font-size:12px")
         f.addRow(n2)
@@ -2206,7 +2415,7 @@ class Fenetre(QMainWindow):
             if d.exec() != QDialog.Accepted:
                 return
             if sec.isChecked() and (len(p1.text()) < 6 or p1.text() != p2.text()):
-                QMessageBox.warning(d, d.windowTitle(), _("Phrase secrète trop courte (6 caractères au moins) ou différente "
+                QMessageBox.warning(d, d.windowTitle(), _("Mot de passe trop court (6 caractères au moins) ou différent "
                                                            "de sa confirmation."))
                 continue
             break
@@ -2230,7 +2439,7 @@ class Fenetre(QMainWindow):
                     donnees = reglages.importer(chemin, phrase)
                     break
                 except reglages.PhraseRequise:
-                    phrase, ok = demander_secret(self, _("Importer des préférences"), _("Ce fichier est chiffré. Phrase secrète :"))
+                    phrase, ok = demander_secret(self, _("Importer des préférences"), _("Ce fichier est chiffré. Mot de passe du fichier :"))
                     if not ok:
                         return
                 except (OSError, ValueError, KeyError):

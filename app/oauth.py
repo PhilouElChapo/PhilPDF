@@ -128,7 +128,10 @@ def _poster(url, champs, journal=None):
         raise ErreurAutorisation(_("Serveur injoignable : {raison}", raison=getattr(e, "reason", e)))
 
 
-def autoriser(fournisseur, ouvrir=webbrowser.open, delai=300, arret=lambda: False, journal=None):
+PORTEE_COMPLETE = {"gdrive": "https://www.googleapis.com/auth/drive"}   # tout le Drive (option du compte)
+
+
+def autoriser(fournisseur, ouvrir=webbrowser.open, delai=300, arret=lambda: False, journal=None, complet=False):
     """Ouvre le navigateur et attend l'accord. Renvoie le dict de jetons (refresh_token, access_token...)."""
     f = FOURNISSEURS[fournisseur]
     cid, sec = identifiants(fournisseur)
@@ -184,8 +187,9 @@ def autoriser(fournisseur, ouvrir=webbrowser.open, delai=300, arret=lambda: Fals
     redirection = f.get("retour", "http://127.0.0.1:{port}").format(port=serveur.server_port)
     params = {"client_id": cid, "redirect_uri": redirection, "response_type": "code",
               "code_challenge": defi, "code_challenge_method": "S256", "state": etat, **f["extra"]}
-    if f["portee"]:
-        params["scope"] = f["portee"]
+    portee = PORTEE_COMPLETE.get(fournisseur) if complet and fournisseur in PORTEE_COMPLETE else f["portee"]
+    if portee:
+        params["scope"] = portee
     url = f["auth"] + "?" + urllib.parse.urlencode(params)
     if journal:
         journal(f"→ navigateur : {f['auth']} (retour attendu sur {redirection})")

@@ -12,6 +12,7 @@ from .config import dossier_donnees
 
 GENRES = ("tampons", "signatures", "filigranes")
 PROPRIETES = ("nom", "categorie", "horodatage", "position_date", "favori", "ordre")   # suivent les autres postes (la plus recente gagne)
+CHANGEMENTS = []           # fonctions appelees apres toute modification (volets ouverts, listes) : tout se met a jour
 RAPPEL_ENVOI = []          # fonction appelee apres une modification : envoi immediat vers un Drive en direct
 
 
@@ -80,6 +81,11 @@ class Bibliotheque:
     def _ecrire(self):
         with open(self.index_chemin, "w", encoding="utf-8") as f:
             json.dump(self.index, f, ensure_ascii=False, indent=1)
+        for f in list(CHANGEMENTS):
+            try:
+                f()
+            except Exception:
+                pass
 
     def elements(self, genre):
         """Classes par categorie (sans categorie a la fin), puis dans l'ordre choisi a la souris, puis par nom."""

@@ -112,6 +112,19 @@ json.dump(dd, open(os.path.join(drive, "PhilPDF", "preferences.json"), "w", enco
 ch = reglages.changements_communs(y)
 verifie(ch is not None and not any(it["cle"] in ("agenda", "messagerie") for it in ch["items"]),
         "réglage jamais touché = valeur par défaut : pas de faux changement")
+# --- disposition (largeur des volets) changee sur un autre poste : proposee une fois, reprise ou non
+pp = os.path.join(drive, "PhilPDF", "preferences.json")
+dd = reglages.lire_drive(pp)
+dd.setdefault("postes", {})["Cannes"] = {"machine": "Cannes", "maj": "2027-02-01T10:00", "volet_largeur": 410}
+json.dump(dd, open(pp, "w", encoding="utf-8"))
+z = P(machine="Pharma2", drive=drive, volet_largeur=300)
+dp = reglages.disposition_autre(z)
+verifie(dp and dp["poste"] == "Cannes" and dp["items"][0]["valeur"] == 410, "disposition d'un autre poste proposée")
+reglages.appliquer_disposition(z, dp, [])
+verifie(z["volet_largeur"] == 300 and reglages.disposition_autre(z) is None, "ignorée : plus de question")
+dd["postes"]["Cannes"]["volet_largeur"] = 380
+json.dump(dd, open(pp, "w", encoding="utf-8"))
+verifie(reglages.disposition_autre(z) is not None, "changée à nouveau sur l'autre poste : la question revient")
 coffre.supprimer("c1")
 autre2 = P(machine="Labo", drive=drive, comptes=[{"id": "c1", "type": "webdav", "nom": "NAS maison"}], clef_claude="")
 nv = reglages.secrets_nouveaux(autre2, "ma phrase secrète")

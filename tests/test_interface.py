@@ -228,6 +228,10 @@ o.a_poser = None
 o._choisir_biblio(g_.child(0))
 verif(o.a_poser and o.a_poser[1] == "Tampon importé", "favori : un clic et il est prêt à poser")
 capture(w, "05b_favoris.png")
+w.biblio.renommer(e_, "Tampon renommé")
+noms_ = [i.text(0) for i in o.items_biblio()]
+verif("Tampon renommé" in noms_, "volet : renommé ailleurs -> le volet se met à jour tout seul")
+w.biblio.renommer(e_, "Tampon importé")
 o.changer_mode(None)
 w.biblio.basculer_favori(e_)
 o.liste_biblio.topLevelItem(0).setExpanded(True)
@@ -888,6 +892,51 @@ QTest.qWait(800)
 lv_ = od_.sp.sizes()[2]
 verif(abs(w.params.get("volet_largeur", 0) - lv_) <= 2, f"volet droit : largeur gardée ({w.params.get('volet_largeur')} / {lv_})")
 verif(od_._taille_volet == lv_, "volet droit : même largeur au retour en mode complet")
+
+# --- proprietes du document : modifiables, ecrites aussi dans le XMP (celui qu'affiche Acrobat)
+from moteur import metadonnees as _MD
+od_.doc.set_xml_metadata('<?xpacket begin=""?><x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+                         '<rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title><rdf:Alt>'
+                         '<rdf:li xml:lang="x-default">Titre Adobe</rdf:li></rdf:Alt></dc:title></rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end="w"?>')
+def _exec_prop(self):
+    if self.windowTitle() == "Propriétés du document":
+        self.findChild(_QW.QLineEdit, "prop_title").setText("Convention de trésorerie")
+        self.findChild(_QW.QLineEdit, "prop_author").setText("Philippe Delaye")
+        capture(self, "51_proprietes.png")
+        return _QW.QDialog.Accepted
+    return _QW.QDialog.Rejected
+_QW.QDialog.exec = _exec_prop
+w.onglets.setCurrentWidget(od_)
+w.proprietes()
+_QW.QDialog.exec = _exo
+m_ = _MD.lire(fitz.open("pdf", od_.doc.tobytes()))
+verif(m_["title"] == "Convention de trésorerie" and m_["author"] == "Philippe Delaye" and od_.modifie,
+      f"propriétés : titre et auteur changés, y compris dans le XMP d'Adobe ({m_['title']})")
+
+# --- signatures classees par categorie, comme les tampons ; contenu du volet choisi depuis le menu
+sg_ = w.biblio.elements("signatures")[0]
+w.biblio.modifier(sg_, categorie="Perso")
+od_.ouvrir_bibliotheque("signatures")
+cats_ = [od_.liste_biblio.topLevelItem(i) for i in range(od_.liste_biblio.topLevelItemCount())]
+perso_ = next(g for g in cats_ if g.text(0).startswith("Mes signatures"))
+verif(any(perso_.child(i).text(0) == "Perso" for i in range(perso_.childCount())), "signatures : catégorie en sous-groupe")
+for c_, idx_ in (("format", 1), ("outils", 0), ("tampons", 2)):
+    od_.contenu_volet(c_)
+    verif(od_.pile_volet.currentIndex() == idx_, f"volet : contenu « {c_} » choisi")
+# --- mes postes : la liste des postes
+def _exec_postes(self):
+    if self.windowTitle() == "Mes postes":
+        from PySide6.QtWidgets import QTableWidget
+        t_ = self.findChild(QTableWidget)
+        vus_postes.extend(t_.item(r, 0).text() for r in range(t_.rowCount()))
+        capture(self, "52_mes_postes.png")
+    return _QW.QDialog.Rejected
+vus_postes = []
+_QW.QDialog.exec = _exec_postes
+w.mes_postes()
+_QW.QDialog.exec = _exo
+verif(any("(ce poste)" in x for x in vus_postes) and any(x.startswith("Cannes") for x in vus_postes),
+      f"mes postes : liste des postes ({vus_postes})")
 
 # --- fermeture : une fenetre explique l'attente (preferences, synchronisation)
 ff_ = F.FenetreFermeture(w, "Google Drive (exemple)")

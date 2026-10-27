@@ -265,7 +265,8 @@ class _ListeOrdonnable(QListWidget):
         ids = [self.item(i).data(Qt.UserRole)["id"] for i in range(self.count())]
         x = ids.pop(src)
         ids.insert(dst, x)
-        self.rappel(ids, x)
+        cat = (it.data(Qt.UserRole) or {}).get("categorie", "") if it is not None else None
+        self.rappel(ids, x, cat)
 
 
 class PanneauBibliotheque(QWidget):
@@ -285,7 +286,7 @@ class PanneauBibliotheque(QWidget):
         self.liste.setWordWrap(True)                 # nom, etoile et categorie sur deux lignes, sans « ... »
         self.liste.setTextElideMode(Qt.ElideNone)
         self.liste.setResizeMode(QListWidget.Adjust)
-        self.liste.setMovement(QListWidget.Static)
+        self.liste.setMovement(QListWidget.Snap)          # « Static » empecherait de glisser
         self.liste.setDragDropMode(QListWidget.InternalMove)
         self.liste.setToolTip(_("Glissez un élément pour le placer où vous voulez (classés par catégorie)"))
         self.liste.itemDoubleClicked.connect(lambda _x: self.choisi_double.emit())
@@ -308,8 +309,8 @@ class PanneauBibliotheque(QWidget):
         b.setToolTip(_('Image (PNG, JPG…) ou PDF de ce PC, avec choix de la zone'))
         b.clicked.connect(self.importer)
         h.addWidget(b)
-        if genre == "tampons":
-            b = QPushButton(_('Catégorie et date...'))
+        if True:                                          # tampons et signatures se classent pareil
+            b = QPushButton(_('Catégorie et date...') if genre == "tampons" else _('Catégorie...'))
             b.setToolTip(_("Ranger le tampon dans une catégorie, et choisir s'il porte la date (jamais, toujours, ou demandée à chaque pose) et où"))
             b.clicked.connect(self.proprietes)
             h.addWidget(b)
@@ -324,6 +325,10 @@ class PanneauBibliotheque(QWidget):
         h.addWidget(self.b_favori)
         self.liste.setContextMenuPolicy(Qt.CustomContextMenu)
         self.liste.customContextMenuRequested.connect(self._menu)
+        from . import bibliotheque as _bib                # renomme ailleurs (volet, autre fenetre) : la liste suit
+        self._ecoute = lambda: self.rafraichir(self.courant()) if self.isVisible() else None
+        _bib.CHANGEMENTS.append(self._ecoute)
+        self.destroyed.connect(lambda *_a, f=self._ecoute: f in _bib.CHANGEMENTS and _bib.CHANGEMENTS.remove(f))
         h.addStretch()
         v.addLayout(h)
         if compact:                                  # la colonne de boutons n'est jamais coupee en bas
@@ -353,8 +358,12 @@ class PanneauBibliotheque(QWidget):
         it = self.liste.currentItem()
         return it.data(Qt.UserRole) if it else None
 
-    def _deplace(self, ids, ident):
-        """Element glisse a une autre place : l'ordre est garde (et suit sur vos autres postes)."""
+    def _deplace(self, ids, ident, categorie=None):
+        """Element glisse a une autre place : l'ordre est garde (et suit sur vos autres postes). Depose sur un
+        element d'une autre categorie, il rejoint cette categorie."""
+        e = next((x for x in self.b.elements(self.genre) if x["id"] == ident), None)
+        if e is not None and categorie is not None and categorie != e.get("categorie", ""):
+            self.b.modifier(e, categorie=categorie)
         self.b.reordonner(self.genre, ids)
         self.rafraichir(next((e for e in self.b.elements(self.genre) if e["id"] == ident), None))
 
@@ -425,8 +434,7 @@ class PanneauBibliotheque(QWidget):
         m = QMenu(self)
         m.addAction(QIcon(etoile_jaune(16)), _("Retirer des favoris") if e.get("favori") else _("Ajouter aux favoris"), self.defaut)
         m.addAction(_("Renommer"), self.renommer)
-        if self.genre == "tampons":
-            m.addAction(_("Catégorie et date..."), self.proprietes)
+        m.addAction(_("Catégorie et date...") if self.genre == "tampons" else _("Catégorie..."), self.proprietes)
         m.addSeparator()
         m.addAction(_("Supprimer"), self.supprimer)
         m.exec(self.liste.mapToGlobal(pos))
@@ -434,10 +442,11 @@ class PanneauBibliotheque(QWidget):
     def proprietes(self):
         e = self.courant()
         if not e:
-            QMessageBox.information(self, _("Tampons"), _("Choisissez d'abord un tampon dans la liste."))
+            QMessageBox.information(self, _("Tampons"), _("Choisissez d'abord un élément dans la liste."))
             return
         d = QDialog(self)
-        d.setWindowTitle(_("Tampon « {nom} »", nom=e["nom"]))
+        sig = self.genre != "tampons"
+        d.setWindowTitle(_("Signature « {nom} »", nom=e["nom"]) if sig else _("Tampon « {nom} »", nom=e["nom"]))
         f = QFormLayout(d)
         cat = QComboBox()
         cat.setEditable(True)
@@ -457,6 +466,9 @@ class PanneauBibliotheque(QWidget):
             pos.addItem(t, k)
         pos.setCurrentIndex(max(0, pos.findData(e.get("position_date", "dessous"))))
         f.addRow(_("Position de la date"), pos)
+        if sig:                                           # une signature n'a qu'une categorie
+            f.setRowVisible(hor, False)
+            f.setRowVisible(pos, False)
         ap = QLabel()
         ap.setAlignment(Qt.AlignCenter)
         ap.setMinimumHeight(90)
@@ -465,7 +477,7 @@ class PanneauBibliotheque(QWidget):
 
         def maj(*_a):
             brut = self.b.lire(e)
-            pdf = objets.horodater(brut, hor.currentData() != "non", self.auteur, pos.currentData())
+            pdf = brut if sig else objets.horodater(brut, hor.currentData() != "non", self.auteur, pos.currentData())
             ap.setPixmap(_pix_depuis_png(objets.apercu(pdf, 80), 80))
             pos.setEnabled(hor.currentData() != "non")
         hor.currentIndexChanged.connect(maj)
@@ -476,7 +488,10 @@ class PanneauBibliotheque(QWidget):
         bb.rejected.connect(d.reject)
         f.addRow(bb)
         if d.exec() == QDialog.Accepted:
-            self.b.modifier(e, categorie=cat.currentText().strip(), horodatage=hor.currentData(), position_date=pos.currentData())
+            if sig:
+                self.b.modifier(e, categorie=cat.currentText().strip())
+            else:
+                self.b.modifier(e, categorie=cat.currentText().strip(), horodatage=hor.currentData(), position_date=pos.currentData())
             self.rafraichir(e)
 
     def synchroniser(self):
@@ -1256,13 +1271,13 @@ def demander_secret(parent, titre, texte, indice="", avec_indice=False):
     v.addWidget(champ)
     ind = None
     if avec_indice and not indice:
-        li = QLabel(_("Indice pour vous en souvenir (facultatif, enregistré en clair et envoyé à vos autres postes ; "
-                      "jamais la phrase elle-même) :"))
+        li = QLabel(_("Indice pour vous souvenir du mot de passe principal (facultatif, enregistré en clair et envoyé à vos "
+                      "autres postes ; jamais le mot de passe lui-même) :"))
         li.setWordWrap(True)
         li.setStyleSheet("color:#555;font-size:12px")
         v.addWidget(li)
         ind = QLineEdit()
-        ind.setPlaceholderText(_("ex. « la phrase du carnet bleu »"))
+        ind.setPlaceholderText(_("ex. « le code du carnet bleu »"))
         v.addWidget(ind)
     bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
     bb.accepted.connect(d.accept)

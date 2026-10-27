@@ -20,7 +20,7 @@ from . import coffre
 COMMUNS = ["auteur", "langue", "outils_epingles", "barre_rapide", "volet", "vignettes", "fixer_objets",
            "filigranes_perso", "ia_moteur", "maj_source", "maj_auto", "synchro", "comptes", "comptes_icone", "theme", "synchro_secrets", "barre", "couleurs_annotations",
            "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "agenda", "messagerie"]
-POSTE = ["volet_largeur", "vignettes_largeur", "biblio_replies", "sessions_vues", "synchro_etat", "machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
+POSTE = ["disposition_vue", "volet_largeur", "vignettes_largeur", "biblio_replies", "sessions_vues", "synchro_etat", "machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
 CLEFS_IA = ["clef_claude", "clef_gemini"]
 FICHIER_DRIVE = "preferences.json"
 
@@ -374,6 +374,52 @@ def changements_communs(params):
             items.append({"cle": k, "libelle": libelle_commun(k), "detail": decrire_changement(k, _effectif(params, k), c[k]),
                           "valeur": c[k], "coche": plus_recent_ailleurs})
     return {"par": par, "maj": maj, "local": local, "items": items, "plus_recent_ailleurs": plus_recent_ailleurs}
+
+
+DISPOSITION = ("volet_largeur", "vignettes_largeur", "biblio_replies")
+
+
+def disposition_autre(params):
+    """Disposition (largeur des volets, categories ouvertes) changee sur un autre poste : proposee ici, une fois.
+    Chaque poste garde la sienne ; refusee, la question ne revient que si l'autre poste la change encore.
+    Renvoie {"poste", "sig", "items": [{cle, libelle, detail, valeur}]} ou None."""
+    p = chemin_drive(params)
+    if not p:
+        return None
+    postes = lire_drive(p).get("postes") or {}
+    moi = params.get("machine")
+    autres = sorted(((v.get("maj") or "", m, v) for m, v in postes.items() if m != moi and isinstance(v, dict)
+                     and any(k in v for k in DISPOSITION)), reverse=True)
+    if not autres:
+        return None
+    _d, m, v = autres[0]
+    sig = m + "|" + json.dumps({k: v.get(k) for k in DISPOSITION}, sort_keys=True)
+    if sig == params.get("disposition_vue"):
+        return None
+    libs = {"volet_largeur": _("Largeur du volet de droite"), "vignettes_largeur": _("Largeur des vignettes"),
+            "biblio_replies": _("Groupes ouverts ou fermés dans le volet des tampons")}
+    items = []
+    for k in DISPOSITION:
+        if k in v and v[k] != params.get(k):
+            if k == "biblio_replies":
+                det = _("comme sur « {poste} »", poste=m)
+            else:
+                det = f"{params.get(k) or '-'} px  →  {v[k]} px"
+            items.append({"cle": k, "libelle": libs[k], "detail": det, "valeur": v[k]})
+    if not items:
+        params["disposition_vue"] = sig
+        params.enregistrer()
+        return None
+    return {"poste": m, "sig": sig, "items": items}
+
+
+def appliquer_disposition(params, dispo, cles):
+    """Reprend ce qui est coche ; dans tous les cas, cette disposition n'est plus proposee."""
+    for it in dispo["items"]:
+        if it["cle"] in cles:
+            params[it["cle"]] = it["valeur"]
+    params["disposition_vue"] = dispo["sig"]
+    params.enregistrer()
 
 
 def appliquer_communs(params, changements, cles):

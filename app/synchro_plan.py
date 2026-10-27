@@ -125,10 +125,10 @@ def decrire(plan, params, compte=None, emplacement=None):
         elif rel == "secrets.philpdf":
             famille = "secrets"
             titre = _("Mots de passe et autorisations")
-            detail = _("chiffrés par votre phrase secrète")
+            detail = _("chiffrés par votre mot de passe principal")
         elif rel == "indice_phrase.json":
             famille = "secrets"
-            titre = _("Indice de la phrase secrète")
+            titre = _("Indice du mot de passe principal")
         elif rel == "sauvegarde/index.json":
             famille = "biblio"
             titre = _("Liste des tampons et signatures")

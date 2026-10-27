@@ -98,9 +98,9 @@ class TacheAutorisation(QThread):
     fini = Signal(object, str)          # jetons, erreur
     ligne = Signal(str)                 # etape de l'echange, affichee en direct
 
-    def __init__(self, fournisseur):
+    def __init__(self, fournisseur, complet=False):
         super().__init__()
-        self.f, self.stop, self.journal = fournisseur, False, []
+        self.f, self.stop, self.journal, self.complet = fournisseur, False, [], complet
 
     def _noter(self, t):
         self.journal.append(t)
@@ -112,7 +112,8 @@ class TacheAutorisation(QThread):
         from . import oauth
         import webbrowser
         try:
-            j = oauth.autoriser(self.f, ouvrir=webbrowser.open, arret=lambda: self.stop, journal=self._noter)
+            j = oauth.autoriser(self.f, ouvrir=webbrowser.open, arret=lambda: self.stop, journal=self._noter,
+                                complet=self.complet)
             self.fini.emit(j, "")
         except Exception as e:
             self._noter(f"✕ {e}")
@@ -129,7 +130,7 @@ def autoriser_compte(parent, compte):
     if not oauth.disponible(compte["type"]):
         QMessageBox.information(parent, nom, _("Cette version de PhilPDF n'a pas l'identifiant d'application pour {nom}.", nom=nom))
         return False
-    t = TacheAutorisation(compte["type"])
+    t = TacheAutorisation(compte["type"], bool(compte.get("acces_complet")))
     dlg = Avancement(parent, _("Autorisation"))
     dlg.etape(_("Votre navigateur s'ouvre sur la page de {nom}.\nConnectez-vous si besoin, puis cliquez sur "
                 "« Autoriser » (ou « Continuer »). Revenez ensuite ici.", nom=nom), 0, 0)
@@ -271,6 +272,13 @@ class DialogueCompte(QDialog):
         ha2.addWidget(self.b_autoriser)
         ha2.addWidget(self.etat_auth)
         f.addRow(_("Accès"), wa)
+        self.complet = QCheckBox(_("Voir tout mon Google Drive (pas seulement les dossiers créés par PhilPDF)"))
+        self.complet.setChecked(bool(self.c.get("acces_complet")))
+        self.complet.setToolTip(_("Il faut alors autoriser à nouveau : Google affiche « application non validée » "
+                                  "tant qu'il n'a pas vérifié PhilPDF ; cliquez sur « Paramètres avancés », puis "
+                                  "« Accéder à PhilPDF »."))
+        self.complet.toggled.connect(self._complet_change)
+        f.addRow(self.complet)
         self.note = QLabel(_("Le mot de passe est rangé dans le coffre de Windows (ou de Linux), jamais en clair."))
         self.note.setStyleSheet("color:#555;font-size:12px")
         self.note.setWordWrap(True)
@@ -365,6 +373,15 @@ class DialogueCompte(QDialog):
         self.c.pop("couleur", None)
         self._maj_icone()
 
+    def _complet_change(self, on):
+        self.c["acces_complet"] = on
+        if coffre.lire(self.c["id"] + ".jeton") and QMessageBox.question(
+                self, _("Google Drive"),
+                _("Pour {x}, Google doit vous redemander l'autorisation.\nGoogle affichera « application non validée » : "
+                  "cliquez sur « Paramètres avancés », puis « Accéder à PhilPDF ».\n\nAutoriser maintenant ?",
+                  x=_("voir tout votre Drive") if on else _("revenir à l'accès limité"))) == QMessageBox.Yes:
+            self._autoriser()
+
     def _basculer_mdp(self):
         visible = self.mdp.echoMode() == QLineEdit.Password
         self.mdp.setEchoMode(QLineEdit.Normal if visible else QLineEdit.Password)
@@ -383,7 +400,7 @@ class DialogueCompte(QDialog):
         for w, vis in ((self.adresse.parentWidget(), t not in distant.NUAGES), (self.port, serveur),
                        (self.utilisateur, serveur), (self.mdp, serveur), (self.chiffrement, t == "ftp"),
                        (self.dossier, serveur), (self.libre, serveur), (self.note, serveur),
-                       (self.b_autoriser.parentWidget(), t in distant.NUAGES)):
+                       (self.b_autoriser.parentWidget(), t in distant.NUAGES), (self.complet, t == "gdrive")):
             self.f.setRowVisible(w, vis)
         if t in distant.NUAGES:
             self._maj_auth()
