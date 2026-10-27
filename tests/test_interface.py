@@ -848,6 +848,18 @@ w._synchro_trouvee(("Cannes", "2026-10-27T10:00", [{"nom": "Autre.pdf", "emprein
 verif(w.accueil.carte.isVisibleTo(w.accueil), "autre poste : d'autres fichiers ouverts -> bandeau à nouveau")
 w.accueil.cacher_synchro()
 
+# --- largeur du volet droit reglee a la souris : gardee pour les documents suivants et apres redemarrage
+od_ = w.documents()[0]
+w.onglets.setCurrentWidget(od_); app.processEvents()
+od_.mode_volet("complet")
+t_ = od_.sp.sizes()
+od_.sp.setSizes([t_[0], t_[1] + t_[2] - 260, 260])
+od_.sp.splitterMoved.emit(0, 2)
+QTest.qWait(800)
+lv_ = od_.sp.sizes()[2]
+verif(abs(w.params.get("volet_largeur", 0) - lv_) <= 2, f"volet droit : largeur gardée ({w.params.get('volet_largeur')} / {lv_})")
+verif(od_._taille_volet == lv_, "volet droit : même largeur au retour en mode complet")
+
 # --- fermeture : une fenetre explique l'attente (preferences, synchronisation)
 ff_ = F.FenetreFermeture(w, "Google Drive (exemple)")
 ff_.etape("Préférences envoyées vers Google Drive (exemple)", lambda: None)

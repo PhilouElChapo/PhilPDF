@@ -1406,7 +1406,10 @@ class OngletDocument(QWidget):
         self.sp.addWidget(self.volet)
         self.sp.splitterMoved.connect(self._volet_glisse)
         self.sp.setStretchFactor(1, 1)
-        self.sp.setSizes([140, 900, 320])
+        lv_ = int(self.params.get("volet_largeur") or 320)          # largeurs reglees a la souris : gardees
+        lg_ = int(self.params.get("vignettes_largeur") or 140)
+        self._taille_volet = max(200, lv_)
+        self.sp.setSizes([lg_, 900, self._taille_volet])
         v.addWidget(self.sp, 1)
         self.barre_rapide = BarreRapide(self, self.zone.viewport())
         self.construire_pages()
@@ -1823,8 +1826,30 @@ class OngletDocument(QWidget):
             self.params["volet"] = mode
             self.params.enregistrer()
 
+    def _memo_largeurs(self):
+        t = self.sp.sizes()
+        changes = False
+        if self.vignettes.isVisible() and t[0] >= 60 and t[0] != self.params.get("vignettes_largeur"):
+            self.params["vignettes_largeur"] = t[0]
+            changes = True
+        if getattr(self, "_mode_volet", "complet") == "complet" and self.volet.isVisible() and t[2] >= 200 \
+                and t[2] != self.params.get("volet_largeur"):
+            self.params["volet_largeur"] = t[2]
+            self._taille_volet = t[2]
+            changes = True
+        if changes:
+            self.params.enregistrer()
+
     def _volet_glisse(self, *_a):
-        """En retrecissant le volet a la souris, il passe en icones seules ; en l'elargissant, il redevient complet."""
+        """En retrecissant le volet a la souris, il passe en icones seules ; en l'elargissant, il redevient complet.
+        La largeur choisie est gardee (meme apres fermeture), comme celle des vignettes."""
+        if not hasattr(self, "_t_largeurs"):
+            from PySide6.QtCore import QTimer
+            self._t_largeurs = QTimer(self)
+            self._t_largeurs.setSingleShot(True)
+            self._t_largeurs.setInterval(600)
+            self._t_largeurs.timeout.connect(self._memo_largeurs)
+        self._t_largeurs.start()
         if not self.volet.isVisible():
             return
         lv = self.sp.sizes()[2]
@@ -1835,7 +1860,7 @@ class OngletDocument(QWidget):
                 self.sp.setSizes([t[0], t[1] + t[2] - 200, 200])
             return
         if mode == "complet" and lv < 175:
-            self._taille_volet = 300
+            self._taille_volet = max(200, int(self.params.get("volet_largeur") or 300))
             self.mode_volet("icones")
         elif mode == "icones" and lv > 140:
             self._taille_volet = max(lv, 240)
