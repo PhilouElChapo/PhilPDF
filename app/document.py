@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, Q
                                QListWidget, QListWidgetItem, QSplitter, QPushButton, QInputDialog, QMenu,
                                QMessageBox, QLineEdit, QDialog, QDialogButtonBox, QCheckBox, QFormLayout,
                                QAbstractItemView, QComboBox, QSpinBox, QStackedWidget, QColorDialog, QFileDialog,
-                               QDoubleSpinBox)
+                               QDoubleSpinBox, QApplication)
 from .icones import icone
 from .outils import outil, famille
 from .dialogues import boutons_fr, DialogueBibliotheque
@@ -131,6 +131,18 @@ class PageWidget(QWidget):
                 p.setPen(QPen(QColor("#a35c00"), 1, Qt.DotLine))
                 p.setBrush(Qt.NoBrush)
                 p.drawRect(self.vers_ecran(r))
+        rt = getattr(o, "retouche", None)
+        if rt and rt["page"] == self.num and rt.get("apercu") is not None:       # retouche en direct sur l'image
+            c, w_, h_, ang = rt["geo"]
+            ce = self.vers_ecran(fitz.Rect(c, c))
+            k = self.echelle()
+            p.save()
+            p.translate(ce.center())
+            p.rotate(-ang)
+            p.setRenderHint(QPainter.SmoothPixmapTransform)
+            p.fillRect(QRectF(-w_ * k / 2, -h_ * k / 2, w_ * k, h_ * k), QColor("#ffffff"))
+            p.drawImage(QRectF(-w_ * k / 2, -h_ * k / 2, w_ * k, h_ * k), rt["apercu"])
+            p.restore()
         obj = o.objet
         if obj and obj["page"] == self.num and not self.editeur:
             r = self.vers_ecran(obj["rect"])
@@ -281,6 +293,10 @@ class PageWidget(QWidget):
             self.glisse = {"genre": "rotation", "centre": r.center(), "rect0": fitz.Rect(o.objet["rect"]),
                            "depart": self._angle_souris(e.position(), r.center()), "angle": None}
             return
+        rt = getattr(o, "retouche", None)
+        if rt and rt["page"] == self.num and o.ret_b_baguette.isChecked():
+            if o.clic_baguette(pt, bool(e.modifiers() & Qt.ShiftModifier)):
+                return
         poignee = self._sur_poignee(e.position())
         if poignee is not None:
             self.glisse = {"genre": "redim", "coin": poignee, "debut": pt, "rect0": fitz.Rect(o.objet["rect"]), "fantome": None}
@@ -1838,6 +1854,7 @@ class OngletDocument(QWidget):
         self.pile_volet.addWidget(self._volet_outils())
         self.pile_volet.addWidget(self._volet_format())
         self.pile_volet.addWidget(self._volet_bibliotheque())
+        self.pile_volet.addWidget(self._volet_retouche())       # 3 : retouche de l'image choisie
         self.icones_volet = QWidget()
         self.icones_layout = QVBoxLayout(self.icones_volet)
         self.icones_layout.setContentsMargins(4, 10, 4, 10)
@@ -2030,6 +2047,258 @@ class OngletDocument(QWidget):
         self.remplir_favoris()
         self.remplir_icones_volet()
         self.outil_demande.emit("__epingles__")
+
+    # ------------------------------------------------------------ retouche d'image (volet de droite)
+    CURSEURS_RETOUCHE = (("luminosite", "Luminosité", -100, 100, 0), ("contraste", "Contraste", -100, 100, 0),
+                         ("gamma", "Tons moyens", 30, 300, 100), ("noir", "Niveau des noirs", 0, 200, 0),
+                         ("blanc", "Niveau des blancs", 55, 255, 255), ("saturation", "Saturation", -100, 100, 0),
+                         ("temperature", "Température (froid ↔ chaud)", -100, 100, 0), ("teinte", "Teinte", -100, 100, 0),
+                         ("nettete", "Flou ↔ netteté", -100, 100, 0), ("bruit", "Réduction du bruit", 0, 100, 0))
+
+    def _volet_retouche(self):
+        from PySide6.QtWidgets import QScrollArea, QSlider, QGridLayout
+        zone = QScrollArea()
+        zone.setWidgetResizable(True)
+        zone.setFrameShape(QFrame.NoFrame)
+        zone.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)     # le contenu suit la largeur du volet
+        w = QWidget()
+        w.setMinimumWidth(10)
+        zone.setWidget(w)
+        v = QVBoxLayout(w)
+        v.setContentsMargins(14, 16, 14, 16)
+        t = QLabel(_("RETOUCHE DE L'IMAGE"))
+        t.setStyleSheet("font-size:12px;font-weight:600;color:#555;letter-spacing:1px")
+        v.addWidget(t)
+        aide = QLabel(_("Les réglages s'affichent en direct sur l'image de la page. Rien n'est changé dans le PDF "
+                        "avant « Appliquer à l'image ». Ctrl+Z annule ensuite."))
+        aide.setWordWrap(True)
+        aide.setStyleSheet("color:#555;font-size:12px")
+        v.addWidget(aide)
+        self.ret_auto = QCheckBox(_("Correction automatique"))
+        self.ret_auto.setToolTip(_("Niveaux et couleurs corrigés automatiquement"))
+        self.ret_auto.toggled.connect(lambda _c: self._maj_retouche())
+        v.addWidget(self.ret_auto)
+        g = QGridLayout()
+        g.setHorizontalSpacing(6)
+        g.setVerticalSpacing(2)
+        self.ret_curseurs = {}
+        libs = {"luminosite": _("Luminosité"), "contraste": _("Contraste"), "gamma": _("Tons moyens"),
+                "noir": _("Niveau des noirs"), "blanc": _("Niveau des blancs"), "saturation": _("Saturation"),
+                "temperature": _("Température (froid ↔ chaud)"), "teinte": _("Teinte"), "nettete": _("Flou ↔ netteté"),
+                "bruit": _("Réduction du bruit")}
+        for i, (cle, lib, mini, maxi, defaut) in enumerate(self.CURSEURS_RETOUCHE):
+            lb = QLabel(libs.get(cle, lib))
+            lb.setStyleSheet("font-size:12px")
+            sl = QSlider(Qt.Horizontal)
+            sl.setRange(mini, maxi)
+            sl.setValue(defaut)
+            sl.setObjectName("ret_" + cle)
+            val = QLabel(str(defaut))
+            val.setFixedWidth(30)
+            val.setStyleSheet("color:#777;font-size:11px")
+            sl.valueChanged.connect(lambda x, val=val: (val.setText(str(x)), self._maj_retouche()))
+            sl.setToolTip(_("Double-clic sur le nom : revenir à la valeur de départ"))
+            lb.mouseDoubleClickEvent = lambda _e, sl=sl, d=defaut: sl.setValue(d)
+            g.addWidget(lb, 2 * i, 0, 1, 2)
+            g.addWidget(sl, 2 * i + 1, 0)
+            g.addWidget(val, 2 * i + 1, 1)
+            self.ret_curseurs[cle] = (sl, defaut)
+        v.addLayout(g)
+        self.ret_nb = QCheckBox(_("Noir et blanc"))
+        self.ret_nb.toggled.connect(lambda _c: self._maj_retouche())
+        v.addWidget(self.ret_nb)
+        t2 = QLabel(_("BAGUETTE MAGIQUE"))
+        t2.setStyleSheet("font-size:12px;font-weight:600;color:#555;letter-spacing:1px;margin-top:8px")
+        v.addWidget(t2)
+        self.ret_b_baguette = BoutonVolet(_("Choisir une zone"),
+                                          _("Cliquez sur l'image : la zone de même couleur est choisie (Maj + clic : en ajouter)"))
+        self.ret_b_baguette.setCheckable(True)
+        v.addWidget(self.ret_b_baguette)
+        ht = QHBoxLayout()
+        ht.addWidget(QLabel(_("Tolérance")))
+        self.ret_tol = QSlider(Qt.Horizontal)
+        self.ret_tol.setRange(2, 120)
+        self.ret_tol.setValue(30)
+        ht.addWidget(self.ret_tol, 1)
+        v.addLayout(ht)
+        hb = QHBoxLayout()
+        for txt, aide_, mode in ((_("Effacer"), _("La zone est remplie à partir de ce qui l'entoure"), "fond"),
+                                 (_("Transparent"), _("La zone devient transparente"), "transparent"),
+                                 (_("Blanc"), _("La zone devient blanche"), "blanc")):
+            b = QPushButton(txt)
+            b.setToolTip(aide_)
+            b.clicked.connect(lambda _c=False, m=mode: self.effacer_zone(m))
+            hb.addWidget(b)
+        v.addLayout(hb)
+        b = QPushButton(_("Désélectionner la zone"))
+        b.clicked.connect(lambda: (self.retouche and self.retouche.update(masque=None), self._maj_retouche()))
+        v.addWidget(b)
+        self.ret_b_ia = BoutonVolet(_("Retouche avec l'IA (Gemini)..."), _("Consigne, styles prêts à l'emploi, zones entourées ; avant / après à valider"))
+        self.ret_b_ia.clicked.connect(self.retouche_ia)
+        v.addWidget(self.ret_b_ia)
+        v.addStretch(1)
+        hb2 = QHBoxLayout()
+        b = QPushButton(_("Réinitialiser"))
+        b.clicked.connect(self.reinitialiser_retouche)
+        hb2.addWidget(b)
+        b = QPushButton(_("Appliquer à l'image"))
+        b.setStyleSheet("QPushButton{background:#0f6cbd;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-weight:600}")
+        b.clicked.connect(self.appliquer_retouche)
+        hb2.addWidget(b)
+        v.addLayout(hb2)
+        from PySide6.QtCore import QTimer
+        self._t_retouche = QTimer(self)
+        self._t_retouche.setSingleShot(True)
+        self._t_retouche.setInterval(90)
+        self._t_retouche.timeout.connect(self._calcul_apercu)
+        return zone
+
+    def reglages_retouche(self):
+        r = {k: sl.value() for k, (sl, _d) in self.ret_curseurs.items()}
+        r.update(auto=self.ret_auto.isChecked(), noir_blanc=self.ret_nb.isChecked())
+        return r
+
+    def ouvrir_retouche(self, obj):
+        """Image choisie (mode Modifier) : le volet de retouche s'ouvre, avec ses reglages a zero."""
+        from moteur import retouche as R
+        try:
+            src = R.depuis_pdf(self.doc, obj["xref"])
+        except Exception as e:
+            self.message(_("Retouche impossible sur cette image : {e}", e=e))
+            return
+        self.retouche = {"page": obj["page"], "xref": obj["xref"], "src": src, "petit": R.reduire(src),
+                         "masque": None, "apercu": None, "geo": Editeur(self.doc).geometrie_image(obj["page"], obj["xref"])}
+        for sl, d in self.ret_curseurs.values():
+            sl.blockSignals(True)
+            sl.setValue(d)
+            sl.blockSignals(False)
+        for c in (self.ret_auto, self.ret_nb):
+            c.blockSignals(True)
+            c.setChecked(False)
+            c.blockSignals(False)
+        self.ret_b_baguette.setChecked(False)
+        self.pile_volet.setCurrentIndex(3)
+        self._montrer_volet()
+        self._calcul_apercu()
+
+    def fermer_retouche(self):
+        self.retouche = None
+        if self.pile_volet.currentIndex() == 3:
+            self.pile_volet.setCurrentIndex(1 if self.mode == "modifier" else 0)
+        self.rafraichir_pages()
+
+    def reinitialiser_retouche(self):
+        if self.retouche:
+            obj = {"page": self.retouche["page"], "xref": self.retouche["xref"]}
+            self.ouvrir_retouche(obj)
+
+    def _maj_retouche(self):
+        if getattr(self, "retouche", None):
+            self._t_retouche.start()
+
+    def _calcul_apercu(self):
+        """Apercu rapide sur une copie reduite ; la zone de la baguette apparait en rouge."""
+        from moteur import retouche as R
+        import numpy as np
+        rt = getattr(self, "retouche", None)
+        if not rt:
+            return
+        img = R.appliquer(rt["petit"], self.reglages_retouche())
+        if rt["masque"] is not None:
+            import cv2
+            m = cv2.resize(rt["masque"].astype(np.uint8), (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST) > 0
+            rouge = img.copy()
+            rouge[m, 0] = np.clip(rouge[m, 0].astype(int) * 0.4 + 255 * 0.6, 0, 255).astype(np.uint8)
+            rouge[m, 1] = (rouge[m, 1] * 0.4).astype(np.uint8)
+            rouge[m, 2] = (rouge[m, 2] * 0.4).astype(np.uint8)
+            img = rouge
+        q = QImage(img.data, img.shape[1], img.shape[0], img.shape[1] * 4, QImage.Format_RGBA8888).copy()
+        rt["apercu"] = q
+        for pw in self.page_widgets:
+            if pw.num == rt["page"]:
+                pw.update()
+
+    def point_image(self, pt):
+        """Point de la page -> pixel de l'image en retouche (rotation comprise), ou None s'il est dehors."""
+        import math
+        rt = self.retouche
+        c, w, h, angle = rt["geo"]
+        a = math.radians(angle)
+        dx, dy = pt.x - c.x, pt.y - c.y
+        x = dx * math.cos(a) - dy * math.sin(a)
+        y = dx * math.sin(a) + dy * math.cos(a)
+        H, W = rt["src"].shape[:2]
+        px, py = (x + w / 2) / w * W, (y + h / 2) / h * H
+        return (px, py) if 0 <= px < W and 0 <= py < H else None
+
+    def clic_baguette(self, pt, ajouter=False):
+        from moteur import retouche as R
+        rt = self.retouche
+        p = self.point_image(pt)
+        if p is None:
+            return False
+        base = R.appliquer(rt["src"], self.reglages_retouche()) if any(
+            v for k, v in self.reglages_retouche().items() if k not in ("gamma", "blanc")) else rt["src"]
+        rt["masque"] = R.baguette(base, p[0], p[1], self.ret_tol.value(), rt["masque"] if ajouter else None)
+        self._calcul_apercu()
+        return True
+
+    def effacer_zone(self, mode):
+        from moteur import retouche as R
+        rt = getattr(self, "retouche", None)
+        if not rt or rt["masque"] is None:
+            self.message(_("Choisissez d'abord une zone avec la baguette magique."))
+            return
+        rt["src"] = R.effacer(rt["src"], rt["masque"], mode)
+        rt["petit"] = R.reduire(rt["src"])
+        rt["masque"] = None
+        rt["modifiee"] = True
+        self._calcul_apercu()
+
+    def appliquer_retouche(self):
+        from moteur import retouche as R
+        rt = getattr(self, "retouche", None)
+        if not rt:
+            return
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            img = R.appliquer(rt["src"], self.reglages_retouche())
+            self.memoriser(_("Retouche de l'image"))
+            nx = R.remplacer_dans_pdf(self.doc, rt["page"], rt["xref"], img)
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            self.message(_("Retouche impossible : {e}", e=e))
+            return
+        QApplication.restoreOverrideCursor()
+        n = rt["page"]
+        self.apres_modif([_("Image retouchée.")])
+        r = next((r for x, r in Editeur(self.doc).images(n) if x == nx), None)
+        self.objet = {"type": "image", "page": n, "xref": nx, "rect": r, "garder_proportions": True} if r else None
+        if self.objet:
+            self.ouvrir_retouche(self.objet)
+        else:
+            self.fermer_retouche()
+
+    def retouche_ia(self):
+        rt = getattr(self, "retouche", None)
+        if not rt:
+            return
+        from .dialogues_retouche_ia import DialogueRetoucheIA
+        from moteur import retouche as R
+        d = DialogueRetoucheIA(self, R.appliquer(rt["src"], self.reglages_retouche()), self.params)
+        if d.exec() == QDialog.Accepted and d.resultat is not None:
+            rt["src"] = d.resultat
+            rt["petit"] = R.reduire(rt["src"])
+            for sl, dft in self.ret_curseurs.values():      # les reglages sont deja dans l'image envoyee
+                sl.blockSignals(True)
+                sl.setValue(dft)
+                sl.blockSignals(False)
+            for c in (self.ret_auto, self.ret_nb):
+                c.blockSignals(True)
+                c.setChecked(False)
+                c.blockSignals(False)
+            self._calcul_apercu()
+            self.message(_("Résultat de l'IA dans l'aperçu : « Appliquer à l'image » pour le garder."))
 
     def _volet_format(self):
         w = QWidget()
@@ -2527,7 +2796,12 @@ class OngletDocument(QWidget):
         return None
 
     def choisir_objet(self, obj):
+        rt = getattr(self, "retouche", None)
+        if rt and not (obj and obj.get("type") == "image" and obj.get("xref") == rt["xref"]):
+            self.fermer_retouche()
         self.objet = obj
+        if obj and obj["type"] == "image" and self.mode == "modifier" and not getattr(self, "retouche", None):
+            self.ouvrir_retouche(obj)
         if obj and obj["type"] == "ligne" and self.mode == "modifier":
             try:
                 chars, r, t = Editeur(self.doc).ligne_a(obj["page"], obj["rect"])
@@ -2571,6 +2845,8 @@ class OngletDocument(QWidget):
         obj["rect"] = fitz.Rect(nouveau)
         if obj["type"] in ("image",):
             self.objet = None
+            if getattr(self, "retouche", None):
+                self.fermer_retouche()
         self.apres_modif(journal)
         if obj["type"] == "ligne":
             self.objet = {"type": "ligne", "page": n, "rect": nouveau, "texte": obj["texte"]}
@@ -2608,6 +2884,8 @@ class OngletDocument(QWidget):
                 ed = Editeur(self.doc)
                 ed.tourner_image(n, obj["xref"], delta)
                 obj["rect"] = fitz.Rect(next(r for x, r in ed.images(n) if x == obj["xref"]))
+                if getattr(self, "retouche", None):
+                    self.retouche["geo"] = ed.geometrie_image(n, obj["xref"])
                 journal = ed.journal
             else:
                 ed = Editeur(self.doc)
@@ -3221,6 +3499,8 @@ class OngletDocument(QWidget):
         return fitz.Rect(x, y, x + w, y + h), pix, texte, taille
 
     def changer_mode(self, mode):
+        if mode != "modifier" and getattr(self, "retouche", None):
+            self.fermer_retouche()
         if mode != "poser":
             self.a_poser = None if mode is None else self.a_poser
         self.mode = mode

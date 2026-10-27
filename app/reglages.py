@@ -19,7 +19,7 @@ from . import coffre
 
 COMMUNS = ["auteur", "langue", "outils_epingles", "barre_rapide", "volet", "vignettes", "fixer_objets",
            "filigranes_perso", "ia_moteur", "maj_source", "maj_auto", "synchro", "comptes", "comptes_icone", "theme", "synchro_secrets", "barre", "couleurs_annotations",
-           "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "agenda", "messagerie"]
+           "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "agenda", "messagerie", "ia_styles_perso"]
 POSTE = ["disposition_vue", "volet_largeur", "vignettes_largeur", "biblio_replies", "sessions_vues", "synchro_etat", "machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
 CLEFS_IA = ["clef_claude", "clef_gemini"]
 FICHIER_DRIVE = "preferences.json"
@@ -285,7 +285,7 @@ def libelle_commun(k):
             "ia_consignes_resume": _("Consignes personnelles pour le résumé IA"),
             "agenda": _("Agenda pour les rendez-vous"), "messagerie": _("Messagerie pour les e-mails"),
             "orthographe": _("Correcteur d'orthographe"), "orthographe_langue": _("Langue du correcteur"),
-            "barre_style": _("Boutons de la barre (icône, nom)")}.get(k, k)
+            "barre_style": _("Boutons de la barre (icône, nom)"), "ia_styles_perso": _("Mes styles d'image pour l'IA")}.get(k, k)
 
 
 # valeur utilisee quand le reglage n'a jamais ete touche sur un poste (absent = cette valeur)

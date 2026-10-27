@@ -266,6 +266,66 @@ def _gemini(clef, params, consignes, texte, images, max_jetons, json_attendu):
             raise
 
 
+def modeles_image_gemini(clef):
+    """Modeles Gemini qui savent rendre une image modifiee (les plus recents d'abord, stables avant les apercus)."""
+    if "gemini_image" in _modeles_trouves:
+        return _modeles_trouves["gemini_image"]
+    try:
+        d = _http(f"{GEMINI_API}/models?pageSize=200&key={clef}", delai=20)
+        ids = [m["name"].split("/")[-1] for m in d.get("models", [])
+               if "generateContent" in m.get("supportedGenerationMethods", [])]
+    except ErreurIA:
+        ids = []
+
+    def rang(i):
+        m = re.search(r"gemini-(\d+(?:\.\d+)?)", i)
+        return ("preview" not in i and "exp" not in i, float(m.group(1)) if m else 0, "pro" not in i)
+    img = sorted([i for i in ids if i.startswith("gemini") and "image" in i and "imagen" not in i], key=rang, reverse=True)
+    _modeles_trouves["gemini_image"] = img or ["gemini-2.5-flash-image", "gemini-2.5-flash-image-preview"]
+    return _modeles_trouves["gemini_image"]
+
+
+def retoucher_image(params, png, consigne, zones_png=None, delai=240):
+    """Envoie l'image (PNG) et la consigne a Gemini, qui renvoie l'image modifiee (octets PNG ou JPEG).
+    zones_png : la meme image avec les zones entourees et numerotees (la consigne dit quoi faire de chacune).
+    Claude ne sait pas produire d'image : seul Gemini est utilise ici."""
+    clef = nettoyer_clef(params.get("clef_gemini", ""))
+    if not clef:
+        raise ErreurIA(_("Il faut une clef Gemini (Edition › Préférences › IA) : Claude ne sait pas modifier une image."))
+    parts = [{"inline_data": {"mime_type": "image/png", "data": base64.b64encode(png).decode()}}]
+    if zones_png:
+        parts.append({"inline_data": {"mime_type": "image/png", "data": base64.b64encode(zones_png).decode()}})
+    parts.append({"text": consigne})
+    corps = {"contents": [{"role": "user", "parts": parts}],
+             "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]}}
+    from .journal import ecrire
+    derniere = None
+    for modele in modeles_image_gemini(clef)[:4]:
+        try:
+            t0 = __import__("time").monotonic()
+            d = _http(f"{GEMINI_API}/models/{modele}:generateContent?key={clef}", corps, delai=delai)
+            for c in d.get("candidates") or []:
+                for p in (c.get("content") or {}).get("parts", []):
+                    data = p.get("inline_data") or p.get("inlineData")
+                    if data and data.get("data"):
+                        ecrire("IA gemini", f"image modifiée en {__import__('time').monotonic() - t0:.1f} s, modèle {modele}")
+                        dernier.update(moteur="gemini", modele=modele)
+                        return base64.b64decode(data["data"])
+            texte = " ".join(p.get("text", "") for c in d.get("candidates") or [] for p in (c.get("content") or {}).get("parts", []))
+            raison = (d.get("promptFeedback") or {}).get("blockReason") or texte.strip()[:200] or "?"
+            raise ErreurIA(_("Gemini n'a pas renvoyé d'image ({raison}).", raison=raison))
+        except ErreurIA as e:
+            code = getattr(e, "code", 0)
+            if code in (400, 403) and "API key" in str(e):
+                raise ErreurIA(_("Clef Gemini refusée : vérifiez-la dans Edition › Préférences › IA."))
+            ecrire("IA gemini", f"image, modèle {modele} : {e}")
+            derniere = e
+            if code == 404 or code in TRANSITOIRES or getattr(e, "delai", False):
+                continue
+            raise
+    raise derniere or ErreurIA(_("Aucun modèle Gemini d'image disponible avec cette clef."))
+
+
 def demander(params, consignes, texte, images=None, json_attendu=False, max_jetons=4000):
     """Texte (ou objet JSON si json_attendu) renvoye par le premier moteur qui repond."""
     ms = moteurs(params)

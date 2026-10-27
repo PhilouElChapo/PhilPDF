@@ -983,6 +983,41 @@ orot_.choisir_objet({"type": "annot", "page": 0, "xref": xr_, "rect": objets.rec
                      "garder_proportions": True})
 orot_.tourner_objet(-20)
 verif(round(objets.angle_objet(orot_.doc, xr_)) in (340, -20), "rotation : tampon tourné (relu par Acrobat : matrice de l'apparence)")
+# --- retoucheur d'image : volet en direct, baguette magique, appliquer ; fenetre IA (zones, styles)
+import numpy as _np
+orot_.changer_mode("modifier")
+img2_ = orot_.objet_sous(0, fitz.Point(380, 340)) or next({"type": "image", "page": 0, "xref": x, "rect": r, "garder_proportions": True}
+                                                           for x, r in _Ed(orot_.doc).images(0))
+orot_.choisir_objet(img2_)
+verif(orot_.pile_volet.currentIndex() == 3 and orot_.retouche, "retouche : image choisie -> volet de retouche ouvert")
+sl_ = orot_.ret_curseurs["luminosite"][0]
+sl_.setValue(60)
+QTest.qWait(250)
+verif(orot_.retouche.get("apercu") is not None, "retouche : aperçu en direct dans la page")
+c_, w2_, h2_, a2_ = orot_.retouche["geo"]
+orot_.ret_b_baguette.setChecked(True)
+verif(orot_.clic_baguette(c_) and orot_.retouche["masque"] is not None and orot_.retouche["masque"].any(),
+      "retouche : baguette magique, zone choisie par sa couleur (image tournée comprise)")
+capture(w, "54_retouche.png")
+orot_.effacer_zone("transparent")
+avant_ = orot_.doc.tobytes()
+orot_.appliquer_retouche()
+from moteur import retouche as _RT
+xr2_ = orot_.objet["xref"] if orot_.objet else _Ed(orot_.doc).images(0)[0][0]
+arr_ = _RT.depuis_pdf(orot_.doc, xr2_)
+verif(orot_.doc.tobytes() != avant_ and (arr_[:, :, 3] < 255).any(), "retouche : appliquée à l'image du PDF (zone transparente)")
+from app import dialogues_retouche_ia as _DRI
+dri_ = _DRI.DialogueRetoucheIA(w, arr_, w.params)
+dri_.cb_style.setCurrentIndex(next(i for i in range(dri_.cb_style.count()) if "Fusain" in dri_.cb_style.itemText(i)))
+dri_.c_zones.setChecked(True)
+dri_.vue.zones = [{"points": [__import__("PySide6.QtCore", fromlist=["QPointF"]).QPointF(x, y) for x, y in ((2, 2), (30, 2), (30, 20), (2, 20), (2, 3))],
+                   "couleur": "#e53935", "couleur_nom": "rouge", "consigne": "en couleur"}]
+dri_._maj_zones()
+dri_.resize(1100, 650); dri_.show(); app.processEvents()
+capture(dri_, "55_retouche_ia.png")
+verif("fusain" in dri_.consigne.toPlainText().lower() and dri_.t_zones.rowCount() == 1 and len(dri_.vue.image_zones()) > 100,
+      "retouche IA : style rempli dans la consigne, zones entourées et numérotées")
+dri_.close()
 orot_.modifie = False
 w.fermer_onglet(w.onglets.indexOf(orot_))
 

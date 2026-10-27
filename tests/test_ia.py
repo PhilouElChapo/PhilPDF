@@ -44,6 +44,7 @@ class S(BaseHTTPRequestHandler):
         if u.path == "/gemini/models":
             return self._json({"models": [{"name": "models/gemini-9.5-flash", "supportedGenerationMethods": ["generateContent"]},
                                           {"name": "models/gemini-8.0-flash", "supportedGenerationMethods": ["generateContent"]},
+                                          {"name": "models/gemini-9.5-flash-image", "supportedGenerationMethods": ["generateContent"]},
                                           {"name": "models/embedding-1", "supportedGenerationMethods": ["embedContent"]}]})
         self._json({}, 404)
     def do_POST(self):
@@ -61,6 +62,16 @@ class S(BaseHTTPRequestHandler):
                      "type": "courrier", "dossier": "", "echeances": [{"date": "2026-12-20", "libelle": "délai de recours"}]}
                 return self._json({"content": [{"type": "text", "text": "```json\n" + json.dumps(r) + "\n```"}]})
             return self._json({"content": [{"type": "text", "text": "Réponse à : " + texte[:20]}]})
+        if u.path.startswith("/gemini/models/") and "image" in u.path:     # edition d'image : on renvoie l'image inversee
+            import base64 as _b, io as _io
+            from PIL import Image as _I, ImageOps as _O
+            parts = corps["contents"][0]["parts"]
+            ETAT["image"] = {"images": sum(1 for p in parts if "inline_data" in p), "texte": parts[-1]["text"],
+                             "modalites": corps["generationConfig"]["responseModalities"]}
+            im = _I.open(_io.BytesIO(_b.b64decode(parts[0]["inline_data"]["data"]))).convert("RGB")
+            b = _io.BytesIO(); _O.invert(im).save(b, "PNG")
+            return self._json({"candidates": [{"content": {"parts": [{"text": "voici"},
+                               {"inlineData": {"mimeType": "image/png", "data": _b.b64encode(b.getvalue()).decode()}}]}}]})
         if u.path.startswith("/gemini/models/"):
             modele = u.path.split("/")[-1].split(":")[0]
             if modele in ETAT.get("surcharges", ()):
@@ -136,5 +147,23 @@ a = apprentissage.lire(pa, "classement.json")
 b = json.loads(json.dumps(a)); b["expediteurs"]["urssaf"] = {"nom": "URSSAF", "dossier": "{documents}/URSSAF", "n": 1, "maj": "2026-10-24T10:00:00"}
 f = miroir._fusion(a, b)
 verifie(set(f["expediteurs"]) == {"cpam des alpes maritimes", "urssaf"}, "apprentissages de deux postes fusionnés sans perte")
+# --- retouche d'image par Gemini (Claude ne sait pas rendre une image)
+from PIL import Image as _I
+import io as _io
+_b = _io.BytesIO(); _I.new("RGB", (40, 20), (10, 200, 30)).save(_b, "PNG")
+from app import styles_ia
+cons = styles_ia.consigne_complete("Transforme en aquarelle.", "legere", True,
+                                   [{"couleur_nom": "rouge", "consigne": "le ciel en orage"}])
+r_ = ia.retoucher_image({"clef_gemini": "CLEF-G"}, _b.getvalue(), cons, zones_png=_b.getvalue())
+px = _I.open(_io.BytesIO(r_)).convert("RGB").getpixel((5, 5))
+verifie(px == (245, 55, 225), f"image : Gemini renvoie l'image modifiée ({px})")
+verifie(ETAT["image"]["images"] == 2 and "zone 1 (rouge) : le ciel en orage" in ETAT["image"]["texte"]
+        and "IMAGE" in ETAT["image"]["modalites"] and "léger" in ETAT["image"]["texte"], "image : zones et consigne envoyées")
+try:
+    ia.retoucher_image({"clef_claude": "x"}, _b.getvalue(), "x"); verifie(False, "sans clef Gemini")
+except ia.ErreurIA as e:
+    verifie("Gemini" in str(e), "image : sans clef Gemini, message clair (Claude ne sait pas faire d'image)")
+verifie(len(styles_ia.styles()) >= 50 and not any(n.lower() in ("ghibli", "pixar", "disney") for _g, n, _c in styles_ia.styles()),
+        "styles : catalogue complet, aucun nom de studio ou de marque")
 srv.shutdown()
 print(f"\n{ok} vérifications de l'assistant IA réussies")
