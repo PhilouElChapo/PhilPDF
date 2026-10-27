@@ -1104,6 +1104,7 @@
  "Tampons, signatures, documents pâles ou tramés": "Stamps, signatures, faint or screened documents",
  "Tapez pour chercher une police": "Type to search a font",
  "Tapez un numéro de page puis Entrée": "Type a page number then Enter",
+ "Tapez votre texte": "Type your text",
  "Terminer": "Finish",
  "Terminé : {c} passage(s) corrigé(s) dans le texte du PDF, sur {n} différence(s).\n\nAppris : {m} mot(s) ajouté(s) à votre liste personnelle, {r} correction(s) retenue(s) (une correction s'applique seule dès qu'elle a été confirmée deux fois).\n\nFichier : {f}": "Done: {c} passage(s) corrected in the PDF text, out of {n} difference(s).\n\nLearned: {m} word(s) added to your personal list, {r} correction(s) kept (a correction applies on its own once confirmed twice).\n\nFile: {f}",
  "Tesseract": "Tesseract",

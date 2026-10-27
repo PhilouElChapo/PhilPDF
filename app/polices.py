@@ -181,10 +181,34 @@ def _classe_combo():
             self.portee.setCurrentIndex(0 if doc is not None else 1)
             self.portee.currentIndexChanged.connect(lambda _i: self.remplir())
             self.lineEdit().setPlaceholderText(_("Tapez pour chercher une police"))
+            from PySide6.QtCore import QTimer
+            self._minuterie = QTimer(self)            # apercu dans le texte quand la souris s'arrete (pas a chaque ligne survolee)
+            self._minuterie.setSingleShot(True)
+            self._minuterie.setInterval(350)
+            self._minuterie.timeout.connect(self._apercu_differe)
+            self._survolee = None
             self.highlighted.connect(self._survol)
             self.currentIndexChanged.connect(self._choisie)
             self._par_fichier = {}
+            self.view().installEventFilter(self)       # une lettre tapee dans la liste ouverte : on cherche
             self.remplir()
+
+        def eventFilter(self, obj, ev):
+            from PySide6.QtCore import QEvent
+            if self.completer() is not None and obj is self.completer().popup() and ev.type() == QEvent.Hide:
+                QTimer_ = __import__("PySide6.QtCore", fromlist=["QTimer"]).QTimer
+                QTimer_.singleShot(0, self._apres_recherche)
+                return False
+            if obj is self.view() and ev.type() == QEvent.KeyPress and ev.text() and ev.text().isprintable():
+                self.hidePopup()
+                le = self.lineEdit()
+                le.setFocus()
+                le.clear()
+                le.insert(ev.text())                     # la liste filtree (completeur) s'ouvre sous la saisie
+                self.completer().setCompletionPrefix(ev.text())
+                self.completer().complete()
+                return True
+            return False
 
         def set_document(self, doc):
             self._doc = doc
@@ -232,10 +256,21 @@ def _classe_combo():
             comp = QCompleter(self.model(), self)
             comp.setFilterMode(Qt.MatchContains)
             comp.setCaseSensitivity(Qt.CaseInsensitive)
+            comp.setCompletionMode(QCompleter.PopupCompletion)
+            comp.setMaxVisibleItems(14)
+            comp.activated[str].connect(lambda t: self.setCurrentIndex(max(0, self.findText(t))))
+            comp.highlighted[str].connect(lambda t: self._survol(self.findText(t)) if self.findText(t) >= 0 else None)
             self.setCompleter(comp)
+            comp.popup().installEventFilter(self)
             i = self.findData(garde) if garde else 0
             self.setCurrentIndex(max(0, i))
             self.blockSignals(False)
+            self._choisie(self.currentIndex())
+
+        def _apres_recherche(self):
+            """Recherche abandonnee (Echap, clic dehors) : on revient au nom et a l'apercu de la police choisie."""
+            if self.findText(self.currentText()) < 0 or self.lineEdit().text() != self.itemText(self.currentIndex()):
+                self.setEditText(self.itemText(self.currentIndex()))
             self._choisie(self.currentIndex())
 
         def police(self, i=None):
@@ -248,16 +283,23 @@ def _classe_combo():
             super().showPopup()
 
         def _survol(self, i):
-            f = self.itemData(i, Qt.FontRole)
-            self.lineEdit().setFont(f if isinstance(f, QFont) else QFont())
-            self.apercu.emit(self.police(i))
+            self._survolee = i
+            self._minuterie.start()
+
+        def _apercu_differe(self):
+            pop = self.completer().popup() if self.completer() else None
+            if self._survolee is not None and (self.view().isVisible() or (pop is not None and pop.isVisible())):
+                self.apercu.emit(self.police(self._survolee))
 
         def _choisie(self, i):
+            self._minuterie.stop()
             f = self.itemData(i, Qt.FontRole)
             self.lineEdit().setFont(f if isinstance(f, QFont) else QFont())
+            self.lineEdit().setCursorPosition(0)        # le debut du nom reste visible (plus de « olice du document »)
             self.apercu.emit(self.police(i))
 
         def hidePopup(self):
+            self._minuterie.stop()
             super().hidePopup()
             self._choisie(self.currentIndex())      # Echap ou clic dehors : retour a la police choisie
 

@@ -190,7 +190,7 @@ def proteger_bulles():
     origine = QWidget.setStyleSheet
 
     def avec_bulles(self, css):
-        if css and "QLabel" in css and "QToolTip" not in css:
+        if css and "QToolTip" not in css:
             css = css + " " + BULLE
         origine(self, css)
     QWidget.setStyleSheet = avec_bulles

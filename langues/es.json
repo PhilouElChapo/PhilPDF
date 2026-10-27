@@ -1104,6 +1104,7 @@
  "Tampons, signatures, documents pâles ou tramés": "Sellos, firmas, documentos pálidos o tramados",
  "Tapez pour chercher une police": "Escriba para buscar una fuente",
  "Tapez un numéro de page puis Entrée": "Escriba un número de página y pulse Intro",
+ "Tapez votre texte": "Escriba su texto",
  "Terminer": "Terminar",
  "Terminé : {c} passage(s) corrigé(s) dans le texte du PDF, sur {n} différence(s).\n\nAppris : {m} mot(s) ajouté(s) à votre liste personnelle, {r} correction(s) retenue(s) (une correction s'applique seule dès qu'elle a été confirmée deux fois).\n\nFichier : {f}": "Terminado: {c} pasaje(s) corregido(s) en el texto del PDF, de {n} diferencia(s).\n\nAprendido: {m} palabra(s) añadida(s) a su lista personal, {r} corrección(es) retenida(s) (una corrección se aplica sola en cuanto se ha confirmado dos veces).\n\nArchivo: {f}",
  "Tesseract": "Tesseract",

@@ -559,11 +559,28 @@ for j_ in range(1, fp_.count()):
     if fp_.itemData(j_) and fp_.itemData(j_, D.Qt.FontRole) and fp_.itemData(j_, D.Qt.FontRole).toString().split(",")[0] + str(fp_.itemData(j_, D.Qt.FontRole).bold()) != ed_.zone.font().family() + str(ed_.zone.font().bold()):
         i_ = j_
         break
+fp_.showPopup()
 fp_.highlighted.emit(i_)
+QTest.qWait(500)                                     # apercu quand la souris s'arrete sur une police
 verif(ed_.zone.font().toString() != fam0_ and ed_.police_choisie == fp_.itemData(i_),
-      f"polices : aperçu immédiat au survol ({fam0_.split(',')[0]} → {fp_.itemText(i_)})")
+      f"polices : aperçu au survol, souris arrêtée ({fam0_.split(',')[0]} → {fp_.itemText(i_)})")
 fp_.hidePopup()
 verif(ed_.police_choisie is None, "polices : Echap revient à la police choisie")
+verif(fp_.lineEdit().cursorPosition() == 0, "polices : le début du nom reste visible")
+fp_.portee.setCurrentIndex(1)
+fp_.showPopup()
+QTest.keyClick(fp_.view(), D.Qt.Key_L)
+QTest.qWait(100)
+pop_ = fp_.completer().popup()
+noms_ = [pop_.model().index(r, 0).data() for r in range(pop_.model().rowCount())]
+verif(fp_.lineEdit().text() == "l" and pop_.isVisible() and noms_ and all("l" in n.lower() for n in noms_),
+      f"polices : une lettre tapée dans la liste -> recherche filtrée ({len(noms_)} polices)")
+capture(w, "34b_recherche_police.png")
+pop_.hide()
+QTest.qWait(50)
+fp_.portee.setCurrentIndex(0)
+verif("background:#ffffff" in ed_.zone.styleSheet() and ed_.fmt.cursor().shape() == D.Qt.ArrowCursor,
+      "texte en cours : zone sur fond blanc, curseur normal sur la barre de format")
 fp_.setCurrentIndex(i_)
 ed_.valider()
 pol_ = {sp["font"] for b in op.doc[0].get_text("dict")["blocks"] for l in b.get("lines", []) for sp in l["spans"]

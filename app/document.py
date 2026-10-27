@@ -410,8 +410,8 @@ class EditeurParagraphe(QFrame):
         self.zone.setLineWrapMode(QPlainTextEdit.WidgetWidth)
         self.zone.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.zone.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.zone.setStyleSheet("QPlainTextEdit{background:rgb(240,246,254);border:1.5px solid #1462c2;"
-                                "border-radius:3px;padding:0px}")
+        self.zone.setStyleSheet(self._style_zone(QColor("#000000")))
+        self.zone.setPlaceholderText(_("Tapez votre texte"))
         self.zone.document().setDocumentMargin(1)
         f = self._police_affichage()
         f.setPixelSize(max(8, int(self.taille * e * 0.98)))
@@ -502,6 +502,7 @@ class EditeurParagraphe(QFrame):
         self.fmt.setObjectName("fmt")
         self.fmt.setStyleSheet("#fmt{background:#ffffff;border:1px solid #1462c2;border-radius:6px}"
                                "QComboBox,QDoubleSpinBox,QPushButton{font-size:11px}")
+        self.fmt.setCursor(Qt.ArrowCursor)              # pas la croix de deplacement de la page au-dessus des reglages
         h = FluxLayout(self.fmt, marge=5, espace=4)       # passe sur deux lignes si la fenetre est etroite
         self.cb_police = combo_polices(self.fmt, automatique=True, doc=o.doc)
         self.cb_police.portee.setSizeAdjustPolicy(QComboBox.AdjustToContents)
@@ -621,8 +622,16 @@ class EditeurParagraphe(QFrame):
         pm = QPixmap(14, 14)
         pm.fill(self.couleur)
         self.b_coul.setIcon(QIcon(pm))
-        self.zone.setStyleSheet("QPlainTextEdit{background:rgb(240,246,254);border:1.5px solid #1462c2;"
-                                f"border-radius:3px;padding:0px;color:{self.couleur.name()}}}")
+        self.zone.setStyleSheet(self._style_zone(self.couleur))
+
+    @staticmethod
+    def _style_zone(couleur):
+        """Zone de saisie bien visible : fond blanc opaque (ou sombre si le texte est clair), cadre bleu marque,
+        le texte garde sa vraie couleur (ce que l'on voit est ce qui sera ecrit)."""
+        lum = (0.299 * couleur.red() + 0.587 * couleur.green() + 0.114 * couleur.blue()) / 255
+        fond = "#ffffff" if lum < 0.62 else "#3a3a3a"
+        return ("QPlainTextEdit{background:%s;border:2px solid #1462c2;border-radius:3px;padding:0px;color:%s;"
+                "selection-background-color:#9cc3f5;selection-color:#000}" % (fond, couleur.name()))
 
     def _fermer_annexes(self):
         try:                                            # fermer la liste ne doit plus changer la police choisie

@@ -1104,6 +1104,7 @@
  "Tampons, signatures, documents pâles ou tramés": "Timbri, firme, documenti chiari o retinati",
  "Tapez pour chercher une police": "Digita per cercare un carattere",
  "Tapez un numéro de page puis Entrée": "Digita un numero di pagina poi Invio",
+ "Tapez votre texte": "Scrivi il testo",
  "Terminer": "Termina",
  "Terminé : {c} passage(s) corrigé(s) dans le texte du PDF, sur {n} différence(s).\n\nAppris : {m} mot(s) ajouté(s) à votre liste personnelle, {r} correction(s) retenue(s) (une correction s'applique seule dès qu'elle a été confirmée deux fois).\n\nFichier : {f}": "Fatto: {c} passaggio/i corretto/i nel testo del PDF, su {n} differenza/e.\n\nAppreso: {m} parola/e aggiunta/e al tuo elenco personale, {r} correzione/i memorizzata/e (una correzione si applica da sola appena è stata confermata due volte).\n\nFile: {f}",
  "Tesseract": "Tesseract",
