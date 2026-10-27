@@ -7,7 +7,7 @@ et rien n'est ecrit ailleurs sur le PC ni dans le registre.
 import json, os, platform, sys
 
 APP = "PhilPDF"
-VERSION = "0.7.11"
+VERSION = "0.7.12"
 
 
 def dossier_programme():
@@ -90,8 +90,12 @@ class Parametres(dict):
             pass
 
     def ajouter_recent(self, chemin):
+        import datetime
         r = [p for p in self["recents"] if os.path.normcase(p) != os.path.normcase(chemin)]
-        self["recents"] = [chemin] + r[:29]
+        self["recents"] = [chemin] + r[:49]
+        dates = dict(self.get("recents_dates") or {})
+        dates[chemin] = datetime.datetime.now().isoformat(timespec="minutes")
+        self["recents_dates"] = {p: dates[p] for p in self["recents"] if p in dates}
         self.enregistrer()
 
     # ---- session partagee : voir app/session.py

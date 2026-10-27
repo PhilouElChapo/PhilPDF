@@ -104,6 +104,14 @@ reglages.ecrire_drive(x)
 dd = reglages.lire_drive(os.path.join(drive, "PhilPDF", "preferences.json"))
 verifie(dd["communs"]["par"] == "Cannes" and dd["communs"]["outils_epingles"] == ["x"] and reglages.changements_communs(x) is None,
         "vus et gardés : ce poste devient la référence, plus de question")
+# --- un reglage jamais touche ici (vide) vaut sa valeur par defaut : « (vide) -> google » n'est pas propose
+y = P(machine="Neuf2", drive=drive)
+dd = reglages.lire_drive(os.path.join(drive, "PhilPDF", "preferences.json"))
+dd["communs"].update(agenda="google", messagerie="gmail", maj="2027-01-01T00:00:00", par="Pharmacie")
+json.dump(dd, open(os.path.join(drive, "PhilPDF", "preferences.json"), "w", encoding="utf-8"))
+ch = reglages.changements_communs(y)
+verifie(ch is not None and not any(it["cle"] in ("agenda", "messagerie") for it in ch["items"]),
+        "réglage jamais touché = valeur par défaut : pas de faux changement")
 coffre.supprimer("c1")
 autre2 = P(machine="Labo", drive=drive, comptes=[{"id": "c1", "type": "webdav", "nom": "NAS maison"}], clef_claude="")
 nv = reglages.secrets_nouveaux(autre2, "ma phrase secrète")

@@ -89,6 +89,22 @@ def dossiers_connus(params=None):
     return d
 
 
+JOURS_RECENTS = 30          # recents montres sur l'Accueil : 30 derniers jours,
+NB_RECENTS = 30             # 30 fichiers au plus, tous postes confondus
+_RESOLUS = {}               # (poste, chemin la-bas, empreinte) -> chemin ici (ou None) : recherche faite une fois
+
+
+def _dossier_autre(chemin):
+    """Dossier d'un chemin ecrit sur un autre systeme (C:\\... ou /home/...)."""
+    i = max(chemin.rfind("\\"), chemin.rfind("/"))
+    return chemin[:i] if i > 0 else ""
+
+
+def retenir_trouve(machine, e, chemin):
+    """Fichier d'un autre poste retrouve ici par une recherche plus longue (ou designe a la main)."""
+    _RESOLUS[(machine, e.get("chemin"), e.get("empreinte"))] = chemin
+
+
 def empreinte(chemin):
     """Empreinte rapide : taille + debut + fin du fichier (suffit a reconnaitre un PDF)."""
     try:
@@ -165,32 +181,104 @@ class Session:
             dist = ligne[3] if len(ligne) > 3 else None
             if not chemin or not os.path.exists(chemin):
                 continue
-            e = {"chemin": chemin, "nom": os.path.basename(chemin), "taille": os.path.getsize(chemin),
-                 "empreinte": empreinte(chemin), "page": page, "zoom": zoom,
-                 "relatif_maison": _relatif(chemin, maison)}
+            e = self._decrire(chemin, maison, connus)
+            e.update(page=page, zoom=zoom)
             if dist:
                 e["distant"] = {"cle": dist.get("cle"), "chemin": dist.get("chemin"), "lieu": dist.get("lieu")}
                 e["nom"] = os.path.basename(dist.get("chemin") or chemin)
-            # dossier par defaut le plus precis qui le contient (Documents plutot que dossier utilisateur)
-            for clef, base in sorted(connus.items(), key=lambda kv: -len(kv[1])):
-                rel = _relatif(chemin, base)
-                if rel:
-                    e["connu"], e["relatif_connu"] = clef, rel
-                    break
-            for r in self.params.get("racines", []):
-                rel = _relatif(chemin, r)
-                if rel:
-                    e["racine"], e["relatif_racine"] = r, rel
-                    break
             fichiers.append(e)
+        # recents de ce poste (30 jours, 30 fichiers) : ils apparaissent aussi sur vos autres postes
+        recents = []
+        dates = self.params.get("recents_dates") or {}
+        limite = (datetime.datetime.now() - datetime.timedelta(days=JOURS_RECENTS)).isoformat(timespec="minutes")
+        for p in self.params.get("recents", []):
+            q = dates.get(p, "")
+            if len(recents) >= NB_RECENTS or (q and q < limite) or not os.path.isfile(p):
+                continue
+            e = self._decrire(p, maison, connus)
+            e["date"] = q
+            recents.append(e)
         d = self.lire()
         d[self.params["machine"]] = {"maj": datetime.datetime.now().isoformat(timespec="minutes"),
-                                     "maison": maison, "systeme": sys.platform, "fichiers": fichiers}
+                                     "maison": maison, "systeme": sys.platform, "fichiers": fichiers,
+                                     "recents": recents}
         try:
             with open(self.chemin, "w", encoding="utf-8") as f:
                 json.dump(d, f, ensure_ascii=False, indent=1)
         except OSError:
             pass
+
+    def _decrire(self, chemin, maison, connus):
+        """Ce qu'il faut pour retrouver un fichier sur un autre poste (jamais le fichier lui-meme)."""
+        e = {"chemin": chemin, "nom": os.path.basename(chemin), "taille": os.path.getsize(chemin),
+             "empreinte": empreinte(chemin), "relatif_maison": _relatif(chemin, maison)}
+        # dossier par defaut le plus precis qui le contient (Documents plutot que dossier utilisateur)
+        for clef, base in sorted(connus.items(), key=lambda kv: -len(kv[1])):
+            rel = _relatif(chemin, base)
+            if rel:
+                e["connu"], e["relatif_connu"] = clef, rel
+                break
+        for r in self.params.get("racines", []):
+            rel = _relatif(chemin, r)
+            if rel:
+                e["racine"], e["relatif_racine"] = r, rel
+                break
+        return e
+
+    def recents_communs(self, jours=None, n=None):
+        """Recents de ce poste et de vos autres postes, en une liste triee par date (le plus recent d'abord) :
+        [{chemin (ici, ou None si introuvable), nom, dossier, date, poste, ouvert_sur: [postes], machine, e}].
+        Un fichier present a la fois ici et ailleurs n'apparait qu'une fois. Recherche instantanee seulement
+        (pas de parcours du disque) ; ce qu'une recherche plus longue a trouve est garde pour la suite."""
+        jours, n = jours or JOURS_RECENTS, n or NB_RECENTS
+        moi = self.params.get("machine", "")
+        limite = (datetime.datetime.now() - datetime.timedelta(days=jours)).isoformat(timespec="minutes")
+        dates = self.params.get("recents_dates") or {}
+        lignes, par_chemin = [], {}
+
+        def ajouter(l):
+            k = _norm(l["chemin"]) if l["chemin"] else None
+            if k and k in par_chemin:                     # meme fichier : une seule ligne, la date la plus recente
+                x = par_chemin[k]
+                x["ouvert_sur"] = sorted(set(x["ouvert_sur"]) | set(l["ouvert_sur"]))
+                if l["date"] > x["date"]:
+                    x.update(date=l["date"], poste=l["poste"])
+                return
+            lignes.append(l)
+            if k:
+                par_chemin[k] = l
+        for i, p in enumerate(self.params.get("recents", [])):
+            q = dates.get(p) or ""
+            if q and q < limite:
+                continue
+            ajouter({"chemin": p if os.path.exists(p) else None, "chemin_origine": p, "nom": os.path.basename(p),
+                     "dossier": os.path.dirname(p), "date": q or "", "rang": i, "poste": moi, "ouvert_sur": [],
+                     "machine": moi, "e": None, "introuvable_ici": not os.path.exists(p)})
+        for m, v in self.lire().items():
+            if m == moi or not isinstance(v, dict):
+                continue
+            ouverts = {(f.get("empreinte"), f.get("nom")) for f in v.get("fichiers", [])}
+            entrees = [dict(f, date=f.get("date") or "") for f in v.get("recents", [])]
+            for f in v.get("fichiers", []):             # ouverts la-bas : en tete, a la date de sa session
+                if not any((x.get("empreinte"), x.get("nom")) == (f.get("empreinte"), f.get("nom")) for x in entrees):
+                    entrees.append(dict(f, date=v.get("maj", "")))
+            for e in entrees:
+                if e["date"] and e["date"] < limite:
+                    continue
+                ouvert = (e.get("empreinte"), e.get("nom")) in ouverts
+                cle = (m, e.get("chemin"), e.get("empreinte"))
+                if cle not in _RESOLUS:
+                    _RESOLUS[cle] = self.retrouver_direct(m, e)[0]
+                ici = _RESOLUS[cle]
+                if ici and ici.startswith("distant:"):
+                    ici = None
+                ajouter({"chemin": ici, "chemin_origine": e.get("chemin"), "nom": e.get("nom") or "?",
+                         "dossier": os.path.dirname(ici) if ici else _dossier_autre(e.get("chemin") or ""),
+                         "date": e["date"] if not ouvert else max(e["date"], v.get("maj", "")), "rang": 999,
+                         "poste": m, "ouvert_sur": [m] if ouvert else [], "machine": m, "e": e,
+                         "introuvable_ici": not ici})
+        lignes.sort(key=lambda l: (l["date"] or "", -l["rang"]), reverse=True)
+        return lignes[:n]
 
     def autres_machines(self):
         """[(machine, date, nb_fichiers)] des autres machines, la plus recente d'abord."""

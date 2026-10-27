@@ -202,6 +202,19 @@ def miroir_scenario(nom, compte, mdp):
     miroir.synchroniser(pa, emplacement=distant.emplacement(compte, mdp), choix={"sauvegarde/tampons/t2.json"})
     verifie(os.path.exists(t2) and miroir.planifier(pa, emplacement=distant.emplacement(compte, mdp)) == [],
             f"{nom} : coché -> reçu, plus rien en attente")
+    # session modifiee des deux cotes : l'envoi de routine fusionne (sinon « 1 fichier ouvert » resterait affiche ailleurs)
+    _t.sleep(1.1)
+    os.environ["HOME"] = os.environ["APPDATA"] = os.path.join(base, nom.replace(" ", "_"), "B")
+    ecrire(lb, "session.json", {"B": {"maj": "2026-10-28T10:00", "fichiers": ["b9.pdf"]}})
+    miroir.synchroniser(pb, emplacement=distant.emplacement(compte, mdp), sens=miroir.ENVOIS)
+    os.environ["HOME"] = os.environ["APPDATA"] = os.path.join(base, nom.replace(" ", "_"), "A")
+    ecrire(la, "session.json", {"A": {"maj": "2026-10-28T11:00", "fichiers": []}})
+    miroir.synchroniser(pa, emplacement=distant.emplacement(compte, mdp), sens=miroir.ENVOIS)
+    with open(os.path.join(la, "session.json"), encoding="utf-8") as f:
+        s_ = json.load(f)
+    verifie(s_["A"]["fichiers"] == [] and s_["B"]["fichiers"] == ["b9.pdf"] and
+            not any(x["rel"] == "session.json" for x in miroir.planifier(pa, emplacement=distant.emplacement(compte, mdp))),
+            f"{nom} : tout fermé ici -> session vide envoyée même si l'autre poste a écrit entre-temps")
     os.utime(t2, None)                                      # reecrit a l'identique : pas un changement
     verifie(miroir.planifier(pa, emplacement=distant.emplacement(compte, mdp)) == [], f"{nom} : heure changée seule -> rien à envoyer")
     os.environ["HOME"] = os.environ["APPDATA"] = base

@@ -18,8 +18,7 @@ import datetime, json, os
 from . import coffre
 
 COMMUNS = ["auteur", "langue", "outils_epingles", "barre_rapide", "volet", "vignettes", "fixer_objets",
-           "filigranes_perso", "ia_moteur", "maj_source", "maj_auto", "synchro", "comptes", "comptes_icone", "defaut_tampons",
-           "defaut_signatures", "theme", "synchro_secrets", "barre", "couleurs_annotations",
+           "filigranes_perso", "ia_moteur", "maj_source", "maj_auto", "synchro", "comptes", "comptes_icone", "theme", "synchro_secrets", "barre", "couleurs_annotations",
            "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "agenda", "messagerie"]
 POSTE = ["volet_largeur", "vignettes_largeur", "biblio_replies", "sessions_vues", "synchro_etat", "machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
 CLEFS_IA = ["clef_claude", "clef_gemini"]
@@ -283,7 +282,28 @@ def libelle_commun(k):
             "theme": _("Thème"), "synchro_secrets": _("Synchroniser les mots de passe"),
             "barre": _("Barre d'outils des documents"), "couleurs_annotations": _("Couleurs des annotations"),
             "style_souligne": _("Style du soulignement"), "opacite_surlignage": _("Opacité du surlignage"),
-            "ia_consignes_resume": _("Consignes personnelles pour le résumé IA")}.get(k, k)
+            "ia_consignes_resume": _("Consignes personnelles pour le résumé IA"),
+            "agenda": _("Agenda pour les rendez-vous"), "messagerie": _("Messagerie pour les e-mails"),
+            "orthographe": _("Correcteur d'orthographe"), "orthographe_langue": _("Langue du correcteur"),
+            "barre_style": _("Boutons de la barre (icône, nom)")}.get(k, k)
+
+
+# valeur utilisee quand le reglage n'a jamais ete touche sur un poste (absent = cette valeur)
+DEFAUTS_COMMUNS = {"agenda": "google", "messagerie": "gmail", "comptes_icone": "photo", "barre_style": "auto",
+                   "orthographe": True, "orthographe_langue": "auto", "ia_consignes_resume": "",
+                   "filigranes_perso": [], "comptes": [], "barre": None}
+
+
+def _effectif(params, k):
+    v = params.get(k)
+    if v in (None, "") and k in DEFAUTS_COMMUNS:
+        return DEFAUTS_COMMUNS[k]
+    return v
+
+
+def _meme(a, b):
+    vide = (None, "", [], {})
+    return a == b or (a in vide and b in vide)
 
 
 def _court(v):
@@ -349,8 +369,9 @@ def changements_communs(params):
     plus_recent_ailleurs = maj > local
     items = []
     for k in COMMUNS:
-        if k in c and c[k] != params.get(k):
-            items.append({"cle": k, "libelle": libelle_commun(k), "detail": decrire_changement(k, params.get(k), c[k]),
+        # « (vide) -> google » n'est pas un changement : jamais regle ici = valeur par defaut, la meme
+        if k in c and not _meme(c[k], _effectif(params, k)) and not _meme(_effectif({k: c[k]}, k), _effectif(params, k)):
+            items.append({"cle": k, "libelle": libelle_commun(k), "detail": decrire_changement(k, _effectif(params, k), c[k]),
                           "valeur": c[k], "coche": plus_recent_ailleurs})
     return {"par": par, "maj": maj, "local": local, "items": items, "plus_recent_ailleurs": plus_recent_ailleurs}
 

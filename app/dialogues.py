@@ -242,6 +242,32 @@ class PaveSignature(QDialog):
 
 
 # ------------------------------------------------------------------ bibliotheque (tampons / signatures)
+class _ListeOrdonnable(QListWidget):
+    """Grille d'apercus que l'on reordonne en glissant un element a sa nouvelle place."""
+
+    def __init__(self, rappel):
+        super().__init__()
+        self.rappel = rappel
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.setDropIndicatorShown(True)
+        self.setDragDropMode(QListWidget.InternalMove)
+        self.setDefaultDropAction(Qt.MoveAction)
+
+    def dropEvent(self, ev):
+        src = self.currentRow()
+        it = self.itemAt(ev.position().toPoint())
+        dst = self.row(it) if it is not None else self.count() - 1
+        ev.setDropAction(Qt.IgnoreAction)
+        ev.accept()
+        if src < 0 or dst == src:
+            return
+        ids = [self.item(i).data(Qt.UserRole)["id"] for i in range(self.count())]
+        x = ids.pop(src)
+        ids.insert(dst, x)
+        self.rappel(ids, x)
+
+
 class PanneauBibliotheque(QWidget):
     """Liste des tampons ou des signatures avec ses boutons : sert dans la fenetre « Mes tampons »
     et dans l'onglet Tampons et signatures des Preferences."""
@@ -252,7 +278,7 @@ class PanneauBibliotheque(QWidget):
         self.b, self.genre, self.auteur = biblio, genre, auteur
         v = QHBoxLayout(self) if compact else QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
-        self.liste = QListWidget()
+        self.liste = _ListeOrdonnable(self._deplace)
         self.liste.setViewMode(QListWidget.IconMode)
         self.liste.setIconSize(QSize(150, 50) if compact else QSize(200, 70))
         self.liste.setGridSize(QSize(176, 104) if compact else QSize(220, 128))
@@ -260,6 +286,8 @@ class PanneauBibliotheque(QWidget):
         self.liste.setTextElideMode(Qt.ElideNone)
         self.liste.setResizeMode(QListWidget.Adjust)
         self.liste.setMovement(QListWidget.Static)
+        self.liste.setDragDropMode(QListWidget.InternalMove)
+        self.liste.setToolTip(_("Glissez un élément pour le placer où vous voulez (classés par catégorie)"))
         self.liste.itemDoubleClicked.connect(lambda _x: self.choisi_double.emit())
         v.addWidget(self.liste, 1)
         h = QVBoxLayout() if compact else QHBoxLayout()
@@ -324,6 +352,11 @@ class PanneauBibliotheque(QWidget):
     def courant(self):
         it = self.liste.currentItem()
         return it.data(Qt.UserRole) if it else None
+
+    def _deplace(self, ids, ident):
+        """Element glisse a une autre place : l'ordre est garde (et suit sur vos autres postes)."""
+        self.b.reordonner(self.genre, ids)
+        self.rafraichir(next((e for e in self.b.elements(self.genre) if e["id"] == ident), None))
 
     def predefini(self):
         noms = [n for n, _x, _x in objets.PREDEFINIS]

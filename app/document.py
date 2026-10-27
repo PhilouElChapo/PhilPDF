@@ -2064,7 +2064,7 @@ class OngletDocument(QWidget):
         titre = _("Mes tampons") if genre == "tampons" else _("Mes signatures")
         g_perso = groupe(None, "perso", f"{titre} ({len(perso)})")
         cats = {}
-        for e in sorted(perso, key=lambda x: (x.get("categorie", "").lower(), x["nom"].lower())):
+        for e in perso:                              # meme ordre que dans « Mes tampons » (categorie, puis votre ordre)
             c = e.get("categorie", "")
             parent = g_perso
             if c:

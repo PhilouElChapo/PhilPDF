@@ -113,7 +113,7 @@ class TacheMiroir(QThread):
             elif self.mode == "choix":
                 self.fini.emit(miroir.synchroniser(self.params, choix=self.choix), "")
             elif self.mode in ("envois", "envois_seuls"):
-                r = miroir.synchroniser(self.params, sens={"envoyer"})
+                r = miroir.synchroniser(self.params, sens=miroir.ENVOIS)
                 attente = []
                 if self.mode == "envois":
                     attente = [a for a in miroir.planifier(self.params) if a["action"] in miroir.RECEPTIONS]
@@ -363,6 +363,7 @@ class Fenetre(QMainWindow):
         self.accueil.synchroniser.connect(self.synchroniser)
         self.accueil.session_vue.connect(self.marquer_session_vue)
         self.accueil.synchro_drive.connect(self.synchro_manuelle)
+        self.accueil.chercher_recent.connect(self.chercher_recent)
         self.accueil.doublon_choisi.connect(lambda m, e, p: session_de(self.params).apprendre_depuis(m, e, p))
         self.accueil.changer_synchro.connect(lambda: self.bienvenue(seulement_synchro=True))
         self.synchro = None              # (machine, date, fichiers, resultats) trouve au demarrage
@@ -1055,7 +1056,49 @@ class Fenetre(QMainWindow):
             self.params["sessions_vues"] = vues
             self.params.enregistrer()
 
+    def chercher_recent(self, machine, e):
+        """Fichier recent d'un autre poste, introuvable ici d'un coup d'oeil : recherche sur ce poste (quelques
+        secondes), sinon vous l'indiquez ; PhilPDF retient le dossier pour la suite."""
+        from .session import retenir_trouve
+        s = session_de(self.params)
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            res = s.retrouver_tous(machine, [e], delai=8)
+        finally:
+            QApplication.restoreOverrideCursor()
+        doublons = getattr(s, "doublons", {}).get(0)
+        trouve = res[0][0]
+        if doublons:
+            self.accueil.doublons = {0: doublons}
+            self.accueil._autre = (machine, "", [e], res, False, {0: doublons})
+            trouve = self.accueil.choisir_doublon(0)
+        if not trouve:
+            r = QMessageBox.question(self, _("Fichier introuvable"),
+                                     _("« {nom} » (ouvert sur {poste}) n'a pas été trouvé sur ce poste.\nVoulez-vous l'indiquer vous-même ?",
+                                       nom=e.get("nom"), poste=machine))
+            if r != QMessageBox.Yes:
+                return
+            trouve, _f = QFileDialog.getOpenFileName(self, _("Où est « {nom} » sur ce poste ?", nom=e.get("nom")),
+                                                     self.dossier_depart(), "PDF (*.pdf)")
+            if not trouve:
+                return
+        s.apprendre_depuis(machine, e, trouve)
+        retenir_trouve(machine, e, trouve)
+        self.ouvrir(trouve)
+        self.accueil.rafraichir()
+
     def _synchro_trouvee(self, r):
+        """Fichiers ouverts sur un autre poste : retrouves ici en arriere-plan, montres dans les Recents (plus de bandeau)."""
+        from .session import retenir_trouve
+        m, date, fichiers, res = r[:4]
+        self.synchro = (m, date, fichiers, res)
+        for e, (c, _x) in zip(fichiers, res):
+            if c and not c.startswith("distant:"):
+                retenir_trouve(m, e, c)
+        self.accueil.rafraichir()
+        return
+
+    def _ancien_synchro_trouvee(self, r):
         m, date, fichiers, res, plus_recente = r[:5]
         doublons = r[5] if len(r) > 5 else {}
         self.synchro = (m, date, fichiers, res)

@@ -14,6 +14,9 @@ from . import distant
 
 _VERROU = threading.RLock()          # jamais deux synchros en meme temps (demarrage, minute, envoi immediat...)
 RECEPTIONS = ("recevoir", "fusionner", "supprimer_ici")
+# envois de routine (chaque minute, a la fermeture) : ce poste envoie ses changements ; la session et les reglages
+# modifies des deux cotes sont fusionnes (chaque poste garde sa partie), sinon ils resteraient bloques
+ENVOIS = {"envoyer", "fusionner:session.json", "fusionner:preferences.json"}
 
 RACINE_DISTANTE = "/PhilPDF"
 
@@ -167,7 +170,7 @@ def _synchroniser(params, compte, emplacement, choix, sens, plan):
                 action = "envoyer"
             else:
                 action = None
-            if action and (plan is not None or (choix is not None and rel not in choix) or (sens is not None and action not in sens)):
+            if action and (plan is not None or (choix is not None and rel not in choix) or (sens is not None and action not in sens and f"{action}:{rel}" not in sens)):
                 if plan is not None:
                     plan.append({"rel": rel, "action": action, "taille": (d[0] if d else (os.path.getsize(lp) if l_mtime else 0)),
                                  "date": d[1] if d else ""})

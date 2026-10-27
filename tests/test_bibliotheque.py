@@ -36,4 +36,18 @@ sur("Maison")
 b.synchroniser_drive()
 verifie([e["nom"] for e in b.index] == ["Phil"], "une suppression sur un poste est appliquée sur l'autre")
 verifie(not b.nouveautes_drive(), "plus rien de nouveau ensuite")
+# classement par categorie (sans categorie a la fin), puis ordre choisi a la souris, suivi par l'autre poste
+sur("Pharmacie")
+for nom, cat in (("Zeta", "SCI"), ("Alpha", ""), ("Beta", "Perso"), ("Gamma", "SCI")):
+    e = a.ajouter("tampons", nom, b"%PDF-" + nom.encode())
+    if cat:
+        a.modifier(e, categorie=cat)
+verifie([e["nom"] for e in a.elements("tampons")] == ["Beta", "Zeta", "Gamma", "Alpha"],
+        "tampons classés par catégorie (Perso, SCI), sans catégorie à la fin")
+ids = [e["id"] for e in a.elements("tampons")]
+a.reordonner("tampons", [ids[0], ids[2], ids[1], ids[3]])
+verifie([e["nom"] for e in a.elements("tampons")] == ["Beta", "Gamma", "Zeta", "Alpha"], "ordre choisi à la souris gardé")
+sur("Maison")
+b.synchroniser_drive()
+verifie([e["nom"] for e in b.elements("tampons")] == ["Beta", "Gamma", "Zeta", "Alpha"], "même ordre sur l'autre poste")
 print(f"\n{ok} vérifications de bibliothèque réussies")

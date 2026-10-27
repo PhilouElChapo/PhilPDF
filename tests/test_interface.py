@@ -835,18 +835,47 @@ verif(len(vus_) == 2 and os.path.exists(os.path.join(_M_dossier_ := __import__("
 _QW.QDialog.exec = _exo
 w.params["drive_compte"] = ""
 w.params.enregistrer()
-# --- fichiers ouverts sur l'autre poste : le bandeau une fois, puis une simple mention
-autre_ = ("Cannes", "2026-10-27T00:19", [{"nom": "CR.pdf", "empreinte": "e1"}], [(None, "introuvable")], True, {})
-w._synchro_trouvee(autre_)
-verif(w.accueil.carte.isVisibleTo(w.accueil), "autre poste : bandeau montré la première fois")
-w.accueil.session_vue.emit()
-w.accueil.cacher_synchro()
-w._synchro_trouvee(("Cannes", "2026-10-27T09:00") + autre_[2:])
-verif(not w.accueil.carte.isVisibleTo(w.accueil) and "Sur Cannes" in w.accueil.bandeau.text(),
-      "autre poste : mêmes fichiers (session seulement redatée) -> plus de bandeau, une mention cliquable")
-w._synchro_trouvee(("Cannes", "2026-10-27T10:00", [{"nom": "Autre.pdf", "empreinte": "e2"}], [(None, "introuvable")], True, {}))
-verif(w.accueil.carte.isVisibleTo(w.accueil), "autre poste : d'autres fichiers ouverts -> bandeau à nouveau")
-w.accueil.cacher_synchro()
+# --- Recents : ceux de ce poste et ceux des autres postes, une seule liste (plus de bandeau)
+from app.session import session_de as _sd
+import datetime as _dt
+s_ = _sd(w.params)
+ici_pdf = os.path.join(TRAVAIL, "Commun.pdf")
+shutil.copy(os.path.join(TRAVAIL, "Facture_test.pdf") if os.path.exists(os.path.join(TRAVAIL, "Facture_test.pdf")) else w.params["recents"][0], ici_pdf)
+from app.session import empreinte as _emp
+maint_ = _dt.datetime.now().isoformat(timespec="minutes")
+d_ = s_.lire()
+d_["Cannes"] = {"maj": maint_, "fichiers": [{"chemin": ici_pdf, "nom": "Commun.pdf", "taille": os.path.getsize(ici_pdf), "empreinte": _emp(ici_pdf)}],
+                "recents": [{"chemin": "C:\\Ailleurs\\Absent.pdf", "nom": "Absent.pdf", "taille": 10, "empreinte": "x", "date": maint_},
+                            {"chemin": "C:\\Vieux.pdf", "nom": "Vieux.pdf", "taille": 10, "empreinte": "y", "date": "2020-01-01T10:00"}]}
+_json.dump(d_, open(s_.chemin, "w", encoding="utf-8"))
+w._synchro_trouvee(("Cannes", maint_, d_["Cannes"]["fichiers"], [(ici_pdf, "même emplacement")], True, {}))
+textes_ = [w.accueil.liste.item(i).text() for i in range(w.accueil.liste.count())]
+verif(not w.accueil.carte.isVisibleTo(w.accueil), "autre poste : plus de bandeau")
+verif(any("Commun.pdf" in t and "ouvert sur Cannes" in t for t in textes_), "récents : fichier ouvert sur l'autre poste, retrouvé ici")
+abs_ = [i for i in range(w.accueil.liste.count()) if "Absent.pdf" in w.accueil.liste.item(i).text()]
+verif(abs_ and "introuvable sur ce poste" in w.accueil.liste.item(abs_[0]).text()
+      and w.accueil.liste.item(abs_[0]).foreground().color() == D.Qt.gray, "récents : fichier de l'autre poste introuvable ici, grisé")
+verif(not any("Vieux.pdf" in t for t in textes_) and w.accueil.liste.count() <= 30, "récents : 30 derniers jours, 30 au plus")
+capture(w.accueil, "50_recents_communs.png")
+
+# --- tampons : glisser un apercu a une autre place change l'ordre (garde)
+for n_ in ("T-un", "T-deux"):
+    w.biblio.ajouter("tampons", n_, objets.tampon_predefini(n_, (0.1, 0.2, 0.6), "X"))
+pb_ = G.PanneauBibliotheque(None, w.biblio, "tampons", compact=True)
+pb_.resize(900, 400); pb_.show(); app.processEvents()
+avant_ = [pb_.liste.item(i).data(D.Qt.UserRole)["nom"] for i in range(pb_.liste.count())]
+r_un = avant_.index("T-un"); r_deux = avant_.index("T-deux")
+pb_.liste.setCurrentRow(r_un)
+from PySide6.QtGui import QDropEvent as _QDE
+from PySide6.QtCore import QMimeData as _QMD
+cible_ = pb_.liste.visualItemRect(pb_.liste.item(r_deux)).center()
+ev_ = _QDE(D.QPointF(cible_) if hasattr(D, "QPointF") else __import__("PySide6.QtCore", fromlist=["QPointF"]).QPointF(cible_),
+           D.Qt.MoveAction, _QMD(), D.Qt.LeftButton, D.Qt.NoModifier)
+pb_.liste.dropEvent(ev_)
+apres_ = [e["nom"] for e in w.biblio.elements("tampons")]
+verif(apres_.index("T-un") > apres_.index("T-deux") and len(apres_) == len(avant_),
+      f"tampons : glissé à une autre place, ordre gardé ({avant_} → {apres_})")
+pb_.close()
 
 # --- largeur du volet droit reglee a la souris : gardee pour les documents suivants et apres redemarrage
 od_ = w.documents()[0]

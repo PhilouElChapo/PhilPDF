@@ -11,7 +11,7 @@ import hashlib, json, os, shutil, string, sys, time, uuid
 from .config import dossier_donnees
 
 GENRES = ("tampons", "signatures", "filigranes")
-PROPRIETES = ("nom", "categorie", "horodatage", "position_date", "favori")   # suivent les autres postes (la plus recente gagne)
+PROPRIETES = ("nom", "categorie", "horodatage", "position_date", "favori", "ordre")   # suivent les autres postes (la plus recente gagne)
 RAPPEL_ENVOI = []          # fonction appelee apres une modification : envoi immediat vers un Drive en direct
 
 
@@ -82,7 +82,24 @@ class Bibliotheque:
             json.dump(self.index, f, ensure_ascii=False, indent=1)
 
     def elements(self, genre):
-        return [e for e in self.index if e["genre"] == genre and os.path.exists(self.fichier(e))]
+        """Classes par categorie (sans categorie a la fin), puis dans l'ordre choisi a la souris, puis par nom."""
+        el = [e for e in self.index if e["genre"] == genre and os.path.exists(self.fichier(e))]
+        rang = {id(e): i for i, e in enumerate(el)}
+        return sorted(el, key=lambda e: (not e.get("categorie"), (e.get("categorie") or "").lower(),
+                                         e.get("ordre", 10000 + rang[id(e)]), e["nom"].lower()))
+
+    def reordonner(self, genre, ids):
+        """Ordre choisi a la souris (glisser-deposer) : garde et envoye a vos autres postes."""
+        maj = time.strftime("%Y-%m-%d %H:%M:%S")
+        pos = {i: n for n, i in enumerate(ids)}
+        change = False
+        for x in self.index:
+            if x["genre"] == genre and x["id"] in pos and x.get("ordre") != pos[x["id"]]:
+                x["ordre"], x["maj"] = pos[x["id"]], maj
+                change = True
+        if change:
+            self._ecrire()
+            self._auto()
 
     def fichier(self, e):
         return os.path.join(self.racine, e["genre"], e["id"] + e.get("ext", ".pdf"))

@@ -249,7 +249,8 @@ class PageAccueil(QWidget):
     action_fichier = Signal(str, str)     # chemin, action (menu clic droit des fichiers recents)
     reprendre = Signal()          # reprendre la session proposee (remplace les fichiers ouverts)
     synchroniser = Signal()       # fenetre de synchronisation manuelle
-    synchro_drive = Signal()      # synchroniser maintenant (fenetre a cocher)
+    synchro_drive = Signal()
+    chercher_recent = Signal(str, object)   # poste, fichier de ce poste introuvable ici      # synchroniser maintenant (fenetre a cocher)
     session_vue = Signal()        # Reprendre ou Ignorer : on ne remontre le bandeau qu'apres un changement sur l'autre poste
     doublon_choisi = Signal(str, object, str)   # machine, fichier de l'autre poste, chemin choisi ici
     rechercher = Signal()         # rechercher dans tous mes PDF
@@ -358,21 +359,45 @@ class PageAccueil(QWidget):
         self.liste.setStyleSheet("QListWidget{background:#fff;border:1px solid #e2e2e2;border-radius:10px;font-size:14px}"
                                  "QListWidget::item{padding:10px;border-bottom:1px solid #f0f0f0}"
                                  "QListWidget::item:hover{background:#f4f7fb}")
-        self.liste.itemActivated.connect(lambda it: self.ouvrir.emit(it.data(Qt.UserRole)))
         self.liste.setContextMenuPolicy(Qt.CustomContextMenu)
         self.liste.customContextMenuRequested.connect(self._menu_fichier)
-        self.liste.itemClicked.connect(lambda it: self.ouvrir.emit(it.data(Qt.UserRole)))
+        self.liste.itemClicked.connect(self._clic_recent)
         v.addWidget(self.liste, 1)
         self.rafraichir()
 
+    def lignes_recents(self):
+        """Recents de ce poste et des autres (session partagee), 30 jours, 30 fichiers, une seule liste."""
+        try:
+            from .session import session_de
+            return session_de(self.params).recents_communs()
+        except Exception:
+            return [{"chemin": p if os.path.exists(p) else None, "chemin_origine": p, "nom": os.path.basename(p),
+                     "dossier": os.path.dirname(p), "date": "", "poste": self.params.get("machine", ""), "ouvert_sur": [],
+                     "machine": self.params.get("machine", ""), "e": None, "introuvable_ici": not os.path.exists(p)}
+                    for p in self.params["recents"][:30]]
+
     def rafraichir(self):
+        from .session import date_fr
         self.liste.clear()
-        for p in self.params["recents"]:
-            existe = os.path.exists(p)
-            it = QListWidgetItem(icone("creer", "#c9252d" if existe else "#bbbbbb"),
-                                 f"{os.path.basename(p)}\n{os.path.dirname(p)}" + ("" if existe else _('   (introuvable sur ce PC)')))
-            it.setData(Qt.UserRole, p)
-            if not existe:
+        moi = self.params.get("machine", "")
+        for l in self.lignes_recents():
+            ici = l["chemin"]
+            infos = []
+            if l["date"]:
+                infos.append((l["poste"] + ", " if l["poste"] != moi else "") + date_fr(l["date"]))
+            elif l["poste"] != moi:
+                infos.append(l["poste"])
+            if l["ouvert_sur"]:
+                infos.append("● " + _("ouvert sur {poste}", poste=", ".join(l["ouvert_sur"])))
+            if not ici:
+                infos.append(_("introuvable sur ce poste"))
+            it = QListWidgetItem(icone("creer", "#c9252d" if ici else "#bbbbbb"),
+                                 f"{l['nom']}\n{l['dossier']}" + ("   ·   " + "   ·   ".join(infos) if infos else ""))
+            it.setData(Qt.UserRole, ici or "")
+            it.setData(Qt.UserRole + 1, l)
+            it.setToolTip(ici or (_("Sur {poste} : {chemin}", poste=l["poste"], chemin=l["chemin_origine"] or "?") + "\n"
+                                  + _("Cliquez pour le chercher sur ce poste ou l'indiquer vous-même.")))
+            if not ici:
                 it.setForeground(Qt.gray)
             self.liste.addItem(it)
         self.bandeau.setText(_('Poste : <b>{machine}</b>. ', machine=self.params['machine']) + (
@@ -443,12 +468,33 @@ class PageAccueil(QWidget):
             return libelle_compte(c)
         return self.params.get("drive", "")
 
+    def _clic_recent(self, it):
+        chemin = it.data(Qt.UserRole)
+        if chemin:
+            self.ouvrir.emit(chemin)
+            return
+        l = it.data(Qt.UserRole + 1) or {}
+        if l.get("e") is not None:                    # fichier d'un autre poste introuvable ici : le chercher
+            self.chercher_recent.emit(l["machine"], l["e"])
+
     def _menu_fichier(self, pos):
         it = self.liste.itemAt(pos)
         if not it:
             return
         chemin = it.data(Qt.UserRole)
-        existe = os.path.exists(chemin)
+        existe = bool(chemin) and os.path.exists(chemin)
+        if not chemin:
+            l = it.data(Qt.UserRole + 1) or {}
+            from PySide6.QtWidgets import QMenu
+            m = QMenu(self)
+            if l.get("e") is not None:
+                m.addAction(icone("rechercher", "#444444"), _("Chercher sur ce poste..."),
+                            lambda: self.chercher_recent.emit(l["machine"], l["e"]))
+            if l.get("chemin_origine") and l.get("machine") == self.params.get("machine"):
+                m.addAction(icone("fermer", "#444444"), _("Retirer de la liste"),
+                            lambda: self.action_fichier.emit(l["chemin_origine"], "retirer"))
+            m.exec(self.liste.viewport().mapToGlobal(pos))
+            return
         from PySide6.QtWidgets import QMenu
         m = QMenu(self)
 
@@ -534,7 +580,5 @@ class PageAccueil(QWidget):
         res = list(a[3])
         res[i] = (p, _("choisi par vous"))
         self.doublon_choisi.emit(a[0], a[2][i], p)
-        d = dict(self.doublons)
-        d.pop(i, None)
-        self.montrer_synchro(a[0], a[1], a[2], res, a[4], d, forcer=True)
+        self.doublons = {k: v for k, v in self.doublons.items() if k != i}
         return p
