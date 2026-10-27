@@ -1,6 +1,12 @@
 """Sur GitHub Actions, toute erreur d'un test devient une annotation lisible (titre + trace)."""
 import os, sys, traceback
 
+for _f in (sys.stdout, sys.stderr):                      # console Windows (cp1252) : « → », « ≤ »... sans erreur
+    try:
+        _f.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:                                     # noqa: BLE001
+        pass
+
 if os.environ.get("GITHUB_ACTIONS"):
     def _crochet(t, v, tb):
         trace = "".join(traceback.format_exception(t, v, tb))[-3000:]
