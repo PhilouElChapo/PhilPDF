@@ -11,7 +11,7 @@ Application :
  - version installee : l'installateur se lance en mode silencieux ;
  - Linux : simple avertissement pour l'instant.
 """
-import json, os, subprocess, sys, tempfile, urllib.request, zipfile
+import json, os, subprocess, sys, tempfile, urllib.error, urllib.request, zipfile
 from .config import VERSION, est_portable, dossier_programme
 
 DEPOT = "PhilouElChapo/PhilPDF"
@@ -21,9 +21,43 @@ def _v(t):
     return tuple(int(x) for x in t.lstrip("vV").split(".") if x.isdigit())
 
 
+class _SansRedirection(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k):
+        return None
+
+
+def _statut(url):
+    """(code HTTP, adresse de redirection) sans suivre la redirection."""
+    op = urllib.request.build_opener(_SansRedirection)
+    try:
+        with op.open(urllib.request.Request(url, method="HEAD", headers={"User-Agent": "PhilPDF"}), timeout=10) as r:
+            return r.status, r.headers.get("Location", "")
+    except urllib.error.HTTPError as e:
+        return e.code, e.headers.get("Location", "") if e.headers else ""
+
+
+def _depuis_page(nom):
+    """Sans l'API de GitHub (limitee a 60 demandes par heure et par adresse Internet : vite atteint avec deux postes
+    derriere la meme box) : la page « derniere version » redirige vers .../tag/vX.Y.Z."""
+    code, ou = _statut(f"https://github.com/{DEPOT}/releases/latest")
+    tag = (ou or "").rstrip("/").rsplit("/", 1)[-1]
+    if code not in (301, 302, 303, 307, 308) or not tag.lower().startswith("v"):
+        raise ValueError(f"GitHub {code}")
+    paquet = f"https://github.com/{DEPOT}/releases/download/{tag}/{nom}"
+    code, _ou = _statut(paquet)
+    if code == 404:
+        paquet = None                                       # version annoncee, paquet pas encore depose
+    elif code not in (200, 301, 302, 303, 307, 308):
+        raise ValueError(f"GitHub {code}")
+    return tag, paquet, ""
+
+
 def chercher(params):
-    """Renvoie (version, url_ou_chemin_du_paquet, notes) si une version plus recente existe, sinon None."""
+    """Version plus recente : (version, paquet, notes). A jour : None.
+    Sinon un dict : {"preparation": version} (publiee, paquet en cours de fabrication) ou {"erreur": texte}
+    (pas de reponse : on ne pretend plus que tout est a jour)."""
     source = params.get("maj_source", "github")
+    nom = "PhilPDF_portable.zip" if est_portable() else "PhilPDF_Setup.exe"
     try:
         from .bibliotheque import dossier_philpdf_drive
         dd = dossier_philpdf_drive(params) if source == "dossier" else None
@@ -35,18 +69,22 @@ def chercher(params):
             paquet = os.path.join(dd, info["portable" if est_portable() else "installateur"])
             notes = info.get("notes", "")
         else:
-            req = urllib.request.Request(f"https://api.github.com/repos/{DEPOT}/releases/latest",
-                                         headers={"User-Agent": "PhilPDF", "Accept": "application/vnd.github+json"})
-            with urllib.request.urlopen(req, timeout=8) as r:
-                info = json.load(r)
-            version = info["tag_name"]
-            nom = "PhilPDF_portable.zip" if est_portable() else "PhilPDF_Setup.exe"
-            paquet = next((a["browser_download_url"] for a in info.get("assets", []) if a["name"] == nom), None)
-            notes = info.get("body", "")
-        if paquet and _v(version) > _v(VERSION):
+            try:
+                req = urllib.request.Request(f"https://api.github.com/repos/{DEPOT}/releases/latest",
+                                             headers={"User-Agent": "PhilPDF", "Accept": "application/vnd.github+json"})
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    info = json.load(r)
+                version = info["tag_name"]
+                paquet = next((a["browser_download_url"] for a in info.get("assets", []) if a["name"] == nom), None)
+                notes = info.get("body", "")
+            except Exception:                               # noqa: BLE001 (limite de l'API, panne passagere)
+                version, paquet, notes = _depuis_page(nom)
+        if _v(version) > _v(VERSION):
+            if not paquet:
+                return {"preparation": version.lstrip("vV")}
             return version, paquet, notes
-    except Exception:
-        return None
+    except Exception as e:                                  # noqa: BLE001
+        return {"erreur": str(e) or e.__class__.__name__}
     return None
 
 

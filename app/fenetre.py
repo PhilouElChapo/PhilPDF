@@ -2618,6 +2618,23 @@ class Fenetre(QMainWindow):
             if not silencieux:
                 QMessageBox.information(self, _('Mises à jour'), _('PhilPDF {VERSION} est à jour.', VERSION=VERSION))
             return
+        if isinstance(res, dict):
+            if res.get("preparation"):
+                # nouvelle version annoncee, paquet encore en fabrication : on reessaie tout seul dans 5 minutes
+                QTimer.singleShot(5 * 60 * 1000, lambda: self.verifier_maj(silencieux))
+                if not silencieux:
+                    QMessageBox.information(self, _('Mises à jour'),
+                                            _("PhilPDF {v} est en cours de publication (fichier pas encore prêt). "
+                                              "PhilPDF réessaie tout seul dans 5 minutes.", v=res["preparation"]))
+            elif not silencieux:
+                QMessageBox.warning(self, _('Mises à jour'),
+                                    _("Impossible de vérifier les mises à jour pour le moment ({e}). Vous avez PhilPDF "
+                                      "{VERSION} ; réessayez dans quelques minutes.", e=res.get("erreur", "?"), VERSION=VERSION))
+            else:
+                QTimer.singleShot(15 * 60 * 1000, lambda: self.verifier_maj(True))
+            from .journal import ecrire
+            ecrire("mise a jour", f"verification : {res}")
+            return
         version, paquet, notes = res
         r = QMessageBox.question(self, _('Mise à jour disponible'),
                                  _('PhilPDF {version} est disponible (vous avez {VERSION}).\n\n{x}\n\nInstaller maintenant ? PhilPDF se fermera puis se relancera.', version=version, VERSION=VERSION, x=notes[:600]))

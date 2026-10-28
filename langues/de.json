@@ -1891,5 +1891,7 @@
  "IBAN incorrect.": "Falsche IBAN.",
  "Numéro SIRET incorrect.": "Falsche SIRET-Nummer.",
  "Numéro RPPS incorrect.": "Falsche RPPS-Nummer.",
- "Valeur incorrecte.": "Falscher Wert."
+ "Valeur incorrecte.": "Falscher Wert.",
+ "PhilPDF {v} est en cours de publication (fichier pas encore prêt). PhilPDF réessaie tout seul dans 5 minutes.": "PhilPDF {v} wird gerade veröffentlicht (Datei noch nicht bereit). PhilPDF versucht es in 5 Minuten selbst erneut.",
+ "Impossible de vérifier les mises à jour pour le moment ({e}). Vous avez PhilPDF {VERSION} ; réessayez dans quelques minutes.": "Updates können gerade nicht geprüft werden ({e}). Sie haben PhilPDF {VERSION}; versuchen Sie es in einigen Minuten erneut."
 }
