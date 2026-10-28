@@ -29,7 +29,79 @@ _MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "aoû
 
 
 def vide():
-    return {"format": {"genre": "aucun"}, "auto": None, "calcul": None, "plage": None, "depend": None, "affiche": None}
+    return {"format": {"genre": "aucun"}, "auto": None, "calcul": None, "plage": None, "depend": None, "affiche": None,
+            "majuscules": False, "controle": None, "aide": None, "action": None}
+
+
+CONTROLES = ("email", "nir", "iban", "siret", "rpps")
+CALCULS_DATES = ("age", "ecart_jours", "date_plus")
+
+
+# ------------------------------------------------------------------ controles francais
+def _luhn(ch):
+    t = 0
+    for i, c in enumerate(reversed(ch)):
+        d = int(c)
+        if i % 2:
+            d *= 2
+            if d > 9:
+                d -= 9
+        t += d
+    return t % 10 == 0
+
+
+def controle_ok(genre, texte):
+    """E-mail, n° de Securite sociale (avec sa clef), IBAN, SIRET, RPPS : la valeur est-elle valable ?"""
+    t = (texte or "").strip()
+    if not t:
+        return True
+    c = re.sub(r"[\s.\-]", "", t).upper()
+    if genre == "email":
+        return bool(re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]{2,}", t))
+    if genre == "nir":
+        if not re.fullmatch(r"[12378]\d{4}(\d{2}|2A|2B)\d{6}\d{2}", c):
+            return False
+        corps = c[:13].replace("2A", "19").replace("2B", "18")
+        return 97 - int(corps) % 97 == int(c[13:])
+    if genre == "iban":
+        if not re.fullmatch(r"[A-Z]{2}\d{2}[A-Z0-9]{11,30}", c):
+            return False
+        r = c[4:] + c[:4]
+        return int("".join(str(int(x, 36)) for x in r)) % 97 == 1
+    if genre == "siret":
+        if not re.fullmatch(r"\d{14}", c):
+            return False
+        return _luhn(c) or (c.startswith("356000000") and sum(int(x) for x in c) % 5 == 0)
+    if genre == "rpps":
+        return bool(re.fullmatch(r"\d{11}", c)) and _luhn(c)
+    return True
+
+
+_JS_CONTROLES = {
+    "email": 'function(v){return /^[^@\\s]+@[^@\\s]+\\.[^@\\s]{2,}$/.test(v);}',
+    "nir": ('function(v){v=v.replace(/[\\s.\\-]/g,"").toUpperCase();'
+            'if(!/^[12378]\\d{4}(\\d{2}|2A|2B)\\d{8}$/.test(v))return false;'
+            'var c=v.substr(0,13).replace("2A","19").replace("2B","18");var r=0;'
+            'for(var i=0;i<c.length;i++)r=(r*10+parseInt(c.charAt(i),10))%97;return 97-r==parseInt(v.substr(13),10);}'),
+    "iban": ('function(v){v=v.replace(/\\s/g,"").toUpperCase();if(!/^[A-Z]{2}\\d{2}[A-Z0-9]{11,30}$/.test(v))return false;'
+             'v=v.substr(4)+v.substr(0,4);var r=0;for(var i=0;i<v.length;i++){var n=parseInt(v.charAt(i),36).toString();'
+             'for(var j=0;j<n.length;j++)r=(r*10+parseInt(n.charAt(j),10))%97;}return r==1;}'),
+    "siret": ('function(v){v=v.replace(/[\\s.\\-]/g,"");if(!/^\\d{14}$/.test(v))return false;var s=0;'
+              'for(var i=0;i<14;i++){var d=parseInt(v.charAt(13-i),10);if(i%2){d*=2;if(d>9)d-=9;}s+=d;}'
+              'if(s%10==0)return true;if(v.substr(0,9)=="356000000"){s=0;for(i=0;i<14;i++)s+=parseInt(v.charAt(i),10);return s%5==0;}return false;}'),
+    "rpps": ('function(v){v=v.replace(/\\s/g,"");if(!/^\\d{11}$/.test(v))return false;var s=0;'
+             'for(var i=0;i<11;i++){var d=parseInt(v.charAt(10-i),10);if(i%2){d*=2;if(d>9)d-=9;}s+=d;}return s%10==0;}'),
+}
+MESSAGES_CONTROLE = {"email": "Adresse e-mail incorrecte.", "nir": "Numéro de Sécurité sociale incorrect (vérifiez la clef).",
+                     "iban": "IBAN incorrect.", "siret": "Numéro SIRET incorrect.", "rpps": "Numéro RPPS incorrect."}
+
+
+def _js_controle(genre, message=None):
+    if genre not in _JS_CONTROLES:
+        return ""
+    msg = message or MESSAGES_CONTROLE[genre]
+    return (f"if (event.value != \"\" && !({_JS_CONTROLES[genre]})(event.value)) "
+            f"{{ app.alert({_jsstr(msg)}); event.rc = false; }}")
 
 
 # ------------------------------------------------------------------ lecture / ecriture dans le PDF
@@ -234,10 +306,35 @@ def jetons_formule(formule):
     return out
 
 
-def _js_calcul(c):
+def _js_calcul(c, formats=None, fmt_soi=None):
     if not c:
         return ""
-    if c.get("genre") == "formule":
+    formats = formats or {}
+    g = c.get("genre")
+
+    def dfmt(nom):
+        f = formats.get(nom) or {}
+        return f.get("date") if f.get("genre") == "date" and f.get("date") else "dd/mm/yyyy"
+    if g == "copie":
+        return f'event.value = this.getField({_jsstr(c.get("source", ""))}).value;'
+    if g == "age":
+        src = c.get("source", "")
+        return (f'var d = util.scand({_jsstr(dfmt(src))}, this.getField({_jsstr(src)}).valueAsString); '
+                'if (d) { var n = new Date(); var a = n.getFullYear() - d.getFullYear(); '
+                'if (n.getMonth() < d.getMonth() || (n.getMonth() == d.getMonth() && n.getDate() < d.getDate())) a--; '
+                'event.value = a; } else event.value = "";')
+    if g == "ecart_jours":
+        a, b = c.get("debut", ""), c.get("fin", "")
+        return (f'var a = util.scand({_jsstr(dfmt(a))}, this.getField({_jsstr(a)}).valueAsString); '
+                f'var b = util.scand({_jsstr(dfmt(b))}, this.getField({_jsstr(b)}).valueAsString); '
+                'event.value = (a && b) ? Math.round((b.getTime() - a.getTime()) / 86400000) : "";')
+    if g == "date_plus":
+        src = c.get("source", "")
+        soi = (fmt_soi or {}).get("date") if (fmt_soi or {}).get("genre") == "date" else "dd/mm/yyyy"
+        return (f'var d = util.scand({_jsstr(dfmt(src))}, this.getField({_jsstr(src)}).valueAsString); '
+                f'if (d) {{ d.setDate(d.getDate() + {int(c.get("jours", 0))}); event.value = util.printd({_jsstr(soi or "dd/mm/yyyy")}, d); }} '
+                'else event.value = "";')
+    if g == "formule":
         js = []
         for t, v in jetons_formule(c.get("formule", "")):
             js.append(f"AFMakeNumber(getField({_jsstr(v)}).value)" if t == "champ" else v)
@@ -246,6 +343,22 @@ def _js_calcul(c):
         return f"/** BVCALC {sfn} EVCALC **/ event.value = {' '.join(js) or '0'};"
     champs = ", ".join(_jsstr(x) for x in c.get("champs", []))
     return f'AFSimple_Calculate("{CALCULS.get(c.get("genre"), "SUM")}", new Array ({champs}));'
+
+
+def _js_action(a):
+    """Bouton : reinitialiser, imprimer, envoyer par e-mail, aller a une page."""
+    if not a:
+        return ""
+    g = a.get("genre")
+    if g == "reinitialiser":
+        return 'if (app.alert({cMsg: "Effacer tout le formulaire ?", nIcon: 2, nType: 2}) == 4) this.resetForm();'
+    if g == "imprimer":
+        return "this.print({bUI: true});"
+    if g == "email":
+        return f'this.mailDoc({{bUI: true, cTo: {_jsstr(a.get("email", ""))}, cSubject: {_jsstr(a.get("sujet", ""))}}});'
+    if g == "page":
+        return f"this.pageNum = {max(0, int(a.get('page', 1)) - 1)};"
+    return ""
 
 
 def _js_auto(auto, fmt):
@@ -320,6 +433,7 @@ def generer_js(doc):
         lignes = [f"this.getField({_jsstr(c)}).display = ({cond}) ? display.visible : display.hidden;"
                   for c in a["cibles"]]
         sur_source.setdefault(("affiche", nom), []).extend(lignes)
+    formats = {nom: (r.get("format") or {}) for nom, r in regles.items()}
     calcules = []
     for nom, l in par_nom.items():
         r = regles[nom]
@@ -330,7 +444,9 @@ def generer_js(doc):
         fx = xref_champ(doc, w)
         fmt = (r.get("format") if r.get("_philpdf") else None) or {"genre": "aucun"}
         jf, jk = _js_format(fmt)
-        cal = _js_calcul(r.get("calcul")) if r.get("_philpdf") else ""
+        cal = _js_calcul(r.get("calcul"), formats, fmt) if r.get("_philpdf") else ""
+        if r.get("_philpdf") and r.get("majuscules"):
+            jk = ("if (!event.willCommit) event.change = event.change.toUpperCase();\n" + jk).strip()
         if r.get("calcul"):
             calcules.append(nom)
         plage = r.get("plage") if r.get("_philpdf") else None
@@ -339,6 +455,8 @@ def generer_js(doc):
             jv = "AFRange_Validate({}, {}, {}, {});".format(
                 "true" if plage.get("min") is not None else "false", plage.get("min") or 0,
                 "true" if plage.get("max") is not None else "false", plage.get("max") or 0)
+        if r.get("_philpdf") and r.get("controle"):
+            jv = (jv + "\n" + _js_controle(r["controle"])).strip()
         jv = "\n".join(x for x in [jv] + sur_source.get(nom, []) +
                        ([] if w.field_type in (fitz.PDF_WIDGET_TYPE_CHECKBOX, fitz.PDF_WIDGET_TYPE_RADIOBUTTON)
                         else sur_source.get(("affiche", nom), [])) if x)
@@ -346,9 +464,18 @@ def generer_js(doc):
             fitz.PDF_WIDGET_TYPE_CHECKBOX, fitz.PDF_WIDGET_TYPE_RADIOBUTTON) else ""
         for cle, texte in (("F", jf), ("K", jk), ("C", cal), ("V", jv)):
             _poser_js(doc, fx, cle, _remplacer_bloc(_js(doc, fx, cle), texte))
-        for nn, ww in l:                                  # widgets : valeur auto au clic, case qui affiche/masque
-            _poser_js(doc, ww.xref, "Fo", _remplacer_bloc(_js(doc, ww.xref, "Fo"),
-                                                           _js_auto(r.get("auto") if r.get("_philpdf") else None, fmt)))
+        aide = (r.get("aide") or {}) if r.get("_philpdf") else {}
+        jfo = _js_auto(r.get("auto") if r.get("_philpdf") else None, fmt)
+        if aide.get("entree"):
+            jfo = (jfo + "\n" + f'app.alert({{cMsg: {_jsstr(aide["entree"])}, nIcon: 3, cTitle: "Aide"}});').strip()
+        jbl = (f'if (event.target.value == "" || event.target.value == "Off") app.alert({{cMsg: {_jsstr(aide["vide"])}, nIcon: 1}});'
+               if aide.get("vide") else "")
+        act = _js_action(r.get("action")) if r.get("_philpdf") else ""
+        if act:
+            ja = (ja + "\n" + act).strip()
+        for nn, ww in l:                                  # widgets : valeur auto au clic, aide, action du bouton
+            _poser_js(doc, ww.xref, "Fo", _remplacer_bloc(_js(doc, ww.xref, "Fo"), jfo))
+            _poser_js(doc, ww.xref, "Bl", _remplacer_bloc(_js(doc, ww.xref, "Bl"), jbl))
             _poser_js(doc, ww.xref, "U", _remplacer_bloc(_js(doc, ww.xref, "U"), ja))
     _ordre_calcul(doc, par_nom, regles, calcules)
 
@@ -382,6 +509,10 @@ def _ordre_calcul(doc, par_nom, regles, calcules):
 def sources(calcul):
     if not calcul:
         return []
+    if calcul.get("genre") in ("copie", "age", "date_plus"):
+        return [calcul.get("source", "")]
+    if calcul.get("genre") == "ecart_jours":
+        return [calcul.get("debut", ""), calcul.get("fin", "")]
     if calcul.get("genre") == "formule":
         try:
             return [v for t, v in jetons_formule(calcul.get("formule", "")) if t == "champ"]
@@ -533,8 +664,12 @@ def saisie(regles, texte):
     fmt = (regles or {}).get("format") or {"genre": "aucun"}
     g = fmt.get("genre")
     texte = (texte or "").strip() if g != "aucun" else (texte or "")
-    if texte == "":
+    if texte.strip() == "":
         return "", None
+    if (regles or {}).get("majuscules"):
+        texte = texte.upper()
+    if (regles or {}).get("controle") and not controle_ok(regles["controle"], texte):
+        return None, "controle"
     val = texte
     if g in ("nombre", "pourcentage"):
         v = nombre(texte)
@@ -567,11 +702,32 @@ def saisie(regles, texte):
     return val, None
 
 
-def calculer(regles, valeurs):
+def calculer(regles, valeurs, formats=None):
     """Valeur d'un champ calcule a partir des valeurs des autres ({nom: texte})."""
     c = (regles or {}).get("calcul")
     if not c:
         return None
+    g = c.get("genre")
+    if g == "copie":
+        return str(valeurs.get(c.get("source", ""), "") or "")
+    if g in CALCULS_DATES:
+        def d(nom):
+            return lire_date((formats or {}).get(nom) or "dd/mm/yyyy", str(valeurs.get(nom, "") or ""))
+        if g == "age":
+            n = d(c.get("source", ""))
+            if not n:
+                return ""
+            auj = _dt.date.today()
+            return str(auj.year - n.year - ((auj.month, auj.day) < (n.month, n.day)))
+        if g == "ecart_jours":
+            a, b = d(c.get("debut", "")), d(c.get("fin", ""))
+            return str((b - a).days) if a and b else ""
+        n = d(c.get("source", ""))
+        if not n:
+            return ""
+        soi = ((regles.get("format") or {}).get("date") if (regles.get("format") or {}).get("genre") == "date"
+               else None) or "dd/mm/yyyy"
+        return ecrire_date(soi, n + _dt.timedelta(days=int(c.get("jours", 0))))
     if c.get("genre") == "formule":
         try:
             jet = jetons_formule(c.get("formule", ""))

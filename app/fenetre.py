@@ -1195,6 +1195,10 @@ class Fenetre(QMainWindow):
                 chemin += ".pdf"
         if sous and getattr(o, "distant", None):
             o.distant = None                  # "Enregistrer sous" sur ce PC : le fichier n'est plus celui du NAS
+        if o.mode != "formulaire" and any((w.field_value or "") not in ("", "Off") for p_ in o.doc for w in (p_.widgets() or [])
+                                          if w.field_type not in (fitz.PDF_WIDGET_TYPE_BUTTON, fitz.PDF_WIDGET_TYPE_SIGNATURE)):
+            if not o.avant_enregistrer():
+                return False
         try:
             o.enregistrer(chemin)
         except Exception as e:
@@ -1384,8 +1388,12 @@ class Fenetre(QMainWindow):
             o.changer_mode("champ_signature")
         elif oid == "formulaire":
             o.changer_mode("formulaire")
-            if not o.nb_champs():
-                o.detecter_champs()
+            mode_ = self.params.get("formulaire_detection", "auto")
+            if not o.nb_champs() and mode_ != "jamais":
+                if mode_ == "auto" or question(self, _("Formulaire"), _("Repérer tout seul les zones à remplir de ce document ?"),
+                                               [(_("Repérer les champs"), QMessageBox.AcceptRole),
+                                                (_("Non, je les trace"), QMessageBox.RejectRole)]) == 0:
+                    o.detecter_champs()
         elif oid == "biffer":
             o.changer_mode("biffer")
         elif oid == "commentaires":
@@ -1996,6 +2004,23 @@ class Fenetre(QMainWindow):
         lf.setWordWrap(True)
         lf.setStyleSheet("color:#555;font-size:12px")
         vt.addWidget(lf)
+        vt.addSpacing(8)
+        lt = QLabel("<b>" + _("Formulaires") + "</b>")
+        vt.addWidget(lt)
+        hd = QHBoxLayout()
+        hd.addWidget(QLabel(_("En passant en mode Formulaire, repérer les zones à remplir :")))
+        detection = QComboBox()
+        detection.setObjectName("pref_formulaire_detection")
+        for k_, t_ in (("auto", _("tout seul (si le document n'a pas encore de champs)")), ("demander", _("me demander")),
+                       ("jamais", _("jamais (bouton « Détecter les champs »)"))):
+            detection.addItem(t_, k_)
+        detection.setCurrentIndex(max(0, detection.findData(self.params.get("formulaire_detection", "auto"))))
+        hd.addWidget(detection, 1)
+        vt.addLayout(hd)
+        types_auto = QCheckBox(_("Donner tout seul un type aux champs d'après leur libellé (date, montant, téléphone, "
+                                 "code postal, e-mail, n° de Sécurité sociale, signature...)"))
+        types_auto.setChecked(self.params.get("formulaire_types_auto", True))
+        vt.addWidget(types_auto)
 
         # ---------------- Synchronisation (avancé)
         f = page(_('Avancé'))
@@ -2097,6 +2122,7 @@ class Fenetre(QMainWindow):
         self.params.update(machine=machine.text().strip() or self.params["machine"],
                            drive=synchro_valeurs(drive, self.params)[0], drive_compte=synchro_valeurs(drive, self.params)[1],
                            auteur=auteur.text().strip(), fixer_objets=fixer.isChecked(),
+                           formulaire_detection=detection.currentData(), formulaire_types_auto=types_auto.isChecked(),
                            nas=nas.text().strip(), synchro=sync.isChecked(), langue=langue.currentData(),
                            racines=[racines.item(i).text() for i in range(racines.count())],
                            ia_moteur=["claude", "gemini", "deux"][moteur.currentIndex()],

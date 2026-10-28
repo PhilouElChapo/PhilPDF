@@ -66,7 +66,9 @@ class DialogueChamp(QDialog):
             self._liste()
         if self.est_texte or ft == T.PDF_WIDGET_TYPE_COMBOBOX:
             self._format()
+        self.est_bouton = ft == T.PDF_WIDGET_TYPE_BUTTON
         if self.est_texte:
+            self._controle()
             self._auto()
             self._calcul()
         if self.est_texte or ft == T.PDF_WIDGET_TYPE_COMBOBOX:
@@ -75,6 +77,10 @@ class DialogueChamp(QDialog):
             self._depend()
         if self.est_case or self.est_liste:
             self._affiche()
+        if self.est_bouton:
+            self._bouton()
+        if not self.est_bouton:
+            self._aide()
         self.v.addStretch(1)
         bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
         bb.accepted.connect(self.valider)
@@ -223,6 +229,63 @@ class DialogueChamp(QDialog):
         for wdg in (self.l_masque, self.f_masque):
             wdg.setVisible(g == "masque")
 
+    def _controle(self):
+        f = self._groupe(_("Contrôle de la saisie"))
+        self.majuscules = QCheckBox(_("Mettre en majuscules ce qui est tapé (noms, villes...)"))
+        self.majuscules.setObjectName("ch_majuscules")
+        self.majuscules.setChecked(bool(self.r.get("majuscules")))
+        f.addRow(self.majuscules)
+        self.controle = QComboBox()
+        self.controle.setObjectName("ch_controle")
+        for k, t in ((None, _("Aucun")), ("email", _("Adresse e-mail")), ("nir", _("N° de Sécurité sociale (avec la clef)")),
+                     ("iban", _("IBAN")), ("siret", _("SIRET")), ("rpps", _("N° RPPS"))):
+            self.controle.addItem(t, k)
+        self.controle.setCurrentIndex(max(0, self.controle.findData(self.r.get("controle"))))
+        f.addRow(_("Vérifier que c'est un"), self.controle)
+
+    def _aide(self):
+        a = self.r.get("aide") or {}
+        f = self._groupe(_("Aide pour la personne qui remplit"))
+        self.aide_entree = QLineEdit(a.get("entree", ""))
+        self.aide_entree.setObjectName("ch_aide_entree")
+        self.aide_entree.setPlaceholderText(_("ex. Indiquez la date de la dernière injection"))
+        f.addRow(_("Message à l'entrée dans le champ"), self.aide_entree)
+        self.aide_vide = QLineEdit(a.get("vide", ""))
+        self.aide_vide.setObjectName("ch_aide_vide")
+        self.aide_vide.setPlaceholderText(_("ex. Ce champ est obligatoire"))
+        f.addRow(_("Message si on le laisse vide"), self.aide_vide)
+
+    def _bouton(self):
+        from .formulaire_doc import actions_bouton
+        a = self.r.get("action") or {}
+        f = self._groupe(_("Action du bouton"))
+        self.b_legende = QLineEdit(self.w.button_caption or "")
+        f.addRow(_("Texte du bouton"), self.b_legende)
+        self.b_action = QComboBox()
+        self.b_action.setObjectName("ch_action")
+        for k, t in actions_bouton():
+            self.b_action.addItem(t, k)
+        self.b_action.setCurrentIndex(max(0, self.b_action.findData(a.get("genre"))))
+        f.addRow(_("Quand on clique"), self.b_action)
+        self.b_email = QLineEdit(a.get("email", ""))
+        self.b_sujet = QLineEdit(a.get("sujet", ""))
+        self.b_page = QSpinBox()
+        self.b_page.setRange(1, max(1, len(self.doc)))
+        self.b_page.setValue(int(a.get("page", 1)))
+        self.l_email, self.l_sujet, self.l_page = QLabel(_("Destinataire")), QLabel(_("Objet")), QLabel(_("Page"))
+        f.addRow(self.l_email, self.b_email)
+        f.addRow(self.l_sujet, self.b_sujet)
+        f.addRow(self.l_page, self.b_page)
+
+        def maj(*_x):
+            g = self.b_action.currentData()
+            for wdg in (self.l_email, self.b_email, self.l_sujet, self.b_sujet):
+                wdg.setVisible(g == "email")
+            for wdg in (self.l_page, self.b_page):
+                wdg.setVisible(g == "page")
+        self.b_action.currentIndexChanged.connect(maj)
+        maj()
+
     def _auto(self):
         f = self._groupe(_("Valeur automatique"))
         self.auto = QComboBox()
@@ -242,10 +305,28 @@ class DialogueChamp(QDialog):
         for k, t in ((None, _("Aucun : la valeur est saisie")), ("somme", _("Somme (+) des champs cochés")),
                      ("produit", _("Produit (×) des champs cochés")), ("moyenne", _("Moyenne des champs cochés")),
                      ("min", _("Minimum des champs cochés")), ("max", _("Maximum des champs cochés")),
-                     ("formule", _("Formule"))):
+                     ("formule", _("Formule")), ("copie", _("Même valeur qu'un autre champ (champs liés)")),
+                     ("age", _("Age d'après une date de naissance")), ("ecart_jours", _("Nombre de jours entre deux dates")),
+                     ("date_plus", _("Date + un nombre de jours"))):
             self.c_genre.addItem(t, k)
         self.c_genre.setCurrentIndex(max(0, self.c_genre.findData(c.get("genre"))))
         f.addRow(self.c_genre)
+        self.c_source, self.c_fin = QComboBox(), QComboBox()
+        self.c_source.setObjectName("ch_calcul_source")
+        self.c_fin.setObjectName("ch_calcul_fin")
+        for cb in (self.c_source, self.c_fin):
+            for nm in self.autres:
+                cb.addItem(nm, nm)
+        self.c_source.setCurrentIndex(max(0, self.c_source.findData(c.get("source") or c.get("debut"))))
+        self.c_fin.setCurrentIndex(max(0, self.c_fin.findData(c.get("fin"))))
+        self.c_jours = QSpinBox()
+        self.c_jours.setRange(-3650, 3650)
+        self.c_jours.setValue(int(c.get("jours", 30)))
+        self.c_jours.setSuffix(" " + _("jours"))
+        self.l_source, self.l_fin, self.l_jours = QLabel(_("Champ")), QLabel(_("jusqu'au champ")), QLabel(_("Ajouter"))
+        f.addRow(self.l_source, self.c_source)
+        f.addRow(self.l_fin, self.c_fin)
+        f.addRow(self.l_jours, self.c_jours)
         self.c_champs = QListWidget()
         self.c_champs.setObjectName("ch_calcul_champs")
         self.c_champs.setMaximumHeight(130)
@@ -287,6 +368,13 @@ class DialogueChamp(QDialog):
         self.c_champs.setVisible(g in C.CALCULS)
         self.w_formule.setVisible(g == "formule")
         self.c_aide.setVisible(g == "formule")
+        for wdg in (self.l_source, self.c_source):
+            wdg.setVisible(g in ("copie", "age", "ecart_jours", "date_plus"))
+        self.l_source.setText(_("Du champ") if g == "ecart_jours" else _("Champ"))
+        for wdg in (self.l_fin, self.c_fin):
+            wdg.setVisible(g == "ecart_jours")
+        for wdg in (self.l_jours, self.c_jours):
+            wdg.setVisible(g == "date_plus")
 
     def _plage(self):
         p = self.r.get("plage") or {}
@@ -446,8 +534,30 @@ class DialogueChamp(QDialog):
                                {"genre": "date", "date": "dd/mm/yyyy HH:MM" if r["auto"] == "date_heure_clic" else "dd/mm/yyyy"})
         if hasattr(self, "c_genre") and self.c_genre.currentData():
             g = self.c_genre.currentData()
-            r["calcul"] = ({"genre": "formule", "formule": self.c_formule.text().strip()} if g == "formule"
-                           else {"genre": g, "champs": self._coches(self.c_champs)})
+            if g == "formule":
+                r["calcul"] = {"genre": "formule", "formule": self.c_formule.text().strip()}
+            elif g in ("copie", "age"):
+                r["calcul"] = {"genre": g, "source": self.c_source.currentData()}
+            elif g == "ecart_jours":
+                r["calcul"] = {"genre": g, "debut": self.c_source.currentData(), "fin": self.c_fin.currentData()}
+            elif g == "date_plus":
+                r["calcul"] = {"genre": g, "source": self.c_source.currentData(), "jours": self.c_jours.value()}
+                if r["format"]["genre"] != "date":
+                    r["format"] = {"genre": "date", "date": "dd/mm/yyyy"}
+            else:
+                r["calcul"] = {"genre": g, "champs": self._coches(self.c_champs)}
+        if hasattr(self, "majuscules"):
+            r["majuscules"] = self.majuscules.isChecked()
+            r["controle"] = self.controle.currentData()
+        if hasattr(self, "aide_entree") and (self.aide_entree.text().strip() or self.aide_vide.text().strip()):
+            r["aide"] = {"entree": self.aide_entree.text().strip(), "vide": self.aide_vide.text().strip()}
+        if hasattr(self, "b_action"):
+            g = self.b_action.currentData()
+            r["action"] = {"genre": g}
+            if g == "email":
+                r["action"].update(email=self.b_email.text().strip(), sujet=self.b_sujet.text().strip())
+            elif g == "page":
+                r["action"]["page"] = self.b_page.value()
         if hasattr(self, "p_min_on") and (self.p_min_on.isChecked() or self.p_max_on.isChecked()):
             r["plage"] = {"min": self.p_min.value() if self.p_min_on.isChecked() else None,
                           "max": self.p_max.value() if self.p_max_on.isChecked() else None}
@@ -483,6 +593,8 @@ class DialogueChamp(QDialog):
                 return
         self.resultat = {"nom": nom, "info": self.info.text().strip(), "obligatoire": self.obligatoire.isChecked(),
                          "lecture": self.lecture.isChecked(), "affichage": self.affichage.currentData(), "regles": r}
+        if self.est_bouton:
+            self.resultat["legende"] = self.b_legende.text().strip()
         if self.est_texte:
             self.resultat.update(multi=self.multi.isChecked(), maxlen=self.maxlen.value(),
                                  alignement=self.alignement.currentData(), taille=self.taille.value())

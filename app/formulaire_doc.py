@@ -19,7 +19,13 @@ T = fitz
 def types_a_tracer():
     return [("auto", _("Automatique")), ("texte", _("Texte")), ("case", _("Case à cocher")),
             ("radio", _("Bouton radio")), ("liste", _("Liste déroulante")), ("liste_multiple", _("Liste")),
-            ("date", _("Date")), ("montant", _("Montant (€)")), ("signature", _("Signature"))]
+            ("date", _("Date")), ("montant", _("Montant (€)")), ("signature", _("Signature")),
+            ("bouton", _("Bouton (réinitialiser, imprimer, e-mail...)"))]
+
+
+def actions_bouton():
+    return [("reinitialiser", _("Réinitialiser le formulaire")), ("imprimer", _("Imprimer")),
+            ("email", _("Envoyer par e-mail")), ("page", _("Aller à une page"))]
 
 
 class SaisieDate(QFrame):
@@ -83,6 +89,8 @@ class MixinFormulaire:
         if genre == "signature":
             self.ajouter_champ_signature(n, r)
             return True
+        if genre == "bouton":
+            return self.creer_bouton(n, r)
         if genre == "auto":
             genre = "case" if r.width <= 20 and r.height <= 20 else "texte"
         if genre in ("case", "radio"):
@@ -132,6 +140,115 @@ class MixinFormulaire:
         self.apres_modif([_("Champ « {nom} » ajouté.", nom=nom)])
         self._maj_form()
         return True
+
+    def creer_bouton(self, n, r):
+        """Bouton dans le PDF (marche aussi dans Acrobat) : reinitialiser, imprimer, envoyer par e-mail, aller a une page."""
+        acts = actions_bouton()
+        lib, ok = QInputDialog.getItem(self, _("Bouton"), _("Action du bouton :"), [t for _k, t in acts], 0, False)
+        if not ok:
+            return False
+        genre = next(k for k, t in acts if t == lib)
+        action = {"genre": genre}
+        if genre == "email":
+            a, ok = QInputDialog.getText(self, _("Bouton"), _("Adresse e-mail du destinataire :"))
+            if not ok:
+                return False
+            sujet, ok = QInputDialog.getText(self, _("Bouton"), _("Objet du message :"), text=self.nom)
+            action.update(email=a.strip(), sujet=sujet.strip())
+        elif genre == "page":
+            num, ok = QInputDialog.getInt(self, _("Bouton"), _("Page :"), 1, 1, len(self.doc))
+            if not ok:
+                return False
+            action["page"] = num
+        legende, ok = QInputDialog.getText(self, _("Bouton"), _("Texte du bouton :"), text=lib)
+        if not ok or not legende.strip():
+            return False
+        pris = {x.field_name for _k, x in C.tous_les_champs(self.doc)}
+        k = 1
+        while f"Bouton{k}" in pris:
+            k += 1
+        nom = f"Bouton{k}"
+        if r.width < 40 or r.height < 14:
+            r = fitz.Rect(r.x0, r.y0, r.x0 + max(r.width, 110), r.y0 + max(r.height, 22))
+        self.memoriser(_("Ajout du bouton « {nom} »", nom=legende.strip()))
+        w = fitz.Widget()
+        w.field_type = T.PDF_WIDGET_TYPE_BUTTON
+        w.field_name = nom
+        w.rect = fitz.Rect(r)
+        w.button_caption = legende.strip()
+        w.fill_color = (0.9, 0.93, 0.98)
+        w.border_color = (0.36, 0.5, 0.72)
+        w.border_width = 1
+        w.text_fontsize = 0
+        w.field_flags |= 1 << 2                           # bouton-poussoir, pas une case
+        self.doc[n].add_widget(w)
+        FO.normaliser(self.doc) if not self.est_signe() else None
+        w = self._widget_nom(nom)
+        reg = C.vide()
+        reg["action"] = action
+        C.ecrire(self.doc, w, reg)
+        C.generer_js(self.doc)
+        self.apres_modif([_("Bouton « {nom} » ajouté.", nom=legende.strip())])
+        self._maj_form()
+        return True
+
+    def clic_bouton(self, w):
+        """Dans PhilPDF, le bouton fait la meme chose que dans Acrobat."""
+        a = self.regles_champ(w).get("action") or {}
+        g = a.get("genre")
+        fen = self.window()
+        if g == "reinitialiser":
+            if QMessageBox.question(self, _("Formulaire"), _("Effacer tout le formulaire ?")) != QMessageBox.Yes:
+                return
+            self.memoriser(_("Réinitialisation du formulaire"))
+            for _n, x in C.tous_les_champs(self.doc):
+                if x.field_type in (T.PDF_WIDGET_TYPE_BUTTON, T.PDF_WIDGET_TYPE_SIGNATURE) or self.champ_verrouille(x):
+                    continue
+                if x.field_type in (T.PDF_WIDGET_TYPE_CHECKBOX, T.PDF_WIDGET_TYPE_RADIOBUTTON):
+                    x.field_value = False
+                    self._maj_widget(x)
+                else:
+                    self._ecrire_valeur(x, "")
+            self.recalculer()
+            self.apres_modif([_("Formulaire réinitialisé.")])
+        elif g == "imprimer" and hasattr(fen, "imprimer"):
+            fen.imprimer([self])
+        elif g == "email":
+            if (self.modifie or not self.chemin) and hasattr(fen, "enregistrer") and not fen.enregistrer(self):
+                return
+            from . import agenda
+            agenda.ouvrir(agenda.lien_message(self.params.get("messagerie") or "gmail", a.get("sujet") or self.nom,
+                                              _("Ci-joint : {f}", f=self.nom), a.get("email", "")))
+            try:
+                from .fenetre import montrer_dans_explorateur
+                montrer_dans_explorateur(self.chemin)
+            except Exception:                             # noqa: BLE001
+                pass
+        elif g == "page":
+            self.aller_a(max(0, min(len(self.doc) - 1, int(a.get("page", 1)) - 1)))
+
+    def aide_entree(self, pw, w):
+        """Message d'aide du champ, montre a l'entree (comme Acrobat, sans fenetre a fermer)."""
+        aide = (self.regles_champ(w).get("aide") or {}).get("entree")
+        if aide:
+            from PySide6.QtWidgets import QToolTip
+            r = pw.vers_ecran(w.rect).toRect()
+            QToolTip.showText(pw.mapToGlobal(r.bottomLeft()), aide, pw)
+            self.message(aide)
+
+    def avant_enregistrer(self):
+        """Champs obligatoires vides : on le dit (avec leurs messages), on enregistre si vous le voulez."""
+        vides = self.champs_obligatoires_vides()
+        if not vides:
+            return True
+        lignes = []
+        for nom in vides:
+            w = self._widget_nom(nom)
+            msg = ((self.regles_champ(w).get("aide") or {}).get("vide") if w is not None else "") or ""
+            lignes.append(f"• {nom}" + (f" : {msg}" if msg else ""))
+        return QMessageBox.question(self, _("Formulaire"),
+                                    _("Champs obligatoires encore vides :\n{x}\n\nEnregistrer quand même ?",
+                                      x="\n".join(lignes[:15]))) == QMessageBox.Yes
 
     def _widget_nom(self, nom, n=None):
         for k, p in enumerate(self.doc):
@@ -249,6 +366,8 @@ class MixinFormulaire:
                 x.choice_values = sorted(res["items"], key=str.lower) if res["trier"] else res["items"]
             x.field_flags = fl
             x.field_display = res["affichage"]
+            if res.get("legende"):
+                x.button_caption = res["legende"]
             self._maj_widget(x)
             if "alignement" in res:
                 self.doc.xref_set_key(C.xref_champ(self.doc, x), "Q", str(res["alignement"]) if res["alignement"] else "null")
@@ -361,7 +480,11 @@ class MixinFormulaire:
                    "date": _("Date attendue au format {f}.", f=fmt.get("date", "jj/mm/aaaa").replace("yyyy", "aaaa").replace("dd", "jj")),
                    "heure": _("Heure attendue au format {f}.", f=fmt.get("heure", "HH:MM")),
                    "masque": _("Saisie attendue : {f}", f=fmt.get("masque", "")),
-                   "plage": self._message_plage(r)}.get(err, err)
+                   "plage": self._message_plage(r),
+                   "controle": {"email": _("Adresse e-mail incorrecte."),
+                                "nir": _("Numéro de Sécurité sociale incorrect (vérifiez la clef)."),
+                                "iban": _("IBAN incorrect."), "siret": _("Numéro SIRET incorrect."),
+                                "rpps": _("Numéro RPPS incorrect.")}.get(r.get("controle"), _("Valeur incorrecte."))}.get(err, err)
             QMessageBox.warning(self, _("Formulaire"), msg)
             return None
         return val
@@ -423,7 +546,14 @@ class MixinFormulaire:
         par = {x.field_name: (x, r) for x, r in calc}
         for nm in ordre:
             x, r = par[nm]
-            val = C.valeur_brute(C.calculer(r, self.valeurs()))
+            formats = {}
+            for src in C.sources(r["calcul"]):
+                y = self._widget_nom(src)
+                if y is not None:
+                    f = (self.regles_champ(y).get("format") or {})
+                    formats[src] = f.get("date") if f.get("genre") == "date" else None
+            v = C.calculer(r, self.valeurs(), formats)
+            val = v if isinstance(v, str) else C.valeur_brute(v)
             if (x.field_value or "") != val:
                 self._ecrire_valeur(x, val, r)
 

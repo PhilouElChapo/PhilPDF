@@ -3478,9 +3478,44 @@ class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
             return
         FO.noms_uniques(tous)
         self.memoriser(_("Création d'un formulaire"))
+        typer = self.params.get("formulaire_types_auto", True)
+        a_typer, signatures = {}, []
+        if typer:
+            for num, l in trouves.items():
+                for c in list(l):
+                    g, reg = FO.deviner(c["nom"])
+                    if g == "signature" and c["genre"] == "texte" and c["rect"].height >= 10:
+                        l.remove(c)
+                        signatures.append((num, c))
+                    elif reg and c["genre"] == "texte":
+                        a_typer[c["nom"]] = reg
         n = FO.creer(self.doc, trouves)
-        self.apres_modif([_("{n} champ(s) créé(s) : vérifiez-les, renommez ou supprimez ceux qui ne conviennent pas.", n=n)])
+        for num, c in signatures:                        # « Signature : ____ » -> vrai champ de signature
+            r = fitz.Rect(c["rect"])
+            if r.height < 30:
+                r = fitz.Rect(r.x0, r.y1 - 30, r.x1, r.y1)
+            w = fitz.Widget()
+            w.field_type = fitz.PDF_WIDGET_TYPE_SIGNATURE
+            w.field_name = c["nom"] or "Signature"
+            w.rect = r
+            self.doc[num].add_widget(w)
+            n += 1
+        if signatures:
+            FO.normaliser(self.doc)
+        from moteur import champs as _C
+        types = 0
+        for nom, reg in a_typer.items():
+            w = self._widget_nom(nom)
+            if w is not None:
+                _C.ecrire(self.doc, w, dict(_C.vide(), **reg))
+                types += 1
+        if types:
+            _C.generer_js(self.doc)
+        self.apres_modif([_("{n} champ(s) créé(s) : vérifiez-les, renommez ou supprimez ceux qui ne conviennent pas.", n=n)
+                          + ((" " + _("{t} reconnu(s) d'après leur libellé (date, montant, téléphone, e-mail, signature...) : "
+                                      "double-clic pour changer.", t=types + len(signatures))) if types or signatures else "")])
         self._maj_form()
+        self.verifier_signatures() if signatures else None
 
     def ajouter_champ(self, n, r):
         genre = self.type_trace.currentData() if hasattr(self, "type_trace") else "auto"
@@ -3496,8 +3531,18 @@ class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
         nom, ok = QInputDialog.getText(self, _("Nouveau champ"), _("Nom du champ :"), text=propose)
         if not ok or not nom.strip():
             return
+        g_, reg_ = FO.deviner(nom) if (not case and self.params.get("formulaire_types_auto", True)) else (None, None)
+        if g_ == "signature":
+            self.ajouter_champ_signature(n, r)
+            return
         self.memoriser(_("Ajout du champ « {nom} »", nom=nom.strip()))
         FO.creer(self.doc, {n: [{"genre": "case" if case else "texte", "rect": r, "nom": nom.strip(), "lignes": r.height > 30}]})
+        if reg_:
+            from moteur import champs as _C
+            w_ = self._widget_nom(nom.strip())
+            if w_ is not None:
+                _C.ecrire(self.doc, w_, dict(_C.vide(), **reg_))
+                _C.generer_js(self.doc)
         self.apres_modif([_("Champ « {nom} » ajouté.", nom=nom.strip())])
         self._maj_form()
 
@@ -3536,6 +3581,9 @@ class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
     def remplir_champ(self, pw, w):
         """Clic sur un champ hors mode formulaire : case cochee/decochee, texte saisi sur place."""
         w = self._widget((pw.num, w.xref)) or w
+        if w.field_type == fitz.PDF_WIDGET_TYPE_BUTTON:
+            self.clic_bouton(w)
+            return
         if self.champ_verrouille(w):
             self.message(_("Le champ « {x} » est verrouillé par une signature : le modifier invaliderait la signature.",
                            x=w.field_name))
@@ -3563,6 +3611,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
                 return
             if self.valeur_auto(w):
                 w = self._widget((pw.num, w.xref)) or w
+            self.aide_entree(pw, w)
             pw.ouvrir_saisie_champ(w)
 
     def choisir_radio(self, w):

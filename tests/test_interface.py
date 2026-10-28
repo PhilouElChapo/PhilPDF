@@ -430,7 +430,7 @@ of.remplir_champ(pw0, champ_nom)
 pw0.saisie.setText("Delaye"); pw0.saisie.returnPressed.emit()
 sortie_f = os.path.join(TRAVAIL, "Inscription_remplie.pdf"); of.enregistrer(sortie_f)
 rf = {x.field_name: x.field_value for x in fitz.open(sortie_f)[0].widgets()}
-verif(rf["Nom"] == "Delaye" and rf["Je certifie sur l'honneur"] not in (False, "Off", ""), f"formulaire : rempli dans PhilPDF et enregistré {rf}")
+verif(rf["Nom"] == "DELAYE" and rf["Je certifie sur l'honneur"] not in (False, "Off", ""), f"formulaire : rempli dans PhilPDF et enregistré {rf}")
 w.onglets.setCurrentWidget(o)
 
 # --- OCR IA compare : deux lectures, choix, apprentissage

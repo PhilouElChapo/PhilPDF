@@ -262,3 +262,33 @@ def normaliser(doc):
             del ref_ancien
             n += 1
     return n
+
+
+# ------------------------------------------------------------------ type devine d'apres le libelle
+_TYPES = [  # (motif du libelle, genre du champ, regles PhilPDF)
+    (r"signature|sign[ée] par|visa\b", "signature", None),
+    (r"\bdate\b|n[ée]\(?e?\)?\s*le|\bfait le\b|\ble\s*:?$|d[ée]livr[ée] le|\bdu\b\s*:?$|\bau\b\s*:?$", "texte",
+     {"format": {"genre": "date", "date": "dd/mm/yyyy"}}),
+    (r"montant|prix|total|tarif|somme|co[uû]t|\b(ht|ttc)\b|€|euros?", "texte",
+     {"format": {"genre": "nombre", "decimales": 2, "separateur": 2, "negatif": 0, "symbole": "€", "symbole_avant": False}}),
+    (r"quantit[ée]|\bqt[ée]\b|nombre de|\bnb\b", "texte",
+     {"format": {"genre": "nombre", "decimales": 0, "separateur": 2, "negatif": 0, "symbole": "", "symbole_avant": False}}),
+    (r"t[ée]l[ée]?phone|\bt[ée]l\b|portable|mobile|\bfax\b|\bgsm\b", "texte",
+     {"format": {"genre": "masque", "masque": "99 99 99 99 99"}}),
+    (r"code\s*postal|\bc\.?p\.?\b", "texte", {"format": {"genre": "masque", "masque": "99999"}}),
+    (r"e-?mail|courriel|m[ée]l\b|adresse [ée]lectronique", "texte", {"controle": "email"}),
+    (r"s[ée]curit[ée] sociale|\bn\.?i\.?r\.?\b|n°\s*ss\b|immatriculation", "texte", {"controle": "nir"}),
+    (r"\biban\b", "texte", {"controle": "iban", "majuscules": True}),
+    (r"\bsiret\b", "texte", {"controle": "siret"}),
+    (r"\brpps\b", "texte", {"controle": "rpps"}),
+    (r"^nom\b|nom de famille|nom d'usage|\bville\b|commune", "texte", {"majuscules": True}),
+]
+
+
+def deviner(libelle):
+    """(genre, regles) proposes pour un champ d'apres son libelle (« Date de naissance » -> date...) ; (None, None)."""
+    t = (libelle or "").strip().lower()
+    for motif, genre, regles in _TYPES:
+        if re.search(motif, t):
+            return genre, (dict(regles) if regles else None)
+    return None, None

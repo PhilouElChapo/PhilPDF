@@ -185,6 +185,88 @@ verif(r["plage"] == {"min": 1.0, "max": 100.0}, "formulaire d'Acrobat : plage re
 r = C.lire(dd, next(w for w in dd[0].widgets() if w.field_name == "Date"))
 verif(r["auto"] == "date_clic" and r["format"]["genre"] == "date", "formulaire d'Acrobat : date au clic relue")
 
+# --- nouveautes : majuscules, controles, calculs de dates, champs lies, bouton, aide, reperage intelligent
+src2 = os.path.join(T, "Fiche patient.pdf")
+d2 = fitz.open()
+p2 = d2.new_page()
+for y_, lib_ in ((80, "Nom : ____________________"), (110, "Date de naissance : ____________"),
+                 (140, "Téléphone : ______________"), (170, "N° de Sécurité sociale : ______________________"),
+                 (200, "E-mail : ____________________"), (300, "Signature : ______________________")):
+    p2.insert_text((60, y_), lib_, fontsize=11)
+d2.save(src2)
+o3 = OngletDocument(Parametres(), src2)
+o3.changer_mode("formulaire")
+o3.detecter_champs()
+types3 = {w.field_name: (w.field_type, C.lire(o3.doc, w)) for w in o3.doc[0].widgets()}
+verif(any(t == fitz.PDF_WIDGET_TYPE_SIGNATURE for t, _r in types3.values()), f"repérage : « Signature : ___ » devient un champ de signature ({list(types3)})")
+nom_date = next((k for k, (t, r) in types3.items() if (r.get("format") or {}).get("genre") == "date"), None)
+nom_tel = next((k for k, (t, r) in types3.items() if (r.get("format") or {}).get("masque") == "99 99 99 99 99"), None)
+nom_nir = next((k for k, (t, r) in types3.items() if r.get("controle") == "nir"), None)
+nom_nom = next((k for k, (t, r) in types3.items() if r.get("majuscules")), None)
+verif(nom_date and nom_tel and nom_nir and nom_nom, f"repérage : date, téléphone, n° SS, nom en majuscules reconnus ({nom_date}, {nom_tel}, {nom_nir}, {nom_nom})")
+o3.changer_mode(None)
+o3.valeur_champ(0, o3._widget_nom(nom_nom).xref, "dupont")
+verif(o3._widget_nom(nom_nom).field_value == "DUPONT", "majuscules automatiques")
+avert.clear()
+o3.valeur_champ(0, o3._widget_nom(nom_nir).xref, "1 85 05 78 006 084 92")
+verif(avert and "Sécurité sociale" in avert[-1] and not (o3._widget_nom(nom_nir).field_value or ""), "n° de Sécurité sociale à la clef fausse refusé")
+o3.valeur_champ(0, o3._widget_nom(nom_nir).xref, "1 85 05 78 006 084 91")
+verif((o3._widget_nom(nom_nir).field_value or "") != "", "n° de Sécurité sociale valable accepté")
+o3.valeur_champ(0, o3._widget_nom(nom_tel).xref, "0612345678")
+verif(o3._widget_nom(nom_tel).field_value == "06 12 34 56 78", "téléphone mis en forme")
+# age d'apres la date de naissance + champ lie
+o3.changer_mode("formulaire")
+tracer_ = lambda genre, rect, *rep: (reponses.__setitem__(slice(None), list(rep)),
+                                     o3.type_trace.setCurrentIndex(o3.type_trace.findData(genre)), o3.zone_tracee(0, fitz.Rect(rect)))
+tracer_("texte", (300, 100, 380, 118), "Age")
+tracer_("texte", (300, 400, 480, 418), "Rappel nom")
+tracer_("date", (300, 130, 400, 148), "Prochain rappel")
+w_age = o3._widget_nom("Age")
+DC.DialogueChamp.exec = lambda self: (self.c_genre.setCurrentIndex(self.c_genre.findData("age")),
+                                      self.c_source.setCurrentIndex(self.c_source.findData(nom_date)), self.valider(), QDialog.Accepted)[-1]
+o3.proprietes_champ(0, w_age)
+DC.DialogueChamp.exec = lambda self: (self.c_genre.setCurrentIndex(self.c_genre.findData("copie")),
+                                      self.c_source.setCurrentIndex(self.c_source.findData(nom_nom)),
+                                      self.aide_entree.setText("Recopié tout seul"), self.valider(), QDialog.Accepted)[-1]
+o3.proprietes_champ(0, o3._widget_nom("Rappel nom"))
+DC.DialogueChamp.exec = lambda self: (self.c_genre.setCurrentIndex(self.c_genre.findData("date_plus")),
+                                      self.c_source.setCurrentIndex(self.c_source.findData(nom_date)), self.c_jours.setValue(30),
+                                      self.valider(), QDialog.Accepted)[-1]
+o3.proprietes_champ(0, o3._widget_nom("Prochain rappel"))
+sc_ = C.scripts(o3.doc, o3._widget_nom("Age"))
+verif("util.scand" in sc_.get("C", "") and "getFullYear" in sc_.get("C", ""), "JavaScript Acrobat : âge calculé")
+verif("toUpperCase" in C.scripts(o3.doc, o3._widget_nom(nom_nom)).get("K", ""), "JavaScript Acrobat : majuscules")
+verif("event.rc = false" in C.scripts(o3.doc, o3._widget_nom(nom_nir)).get("V", ""), "JavaScript Acrobat : contrôle du n° SS")
+verif("app.alert" in C.scripts(o3.doc, o3._widget_nom("Rappel nom")).get("Fo", ""), "JavaScript Acrobat : message d'aide à l'entrée")
+o3.changer_mode(None)
+o3.valeur_champ(0, o3._widget_nom(nom_date).xref, "15/09/1978")
+auj_ = datetime.date.today()
+age_att = auj_.year - 1978 - ((auj_.month, auj_.day) < (9, 15))
+verif(o3._widget_nom("Age").field_value == str(age_att), f"âge calculé ({o3._widget_nom('Age').field_value})")
+verif(o3._widget_nom("Rappel nom").field_value == "DUPONT", "champ lié : même valeur que Nom")
+verif(o3._widget_nom("Prochain rappel").field_value == "15/10/1978", "date + 30 jours")
+# bouton reinitialiser
+o3.changer_mode("formulaire")
+_QID = QInputDialog
+reponses[:] = ["Réinitialiser le formulaire", "Effacer"]
+o3.type_trace.setCurrentIndex(o3.type_trace.findData("bouton"))
+o3.zone_tracee(0, fitz.Rect(60, 500, 180, 524))
+bt_ = next((w for w in o3.doc[0].widgets() if w.field_type == fitz.PDF_WIDGET_TYPE_BUTTON), None)
+verif(bt_ is not None and "resetForm" in C.scripts(o3.doc, bt_).get("U", ""), "bouton Réinitialiser (JavaScript Acrobat)")
+o3.changer_mode(None)
+o3.clic_bouton(bt_)
+verif(not (o3._widget_nom(nom_nom).field_value or "") and not (o3._widget_nom("Age").field_value or ""),
+      "bouton Réinitialiser : le formulaire est vidé dans PhilPDF")
+import subprocess as _sp
+js_ = [v for w in o3.doc[0].widgets() for v in C.scripts(o3.doc, w).values()]
+open(os.path.join(T, "js.js"), "w", encoding="utf-8").write(
+    "var L=" + __import__("json").dumps(js_) + ";var e=0;L.forEach(function(c){try{new Function(c)}catch(x){e++;console.log(x.message,c)}});console.log(e);")
+try:
+    r_ = _sp.run(["node", os.path.join(T, "js.js")], capture_output=True, text=True, timeout=30)
+    verif(r_.stdout.strip().endswith("0"), f"JavaScript produit : syntaxe correcte ({r_.stdout.strip()[-200:]})")
+except (OSError, _sp.SubprocessError):
+    pass
+
 n_ok = sum(1 for c, _q in ok if c)
 print(f"\n{n_ok}/{len(ok)} vérifications de formulaire réussies")
 sys.exit(0 if n_ok == len(ok) else 1)
