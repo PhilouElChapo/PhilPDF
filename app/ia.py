@@ -4,7 +4,7 @@ Rien ne part sans un clic. Avant chaque envoi, les donnees sensibles reperees da
 bancaire, numero de securite sociale, numero fiscal, mot de passe...) sont signalees : l'utilisateur confirme ou
 renonce. Le modele est choisi automatiquement si celui des reglages n'existe plus chez le fournisseur.
 """
-import base64, json, re, urllib.error, urllib.request
+import base64, json, re, threading, time, urllib.error, urllib.request
 
 from .langue import _
 
@@ -19,6 +19,47 @@ _entete_claude = {}         # clef -> en-tetes qui marchent (x-api-key ou Author
 
 class ErreurIA(Exception):
     pass
+
+
+# ------------------------------------------------------------------ suivi en direct de l'envoi
+_suivi = threading.local()
+
+
+def suivre(fonction):
+    """fonction(texte) recevra, pour ce fil d'execution, chaque etape de l'envoi (connexion, envoi, reponse, refus)."""
+    _suivi.fn = fonction
+
+
+def rapporter(texte):
+    fn = getattr(_suivi, "fn", None)
+    if fn:
+        try:
+            fn(texte)
+        except Exception:
+            pass
+
+
+def _taille(n):
+    return f"{n / 1048576:.1f} Mo".replace(".", ",") if n >= 1048576 else f"{max(1, n // 1024)} Ko"
+
+
+def expliquer_refus(code, msg):
+    """Phrase claire pour les refus courants (quota, surcharge) ; '' sinon."""
+    if code == 429:
+        m = re.search(r"retry in (?:(\d+)h)?(?:(\d+)m)?([\d.]+)s", msg)
+        quand = ""
+        if m:
+            h, mi, s = int(m.group(1) or 0), int(m.group(2) or 0), float(m.group(3))
+            quand = _(" Réessayer dans {d}.", d=(f"{h} h {mi:02d} min" if h else f"{mi} min {int(s):02d} s" if mi else f"{int(s)} s"))
+        if "limit: 0" in msg:
+            return _("Quota à 0 : la clef gratuite n'a pas droit à ce modèle. Il faut activer la facturation du projet "
+                     "Google (aistudio.google.com › Facturation).") + quand
+        if "per day" in msg or "PerDay" in msg:
+            return _("Quota du jour épuisé.") + quand
+        return _("Trop de demandes, quota de la minute atteint.") + quand
+    if code in (500, 502, 503, 504):
+        return _("Service surchargé ou en panne passagère ({code}).", code=code)
+    return ""
 
 
 # ------------------------------------------------------------------ donnees sensibles
@@ -119,19 +160,28 @@ def _http(url, corps=None, entetes=None, methode=None, delai=None):
     r.add_header("Content-Type", "application/json")
     for k, v in (entetes or {}).items():
         r.add_header(k, v)
+    t0 = time.monotonic()
     try:
         with urllib.request.urlopen(r, timeout=delai) as f:
-            return json.loads(f.read().decode("utf-8"))
+            brut = f.read()
+            if corps is not None:
+                rapporter(_("← Réponse acceptée (code {c}) en {s} s, {t} reçus", c=f.status,
+                            s=f"{time.monotonic() - t0:.1f}".replace(".", ","), t=_taille(len(brut))))
+            return json.loads(brut.decode("utf-8"))
     except urllib.error.HTTPError as e:
         try:
             d = json.loads(e.read().decode("utf-8", "replace"))
             msg = (d.get("error") or {}).get("message") or str(d)
         except ValueError:
             msg = str(e)
+        clair = expliquer_refus(e.code, msg)
+        rapporter(_("✕ Refusé (code {c}) après {s} s : {m}", c=e.code, s=f"{time.monotonic() - t0:.1f}".replace(".", ","),
+                    m=clair or msg[:200]))
         err = ErreurIA(f"{e.code} : {msg}")
-        err.code = e.code
+        err.code, err.clair = e.code, clair
         raise err
     except OSError as e:
+        rapporter(_("✕ Pas de réponse après {s:.0f} s : {r}", s=time.monotonic() - t0, r=e))
         err = ErreurIA(_("Service injoignable : {raison}", raison=e))
         err.delai = "timed out" in str(e).lower() or isinstance(e, TimeoutError)
         raise err
@@ -212,6 +262,7 @@ def _claude(clef, params, consignes, texte, images, max_jetons):
     forcer, autre_entete = False, False
     for _essai in range(3):
         modele = _modele_claude(clef, params, forcer=forcer)
+        rapporter(_("→ Envoi à Claude, modèle {m}, attente de la réponse...", m=modele))
         try:
             d = _http(f"{CLAUDE_API}/messages", corps(modele), _entetes_claude(clef, autre_entete))
             if autre_entete:                           # cette clef veut l'autre en-tete : on s'en souvient
@@ -244,6 +295,8 @@ def _gemini(clef, params, consignes, texte, images, max_jetons, json_attendu):
     deja_liste = False
     while essais:
         modele = essais.pop(0)
+        rapporter(_("→ Envoi à Gemini, modèle {m}{i}, attente de la réponse...", m=modele,
+                    i=_(" ({n} image(s))", n=len(images)) if images else ""))
         try:
             d = _http(f"{GEMINI_API}/models/{modele}:generateContent?key={clef}", corps)
             cands = d.get("candidates") or []
@@ -300,15 +353,24 @@ def retoucher_image(params, png, consigne, zones_png=None, delai=240):
              "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]}}
     from .journal import ecrire
     derniere = None
-    for modele in modeles_image_gemini(clef)[:4]:
+    rapporter(_("Recherche des modèles d'image proposés par votre clef Gemini..."))
+    liste = modeles_image_gemini(clef)[:4]
+    rapporter(_("Modèles à essayer, dans l'ordre : {l}", l=", ".join(liste)))
+    poids = len(png) + len(zones_png or b"")
+    refus = []
+    for modele in liste:
+        rapporter(_("→ Envoi à {m} : image {t}{z}, consigne de {n} caractères. Gemini travaille "
+                    "(souvent 10 à 60 s)...", m=modele, t=_taille(poids),
+                    z=_(" + plan des zones") if zones_png else "", n=len(consigne)))
         try:
-            t0 = __import__("time").monotonic()
+            t0 = time.monotonic()
             d = _http(f"{GEMINI_API}/models/{modele}:generateContent?key={clef}", corps, delai=delai)
             for c in d.get("candidates") or []:
                 for p in (c.get("content") or {}).get("parts", []):
                     data = p.get("inline_data") or p.get("inlineData")
                     if data and data.get("data"):
-                        ecrire("IA gemini", f"image modifiée en {__import__('time').monotonic() - t0:.1f} s, modèle {modele}")
+                        ecrire("IA gemini", f"image modifiée en {time.monotonic() - t0:.1f} s, modèle {modele}")
+                        rapporter(_("✓ Image modifiée reçue de {m}.", m=modele))
                         dernier.update(moteur="gemini", modele=modele)
                         return base64.b64decode(data["data"])
             texte = " ".join(p.get("text", "") for c in d.get("candidates") or [] for p in (c.get("content") or {}).get("parts", []))
@@ -320,9 +382,16 @@ def retoucher_image(params, png, consigne, zones_png=None, delai=240):
                 raise ErreurIA(_("Clef Gemini refusée : vérifiez-la dans Edition › Préférences › IA."))
             ecrire("IA gemini", f"image, modèle {modele} : {e}")
             derniere = e
+            refus.append((modele, getattr(e, "clair", "") or str(e)[:160]))
             if code == 404 or code in TRANSITOIRES or getattr(e, "delai", False):
+                if modele != liste[-1]:
+                    rapporter(_("→ On essaie le modèle suivant."))
                 continue
+            rapporter(_("✕ {e}", e=str(e)[:300]))
             raise
+    if refus:
+        raise ErreurIA(_("Gemini a refusé la demande sur les modèles d'image essayés :") + "\n" +
+                       "\n".join(f"• {m} : {r}" for m, r in refus))
     raise derniere or ErreurIA(_("Aucun modèle Gemini d'image disponible avec cette clef."))
 
 

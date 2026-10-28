@@ -364,7 +364,8 @@ class PageAccueil(QWidget):
         self.liste.customContextMenuRequested.connect(self._menu_fichier)
         self.liste.itemClicked.connect(self._clic_recent)
         self.liste.setMouseTracking(True)
-        self.liste.itemEntered.connect(lambda it: self._survol(it))
+        self.liste.viewport().setMouseTracking(True)
+        self.liste.viewport().installEventFilter(self)
         self.liste.currentItemChanged.connect(lambda it, _p: self._survol(it))
         corps = QHBoxLayout()
         corps.setSpacing(16)
@@ -378,10 +379,29 @@ class PageAccueil(QWidget):
         self._t_fiche.timeout.connect(lambda: self.fiche.montrer(getattr(self, "_l_fiche", None)))
         self.rafraichir()
 
+    def eventFilter(self, obj, ev):
+        """Apercu seulement quand la souris est sur l'icone, le nom ou le chemin : pas dans le blanc de la ligne."""
+        from PySide6.QtCore import QEvent
+        if obj is self.liste.viewport():
+            if ev.type() == QEvent.MouseMove:
+                pos = ev.position().toPoint()
+                it = self.liste.itemAt(pos)
+                if it is None or not it.data(Qt.UserRole + 1):
+                    self._survol(None)
+                else:
+                    r = self.liste.visualItemRect(it)
+                    fm = self.liste.fontMetrics()
+                    largeur = max((fm.horizontalAdvance(l) for l in it.text().split("\n")), default=0)
+                    fin = r.left() + self.liste.iconSize().width() + 24 + largeur + 16
+                    self._survol(it if pos.x() <= fin else None)
+            elif ev.type() == QEvent.Leave:
+                self._survol(None)
+        return super().eventFilter(obj, ev)
+
     def _survol(self, it):
         """Le fichier survole (ou choisi au clavier) s'affiche dans la fiche de droite, apres un court instant."""
         l = it.data(Qt.UserRole + 1) if it is not None else None
-        if l is None or l is getattr(self, "_l_fiche", None):
+        if l is getattr(self, "_l_fiche", None):
             return
         self._l_fiche = l
         self._t_fiche.start(140)
@@ -710,7 +730,7 @@ def fiche_fichier(chemin):
             else:
                 f["pages"] = len(d)
                 p = d[0]
-                z = 300 / max(1, p.rect.height)
+                z = 640 / max(1, p.rect.height)            # net sur les ecrans haute definition (zoom Windows 150-200 %)
                 f["image"] = p.get_pixmap(matrix=fitz.Matrix(z, z), alpha=False).tobytes("png")
                 txt = " ".join(p.get_text("text").split())
                 f["texte"] = (txt[:260] + "…") if len(txt) > 260 else txt
@@ -808,7 +828,10 @@ class FicheFichier(QFrame):
         if f["image"]:
             pm = QPixmap()
             pm.loadFromData(f["image"], "PNG")
-            self.apercu.setPixmap(pm.scaled(264, 240, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            dpr = self.devicePixelRatioF() or 1.0
+            pm = pm.scaled(int(264 * dpr), int(240 * dpr), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            pm.setDevicePixelRatio(dpr)
+            self.apercu.setPixmap(pm)
         else:
             self.apercu.setPixmap(QPixmap())
             self.apercu.setText("")

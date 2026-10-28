@@ -14,8 +14,12 @@ FAMILLES = [
 
 # (id, famille, icone, titre, sous-titre, bulle d'aide, disponible en 0.1)
 OUTILS = [
-    ("creer", "creer", "creer", _('Créer un PDF'), _('Page vierge ou images'),
-     _("Créer un PDF à partir d'une page vierge ou d'images. Word, scanner et presse-papiers arrivent ensuite."), True),
+    ("creer", "creer", "creer", _('Créer un PDF'), _('Vierge, images, Word, Excel, presse-papiers'),
+     _("Créer un PDF : page vierge, images, fichier Word / Excel / PowerPoint (polices intégrées), presse-papiers ou "
+       "capture d'écran. Vous pouvez aussi glisser un fichier Office sur PhilPDF."), True),
+    ("imprimante", "creer", "imprimer", _('Imprimante PhilPDF'), _('Imprimer vers PDF depuis tout logiciel'),
+     _("Comme l'imprimante Adobe PDF : Imprimer › PhilPDF depuis Word, un navigateur... ouvre le PDF dans PhilPDF, "
+       "polices intégrées. Qualité, dossier de sortie et affichage réglables."), True),
     ("combiner", "creer", "combiner", _('Combiner des fichiers'), _('Fusionner plusieurs fichiers en un seul PDF'),
      _("Assembler plusieurs fichiers en un seul PDF, dans l'ordre de votre choix."), True),
     ("organiser", "creer", "organiser", _('Organiser les pages'), _('Réordonner, pivoter, extraire, supprimer'),
@@ -38,8 +42,9 @@ OUTILS = [
     ("mesure", "annoter", "mesure", _('Mesurer'), _('Distances, périmètres, surfaces'),
      _("Mesurer sur un plan ou le cadastre : réglez l'échelle de la page (1:100, 1 cm = 1 m, ou une cote connue), "
        "puis cliquez. Les mesures restent dans le PDF, lisibles dans Acrobat, et s'exportent vers Excel."), True),
-    ("commentaires", "annoter", "commentaire", _('Commentaires'), _('Notes, surligner, barrer'),
-     _('Sélectionnez du texte : la barre rapide propose surligner, souligner, barrer, note.'), True),
+    ("commentaires", "annoter", "commentaire", _('Commentaires'), _('Formes, flèches, dessin, notes, liste'),
+     _("Rectangle (aussi arrondi), ellipse, ligne, flèche, dessin à main levée, note, texte libre ; couleur, épaisseur "
+       "et type de stylo. Liste des commentaires à droite : un clic va dessus. Pour surligner : sélectionnez du texte."), True),
     ("tampons", "annoter", "tampon", _('Tampons'), _('"Reçu le", "Payé", vos tampons'),
      _("Tampons prêts à l'emploi (Reçu, Validé, Payé...) avec la date, ou les vôtres importés d'une image ou d'un PDF. Sauvegardés sur votre Drive."), True),
     ("remplir_signer", "annoter", "signer", _('Remplir et signer'), _('Signature manuscrite, coches, dates'),

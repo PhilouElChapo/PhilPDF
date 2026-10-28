@@ -152,7 +152,9 @@ def main():
         debloquer()
     except Exception:
         pass
-    fichiers = [os.path.abspath(a) for a in sys.argv[1:] if a.lower().endswith(".pdf") and os.path.exists(a)]
+    impressions = [os.path.abspath(sys.argv[i + 1]) for i, a in enumerate(sys.argv[:-1]) if a == "--impression"]
+    fichiers = [os.path.abspath(a) for a in sys.argv[1:] if a.lower().endswith(".pdf") and os.path.exists(a)
+                and os.path.abspath(a) not in impressions]
     # un seul PhilPDF a la fois : verrou du systeme (meme si deux lancements arrivent ensemble), puis les fichiers
     # sont confies a celui qui est deja ouvert ; apres une mise a jour, le nouveau attend que l'ancien soit ferme
     global _VERROU
@@ -164,7 +166,7 @@ def main():
             if _VERROU.tryLock(0):                    # ...ou il vient de se fermer (redemarrage) : on prend sa place
                 libre = True
                 break
-            if confier_a_instance_ouverte(fichiers):
+            if confier_a_instance_ouverte(fichiers, impressions):
                 sys.exit(0)
             app.processEvents()
             time.sleep(0.4)
@@ -179,6 +181,8 @@ def main():
     w = Fenetre(fichiers)
     ecouter_autres_lancements(w)
     w.show()
+    from PySide6.QtCore import QTimer
+    QTimer.singleShot(800, lambda: w.impressions_en_attente(impressions))
     sys.exit(app.exec())
 
 
@@ -205,7 +209,7 @@ def verrou_instance():
     return v
 
 
-def confier_a_instance_ouverte(fichiers):
+def confier_a_instance_ouverte(fichiers, impressions=()):
     """Si PhilPDF est deja ouvert, lui passe les fichiers (ou lui demande de se montrer) et renvoie True."""
     import json
     from PySide6.QtNetwork import QLocalSocket
@@ -213,7 +217,7 @@ def confier_a_instance_ouverte(fichiers):
     s.connectToServer(_nom_instance())
     if not s.waitForConnected(400):
         return False
-    s.write((json.dumps({"ouvrir": fichiers}) + "\n").encode("utf-8"))
+    s.write((json.dumps({"ouvrir": fichiers, "impression": list(impressions)}) + "\n").encode("utf-8"))
     s.flush()
     s.waitForBytesWritten(3000)
     s.waitForReadyRead(5000)                          # reponse attendue, mais il tourne de toute facon : on s'arrete
@@ -243,6 +247,8 @@ def ecouter_autres_lancements(fenetre):
             c.flush()
             for f in d.get("ouvrir") or []:
                 fenetre.ouvrir(f)
+            if d.get("impression"):
+                fenetre.impressions_en_attente(d["impression"])
             fenetre.setWindowState((fenetre.windowState() & ~Qt.WindowMinimized) | Qt.WindowActive)
             fenetre.show()
             fenetre.raise_()

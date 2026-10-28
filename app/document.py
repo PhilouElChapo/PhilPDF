@@ -16,6 +16,7 @@ from .dialogues import boutons_fr, DialogueBibliotheque
 from moteur.modifier import Editeur, CANDIDATS
 from moteur import objets
 from .signature_doc import MixinSignature
+from .commentaires_doc import MixinCommentaires
 from .mesure_doc import MixinMesure
 from .formulaire_doc import MixinFormulaire, types_a_tracer
 from .langue import _
@@ -226,6 +227,16 @@ class PageWidget(QWidget):
             fo.setBold(True)
             p.setFont(fo)
             p.drawText(QPointF(c.x() + 6, c.y() - 6), f"{g['angle']:+.0f}°")
+        g_ = self.glisse
+        if g_ and g_.get("genre") in ("lasso", "cadre_img"):        # trace de la zone en cours
+            p.setPen(QPen(QColor("#d81b60"), 1.6, Qt.DashLine))
+            p.setBrush(QColor(216, 27, 96, 40))
+            if g_["genre"] == "cadre_img":
+                p.drawRect(QRectF(self.vers_ecran(fitz.Rect(g_["debut"], g_["debut"])).center(),
+                                  self.vers_ecran(fitz.Rect(g_["fin"], g_["fin"])).center()).normalized())
+            elif len(g_["points"]) > 1:
+                from PySide6.QtGui import QPolygonF
+                p.drawPolygon(QPolygonF([self.vers_ecran(fitz.Rect(q, q)).center() for q in g_["points"]]))
         if self.glisse and self.glisse.get("fantome") is not None:
             p.setPen(QPen(QColor("#1462c2"), 1.5, Qt.DashLine))
             p.setBrush(QColor(20, 98, 194, 30))
@@ -254,6 +265,8 @@ class PageWidget(QWidget):
                 p.drawEllipse(re.topLeft(), 3, 3)
         if o.mode == "mesure":
             o.dessiner_mesure(p, self)
+        if o.mode == "commenter":
+            o.dessiner_comm(p, self)
         p.end()
 
     def leaveEvent(self, e):
@@ -329,6 +342,9 @@ class PageWidget(QWidget):
             elif e.button() == Qt.LeftButton:
                 o.clic_mesure(self, pt, e.modifiers())
             return
+        if o.mode == "commenter" and e.button() == Qt.LeftButton:
+            o.comm_presse(self, pt, e.modifiers())
+            return
         if e.button() == Qt.RightButton:
             o.menu_contexte(self, pt, e.globalPosition().toPoint())
             return
@@ -389,6 +405,11 @@ class PageWidget(QWidget):
         if rt and rt["page"] == self.num and o.ret_b_baguette.isChecked():
             if o.clic_baguette(pt, bool(e.modifiers() & Qt.ShiftModifier)):
                 return
+        if rt and rt["page"] == self.num and (o.ret_b_lasso.isChecked() or o.ret_b_cadre.isChecked()):
+            self.glisse = {"genre": "lasso" if o.ret_b_lasso.isChecked() else "cadre_img", "debut": pt,
+                           "points": [fitz.Point(pt)], "fin": fitz.Point(pt),
+                           "ajouter": bool(e.modifiers() & Qt.ShiftModifier)}
+            return
         poignee = self._sur_poignee(e.position())
         if poignee is not None:
             self.glisse = {"genre": "redim", "coin": poignee, "debut": pt, "rect0": fitz.Rect(o.objet["rect"]), "fantome": None}
@@ -409,6 +430,11 @@ class PageWidget(QWidget):
             self.setCursor(Qt.CrossCursor)
             o.survol_mesure(self, pt, e.modifiers())
             return
+        if o.mode == "commenter":
+            self.setCursor(Qt.CrossCursor)
+            if e.buttons() & Qt.LeftButton:
+                o.comm_glisse(self, pt, e.modifiers())
+            return
         g = self.glisse
         if g and e.buttons() & Qt.LeftButton:
             d = pt - g["debut"]
@@ -418,6 +444,12 @@ class PageWidget(QWidget):
                 if e.modifiers() & Qt.ShiftModifier:          # Maj : par pas de 15 degres
                     a = round(a / 15) * 15
                 g["angle"] = a
+                self.update()
+                return
+            if g["genre"] in ("lasso", "cadre_img"):
+                g["fin"] = fitz.Point(pt)
+                if g["genre"] == "lasso":
+                    g["points"].append(fitz.Point(pt))
                 self.update()
                 return
             if g["genre"] == "champ":
@@ -512,6 +544,9 @@ class PageWidget(QWidget):
 
     def mouseReleaseEvent(self, e):
         o = self.o
+        if o.mode == "commenter" and e.button() == Qt.LeftButton:
+            o.comm_lache(self, self.vers_pdf(e.position()), e.modifiers())
+            return
         g, self.glisse = self.glisse, None
         if g:
             if g["genre"] == "rotation":
@@ -522,6 +557,15 @@ class PageWidget(QWidget):
             if g["genre"] == "champ":
                 if g["fantome"] is not None:
                     o.placer_champ(self.num, g["xref"], g["fantome"])
+                self.update()
+                return
+            if g["genre"] in ("lasso", "cadre_img"):
+                if g["genre"] == "cadre_img":
+                    a, b = g["debut"], g["fin"]
+                    pts = [fitz.Point(a.x, a.y), fitz.Point(b.x, a.y), fitz.Point(b.x, b.y), fitz.Point(a.x, b.y)]
+                else:
+                    pts = g["points"]
+                o.zone_tracee_image(pts, g["ajouter"])
                 self.update()
                 return
             if g["genre"] == "zone" and g["fantome"] is not None and g["fantome"].width > 4:
@@ -1564,7 +1608,7 @@ def _signe(doc):
     return False
 
 
-class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, QWidget):
+class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommentaires, QWidget):
     titre_change = Signal()
     outil_demande = Signal(str)
     statut = Signal(str)
@@ -1672,6 +1716,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, QWidget):
         v.addWidget(self.bandeau_form)
         self._construire_bandeau_sig(v)
         self._construire_bandeau_mesure(v)
+        self._construire_bandeau_comm(v)
         self.champ_choisi = None           # (page, xref) du champ choisi en mode formulaire
         self.marques_biffage = []          # [(page, rect)] a biffer
         self.sp = QSplitter()
@@ -2075,6 +2120,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, QWidget):
         self.pile_volet.addWidget(self._volet_format())
         self.pile_volet.addWidget(self._volet_bibliotheque())
         self.pile_volet.addWidget(self._volet_retouche())       # 3 : retouche de l'image choisie
+        self._idx_volet_comm = self.pile_volet.addWidget(self._volet_commentaires())   # 4 : liste des commentaires
         self.icones_volet = QWidget()
         self.icones_layout = QVBoxLayout(self.icones_volet)
         self.icones_layout.setContentsMargins(4, 10, 4, 10)
@@ -2327,13 +2373,29 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, QWidget):
         self.ret_nb = QCheckBox(_("Noir et blanc"))
         self.ret_nb.toggled.connect(lambda _c: self._maj_retouche())
         v.addWidget(self.ret_nb)
-        t2 = QLabel(_("BAGUETTE MAGIQUE"))
+        t2 = QLabel(_("CHOISIR UNE ZONE"))
         t2.setStyleSheet("font-size:12px;font-weight:600;color:#555;letter-spacing:1px;margin-top:8px")
         v.addWidget(t2)
-        self.ret_b_baguette = BoutonVolet(_("Choisir une zone"),
+        self.ret_b_baguette = BoutonVolet(_("Baguette magique"),
                                           _("Cliquez sur l'image : la zone de même couleur est choisie (Maj + clic : en ajouter)"))
         self.ret_b_baguette.setCheckable(True)
         v.addWidget(self.ret_b_baguette)
+        self.ret_b_lasso = BoutonVolet(_("Entourer à la main"),
+                                       _("Dessinez le tour de la zone sur l'image, bouton appuyé (Maj : en ajouter)"))
+        self.ret_b_lasso.setCheckable(True)
+        v.addWidget(self.ret_b_lasso)
+        self.ret_b_cadre = BoutonVolet(_("Tracer un rectangle"), _("Glissez sur l'image (Maj : en ajouter)"))
+        self.ret_b_cadre.setCheckable(True)
+        v.addWidget(self.ret_b_cadre)
+        from PySide6.QtWidgets import QButtonGroup as _QBG
+        self._grp_sel = _QBG(self)
+        self._grp_sel.setExclusive(False)
+        for b_ in (self.ret_b_baguette, self.ret_b_lasso, self.ret_b_cadre):
+            b_.setStyleSheet("QPushButton:checked{background:#fde7ef;border:2px solid #c2185b;color:#8a0f3d;"
+                             "font-weight:600}")
+            self._grp_sel.addButton(b_)
+            b_.toggled.connect(lambda on, b_=b_: [x.setChecked(False) for x in (self.ret_b_baguette, self.ret_b_lasso,
+                                                                                 self.ret_b_cadre) if on and x is not b_])
         ht = QHBoxLayout()
         ht.addWidget(QLabel(_("Tolérance")))
         self.ret_tol = QSlider(Qt.Horizontal)
@@ -2341,15 +2403,17 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, QWidget):
         self.ret_tol.setValue(30)
         ht.addWidget(self.ret_tol, 1)
         v.addLayout(ht)
-        hb = QHBoxLayout()
+        cadre_b = QWidget()                            # les boutons passent a la ligne plutot que d'etre tronques
+        hb = FluxLayout(cadre_b, marge=0, espace=6)
         for txt, aide_, mode in ((_("Effacer"), _("La zone est remplie à partir de ce qui l'entoure"), "fond"),
                                  (_("Transparent"), _("La zone devient transparente"), "transparent"),
                                  (_("Blanc"), _("La zone devient blanche"), "blanc")):
             b = QPushButton(txt)
             b.setToolTip(aide_)
+            b.setMinimumWidth(b.sizeHint().width())
             b.clicked.connect(lambda _c=False, m=mode: self.effacer_zone(m))
             hb.addWidget(b)
-        v.addLayout(hb)
+        v.addWidget(cadre_b)
         b = QPushButton(_("Désélectionner la zone"))
         b.clicked.connect(lambda: (self.retouche and self.retouche.update(masque=None), self._maj_retouche()))
         v.addWidget(b)
@@ -2357,15 +2421,13 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, QWidget):
         self.ret_b_ia.clicked.connect(self.retouche_ia)
         v.addWidget(self.ret_b_ia)
         v.addStretch(1)
-        hb2 = QHBoxLayout()
+        b = QPushButton(_("Appliquer à l'image"))       # pleine largeur : jamais tronque
+        b.setStyleSheet("QPushButton{background:#0f6cbd;color:#fff;border:none;border-radius:6px;padding:8px 10px;font-weight:600}")
+        b.clicked.connect(self.appliquer_retouche)
+        v.addWidget(b)
         b = QPushButton(_("Réinitialiser"))
         b.clicked.connect(self.reinitialiser_retouche)
-        hb2.addWidget(b)
-        b = QPushButton(_("Appliquer à l'image"))
-        b.setStyleSheet("QPushButton{background:#0f6cbd;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-weight:600}")
-        b.clicked.connect(self.appliquer_retouche)
-        hb2.addWidget(b)
-        v.addLayout(hb2)
+        v.addWidget(b)
         from PySide6.QtCore import QTimer
         self._t_retouche = QTimer(self)
         self._t_retouche.setSingleShot(True)
@@ -2396,7 +2458,8 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, QWidget):
             c.blockSignals(True)
             c.setChecked(False)
             c.blockSignals(False)
-        self.ret_b_baguette.setChecked(False)
+        for b_ in (self.ret_b_baguette, self.ret_b_lasso, self.ret_b_cadre):
+            b_.setChecked(False)
         self.pile_volet.setCurrentIndex(3)
         self._montrer_volet()
         self._calcul_apercu()
@@ -2463,11 +2526,42 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, QWidget):
         self._calcul_apercu()
         return True
 
+    def zone_tracee_image(self, points, ajouter=False):
+        """Zone entouree a la main (ou rectangle) sur l'image en retouche : devient la zone choisie."""
+        import numpy as np
+        import cv2
+        rt = getattr(self, "retouche", None)
+        if not rt or len(points) < 3:
+            return False
+        H, W = rt["src"].shape[:2]
+        pix = []
+        for pt in points:
+            q = self.point_image_libre(pt)
+            pix.append([int(round(q[0])), int(round(q[1]))])
+        m = np.zeros((H, W), np.uint8)
+        cv2.fillPoly(m, [np.array(pix, np.int32)], 1)
+        m = m.astype(bool)
+        rt["masque"] = (rt["masque"] | m) if (ajouter and rt["masque"] is not None) else m
+        self._calcul_apercu()
+        return bool(m.any())
+
+    def point_image_libre(self, pt):
+        """Comme point_image, sans refuser les points hors de l'image (tracé qui deborde)."""
+        import math
+        rt = self.retouche
+        c, w, h, angle = rt["geo"]
+        a = math.radians(angle)
+        dx, dy = pt.x - c.x, pt.y - c.y
+        x = dx * math.cos(a) - dy * math.sin(a)
+        y = dx * math.sin(a) + dy * math.cos(a)
+        H, W = rt["src"].shape[:2]
+        return (min(W - 1, max(0, (x + w / 2) / w * W)), min(H - 1, max(0, (y + h / 2) / h * H)))
+
     def effacer_zone(self, mode):
         from moteur import retouche as R
         rt = getattr(self, "retouche", None)
         if not rt or rt["masque"] is None:
-            self.message(_("Choisissez d'abord une zone avec la baguette magique."))
+            self.message(_("Choisissez d'abord une zone : baguette magique, entourer à la main ou rectangle."))
             return
         rt["src"] = R.effacer(rt["src"], rt["masque"], mode)
         rt["petit"] = R.reduire(rt["src"])
@@ -3899,7 +3993,9 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, QWidget):
         if modif:
             self.pile_volet.setCurrentIndex(1)
             self._montrer_volet()
-        elif self.pile_volet.currentIndex() != 0:
+        elif mode == "commenter":
+            pass                                        # le volet Commentaires s'ouvre plus bas
+        elif self.pile_volet.currentIndex() not in (0, getattr(self, "_idx_volet_comm", -1)):
             self.pile_volet.setCurrentIndex(0)
         if mode is None:
             self.objet = None
@@ -3907,6 +4003,10 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, QWidget):
             self.entrer_mesure()
         elif hasattr(self, "bandeau_mesure"):
             self.sortir_mesure()
+        if mode == "commenter":
+            self.entrer_commentaires()
+        elif hasattr(self, "bandeau_comm"):
+            self.sortir_commentaires()
         self.rafraichir_pages()
 
     # ------------------------------------------------------------ pages : rotation, organisation
@@ -4106,6 +4206,8 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, QWidget):
             self.construire_vignettes()
         self.maj_info()
         self.titre_change.emit()
+        if hasattr(self, "liste_comm"):
+            self.remplir_volet_commentaires()
         if journal:
             self.message(journal[-1])
 

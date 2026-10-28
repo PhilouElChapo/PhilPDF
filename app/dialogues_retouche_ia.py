@@ -127,6 +127,7 @@ class VueZones(QWidget):
 
 class TacheIA(QThread):
     fini = Signal(object, str)
+    info = Signal(str)
 
     def __init__(self, params, image_png, consigne, zones_png):
         super().__init__()
@@ -134,6 +135,7 @@ class TacheIA(QThread):
 
     def run(self):
         from . import ia
+        ia.suivre(self.info.emit)
         try:
             self.fini.emit(ia.retoucher_image(*self.args), "")
         except Exception as e:
@@ -178,7 +180,18 @@ class DialogueRetoucheIA(QDialog):
         self.etat.setStyleSheet("color:#555")
         hb.addWidget(self.etat)
         gauche.addLayout(hb)
+        self.suivi = QPlainTextEdit()              # ce qui se passe pendant l'envoi, en direct
+        self.suivi.setObjectName("suivi_ia")
+        self.suivi.setReadOnly(True)
+        self.suivi.setMaximumHeight(130)
+        self.suivi.setStyleSheet("QPlainTextEdit{font-family:Consolas,monospace;font-size:12px;background:#fafafa}")
+        self.suivi.setVisible(False)
+        gauche.addWidget(self.suivi)
         h.addLayout(gauche, 3)
+        from PySide6.QtCore import QTimer
+        self.chrono = QTimer(self)
+        self.chrono.setInterval(1000)
+        self.chrono.timeout.connect(self._tic)
         d = QVBoxLayout()
         d.addWidget(QLabel(_("<b>Style</b> (remplit la consigne)")))
         self.cb_style = QComboBox()
@@ -326,19 +339,44 @@ class DialogueRetoucheIA(QDialog):
             zones_png = self.vue.image_zones()
             self.vue.img = self.img
         self.b_env.setEnabled(False)
-        self.etat.setText(_("Gemini travaille sur l'image (souvent 10 à 60 secondes)..."))
         self.setCursor(Qt.BusyCursor)
+        self.suivi.setVisible(True)
+        self.suivi.clear()
+        import time
+        self._debut = time.monotonic()
+        self._ajouter_suivi(_("Préparation : image {l} × {h} px, style « {s} »", l=envoi.shape[1], h=envoi.shape[0],
+                              s=self.cb_style.currentText() or _("consigne libre")) +
+                            (_(", {n} zone(s)", n=len(zones)) if zones else ""))
+        self._tic()
+        self.chrono.start()
         self.tache = TacheIA(self.params, png(envoi), consigne, zones_png)
+        self.tache.info.connect(self._ajouter_suivi)
         self.tache.fini.connect(self._recu)
         self.tache.start()
 
+    def _ajouter_suivi(self, texte):
+        import time
+        s = int(time.monotonic() - getattr(self, "_debut", time.monotonic()))
+        self.suivi.appendPlainText(f"[{s // 60:02d}:{s % 60:02d}] {texte}")
+        self.suivi.verticalScrollBar().setValue(self.suivi.verticalScrollBar().maximum())
+
+    def _tic(self):
+        import time
+        s = int(time.monotonic() - self._debut)
+        self.etat.setText(_("Envoi en cours : {s} s écoulées (souvent 10 à 60 s)...", s=s))
+
     def _recu(self, octets, err):
+        self.chrono.stop()
         self.unsetCursor()
         self.b_env.setEnabled(True)
+        if not self.isVisible():                  # fenetre fermee pendant l'attente
+            return
         if err:
-            self.etat.setText("✕ " + err[:160])
+            self.etat.setText("✕ " + _("Refusé : voir le détail ci-dessous"))
+            self._ajouter_suivi(_("Terminé sans image."))
             QMessageBox.warning(self, self.windowTitle(), err)
             return
+        self._ajouter_suivi(_("Terminé."))
         from PIL import Image
         import cv2
         im = Image.open(io.BytesIO(octets)).convert("RGBA")

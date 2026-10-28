@@ -13,12 +13,14 @@ from . import ia, apprentissage
 # ------------------------------------------------------------------ tache d'attente
 class _Tache(QThread):
     fini = Signal(object, object)
+    info = Signal(str)
 
     def __init__(self, fonction):
         super().__init__()
         self.fonction = fonction
 
     def run(self):
+        ia.suivre(self.info.emit)
         try:
             self.fini.emit(self.fonction(), None)
         except Exception as e:                          # remonte a l'interface
@@ -34,6 +36,9 @@ def executer(parent, texte, fonction):
     t = _Tache(fonction)
     res = {}
     boucle = QEventLoop()
+    import time
+    debut = time.monotonic()
+    t.info.connect(lambda m: pd.setLabelText(f"{texte}\n\n[{int(time.monotonic() - debut)} s] {m}"))
 
     def fin(r, e):
         res["r"], res["e"] = r, e
@@ -58,6 +63,7 @@ class _TacheSuivie(QThread):
         self.fonction, self.stop = fonction, False
 
     def run(self):
+        ia.suivre(self.detail.emit)
         try:
             self.fini.emit(self.fonction(self), None)
         except Exception as e:

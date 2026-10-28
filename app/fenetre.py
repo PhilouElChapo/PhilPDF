@@ -151,6 +151,7 @@ class TacheSynchro(QThread):
 
 
 EXTENSIONS_OUVRABLES = (".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp")
+from moteur.office import EXTENSIONS as EXTENSIONS_OFFICE
 
 
 class PanneauSynchro(QFrame):
@@ -791,7 +792,8 @@ class Fenetre(QMainWindow):
 
     # ------------------------------------------------------------ glisser-deposer de fichiers sur la fenetre
     def dragEnterEvent(self, e):
-        if e.mimeData().hasUrls() and any(u.isLocalFile() and u.toLocalFile().lower().endswith(EXTENSIONS_OUVRABLES)
+        if e.mimeData().hasUrls() and any(u.isLocalFile() and u.toLocalFile().lower().endswith(EXTENSIONS_OUVRABLES
+                                                                                             + EXTENSIONS_OFFICE)
                                           for u in e.mimeData().urls()):
             e.acceptProposedAction()
         else:
@@ -806,6 +808,9 @@ class Fenetre(QMainWindow):
         images = [f for f in fichiers if f.lower().endswith(EXTENSIONS_OUVRABLES[1:])]
         for f in pdfs:
             self.ouvrir(f)
+        for f in fichiers:                            # Word, Excel, PowerPoint : convertis, polices integrees
+            if f.lower().endswith(EXTENSIONS_OFFICE):
+                self.ouvrir_office(f)
         if images:                                    # images deposees : un PDF est cree a partir d'elles
             try:
                 import pymupdf as _f
@@ -1188,7 +1193,8 @@ class Fenetre(QMainWindow):
             return False
         chemin = o.chemin
         if sous or not chemin:
-            chemin, _x = QFileDialog.getSaveFileName(self, _('Enregistrer sous'), chemin or o.nom, FILTRE)
+            depart = chemin or os.path.join(getattr(o, "dossier_propose", None) or self.dossier_depart(), o.nom)
+            chemin, _x = QFileDialog.getSaveFileName(self, _('Enregistrer sous'), depart, FILTRE)
             if not chemin:
                 return False
             if not chemin.lower().endswith(".pdf"):
@@ -1328,7 +1334,14 @@ class Fenetre(QMainWindow):
             self.enregistrer()
             return
         if oid == "creer":
-            self.creer("vierge")
+            from .creer import DialogueCreer
+            d = DialogueCreer(self)
+            if d.exec() == QDialog.Accepted and d.resultat:
+                self.creer(d.resultat)
+            return
+        if oid == "imprimante":
+            from .creer import DialogueImprimante
+            DialogueImprimante(self, self.params).exec()
             return
         if oid == "combiner":
             self.combiner()
@@ -1405,7 +1418,9 @@ class Fenetre(QMainWindow):
         elif oid == "mesure":
             o.changer_mode("mesure")
         elif oid == "commentaires":
-            self.statusBar().showMessage(_('Sélectionnez du texte : la barre rapide apparaît au-dessus de la sélection.'), 10000)
+            o.changer_mode("commenter")
+            self.statusBar().showMessage(_("Formes, flèches, dessin, notes ; pour surligner : sélectionnez du texte "
+                                           "(la barre rapide apparaît)."), 10000)
         elif oid == "remplir_signer":
             o.ouvrir_bibliotheque("signatures")
         elif oid == "exporter":
@@ -1430,8 +1445,109 @@ class Fenetre(QMainWindow):
         elif oid in ("ocr", "nettoyer"):
             self.ocr(o)
 
+    def ouvrir_office(self, f):
+        """Fichier Word, Excel ou PowerPoint converti en PDF (par Office, sinon LibreOffice) et ouvert, non enregistre :
+        l'enregistrement propose le dossier du fichier d'origine."""
+        from moteur import office
+        prog = QProgressDialog(_("Conversion de « {f} » en PDF...", f=os.path.basename(f)), None, 0, 0, self)
+        prog.setWindowModality(Qt.WindowModal)
+        prog.show()
+        QApplication.processEvents()
+        try:
+            pdf, moyen = office.convertir(f)
+        except Exception as ex:
+            prog.close()
+            QMessageBox.warning(self, _("Créer un PDF"),
+                                _("Conversion impossible : il faut Microsoft Office ou LibreOffice sur ce PC.\n\n{e}",
+                                  e=str(ex)[:400]))
+            return None
+        prog.close()
+        doc = fitz.open("pdf", open(pdf, "rb").read())
+        o = self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=doc,
+                                               nom=os.path.splitext(os.path.basename(f))[0] + ".pdf"))
+        o.dossier_propose = os.path.dirname(f)
+        manque = office.polices_non_integrees(pdf)
+        self.statusBar().showMessage(
+            _("Converti par {m}.", m="Microsoft Office" if moyen == "office" else "LibreOffice") + " " +
+            (_("Polices non intégrées : {p}", p=", ".join(manque)) if manque else _("Toutes les polices sont intégrées.")),
+            12000)
+        return o
+
+    def impressions_en_attente(self, chemins=()):
+        """Impressions venues de l'imprimante PhilPDF (celles donnees, et celles arrivees PhilPDF ferme)."""
+        try:
+            from . import imprimante
+            tous = list(dict.fromkeys(list(chemins) + imprimante.en_attente()))
+            if self.params.get("imprimante_installee"):
+                imprimante.ecrire_surveillance()         # chemin de PhilPDF a jour (apres une mise a jour)
+                imprimante.lancer_surveillance()
+        except Exception:
+            tous = list(chemins)
+        for c in tous:
+            if os.path.exists(c):
+                self.ouvrir_impression(c)
+
+    def ouvrir_impression(self, chemin):
+        from . import imprimante
+        from .creer import nom_impression
+        r = dict(self.params.get("imprimante") or {}, auteur=self.params.get("auteur", ""))
+        try:
+            octets = imprimante.traiter(chemin, r)
+        except Exception as ex:
+            QMessageBox.warning(self, _("Imprimante PhilPDF"), _("Impression illisible : {e}", e=ex))
+            return
+        nom = nom_impression(chemin)
+        if r.get("sortie") == "dossier" and r.get("dossier"):
+            os.makedirs(r["dossier"], exist_ok=True)
+            cible = os.path.join(r["dossier"], nom)
+            if os.path.exists(cible) and not r.get("remplacer"):
+                b, ext = os.path.splitext(cible)
+                k = 2
+                while os.path.exists(f"{b} ({k}){ext}"):
+                    k += 1
+                cible = f"{b} ({k}){ext}"
+            with open(cible, "wb") as f:
+                f.write(octets)
+            if r.get("afficher", True):
+                self.ouvrir(cible)
+            self.statusBar().showMessage(_("Impression enregistrée : {f}", f=cible), 10000)
+        else:
+            o = self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=fitz.open("pdf", octets), nom=nom))
+            o.modifie = True
+        try:
+            os.remove(chemin)
+        except OSError:
+            pass
+        self.setWindowState((self.windowState() & ~Qt.WindowMinimized) | Qt.WindowActive)
+        self.raise_()
+        self.activateWindow()
+
     def creer(self, genre):
         doc = fitz.open()
+        if genre == "office":
+            from moteur.office import EXTENSIONS
+            f, _x = QFileDialog.getOpenFileName(self, _("Fichier Word, Excel ou PowerPoint"), self.dossier_depart(),
+                                                _("Documents Office") + " (" + " ".join("*" + e for e in EXTENSIONS) + ")")
+            if f:
+                self.ouvrir_office(f)
+            return
+        if genre == "imprimante":
+            self.lancer_outil("imprimante")
+            return
+        if genre == "presse_papiers":
+            from .creer import doc_presse_papiers
+            d = doc_presse_papiers()
+            if d is None:
+                QMessageBox.information(self, _("Créer un PDF"), _("Le presse-papiers est vide (copiez une image ou un texte)."))
+                return
+            self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=d, nom=_("Presse-papiers") + ".pdf"))
+            return
+        if genre == "capture":
+            from .creer import capture_ecran
+            capture_ecran(self, lambda d: self.ajouter_onglet(OngletDocument(
+                self.params, biblio=self.biblio, doc=d,
+                nom=_("Capture du {d}", d=__import__("datetime").datetime.now().strftime("%d-%m-%Y %Hh%M")) + ".pdf")))
+            return
         if genre == "images":
             fs = QFileDialog.getOpenFileNames(self, _('Images'), self.dossier_depart(), _('Images (*.png *.jpg *.jpeg *.tif *.tiff *.bmp)'))[0]
             if not fs:
