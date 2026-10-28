@@ -2174,5 +2174,7 @@
  "Mesurer sur un plan ou le cadastre : réglez l'échelle de la page (1:100, 1 cm = 1 m, ou une cote connue), puis cliquez. Les mesures restent dans le PDF, lisibles dans Acrobat, et s'exportent vers Excel.": "Measure on a plan or land register: set the page scale (1:100, 1 cm = 1 m, or a known dimension), then click. Measurements stay in the PDF, readable in Acrobat, and export to Excel.",
  "OCR, allègement, filigrane, numérotation Bates, PDF/A et renommage sur tout un dossier ; vous voyez les noms des fichiers produits avant de lancer, les originaux restent intacts.": "OCR, size reduction, watermark, Bates numbering, PDF/A and renaming on a whole folder; you see the names of the produced files before starting, the originals stay intact.",
  "Conversion au format d'archivage PDF/A-2b : polices intégrées, couleurs, métadonnées ; PhilPDF montre ce qui change et vérifie le résultat avant d'enregistrer.": "Conversion to the PDF/A-2b archiving format: embedded fonts, colours, metadata; PhilPDF shows what changes and checks the result before saving.",
- "Introuvables sur ce poste": "Not found on this computer"
+ "Introuvables sur ce poste": "Not found on this computer",
+ "La connexion à GitHub n'a pas pu être vérifiée sur ce PC (certificat refusé : souvent un antivirus ou un filtre réseau qui inspecte les connexions). Vous avez PhilPDF {VERSION}. Vous pouvez télécharger la dernière version avec votre navigateur.": "The connection to GitHub could not be verified on this PC (certificate refused: often an antivirus or a network filter inspecting connections). You have PhilPDF {VERSION}. You can download the latest version with your browser.",
+ "Ouvrir la page de téléchargement": "Open the download page"
 }

@@ -67,6 +67,14 @@ def verifier(sortie):
         lignes.append(f"jbig2 / excel: {ex}")
     ok &= bon
     lignes.append(f"moteur jbig2 et excel: {'OK' if bon else 'ECHEC'}")
+    try:
+        from app.reseau import activer
+        mode = activer()
+    except Exception as ex:
+        mode = f"erreur {ex}"
+    lignes.append(f"moteur https: certificats verifies par {mode}")
+    if sys.platform == "win32" and mode != "windows":
+        ok = False
     d = fitz.open(); p = d.new_page()
     p.insert_text((72, 100), "Net à payer : 130,00 EUR", fontname="hebo", fontsize=12)
     tmp = tempfile.mkdtemp(); src = os.path.join(tmp, "t.pdf"); d.save(src)
@@ -131,6 +139,11 @@ def verifier(sortie):
 
 
 def main():
+    try:                                          # certificats HTTPS verifies par Windows (comme le navigateur)
+        from app.reseau import activer
+        activer()
+    except Exception:
+        pass
     if "--verifier" in sys.argv:
         sys.exit(verifier(sys.argv[sys.argv.index("--verifier") + 1]))
     app = QApplication(sys.argv)

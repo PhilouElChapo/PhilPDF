@@ -2644,9 +2644,23 @@ class Fenetre(QMainWindow):
                                             _("PhilPDF {v} est en cours de publication (fichier pas encore prêt). "
                                               "PhilPDF réessaie tout seul dans 5 minutes.", v=res["preparation"]))
             elif not silencieux:
-                QMessageBox.warning(self, _('Mises à jour'),
-                                    _("Impossible de vérifier les mises à jour pour le moment ({e}). Vous avez PhilPDF "
-                                      "{VERSION} ; réessayez dans quelques minutes.", e=res.get("erreur", "?"), VERSION=VERSION))
+                err = res.get("erreur", "?")
+                if "CERTIFICATE" in err or "certificate" in err:
+                    texte = _("La connexion à GitHub n'a pas pu être vérifiée sur ce PC (certificat refusé : souvent un "
+                              "antivirus ou un filtre réseau qui inspecte les connexions). Vous avez PhilPDF {VERSION}. "
+                              "Vous pouvez télécharger la dernière version avec votre navigateur.", VERSION=VERSION)
+                else:
+                    texte = _("Impossible de vérifier les mises à jour pour le moment ({e}). Vous avez PhilPDF "
+                              "{VERSION} ; réessayez dans quelques minutes.", e=err, VERSION=VERSION)
+                m = QMessageBox(QMessageBox.Warning, _('Mises à jour'), texte, parent=self)
+                b_nav = m.addButton(_("Ouvrir la page de téléchargement"), QMessageBox.AcceptRole)
+                m.addButton(_("Fermer"), QMessageBox.RejectRole)
+                m.exec()
+                if m.clickedButton() is b_nav:
+                    from PySide6.QtGui import QDesktopServices
+                    from PySide6.QtCore import QUrl
+                    from .mise_a_jour import DEPOT
+                    QDesktopServices.openUrl(QUrl(f"https://github.com/{DEPOT}/releases/latest"))
             else:
                 QTimer.singleShot(15 * 60 * 1000, lambda: self.verifier_maj(True))
             from .journal import ecrire

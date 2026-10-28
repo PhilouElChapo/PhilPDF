@@ -28,9 +28,10 @@ class _SansRedirection(urllib.request.HTTPRedirectHandler):
 
 def _statut(url):
     """(code HTTP, adresse de redirection) sans suivre la redirection."""
-    op = urllib.request.build_opener(_SansRedirection)
+    from .reseau import ouvrir
     try:
-        with op.open(urllib.request.Request(url, method="HEAD", headers={"User-Agent": "PhilPDF"}), timeout=10) as r:
+        with ouvrir(urllib.request.Request(url, method="HEAD", headers={"User-Agent": "PhilPDF"}), 10,
+                    _SansRedirection) as r:
             return r.status, r.headers.get("Location", "")
     except urllib.error.HTTPError as e:
         return e.code, e.headers.get("Location", "") if e.headers else ""
@@ -72,7 +73,8 @@ def chercher(params):
             try:
                 req = urllib.request.Request(f"https://api.github.com/repos/{DEPOT}/releases/latest",
                                              headers={"User-Agent": "PhilPDF", "Accept": "application/vnd.github+json"})
-                with urllib.request.urlopen(req, timeout=10) as r:
+                from .reseau import ouvrir
+                with ouvrir(req, 10) as r:
                     info = json.load(r)
                 version = info["tag_name"]
                 paquet = next((a["browser_download_url"] for a in info.get("assets", []) if a["name"] == nom), None)
@@ -94,7 +96,8 @@ def recuperer(paquet, progression=None, arret=lambda: False):
         return paquet
     dest = os.path.join(tempfile.mkdtemp(), os.path.basename(paquet.split("?")[0]))
     req = urllib.request.Request(paquet, headers={"User-Agent": "PhilPDF"})
-    with urllib.request.urlopen(req, timeout=60) as r, open(dest, "wb") as f:
+    from .reseau import ouvrir
+    with ouvrir(req, 60) as r, open(dest, "wb") as f:
         total, fait = int(r.headers.get("Content-Length") or 0), 0
         while True:
             if arret():
