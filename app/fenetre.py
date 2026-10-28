@@ -2254,14 +2254,17 @@ class Fenetre(QMainWindow):
                 sec = reglages.secrets_nouveaux(self.params, phrase)
             except Exception:
                 sec = []
-        if ch and not ch["items"] and not sec:       # meme contenu : on note juste la date
-            reglages.appliquer_communs(self.params, ch, [])
+        visibles = [it for it in (ch["items"] if ch else []) if not it.get("cache")]
+        if ch and not visibles and not sec:          # rien de nouveau a choisir : on note la date (et on renvoie
+            reglages.appliquer_communs(self.params, ch, [])   # au Drive les identites qu'il n'a plus)
+            if any(it.get("renvoyer") for it in ch["items"]) and reglages.ecrire_drive(self.params):
+                self.synchro_miroir()
             ch = None
         if not ch and not sec and not dispo:
             if manuel:
                 QMessageBox.information(self, _("Réglages de vos autres postes"), _("Rien de nouveau : ce poste est à jour."))
             return
-        n = len(ch["items"] if ch else []) + len(sec) + len(dispo["items"] if dispo else [])
+        n = len(visibles) + len(sec) + len(dispo["items"] if dispo else [])
         if manuel or ouvrir:
             self.choisir_reglages_distants(ch, sec)
             return
@@ -2369,7 +2372,8 @@ class Fenetre(QMainWindow):
                      if ch else ""))
         lb.setWordWrap(True)
         v.addWidget(lb)
-        lignes = [("c", it["cle"], it["libelle"], it["detail"], it.get("coche", True)) for it in (ch["items"] if ch else [])] + \
+        lignes = [("c", it["cle"], it["libelle"], it["detail"], it.get("coche", True)) for it in (ch["items"] if ch else [])
+                  if not it.get("cache")] + \
                  [("s", it["cle"], it["libelle"], _("nouveau, absent de ce poste (valeur chiffrée, non affichée)"), True) for it in sec] + \
                  [("p", it["cle"], it["libelle"] + _(" (disposition de « {poste} »)", poste=self._dispo["poste"]), it["detail"], False)
                   for it in ((getattr(self, "_dispo", None) or {}).get("items") or [])]

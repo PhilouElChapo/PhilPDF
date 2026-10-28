@@ -267,13 +267,20 @@ def reprendre_communs_drive(params):
     if not maj or maj <= (params.get("communs_maj") or "") or par == params.get("machine"):
         return None
     comptes_ici = {x["id"] for x in params.get("comptes", [])}
+    a_renvoyer = False
     for k, v in c.items():
         if k in COMMUNS:
             params[k] = _valeur_reprise(params, c, k, v)
+            if not _meme(params[k], v):               # ce poste en a plus (identites) : le Drive doit les recevoir
+                a_renvoyer = True
     params["communs_maj"] = maj
     params["communs_drive_vu"] = maj
     params._communs_vus = params._empreinte_communs() if hasattr(params, "_empreinte_communs") else ""
+    if a_renvoyer:                                    # date plus recente : la liste reunie part sur le Drive
+        params["communs_maj"] = datetime.datetime.now().isoformat(timespec="seconds")
     params.enregistrer()
+    if a_renvoyer:
+        ecrire_drive(params)
     nouveaux = [x for x in params.get("comptes", []) if x["id"] not in comptes_ici]
     return par, nouveaux
 
@@ -384,6 +391,9 @@ def _valeur_reprise(params, communs, k, v):
     return v
 
 
+UNIONS_CLES = ("identites", "certificats_approuves")
+
+
 def changements_communs(params):
     """None si rien de plus recent sur le Drive ; sinon {"par", "maj", "items": [{cle, libelle, detail, valeur}]}."""
     p = chemin_drive(params)
@@ -406,7 +416,11 @@ def changements_communs(params):
         if not _meme(val, _effectif(params, k)) and not _meme(_effectif({k: val}, k), _effectif(params, k)):
             from .miroir import UNIONS
             items.append({"cle": k, "libelle": libelle_commun(k), "detail": decrire_changement(k, _effectif(params, k), val),
-                          "valeur": val, "coche": plus_recent_ailleurs or k in UNIONS})
+                          "valeur": val, "coche": plus_recent_ailleurs or k in UNIONS,
+                          "renvoyer": k in UNIONS and not _meme(val, c[k])})
+        elif k in UNIONS_CLES and not _meme(val, c[k]):
+            items.append({"cle": k, "libelle": libelle_commun(k), "detail": "", "valeur": val, "coche": True,
+                          "cache": True, "renvoyer": True})    # rien de nouveau ici, mais le Drive doit recevoir les notres
     return {"par": par, "maj": maj, "local": local, "items": items, "plus_recent_ailleurs": plus_recent_ailleurs}
 
 
@@ -460,8 +474,10 @@ def appliquer_communs(params, changements, cles):
     """Reprend seulement les reglages choisis ; les autres restent ceux de ce poste. On ne redemande pas ensuite."""
     garde_ici = False
     for it in changements["items"]:
-        if it["cle"] in cles:
+        if it["cle"] in cles or it.get("cache"):
             params[it["cle"]] = it["valeur"]
+            if it.get("renvoyer"):
+                garde_ici = True                          # la liste reunie doit repartir vers le Drive
         else:
             garde_ici = True
     params["communs_drive_vu"] = changements["maj"]

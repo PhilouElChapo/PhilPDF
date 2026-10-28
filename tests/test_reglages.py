@@ -133,4 +133,22 @@ reglages.reprendre_secrets_choisis(autre2, "ma phrase secrète", [x["cle"] for x
 verifie(coffre.lire("c1") == "motdepasse" and not autre2["clef_claude"], "seuls les mots de passe cochés sont repris")
 reglages.ecrire_indice(a, "la phrase du carnet bleu")
 verifie(reglages.lire_indice(autre2) == "la phrase du carnet bleu", "indice de la phrase secrète visible sur les autres postes")
+# identites : un poste dont la liste est vide ne la vide plus chez les autres ; elle repart et revient
+import tempfile as _tf
+_dr = _tf.mkdtemp()
+os.makedirs(os.path.join(_dr, "PhilPDF"))
+class _P(dict):
+    def enregistrer(self):
+        pass
+_ph = _P(machine="Pharma", drive=_dr, identites=[{"id": "a1", "nom": "Philippe"}], communs_maj="2026-10-28T20:00:00")
+_ca = _P(machine="Cannes", drive=_dr, identites=[], communs_maj="2026-10-28T23:11:00", communs_drive_vu="")
+reglages.ecrire_drive(_ca)
+_ch = reglages.changements_communs(_ph)
+reglages.appliquer_communs(_ph, _ch, [i["cle"] for i in _ch["items"] if not i.get("cache")])
+reglages.ecrire_drive(_ph)
+verifie(_ph["identites"] and reglages.lire_drive(reglages.chemin_drive(_ph))["communs"]["identites"],
+        "identités : le poste qui les a les garde et les renvoie au Drive")
+_ch2 = reglages.changements_communs(_ca)
+reglages.appliquer_communs(_ca, _ch2, [i["cle"] for i in _ch2["items"]])
+verifie(_ca["identites"] == [{"id": "a1", "nom": "Philippe"}], "identités retrouvées sur l'autre poste")
 print(f"\n{ok} vérifications de préférences réussies")
