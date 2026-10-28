@@ -455,11 +455,11 @@ def appliquer_communs(params, changements, cles):
     params.enregistrer()
 
 
-def secrets_nouveaux(params, phrase):
-    """Secrets du Drive absents de ce poste : [{cle, libelle}] (jamais les valeurs)."""
+def secrets_nouveaux(params, phrase, secrets=None):
+    """Secrets du Drive (ou ceux donnes) absents de ce poste : [{cle, libelle}] (jamais les valeurs)."""
     noms = {c["id"]: c.get("nom") or c["id"] for c in params.get("comptes", [])}
     out = []
-    for k, v in lire_secrets_drive(params, phrase).items():
+    for k, v in (lire_secrets_drive(params, phrase) if secrets is None else secrets).items():
         if k.startswith("coffre:"):
             if v and not coffre.lire(k[7:]):
                 cid, _p, suffixe = k[7:].partition(".")

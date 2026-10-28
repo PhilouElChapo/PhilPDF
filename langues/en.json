@@ -1893,5 +1893,7 @@
  "Numéro RPPS incorrect.": "Incorrect RPPS number.",
  "Valeur incorrecte.": "Incorrect value.",
  "PhilPDF {v} est en cours de publication (fichier pas encore prêt). PhilPDF réessaie tout seul dans 5 minutes.": "PhilPDF {v} is being published (file not ready yet). PhilPDF will try again by itself in 5 minutes.",
- "Impossible de vérifier les mises à jour pour le moment ({e}). Vous avez PhilPDF {VERSION} ; réessayez dans quelques minutes.": "Unable to check for updates right now ({e}). You have PhilPDF {VERSION}; try again in a few minutes."
+ "Impossible de vérifier les mises à jour pour le moment ({e}). Vous avez PhilPDF {VERSION} ; réessayez dans quelques minutes.": "Unable to check for updates right now ({e}). You have PhilPDF {VERSION}; try again in a few minutes.",
+ "rien de nouveau pour ce poste": "nothing new for this computer",
+ "nouveau pour ce poste : {x}": "new for this computer: {x}"
 }

@@ -62,6 +62,26 @@ def _distant_json(e, compte, rel):
             pass
 
 
+def _secrets_recus(params, e, compte):
+    """Ce que le fichier chiffre du Drive apporte a ce poste ([] : rien), ou None si on ne peut pas le lire."""
+    from . import coffre, reglages
+    phrase = coffre.lire(reglages.PHRASE)
+    if not phrase:
+        return None
+    tmp = os.path.join(tempfile.mkdtemp(), "s.philpdf")
+    try:
+        e.telecharger(posixpath.join(miroir.racine_distante(compte), "secrets.philpdf"), tmp)
+        sec = reglages.importer(tmp, phrase).get("secrets", {})
+        return [x["libelle"] for x in reglages.secrets_nouveaux(params, phrase, sec)]
+    except Exception:
+        return None
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+
 def decrire(plan, params, compte=None, emplacement=None):
     """Plan brut -> lignes lisibles : [{rel, action, groupe, titre, detail, date, famille}]."""
     compte = compte or miroir.compte_drive(params)
@@ -128,6 +148,14 @@ def decrire(plan, params, compte=None, emplacement=None):
             famille = "secrets"
             titre = _("Mots de passe et autorisations")
             detail = _("chiffrés par votre mot de passe principal")
+            if recoit:
+                nouveaux = _secrets_recus(params, e or emplacement or distant.emplacement(compte), compte)
+                if nouveaux == []:
+                    # rien de nouveau pour ce poste (l'autre poste a seulement reecrit les memes) : sans demander
+                    detail = _("rien de nouveau pour ce poste")
+                    routine = True
+                elif nouveaux:
+                    detail = _("nouveau pour ce poste : {x}", x=", ".join(nouveaux))
         elif rel == "indice_phrase.json":
             famille = "secrets"
             titre = _("Indice du mot de passe principal")
