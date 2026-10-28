@@ -140,8 +140,8 @@ os.makedirs(os.path.join(_dr, "PhilPDF"))
 class _P(dict):
     def enregistrer(self):
         pass
-_ph = _P(machine="Pharma", drive=_dr, identites=[{"id": "a1", "nom": "Philippe"}], communs_maj="2026-10-28T20:00:00")
-_ca = _P(machine="Cannes", drive=_dr, identites=[], communs_maj="2026-10-28T23:11:00", communs_drive_vu="")
+_ph = _P(machine="Pharma", drive=_dr, identites=[{"id": "a1", "nom": "Philippe"}], communs_maj="2026-09-01T10:00:00")
+_ca = _P(machine="Cannes", drive=_dr, identites=[], communs_maj="2026-10-01T10:00:00", communs_drive_vu="")
 reglages.ecrire_drive(_ca)
 _ch = reglages.changements_communs(_ph)
 reglages.appliquer_communs(_ph, _ch, [i["cle"] for i in _ch["items"] if not i.get("cache")])
