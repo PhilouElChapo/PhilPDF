@@ -518,7 +518,7 @@ def dessiner_case(doc, w, style=None, couleur=None, valeur=None):
     cadre = _cadre(doc, w, lw, lh)
     flux = {}
     for etat, contenu in ((nom, cadre + _trace(style, lw, lh, couleur)), ("Off", cadre)):
-        for mode, fond in (("N", ""), ("D", "0.75 g 0 0 %.2f %.2f re f " % (lw, lh))):
+        for mode, fond in (("N", ""), ("D", "")):        # « appuye » = normal : MuPDF le montre parfois en continu
             x = doc.get_new_xref()
             doc.update_object(x, f"<</Type/XObject/Subtype/Form/BBox[0 0 {lw:.2f} {lh:.2f}]/Resources<<>>>>")
             doc.update_stream(x, (fond + contenu).encode() if mode == "D" else contenu.encode(), compress=True)

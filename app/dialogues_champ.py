@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, Q
                                QDialogButtonBox, QTableWidget, QTableWidgetItem, QHeaderView, QPushButton, QScrollArea,
                                QWidget, QMessageBox, QAbstractItemView)
 
+from PySide6.QtGui import QFont, QFontDatabase, QStandardItem
 from .langue import _
 from .dialogues import boutons_fr
 from moteur import champs as C
@@ -17,10 +18,71 @@ from moteur import champs as C
 T = fitz
 
 
+def remplir_polices(combo, doc):
+    """Liste des polices, chacune ecrite dans sa propre police : standard PDF, puis celles du document, puis celles
+    de ce PC (integrees au PDF quand on les choisit)."""
+    from moteur import apparence as AP
+
+    def titre(t):
+        combo.addItem("— " + t + " —", None)
+        it = combo.model().item(combo.count() - 1)
+        it.setEnabled(False)
+        fo = QFont()
+        fo.setBold(True)
+        fo.setPointSize(9)
+        it.setFont(fo)
+
+    def ajouter(lib, cle, fo):
+        combo.addItem(lib, cle)
+        fo.setPointSize(12)
+        combo.setItemData(combo.count() - 1, fo, Qt.FontRole)
+    titre(_("Polices standard du PDF"))
+    for k, lib, fam, gras, ital in (("Helv", "Helvetica", "Arial", False, False),
+                                    ("HeBo", "Helvetica gras", "Arial", True, False),
+                                    ("HeOb", "Helvetica italique", "Arial", False, True),
+                                    ("TiRo", "Times", "Times New Roman", False, False),
+                                    ("TiBo", "Times gras", "Times New Roman", True, False),
+                                    ("TiIt", "Times italique", "Times New Roman", False, True),
+                                    ("Cour", "Courier", "Courier New", False, False),
+                                    ("CoBo", "Courier gras", "Courier New", True, False)):
+        fo = QFont(fam)
+        fo.setBold(gras)
+        fo.setItalic(ital)
+        ajouter(lib, k, fo)
+    doc_pol = [(k, x) for k, x in AP.polices_formulaire(doc).items() if k not in AP.STANDARD and k not in ("ZaDb", "Symb")]
+    if doc_pol:
+        titre(_("Polices du document"))
+        for k, x in doc_pol:
+            nom = doc.xref_get_key(x, "BaseFont")[1].lstrip("/").split("+")[-1] or k
+            fo = QFont()
+            prog = AP.programme_police(doc, k)
+            if prog:
+                i = QFontDatabase.addApplicationFontFromData(prog)
+                fams = QFontDatabase.applicationFontFamilies(i) if i >= 0 else []
+                if fams:
+                    fo = QFont(fams[0])
+                    fo.setBold("Bold" in nom or "Gras" in nom)
+                    fo.setItalic("Italic" in nom or "Oblique" in nom)
+            ajouter(nom, k, fo)
+    sys_pol = AP.polices_systeme()
+    if sys_pol:
+        titre(_("Polices de ce PC (intégrées au PDF)"))
+        familles = set(QFontDatabase.families())
+        for nom, chemin in sys_pol:
+            fam = next((f for f in (nom, nom.rsplit(" ", 1)[0], nom.split(" ")[0]) if f in familles), None)
+            fo = QFont(fam) if fam else QFont()
+            if fam and ("Bold" in nom or "Gras" in nom):
+                fo.setBold(True)
+            if fam and ("Italic" in nom or "Italique" in nom):
+                fo.setItalic(True)
+            ajouter(nom, "fichier:" + chemin, fo)
+
+
 def genres_format():
     return [("aucun", _("Aucun (texte libre)")), ("nombre", _("Nombre")), ("montant", _("Montant (€)")),
             ("pourcentage", _("Pourcentage")), ("date", _("Date")), ("heure", _("Heure")),
             ("telephone", _("Téléphone (06 12 34 56 78)")), ("code_postal", _("Code postal (06460)")),
+            ("nir", _("N° de Sécurité sociale (1 78 09 2A 123 456 78)")),
             ("masque", _("Masque personnalisé (9 = chiffre, A = lettre)"))]
 
 
@@ -112,6 +174,7 @@ class DialogueChamp(QDialog):
             self._aide()
         self.v.addStretch(1)
         self.sommaire.setCurrentRow(0)
+        self._sans_molette()
         bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
         bb.accepted.connect(self.valider)
         bb.rejected.connect(self.reject)
@@ -125,6 +188,23 @@ class DialogueChamp(QDialog):
         bas.addWidget(bb)
         ext.addLayout(bas)
         self.js_perso = None
+
+    def _sans_molette(self):
+        """La molette fait defiler la fenetre : elle ne change plus une liste ou un nombre survole par hasard
+        (seulement celui dans lequel on a clique)."""
+        from PySide6.QtCore import QObject, QEvent
+        from PySide6.QtWidgets import QAbstractSpinBox
+
+        class _Filtre(QObject):
+            def eventFilter(self, obj, ev):
+                if ev.type() == QEvent.Wheel and not obj.hasFocus():
+                    ev.ignore()
+                    return True
+                return False
+        self._filtre_molette = _Filtre(self)
+        for w in self.findChildren(QComboBox) + self.findChildren(QAbstractSpinBox):
+            w.setFocusPolicy(Qt.StrongFocus)
+            w.installEventFilter(self._filtre_molette)
 
     def ouvrir_js(self):
         d = DialogueJavaScript(self, self.doc, self.w, self.r.get("js_seul") or [])
@@ -240,18 +320,13 @@ class DialogueChamp(QDialog):
         police, taille, couleur = AP.lire_da(self.doc, w)
         self.police = QComboBox()
         self.police.setObjectName("ch_police")
-        for k, lib in (("Helv", "Helvetica"), ("HeBo", "Helvetica gras"), ("HeOb", "Helvetica italique"),
-                       ("TiRo", "Times"), ("TiBo", "Times gras"), ("TiIt", "Times italique"),
-                       ("Cour", "Courier"), ("CoBo", "Courier gras")):
-            self.police.addItem(lib, k)
-        for k, x in AP.polices_formulaire(self.doc).items():   # polices du document (ex. une police manuscrite)
-            if k in AP.STANDARD or k in ("ZaDb", "Symb"):
-                continue
-            nom = self.doc.xref_get_key(x, "BaseFont")[1].lstrip("/").split("+")[-1] or k
-            self.police.addItem(nom + "  " + _("(du document)"), k)
+        self.police.setMaxVisibleItems(18)
+        remplir_polices(self.police, self.doc)
         if self.police.findData(police) < 0:
             self.police.addItem(police, police)
         self.police.setCurrentIndex(self.police.findData(police))
+        self.police.currentIndexChanged.connect(lambda _i: self._police_apercu())
+        self._police_apercu()
         f.addRow(_("Police"), self.police)
         self.taille = QSpinBox()
         self.taille.setObjectName("ch_taille")
@@ -272,6 +347,14 @@ class DialogueChamp(QDialog):
             i = self.couleur_txt.count() - 1
         self.couleur_txt.setCurrentIndex(i)
         f.addRow(_("Couleur"), self.couleur_txt)
+
+    def _police_apercu(self):
+        """La liste fermee montre aussi le nom dans sa police (WYSIWYG)."""
+        fo = self.police.itemData(self.police.currentIndex(), Qt.FontRole)
+        if fo is not None:
+            f2 = QFont(fo)
+            f2.setPointSize(11)
+            self.police.setFont(f2)
 
     def _format(self):
         fmt = self.r.get("format") or {"genre": "aucun"}
@@ -359,8 +442,8 @@ class DialogueChamp(QDialog):
         self.majuscules = QComboBox()
         self.majuscules.setObjectName("ch_majuscules")
         for k, t in ((False, _("Laisser tel que tapé")), ("tout", _("TOUT EN MAJUSCULES (noms, villes...)")),
-                     ("premiere", _("Première lettre en majuscule")),
-                     ("mots", _("Première Lettre De Chaque Mot (prénoms, Jean-Pierre)"))):
+                     ("premiere", _("Première lettre en majuscule (Jean philippe)")),
+                     ("mots", _("Première Lettre De Chaque Mot (Jean Philippe, Jean-Pierre)"))):
             self.majuscules.addItem(t, k)
         m_ = self.r.get("majuscules")
         self.majuscules.setCurrentIndex(max(0, self.majuscules.findData("tout" if m_ is True else (m_ or False))))
@@ -720,6 +803,11 @@ class DialogueChamp(QDialog):
         if hasattr(self, "majuscules"):
             r["majuscules"] = self.majuscules.currentData() or False
             r["controle"] = self.controle.currentData()
+        if hasattr(self, "f_genre") and self.f_genre.currentData() == "nir" and not r.get("controle"):
+            r["controle"] = "nir"                          # le format N° SS verifie aussi la clef
+        c_ = r.get("calcul") or {}
+        if c_.get("genre") in C.CALCULS and not c_.get("champs"):
+            r["calcul"] = None                             # aucun champ coche : pas de calcul
         if hasattr(self, "aide_entree") and (self.aide_entree.text().strip() or self.aide_vide.text().strip()):
             r["aide"] = {"entree": self.aide_entree.text().strip(), "vide": self.aide_vide.text().strip()}
         if hasattr(self, "b_action"):
@@ -768,7 +856,9 @@ class DialogueChamp(QDialog):
         if self.est_bouton:
             self.resultat["legende"] = self.b_legende.text().strip()
         if getattr(self, "police", None) is not None:
-            self.resultat["police"] = {"nom": self.police.currentData(), "taille": self.taille.value(),
+            from moteur import apparence as AP
+            self.resultat["police"] = {"nom": self.police.currentData() or AP.lire_da(self.doc, self.w)[0],
+                                       "taille": self.taille.value(),
                                        "couleur": tuple(self.couleur_txt.currentData())}
         if getattr(self, "c_style", None) is not None:
             self.resultat["coche"] = {"style": self.c_style.currentData(),

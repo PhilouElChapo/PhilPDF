@@ -3766,6 +3766,8 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, QWidget):
             valeur = self.saisir_valeur(w, valeur)
             if valeur is None:
                 return
+            if not (valeur or "").strip():                 # message « si on le laisse vide », comme Acrobat
+                self.aide_sortie(n, w)
         if (w.field_value or "") == valeur:
             return
         self.memoriser(_("Remplissage du formulaire"))

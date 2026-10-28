@@ -341,6 +341,36 @@ o5.changer_mode(None)
 o5.remplir_champ(o5.page_widgets[0], o5._widget_nom("Patient"))
 b5 = o5.page_widgets[0].findChild(__import__("PySide6.QtWidgets", fromlist=["QLabel"]).QLabel, "bulle_aide")
 verif(b5 is not None and "Nom de naissance" in b5.text(), "message d'aide affiché à l'entrée du champ")
+# cochee par defaut, somme sans champ (donnait 0), message si vide, N° SS, police du PC integree
+from moteur import apparence as _APm
+_APm.polices_systeme()
+_APm._SYSTEME = _APm._SYSTEME + [("Liberation Serif Bold", os.path.join(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))), "fonts", "LiberationSerif-Bold.ttf"))]
+o5.changer_mode("formulaire")
+def _r6(d):
+    if d.est_case:
+        d.c_defaut.setChecked(True)
+    else:
+        d.f_genre.setCurrentIndex(d.f_genre.findData("nir"))
+        d.c_genre.setCurrentIndex(d.c_genre.findData("produit"))        # aucun champ coche
+        d.aide_vide.setText("A remplir")
+        d.police.setCurrentIndex(d.police.findData("fichier:" + os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), "fonts", "LiberationSerif-Bold.ttf")))
+o5.doc.xref_set_key(o5._widget_nom("Resultat").xref, "AS", "/Off")
+o5.doc.xref_set_key(o5._widget_nom("Resultat").xref, "V", "/Off")
+proprietes("Resultat", _r6, o5)
+verif(o5._widget_nom("Resultat").field_value == "Positif", "cochée par défaut : la case est cochée tout de suite")
+proprietes("Patient", _r6, o5)
+verif(not C.lire(o5.doc, o5._widget_nom("Patient")).get("calcul") and
+      not C.scripts(o5.doc, o5._widget_nom("Patient")).get("C"), "produit sans aucun champ : pas de calcul (plus de 0)")
+verif("/PPLiberationSerifBold" in o5.doc.xref_get_key(o5._widget_nom("Patient").xref, "DA")[1],
+      "police du PC intégrée au formulaire")
+o5.changer_mode(None)
+o5.valeur_champ(0, o5._widget_nom("Patient").xref, "178097512345692")
+verif(o5._widget_nom("Patient").field_value == "1 78 09 75 123 456 92", "format N° de Sécurité sociale")
+o5.valeur_champ(0, o5._widget_nom("Patient").xref, "")
+bv = o5.page_widgets[0].findChildren(__import__("PySide6.QtWidgets", fromlist=["QLabel"]).QLabel, "bulle_vide")
+verif(bv and "A remplir" in bv[-1].text(), "message si on laisse le champ vide")
 import subprocess as _sp
 js_ = [v for w in o3.doc[0].widgets() for v in C.scripts(o3.doc, w).values()]
 open(os.path.join(T, "js.js"), "w", encoding="utf-8").write(

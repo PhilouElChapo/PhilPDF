@@ -2,9 +2,12 @@
 Courier ou Times, et remplace toute autre police (une police manuscrite du formulaire, Helvetica gras...) par
 Helvetica. Ici on dessine nous-memes le texte avec la police des ressources du formulaire (/AcroForm/DR), comme
 Acrobat, a la taille et dans la couleur du champ, aligne et coupe en lignes."""
+import logging
 import re
 
 import pymupdf as fitz
+
+logging.getLogger("fontTools").setLevel(logging.ERROR)
 
 # polices standard proposees : nom de ressource -> (police PostScript, police PyMuPDF pour mesurer)
 STANDARD = {"Helv": ("Helvetica", "helv"), "HeBo": ("Helvetica-Bold", "hebo"), "HeOb": ("Helvetica-Oblique", "heit"),
@@ -168,3 +171,140 @@ def dessiner(doc, w, valeur=None):
                           f"/Resources<</Font<</{police} {fx} 0 R>>>>>>")
     doc.update_stream(ax, flux, compress=True)
     return True
+
+
+# ------------------------------------------------------------------ polices du systeme
+_SYSTEME = None
+
+
+def polices_systeme():
+    """[(nom, chemin)] des polices TrueType / OpenType installees sur ce PC (une par fichier), triees par nom."""
+    global _SYSTEME
+    if _SYSTEME is not None:
+        return _SYSTEME
+    import os
+    import sys
+    vus, out = set(), []
+
+    def ajouter(nom, chemin):
+        if chemin.lower().endswith((".ttf", ".otf")) and os.path.exists(chemin):
+            k = os.path.normcase(chemin)
+            if k not in vus:
+                vus.add(k)
+                out.append((nom, chemin))
+    if sys.platform == "win32":
+        try:
+            import winreg
+            racine = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+            for ruche, cle in ((winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"),
+                               (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts")):
+                try:
+                    k = winreg.OpenKey(ruche, cle)
+                except OSError:
+                    continue
+                i = 0
+                while True:
+                    try:
+                        nom, fichier, _t = winreg.EnumValue(k, i)
+                    except OSError:
+                        break
+                    i += 1
+                    nom = re.sub(r"\s*\((TrueType|OpenType)\)\s*$", "", nom)
+                    if " & " in nom:
+                        continue
+                    ajouter(nom, fichier if os.path.isabs(fichier) else os.path.join(racine, fichier))
+        except Exception:
+            pass
+    else:
+        import subprocess
+        try:
+            r = subprocess.run(["fc-list", "--format", "%{file}\t%{fullname}\n"], capture_output=True, text=True,
+                               timeout=20)
+            for l in r.stdout.splitlines():
+                f, _s, n = l.partition("\t")
+                ajouter(n.split(",")[0] or os.path.basename(f)[:-4], f)
+        except Exception:
+            pass
+    out.sort(key=lambda x: x[0].lower())
+    _SYSTEME = out
+    return out
+
+
+def _nom_ressource(nom):
+    return "PP" + re.sub(r"[^A-Za-z0-9]", "", nom)[:28]
+
+
+def ajouter_police_fichier(doc, chemin):
+    """Integre une police du PC dans le formulaire (reduite aux lettres du clavier). Renvoie son nom de ressource."""
+    import io
+    font = fitz.Font(fontfile=chemin)
+    nom_ps = re.sub(r"[^A-Za-z0-9+-]", "", font.name) or "Police"
+    res = _nom_ressource(font.name)
+    if res in polices_formulaire(doc):
+        return res
+    with open(chemin, "rb") as h:
+        programme = h.read()
+    cff = programme[:4] == b"OTTO"
+    try:
+        from fontTools.ttLib import TTFont
+        from fontTools import subset
+        t = TTFont(io.BytesIO(programme))
+        o = subset.Options()
+        o.name_IDs = ["*"]
+        o.notdef_outline = True
+        o.drop_tables += ["GSUB", "GPOS", "DSIG"]
+        o.layout_features = []
+        sub = subset.Subsetter(o)
+        sub.populate(text=bytes(range(32, 256)).decode("cp1252", errors="ignore") + "œŒ€’“”…–—«»•")
+        sub.subset(t)
+        out = io.BytesIO()
+        t.save(out)
+        programme = out.getvalue()
+    except Exception:
+        pass
+    larg = []
+    for c in range(32, 256):
+        try:
+            u = bytes([c]).decode("cp1252")
+        except UnicodeDecodeError:
+            u = " "
+        larg.append(round(font.glyph_advance(ord(u)) * 1000))
+    ff = doc.get_new_xref()
+    doc.update_object(ff, "<</Subtype/OpenType>>" if cff else f"<</Length1 {len(programme)}>>")
+    doc.update_stream(ff, programme, compress=True)
+    b = font.bbox
+    dx = doc.get_new_xref()
+    doc.update_object(dx, f"<</Type/FontDescriptor/FontName/{nom_ps}/Flags 32"
+                          f"/FontBBox[{round(b.x0 * 1000)} {round(b.y0 * 1000)} {round(b.x1 * 1000)} {round(b.y1 * 1000)}]"
+                          f"/ItalicAngle 0/Ascent {round(font.ascender * 1000)}/Descent {round(font.descender * 1000)}"
+                          f"/CapHeight 700/StemV 80/{'FontFile3' if cff else 'FontFile2'} {ff} 0 R>>")
+    fx = doc.get_new_xref()
+    doc.update_object(fx, f"<</Type/Font/Subtype/{'Type1' if cff else 'TrueType'}/BaseFont/{nom_ps}"
+                          f"/FirstChar 32/LastChar 255/Widths[{' '.join(map(str, larg))}]"
+                          f"/Encoding/WinAnsiEncoding/FontDescriptor {dx} 0 R>>")
+    ax, pre = _acroform(doc)
+    t, v = doc.xref_get_key(ax, pre + "DR/Font")
+    if t == "xref":
+        doc.xref_set_key(int(v.split()[0]), res, f"{fx} 0 R")
+    elif t == "dict":
+        doc.xref_set_key(ax, pre + "DR/Font/" + res, f"{fx} 0 R")
+    else:
+        if doc.xref_get_key(ax, pre + "DR")[0] == "null":
+            doc.xref_set_key(ax, pre + "DR", "<<>>")
+        doc.xref_set_key(ax, pre + "DR/Font", f"<</{res} {fx} 0 R>>")
+    return res
+
+
+def programme_police(doc, nom):
+    """Octets du programme de la police « nom » des ressources du formulaire (pour l'afficher), ou None."""
+    x = polices_formulaire(doc).get(nom)
+    if not x:
+        return None
+    dx = doc.xref_get_key(x, "FontDescriptor")[1]
+    if not dx.endswith("R"):
+        return None
+    for k in ("FontFile2", "FontFile3", "FontFile"):
+        t, v = doc.xref_get_key(int(dx.split()[0]), k)
+        if t == "xref":
+            return doc.xref_stream(int(v.split()[0]))
+    return None

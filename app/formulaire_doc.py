@@ -324,6 +324,29 @@ class MixinFormulaire:
             self._bulle_aide = b
             self.message(aide)
 
+    def aide_sortie(self, n, w):
+        """Champ quitte vide : son message « si on le laisse vide » dans une bulle rouge, quelques secondes."""
+        msg = (self.regles_champ(w).get("aide") or {}).get("vide")
+        if not msg or not (0 <= n < len(self.page_widgets)):
+            return
+        from PySide6.QtWidgets import QLabel
+        from PySide6.QtCore import QTimer
+        pw = self.page_widgets[n]
+        r = pw.vers_ecran(w.rect).toRect()
+        b = QLabel("⚠  " + msg, pw)
+        b.setObjectName("bulle_vide")
+        b.setWordWrap(True)
+        b.setMaximumWidth(max(260, r.width()))
+        b.setStyleSheet("QLabel{background:#fdecea;color:#8a1c12;border:1px solid #e57368;border-radius:5px;"
+                        "padding:5px 9px;font-size:12px}")
+        b.adjustSize()
+        y = r.bottom() + 4 if r.bottom() + 4 + b.height() < pw.height() else max(0, r.top() - b.height() - 4)
+        b.move(max(0, min(r.left(), pw.width() - b.width())), y)
+        b.show()
+        b.raise_()
+        QTimer.singleShot(5000, b.deleteLater)
+        self.message(msg)
+
     def fermer_bulle_aide(self):
         b = getattr(self, "_bulle_aide", None)
         if b is not None:
@@ -475,6 +498,8 @@ class MixinFormulaire:
             if res.get("police"):                         # police, taille, couleur : ecrites avant de redessiner
                 from moteur import apparence as AP
                 po = res["police"]
+                if (po["nom"] or "").startswith("fichier:"):   # police du PC : integree une seule fois
+                    po["nom"] = AP.ajouter_police_fichier(self.doc, po["nom"][8:])
                 AP.assurer_police(self.doc, po["nom"])
                 AP.ecrire_da(self.doc, x, po["nom"], float(po["taille"]), po["couleur"])
                 if po["nom"] in AP.PYMUPDF:
@@ -497,6 +522,9 @@ class MixinFormulaire:
                                         co["valeur"] if x.field_type == T.PDF_WIDGET_TYPE_CHECKBOX else None)
                 if co.get("defaut") is not None:
                     self.doc.xref_set_key(C.xref_champ(self.doc, x), "DV", f"/{etat}" if co["defaut"] else "null")
+                    if co["defaut"] and x.field_value in (False, "Off", "", None):
+                        x.field_value = etat                 # cochee par defaut : cochee tout de suite
+                        self._maj_widget(x)
         if "defaut" in res:                               # valeur par defaut (/DV), et valeur si le champ est vide
             for x in self._widgets_nom(res["nom"] if res["nom"] != ancien else ancien) or self._widgets_nom(ancien):
                 fx = C.xref_champ(self.doc, x)

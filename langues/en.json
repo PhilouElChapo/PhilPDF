@@ -2176,5 +2176,10 @@
  "Conversion au format d'archivage PDF/A-2b : polices intégrées, couleurs, métadonnées ; PhilPDF montre ce qui change et vérifie le résultat avant d'enregistrer.": "Conversion to the PDF/A-2b archiving format: embedded fonts, colours, metadata; PhilPDF shows what changes and checks the result before saving.",
  "Introuvables sur ce poste": "Not found on this computer",
  "La connexion à GitHub n'a pas pu être vérifiée sur ce PC (certificat refusé : souvent un antivirus ou un filtre réseau qui inspecte les connexions). Vous avez PhilPDF {VERSION}. Vous pouvez télécharger la dernière version avec votre navigateur.": "The connection to GitHub could not be verified on this PC (certificate refused: often an antivirus or a network filter inspecting connections). You have PhilPDF {VERSION}. You can download the latest version with your browser.",
- "Ouvrir la page de téléchargement": "Open the download page"
+ "Ouvrir la page de téléchargement": "Open the download page",
+ "Polices standard du PDF": "Standard PDF fonts",
+ "Polices de ce PC (intégrées au PDF)": "Fonts on this PC (embedded in the PDF)",
+ "N° de Sécurité sociale (1 78 09 2A 123 456 78)": "French social security no. (1 78 09 2A 123 456 78)",
+ "Première lettre en majuscule (Jean philippe)": "First letter capitalised (Jean philippe)",
+ "Première Lettre De Chaque Mot (Jean Philippe, Jean-Pierre)": "First Letter Of Each Word (Jean Philippe, Jean-Pierre)"
 }

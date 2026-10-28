@@ -21,7 +21,8 @@ SEPARATEURS = {0: ("1,234.56", ",", "."), 1: ("1234.56", "", "."), 2: ("1.234,56
 DATES = ["dd/mm/yyyy", "dd/mm/yy", "d/m/yyyy", "dd.mm.yyyy", "yyyy-mm-dd", "dd mmmm yyyy", "mm/dd/yyyy",
          "dd/mm/yyyy HH:MM"]
 HEURES = ["HH:MM", "HH:MM:ss", "h:MM tt"]
-MASQUES = {"telephone": "99 99 99 99 99", "code_postal": "99999", "siret": "999 999 999 99999"}
+MASQUES = {"telephone": "99 99 99 99 99", "code_postal": "99999", "siret": "999 999 999 99999",
+           "nir": "9 99 99 XX 999 999 99"}
 CALCULS = {"somme": "SUM", "produit": "PRD", "moyenne": "AVG", "min": "MIN", "max": "MAX"}
 AUTO = ("date_clic", "date_heure_clic", "heure_clic")
 _MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre",
@@ -154,6 +155,10 @@ def lire(doc, w):
         try:
             r = dict(vide(), **json.loads(v))
             r["_philpdf"] = True
+            c = r.get("calcul") or {}
+            if (c.get("genre") in CALCULS and not c.get("champs")) or (c.get("genre") == "formule" and
+                                                                     not (c.get("formule") or "").strip()):
+                r["calcul"] = None                        # somme / produit sans aucun champ : pas un calcul (donnait 0)
             return r
         except ValueError:
             pass
@@ -673,7 +678,7 @@ def appliquer_masque(masque, texte):
         if m in "9AOX":
             if not brut:
                 return None
-            out.append(brut.pop(0))
+            out.append(brut.pop(0).upper())
         else:
             out.append(m)
     return "".join(out) if not brut else None
