@@ -37,6 +37,7 @@ def liste(params):
         e["ici"] = os.path.exists(_fichier(e["id"])) or (bool(e.get("windows")) and e.get("poste") == params.get("machine")
                                                          and __import__("sys").platform == "win32")
         e["expire"] = bool(e.get("fin")) and e["fin"] < _dt.datetime.now(_dt.timezone.utc).isoformat()
+        e.setdefault("nom", "")
         out.append(e)
     out.sort(key=lambda e: (not e.get("defaut"), e.get("expire"), e.get("nom", "").lower()))
     return out
@@ -44,7 +45,7 @@ def liste(params):
 
 def par_defaut(params):
     """Identite proposee pour signer : celle par defaut, sinon la premiere valide presente ici."""
-    l = [e for e in liste(params) if e["ici"]]
+    l = [e for e in liste(params) if e["ici"] and not e.get("orpheline")]
     return next((e for e in l if e.get("defaut") and not e["expire"]), None) or \
         next((e for e in l if not e["expire"]), None) or (l[0] if l else None)
 
@@ -69,6 +70,8 @@ def ajouter_pfx(params, octets, mot_de_passe, origine="fichier"):
               "debut": _iso(info["debut"]), "fin": _iso(info["fin"])})
     with open(_fichier(e["id"]), "wb") as f:
         f.write(octets)
+    e.pop("orpheline", None)
+    params["identites_supprimees"] = [x for x in params.get("identites_supprimees") or [] if x != e["id"]]
     _enregistrer_liste(params, l)
     try:
         approuver(params, S.exporter_cer(octets, mot_de_passe), soi=True)   # vos propres signatures sont approuvees
@@ -123,6 +126,7 @@ def regler(params, ident, **valeurs):
 
 
 def supprimer(params, ident):
+    params["identites_supprimees"] = sorted(set(params.get("identites_supprimees") or []) | {ident})
     l = [e for e in params.get("identites", []) or [] if e["id"] != ident]
     if l and not any(e.get("defaut") for e in l):
         l[0]["defaut"] = True
@@ -173,6 +177,7 @@ def approuver(params, der, soi=False):
 
 
 def retirer(params, empreinte):
+    params["certificats_retires"] = sorted(set(params.get("certificats_retires") or []) | {empreinte})
     params["certificats_approuves"] = [x for x in approuves(params) if x.get("empreinte") != empreinte]
     params.enregistrer()
 
@@ -219,3 +224,47 @@ def nom_identite(params, cle):
     ident = cle.split(":", 1)[1]
     e = next((x for x in params.get("identites", []) or [] if x["id"] == ident), None)
     return e.get("nom", ident) if e else ident
+
+
+def retrouver_orphelines(params):
+    """Fichiers d'identite presents sur ce poste (repris des secrets synchronises) mais absents de la liste (liste
+    perdue lors d'une fusion) : ajoutes comme « a deverrouiller » ; leur mot de passe redonne nom et validite.
+    Renvoie le nombre d'identites retrouvees."""
+    l = [dict(e) for e in params.get("identites", []) or []]
+    connus = {e["id"] for e in l}
+    supprimees = set(params.get("identites_supprimees") or [])
+    n = 0
+    for f in sorted(os.listdir(_dossier())):
+        if not f.lower().endswith(".pfx"):
+            continue
+        ident = f[:-4]
+        if ident in connus or ident in supprimees:
+            continue
+        l.append({"id": ident, "nom": "", "orpheline": True, "origine": "retrouvee",
+                  "ajoute": _iso(_dt.datetime.now().astimezone()), "defaut": not any(x.get("defaut") for x in l)})
+        n += 1
+    if n:
+        _enregistrer_liste(params, l)
+    return n
+
+
+def deverrouiller(params, ident, mot_de_passe):
+    """Identite retrouvee : son mot de passe permet de relire nom, e-mail et validite. Renvoie l'entree."""
+    e = next((x for x in params.get("identites", []) or [] if x["id"] == ident), None)
+    octets = lire(e) if e else None
+    if not octets:
+        raise S.ErreurSignature("absent")
+    info = S.infos_pfx(octets, mot_de_passe)
+    l = [dict(x) for x in params.get("identites", []) or []]
+    for x in l:
+        if x["id"] == ident:
+            x.pop("orpheline", None)
+            x.update({"nom": info["nom"], "email": info["email"], "organisation": info["organisation"],
+                      "emetteur": info["emetteur"], "autosigne": info["autosigne"], "empreinte": info["empreinte"],
+                      "debut": _iso(info["debut"]), "fin": _iso(info["fin"])})
+    _enregistrer_liste(params, l)
+    try:
+        approuver(params, S.exporter_cer(octets, mot_de_passe), soi=True)
+    except S.ErreurSignature:
+        pass
+    return next(x for x in liste(params) if x["id"] == ident)

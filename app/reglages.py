@@ -20,7 +20,7 @@ from . import coffre
 COMMUNS = ["auteur", "langue", "outils_epingles", "barre_rapide", "volet", "vignettes", "fixer_objets",
            "filigranes_perso", "ia_moteur", "maj_source", "maj_auto", "synchro", "comptes", "comptes_icone", "theme", "synchro_secrets", "barre", "couleurs_annotations",
            "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "agenda", "messagerie", "ia_styles_perso",
-           "identites", "certificats_approuves", "signature_reglages",
+           "identites", "certificats_approuves", "signature_reglages", "identites_supprimees", "certificats_retires",
            "formulaire_detection", "formulaire_types_auto"]
 POSTE = ["disposition_vue", "volet_largeur", "vignettes_largeur", "biblio_replies", "sessions_vues", "synchro_etat", "machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
 CLEFS_IA = ["clef_claude", "clef_gemini"]
@@ -269,7 +269,7 @@ def reprendre_communs_drive(params):
     comptes_ici = {x["id"] for x in params.get("comptes", [])}
     for k, v in c.items():
         if k in COMMUNS:
-            params[k] = v
+            params[k] = _valeur_reprise(params, c, k, v)
     params["communs_maj"] = maj
     params["communs_drive_vu"] = maj
     params._communs_vus = params._empreinte_communs() if hasattr(params, "_empreinte_communs") else ""
@@ -372,6 +372,18 @@ def decrire_changement(k, avant, apres):
     return f"{_court(avant)}  →  {_court(apres)}"
 
 
+def _valeur_reprise(params, communs, k, v):
+    """Valeur d'un reglage commun repris d'un autre poste : les identites et certificats sont reunis (ceux d'ici
+    restent), jamais remplaces par une liste plus courte."""
+    from .miroir import UNIONS, unir
+    if k in UNIONS and isinstance(v, list):
+        ret = set(params.get(UNIONS[k][1]) or []) | set(communs.get(UNIONS[k][1]) or [])
+        return unir(k, params.get(k) or [], v, ret)
+    if k in ("identites_supprimees", "certificats_retires") and isinstance(v, list):
+        return sorted(set(v) | set(params.get(k) or []))
+    return v
+
+
 def changements_communs(params):
     """None si rien de plus recent sur le Drive ; sinon {"par", "maj", "items": [{cle, libelle, detail, valeur}]}."""
     p = chemin_drive(params)
@@ -388,9 +400,13 @@ def changements_communs(params):
     items = []
     for k in COMMUNS:
         # « (vide) -> google » n'est pas un changement : jamais regle ici = valeur par defaut, la meme
-        if k in c and not _meme(c[k], _effectif(params, k)) and not _meme(_effectif({k: c[k]}, k), _effectif(params, k)):
-            items.append({"cle": k, "libelle": libelle_commun(k), "detail": decrire_changement(k, _effectif(params, k), c[k]),
-                          "valeur": c[k], "coche": plus_recent_ailleurs})
+        if k not in c:
+            continue
+        val = _valeur_reprise(params, c, k, c[k])
+        if not _meme(val, _effectif(params, k)) and not _meme(_effectif({k: val}, k), _effectif(params, k)):
+            from .miroir import UNIONS
+            items.append({"cle": k, "libelle": libelle_commun(k), "detail": decrire_changement(k, _effectif(params, k), val),
+                          "valeur": val, "coche": plus_recent_ailleurs or k in UNIONS})
     return {"par": par, "maj": maj, "local": local, "items": items, "plus_recent_ailleurs": plus_recent_ailleurs}
 
 

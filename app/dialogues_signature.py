@@ -38,6 +38,8 @@ def _date(iso):
 
 
 def libelle_identite(e):
+    if e.get("orpheline"):
+        return _("Identité retrouvée (nom inconnu) — choisissez « Déverrouiller... » et tapez son mot de passe")
     t = e.get("nom", "?")
     if e.get("email"):
         t += f" <{e['email']}>"
@@ -357,6 +359,23 @@ def aide_acrobat():
               "inutile ici.)"))
 
 
+def retrouver_identites(params):
+    """Identites dont le fichier est la (ou dans les secrets synchronises) mais pas dans la liste : ajoutees,
+    a deverrouiller par leur mot de passe. Renvoie le nombre retrouve."""
+    try:
+        from . import reglages as R, coffre
+        phrase = coffre.lire(R.PHRASE)
+        if phrase and params.get("synchro_secrets"):
+            connus = {e["id"] for e in params.get("identites", []) or []}
+            supprimees = set(params.get("identites_supprimees") or [])
+            for k, v in R.lire_secrets_drive(params, phrase).items():
+                if k.startswith("identite:") and v and k[9:] not in connus and k[9:] not in supprimees:
+                    ID.reprendre_secret(params, k, v)
+    except Exception:                                     # noqa: BLE001 (Drive absent, phrase changee)
+        pass
+    return ID.retrouver_orphelines(params)
+
+
 class DialogueIdentites(QDialog):
     """Mes identités numériques et les certificats que j'approuve."""
 
@@ -385,7 +404,8 @@ class DialogueIdentites(QDialog):
                             (_("Par défaut"), self.defaut, "defaut"), (_("Indice, apparence..."), self.regler, "regler"),
                             (_("Exporter le certificat (.cer)..."), self.exporter_cer, "cer"),
                             (_("Exporter l'identité (.pfx)..."), self.exporter_pfx, "pfx"),
-                            (_("Supprimer"), self.supprimer, "suppr")):
+                            (_("Supprimer"), self.supprimer, "suppr"),
+                            (_("Déverrouiller..."), self.deverrouiller, "deverr")):
             b = QPushButton(txt)
             b.setObjectName("id_" + nom)
             b.clicked.connect(f)
@@ -418,7 +438,29 @@ class DialogueIdentites(QDialog):
         bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Close))
         bb.rejected.connect(self.accept)
         v.addWidget(bb)
+        n = retrouver_identites(self.params)
         self.rafraichir()
+        if n:
+            QMessageBox.information(self, self.windowTitle(),
+                                    _("{n} identité(s) numérique(s) retrouvée(s) sur ce poste, mais leur nom n'était plus "
+                                      "dans la liste. Choisissez-les puis « Déverrouiller... » : leur mot de passe "
+                                      "suffit pour tout retrouver.", n=n))
+
+    def deverrouiller(self):
+        e = self._choisie()
+        if not e:
+            return
+        from .dialogues import demander_secret
+        mdp, ok = demander_secret(self, _("Identité numérique"), _("Mot de passe de cette identité :"),
+                                  indice=e.get("indice", ""))
+        if not ok:
+            return
+        try:
+            e = ID.deverrouiller(self.params, e["id"], mdp)
+        except S.ErreurSignature as ex:
+            QMessageBox.warning(self, _("Identité numérique"), message_erreur(ex))
+            return
+        self.rafraichir(e)
 
     def rafraichir(self, choisir=None):
         self.liste.clear()
@@ -453,7 +495,11 @@ class DialogueIdentites(QDialog):
         e = self._choisie()
         for b in (self.b_defaut, self.b_regler, self.b_cer, self.b_pfx, self.b_suppr):
             b.setEnabled(e is not None)
-        if e is not None:
+        self.b_deverr.setVisible(bool(e and e.get("orpheline")))
+        if e is not None and e.get("orpheline"):
+            for b in (self.b_defaut, self.b_regler, self.b_cer, self.b_pfx):
+                b.setEnabled(False)
+        elif e is not None:
             self.b_cer.setEnabled(e["ici"] or bool(e.get("der")))
             self.b_pfx.setEnabled(e["ici"] and not e.get("windows"))
 
@@ -682,7 +728,7 @@ class DialogueSigner(QDialog):
         self.identite.clear()
         defaut = choisir or ID.par_defaut(self.params)
         for e in ID.liste(self.params):
-            if not e["ici"]:
+            if not e["ici"] or e.get("orpheline"):
                 continue
             self.identite.addItem(icone("certificat", "#b00020" if e["expire"] else "#0f6cbd"), libelle_identite(e), e)
             if defaut and e["id"] == defaut["id"]:

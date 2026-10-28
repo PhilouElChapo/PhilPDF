@@ -2181,5 +2181,9 @@
  "Polices de ce PC (intégrées au PDF)": "Fonts on this PC (embedded in the PDF)",
  "N° de Sécurité sociale (1 78 09 2A 123 456 78)": "French social security no. (1 78 09 2A 123 456 78)",
  "Première lettre en majuscule (Jean philippe)": "First letter capitalised (Jean philippe)",
- "Première Lettre De Chaque Mot (Jean Philippe, Jean-Pierre)": "First Letter Of Each Word (Jean Philippe, Jean-Pierre)"
+ "Première Lettre De Chaque Mot (Jean Philippe, Jean-Pierre)": "First Letter Of Each Word (Jean Philippe, Jean-Pierre)",
+ "Identité retrouvée (nom inconnu) — choisissez « Déverrouiller... » et tapez son mot de passe": "Identity found (name unknown) — choose “Unlock...” and type its password",
+ "Mot de passe de cette identité :": "Password of this identity:",
+ "Déverrouiller...": "Unlock...",
+ "{n} identité(s) numérique(s) retrouvée(s) sur ce poste, mais leur nom n'était plus dans la liste. Choisissez-les puis « Déverrouiller... » : leur mot de passe suffit pour tout retrouver.": "{n} digital identity(ies) found on this computer, but their name was no longer in the list. Choose them then “Unlock...”: their password is enough to recover everything."
 }

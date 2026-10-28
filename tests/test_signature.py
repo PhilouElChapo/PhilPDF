@@ -267,6 +267,22 @@ verif("le nom du chat" in dsi.lbl_indice.text() and tuple(dsi.apparence.currentD
       "à la signature : indice affiché et apparence de l'identité proposée")
 dsi.close()
 
+# liste des identites videe par une fusion entre postes : reunie, ou retrouvee et deverrouillee
+from app.miroir import _fusion
+avec = {"communs": {"identites": list(params["identites"]), "certificats_approuves": list(params.get("certificats_approuves") or [])}}
+vide_ = {"communs": {"identites": [], "certificats_approuves": []}}
+fu = _fusion(vide_, avec)["communs"]
+verif(len(fu["identites"]) == len(params["identites"]) and len(fu["certificats_approuves"]) >= 1,
+      "fusion entre postes : une liste vide ne remplace plus les identités de l'autre poste")
+sauve = list(params["identites"])
+id0 = sauve[0]["id"]
+params["identites"] = []
+verif(ID.retrouver_orphelines(params) >= 1 and ID.par_defaut(params) is None, "identité retrouvée d'après son fichier, à déverrouiller")
+mdp0 = "secret1" if sauve[0].get("origine") == "acrobat" else None
+if mdp0:
+    e0 = ID.deverrouiller(params, id0, mdp0)
+    verif(e0["nom"] == sauve[0]["nom"] and not e0.get("orpheline"), "déverrouillée : nom et validité relus")
+params["identites"] = sauve
 n_ok = sum(1 for c, _q in ok if c)
 print(f"\n{n_ok}/{len(ok)} vérifications de signature réussies")
 sys.exit(0 if n_ok == len(ok) else 1)
