@@ -166,7 +166,27 @@ def lignes_apparence(nom, quand=None, motif="", lieu="", date=True, libelles=Non
     return l
 
 
-def apparence_pdf(largeur, hauteur, nom, image_png=None, lignes=(), gauche_seule=False):
+def _filigrane(page, r):
+    """Petite marque PhilPDF en filigrane, tres pale, derriere la signature (comme le logo d'Acrobat derriere les
+    siennes) : une page au coin plie et un trait de plume, en traits rouges pales."""
+    import pymupdf as fitz
+    h = r.height * 0.86
+    w = h * 0.72
+    x0, y0 = r.x0 + (r.width - w) / 2, r.y0 + (r.height - h) / 2
+    pli = w * 0.3
+    coul, ep = (0.93, 0.55, 0.57), max(0.5, h / 40)
+    sh = page.new_shape()
+    sh.draw_polyline([(x0, y0), (x0 + w - pli, y0), (x0 + w, y0 + pli), (x0 + w, y0 + h), (x0, y0 + h), (x0, y0)])
+    sh.draw_polyline([(x0 + w - pli, y0), (x0 + w - pli, y0 + pli), (x0 + w, y0 + pli)])
+    sh.finish(color=coul, width=ep, stroke_opacity=0.35, closePath=False)
+    # trait de plume en travers de la page
+    a, b = fitz.Point(x0 + w * 0.12, y0 + h * 0.78), fitz.Point(x0 + w * 0.88, y0 + h * 0.5)
+    sh.draw_bezier(a, a + (w * 0.25, -h * 0.35), b + (-w * 0.25, h * 0.35), b)
+    sh.finish(color=coul, width=ep * 1.3, stroke_opacity=0.35)
+    sh.commit(overlay=False)
+
+
+def apparence_pdf(largeur, hauteur, nom, image_png=None, lignes=(), gauche_seule=False, filigrane=True):
     """Apparence facon Acrobat : a gauche la signature manuscrite (ou le nom en grand sur deux lignes), a droite les
     lignes de texte. Sans lignes : tout le cadre pour la gauche. Renvoie le chemin d'un PDF d'une page (temporaire)."""
     import pymupdf as fitz
@@ -177,6 +197,9 @@ def apparence_pdf(largeur, hauteur, nom, image_png=None, lignes=(), gauche_seule
         gauche, droite = fitz.Rect(0, 0, coupe, hauteur), fitz.Rect(coupe + 2, 0, largeur, hauteur)
     else:
         gauche, droite = fitz.Rect(0, 0, largeur, hauteur), None
+    if filigrane:                                         # derriere, a la jonction des deux parties
+        cx = droite.x0 if droite is not None else largeur / 2
+        _filigrane(page, fitz.Rect(cx - hauteur * 0.45, 0, cx + hauteur * 0.45, hauteur))
     if image_png:
         page.insert_image(gauche + (1, 1, -1, -1), stream=image_png, keep_proportion=True)
     elif nom:
