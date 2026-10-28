@@ -41,6 +41,7 @@ def fichiers_acrobat():
 
 def _powershell(script, timeout=40):
     flags = 0x08000000 if sys.platform == "win32" else 0          # CREATE_NO_WINDOW
+    script = "[Console]::OutputEncoding = [Text.Encoding]::UTF8; $OutputEncoding = [Text.Encoding]::UTF8; " + script
     r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
                        capture_output=True, text=True, timeout=timeout, creationflags=flags, encoding="utf-8",
                        errors="replace")
@@ -55,7 +56,7 @@ def windows_identites():
               "Get-ChildItem Cert:\\CurrentUser\\My | Where-Object { $_.HasPrivateKey } | ForEach-Object { "
               "$n = $_.GetNameInfo([Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false); "
               "$i = $_.GetNameInfo([Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $true); "
-              "\"$($_.Thumbprint)`t$n`t$i`t$($_.NotAfter.ToString('o'))`t$($_.Subject)\" }")
+              "\"$($_.Thumbprint)`t$n`t$i`t$($_.NotAfter.ToString('o'))`t$($_.Subject)`t$([Convert]::ToBase64String($_.RawData))\" }")
     try:
         code, sortie, _e = _powershell(script)
     except (OSError, subprocess.SubprocessError):
@@ -64,7 +65,8 @@ def windows_identites():
     for l in sortie.splitlines():
         p = l.strip().split("\t")
         if len(p) >= 5 and p[0]:
-            out.append({"empreinte": p[0], "nom": p[1], "emetteur": p[2], "fin": p[3], "sujet": p[4]})
+            out.append({"empreinte": p[0], "nom": p[1], "emetteur": p[2], "fin": p[3], "sujet": p[4],
+                        "der": p[5] if len(p) > 5 else ""})
     return out
 
 
@@ -95,3 +97,30 @@ def windows_exporter(empreinte, mot_de_passe):
             os.rmdir(os.path.dirname(f))
         except OSError:
             pass
+
+
+def windows_signer(empreinte, donnees):
+    """Fait signer par Windows (RSA, SHA-256, PKCS#1 v1.5) avec la clef de l'ID du magasin, sans l'exporter.
+    Windows peut afficher sa propre fenetre si la clef est protegee."""
+    import base64
+    if not all(c in "0123456789abcdefABCDEF" for c in empreinte):
+        raise ErreurExport("empreinte")
+    b64 = base64.b64encode(donnees).decode("ascii")
+    script = ("$c = Get-Item 'Cert:\\CurrentUser\\My\\" + empreinte + "'; "
+              "$k = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($c); "
+              "if ($k -eq $null) { throw 'clef RSA introuvable' }; "
+              "$d = [Convert]::FromBase64String('" + b64 + "'); "
+              # ancienne clef CryptoAPI (fournisseur sans SHA-256) : on la rouvre avec le fournisseur AES de Windows
+              "if ($k -is [System.Security.Cryptography.RSACryptoServiceProvider]) { "
+              "$ci = $k.CspKeyContainerInfo; "
+              "$p = New-Object System.Security.Cryptography.CspParameters(24, 'Microsoft Enhanced RSA and AES Cryptographic Provider', $ci.KeyContainerName); "
+              "$p.Flags = [System.Security.Cryptography.CspProviderFlags]::UseExistingKey; "
+              "if ($ci.MachineKeyStore) { $p.Flags = $p.Flags -bor [System.Security.Cryptography.CspProviderFlags]::UseMachineKeyStore }; "
+              "$k2 = New-Object System.Security.Cryptography.RSACryptoServiceProvider($p); "
+              "$s = $k2.SignData($d, 'SHA256') } else { "
+              "$s = $k.SignData($d, [Security.Cryptography.HashAlgorithmName]::SHA256, "
+              "[Security.Cryptography.RSASignaturePadding]::Pkcs1) }; [Convert]::ToBase64String($s)")
+    code, sortie, err = _powershell(script, timeout=120)
+    if code != 0 or not sortie.strip():
+        raise ErreurExport((err or "").strip().splitlines()[0] if (err or "").strip() else "signature Windows")
+    return base64.b64decode(sortie.strip().splitlines()[-1])

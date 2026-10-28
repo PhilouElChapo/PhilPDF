@@ -228,6 +228,24 @@ try:
 except IS.ErreurExport:
     verif(True, "empreinte suspecte refusée")
 
+# ID du magasin Windows non exportable : Windows signe lui-meme (simule ici avec une clef locale)
+from cryptography.hazmat.primitives import hashes as _h, serialization as _ser
+from cryptography.hazmat.primitives.asymmetric import padding as _pad
+import base64 as _b64
+pfxw = S.creer_identite("Philippe Windows", "w1")
+clef_w, cert_w, _a = S.ouvrir_pfx(pfxw, "w1")
+der_w = cert_w.public_bytes(_ser.Encoding.DER)
+params["machine"] = "Pharma"
+ew = ID.ajouter_windows(params, {"empreinte": "ABCDEF", "der": _b64.b64encode(der_w).decode()})
+verif(ew["windows"] == "ABCDEF" and ID.lire(ew) is None and "identite:" + ew["id"] not in ID.secrets(params),
+      "ID Windows gardé en référence (pas de clef copiée, pas synchronisé)")
+sw = S.signataire_windows(der_w, lambda d: clef_w.sign(d, _pad.PKCS1v15(), _h.SHA256()))
+src_w = os.path.join(T, "w.pdf")
+formulaire(src_w)
+S.signer(src_w, os.path.join(T, "w_signe.pdf"), None, "", page=0, rect=(72, 600, 252, 645), horodatage=False, signataire=sw)
+vw = S.verifier(os.path.join(T, "w_signe.pdf"), [der_w])
+verif(vw and vw[0]["intacte"] and vw[0]["approuve"] and vw[0]["nom"] == "Philippe Windows", "signature faite par Windows : valide")
+
 n_ok = sum(1 for c, _q in ok if c)
 print(f"\n{n_ok}/{len(ok)} vérifications de signature réussies")
 sys.exit(0 if n_ok == len(ok) else 1)

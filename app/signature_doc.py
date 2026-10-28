@@ -297,7 +297,7 @@ class MixinSignature:
             res = en_fond(self, _("Signature en cours..."), lambda: S.signer(
                 src, dest, r["pfx"], r["mdp"], champ=champ, page=page, rect=(tuple(rect) if rect is not None else None),
                 apparence=app_pdf, raison=r["motif"], lieu=r["lieu"], certifier=r["certifier"],
-                horodatage=r["horodatage"], mot_de_passe_pdf=getattr(self, "mdp_pdf", None),
+                horodatage=r["horodatage"], mot_de_passe_pdf=getattr(self, "mdp_pdf", None), signataire=r.get("signataire"),
                 journal=lambda t: log("signature", t)))
         except Exception as e:                            # noqa: BLE001
             QMessageBox.warning(self, _("Signature numérique"), _("Signature impossible : {e}", e=message_erreur(e)))

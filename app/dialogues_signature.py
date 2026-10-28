@@ -45,7 +45,9 @@ def libelle_identite(e):
         t += "  — " + _("expirée le {d}", d=_date(e.get("fin")))
     elif e.get("fin"):
         t += "  — " + _("valable jusqu'au {d}", d=_date(e.get("fin")))
-    if not e.get("ici"):
+    if e.get("windows"):
+        t += "  — " + _("gardée par Windows sur « {poste} »", poste=e.get("poste", "?"))
+    elif not e.get("ici"):
         t += "  — " + _("absente de ce poste")
     return t
 
@@ -251,12 +253,17 @@ def _importer_windows(parent, params, w):
     try:
         octets = IS.windows_exporter(w["empreinte"], m1.text())
         e = ID.ajouter_pfx(params, octets, m1.text(), origine="windows")
+        _ecrire_secrets(parent)
     except Exception as ex:                               # noqa: BLE001
-        QMessageBox.warning(parent, d.windowTitle(),
-                            _("Windows refuse d'exporter cet ID ({e}). Sa clef est peut-être marquée « non exportable » : "
-                              "dans ce cas, créez une nouvelle identité dans PhilPDF.", e=ex))
-        return None
-    _ecrire_secrets(parent)
+        # clef « non exportable » (cas des ID crees par Acrobat dans Windows) : Windows signera lui-meme
+        if not w.get("der"):
+            QMessageBox.warning(parent, d.windowTitle(), _("Windows refuse d'exporter cet ID ({e}).", e=ex))
+            return None
+        e = ID.ajouter_windows(params, w)
+        QMessageBox.information(parent, d.windowTitle(),
+                                _("La clef de cet ID ne peut pas sortir de Windows : PhilPDF demandera à Windows de "
+                                  "signer, sans mot de passe PhilPDF. Il sert donc sur ce PC seulement ; sur vos autres "
+                                  "postes, importez-y le même ID, ou créez une identité PhilPDF (elle, synchronisée)."))
     QMessageBox.information(parent, d.windowTitle(), _("Identité de {nom} ajoutée.", nom=e.get("nom")) +
                             ("\n" + _("Attention : elle a expiré le {d}.", d=_date(e.get("fin"))) if e.get("expire") else ""))
     return e
@@ -375,8 +382,8 @@ class DialogueIdentites(QDialog):
         for b in (self.b_defaut, self.b_cer, self.b_pfx, self.b_suppr):
             b.setEnabled(e is not None)
         if e is not None:
-            self.b_cer.setEnabled(e["ici"])
-            self.b_pfx.setEnabled(e["ici"])
+            self.b_cer.setEnabled(e["ici"] or bool(e.get("der")))
+            self.b_pfx.setEnabled(e["ici"] and not e.get("windows"))
 
     def importer(self):
         e = importer_pfx(self, self.params)
@@ -414,11 +421,16 @@ class DialogueIdentites(QDialog):
         f, _x = QFileDialog.getSaveFileName(self, _("Exporter le certificat"), e["nom"] + ".cer", _("Certificat (*.cer)"))
         if not f:
             return
-        mdp = self._mdp(e)
-        if mdp is None:
-            return
+        if e.get("der"):
+            import base64
+            cer = base64.b64decode(e["der"])
+        else:
+            mdp = self._mdp(e)
+            if mdp is None:
+                return
+            cer = S.exporter_cer(ID.lire(e), mdp)
         with open(f, "wb") as h:
-            h.write(S.exporter_cer(ID.lire(e), mdp))
+            h.write(cer)
         QMessageBox.information(self, _("Exporter le certificat"),
                                 _("Envoyez ce fichier à vos correspondants : dans Acrobat, Edition › Préférences › "
                                   "Signatures › Identités et certificats approuvés › Certificats approuvés › Importer ; "
@@ -599,6 +611,9 @@ class DialogueSigner(QDialog):
 
     def _mdp_retenu(self, *_a):
         e = self.identite.currentData()
+        win = bool(e and e.get("windows") and not ID.lire(e))
+        self.mdp.setEnabled(not win)
+        self.mdp.setPlaceholderText(_("pas de mot de passe : Windows signe (il peut demander le sien)") if win else "")
         if e and e["id"] in _RETENUS:
             self.mdp.setText(_RETENUS[e["id"]])
         if hasattr(self, "b_signer"):
@@ -649,13 +664,20 @@ class DialogueSigner(QDialog):
         if not e:
             return
         pfx = ID.lire(e)
-        try:
-            S.ouvrir_pfx(pfx, self.mdp.text())
-        except S.ErreurSignature as ex:
-            QMessageBox.warning(self, self.windowTitle(), message_erreur(ex))
-            self.mdp.setFocus()
-            self.mdp.selectAll()
-            return
+        signataire = None
+        if e.get("windows") and not pfx:                  # clef gardee par Windows : il signe lui-meme
+            import base64
+            from . import identites_systeme as IS
+            signataire = S.signataire_windows(base64.b64decode(e["der"]),
+                                              lambda donnees, t=e["windows"]: IS.windows_signer(t, donnees))
+        else:
+            try:
+                S.ouvrir_pfx(pfx, self.mdp.text())
+            except S.ErreurSignature as ex:
+                QMessageBox.warning(self, self.windowTitle(), message_erreur(ex))
+                self.mdp.setFocus()
+                self.mdp.selectAll()
+                return
         if e.get("expire") and QMessageBox.question(
                 self, self.windowTitle(), _("Cette identité a expiré le {d} : Acrobat signalera la signature comme "
                                             "faite avec un certificat expiré. Signer quand même ?", d=_date(e.get("fin")))) != QMessageBox.Yes:
@@ -671,7 +693,7 @@ class DialogueSigner(QDialog):
                                              "horodatage": self.horodatage.isChecked(), "retenir": self.retenir.isChecked()}
         self.params.enregistrer()
         nom, png, lignes, genre = self.reglages_apparence()
-        self.resultat = {"pfx": pfx, "mdp": self.mdp.text(), "identite": e, "nom": nom, "png": png, "lignes": lignes,
+        self.resultat = {"pfx": pfx, "mdp": self.mdp.text(), "identite": e, "signataire": signataire, "nom": nom, "png": png, "lignes": lignes,
                          "genre": genre, "motif": self.motif.currentText().strip(), "lieu": self.lieu.text().strip(),
                          "certifier": self.permis.currentData() if self.certifier.isChecked() else None,
                          "horodatage": self.horodatage.isChecked()}

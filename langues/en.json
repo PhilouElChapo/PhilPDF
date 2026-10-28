@@ -1895,5 +1895,9 @@
  "PhilPDF {v} est en cours de publication (fichier pas encore prêt). PhilPDF réessaie tout seul dans 5 minutes.": "PhilPDF {v} is being published (file not ready yet). PhilPDF will try again by itself in 5 minutes.",
  "Impossible de vérifier les mises à jour pour le moment ({e}). Vous avez PhilPDF {VERSION} ; réessayez dans quelques minutes.": "Unable to check for updates right now ({e}). You have PhilPDF {VERSION}; try again in a few minutes.",
  "rien de nouveau pour ce poste": "nothing new for this computer",
- "nouveau pour ce poste : {x}": "new for this computer: {x}"
+ "nouveau pour ce poste : {x}": "new for this computer: {x}",
+ "La clef de cet ID ne peut pas sortir de Windows : PhilPDF demandera à Windows de signer, sans mot de passe PhilPDF. Il sert donc sur ce PC seulement ; sur vos autres postes, importez-y le même ID, ou créez une identité PhilPDF (elle, synchronisée).": "The key of this ID cannot leave Windows: PhilPDF will ask Windows to sign, without a PhilPDF password. So it only works on this PC; on your other computers, import the same ID there, or create a PhilPDF identity (which is synchronised).",
+ "Windows refuse d'exporter cet ID ({e}).": "Windows refuses to export this ID ({e}).",
+ "pas de mot de passe : Windows signe (il peut demander le sien)": "no password: Windows signs (it may ask for its own)",
+ "gardée par Windows sur « {poste} »": "kept by Windows on \"{poste}\""
 }

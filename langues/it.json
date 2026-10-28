@@ -1895,5 +1895,9 @@
  "PhilPDF {v} est en cours de publication (fichier pas encore prêt). PhilPDF réessaie tout seul dans 5 minutes.": "PhilPDF {v} è in corso di pubblicazione (file non ancora pronto). PhilPDF riproverà da solo tra 5 minuti.",
  "Impossible de vérifier les mises à jour pour le moment ({e}). Vous avez PhilPDF {VERSION} ; réessayez dans quelques minutes.": "Impossibile verificare gli aggiornamenti per il momento ({e}). Avete PhilPDF {VERSION}; riprovate tra qualche minuto.",
  "rien de nouveau pour ce poste": "niente di nuovo per questo computer",
- "nouveau pour ce poste : {x}": "nuovo per questo computer: {x}"
+ "nouveau pour ce poste : {x}": "nuovo per questo computer: {x}",
+ "La clef de cet ID ne peut pas sortir de Windows : PhilPDF demandera à Windows de signer, sans mot de passe PhilPDF. Il sert donc sur ce PC seulement ; sur vos autres postes, importez-y le même ID, ou créez une identité PhilPDF (elle, synchronisée).": "La chiave di questo ID non può uscire da Windows: PhilPDF chiederà a Windows di firmare, senza password PhilPDF. Funziona quindi solo su questo PC; sugli altri computer importate lo stesso ID o create un'identità PhilPDF (che viene sincronizzata).",
+ "Windows refuse d'exporter cet ID ({e}).": "Windows rifiuta di esportare questo ID ({e}).",
+ "pas de mot de passe : Windows signe (il peut demander le sien)": "nessuna password: firma Windows (può chiedere la sua)",
+ "gardée par Windows sur « {poste} »": "custodita da Windows su «{poste}»"
 }

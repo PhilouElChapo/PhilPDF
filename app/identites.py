@@ -34,7 +34,8 @@ def liste(params):
     out = []
     for e in params.get("identites", []) or []:
         e = dict(e)
-        e["ici"] = os.path.exists(_fichier(e["id"]))
+        e["ici"] = os.path.exists(_fichier(e["id"])) or (bool(e.get("windows")) and e.get("poste") == params.get("machine")
+                                                         and __import__("sys").platform == "win32")
         e["expire"] = bool(e.get("fin")) and e["fin"] < _dt.datetime.now(_dt.timezone.utc).isoformat()
         out.append(e)
     out.sort(key=lambda e: (not e.get("defaut"), e.get("expire"), e.get("nom", "").lower()))
@@ -73,6 +74,28 @@ def ajouter_pfx(params, octets, mot_de_passe, origine="fichier"):
         approuver(params, S.exporter_cer(octets, mot_de_passe), soi=True)   # vos propres signatures sont approuvees
     except S.ErreurSignature:
         pass
+    return next(x for x in liste(params) if x["id"] == e["id"])
+
+
+def ajouter_windows(params, w):
+    """ID du magasin Windows dont la clef n'est pas exportable : PhilPDF le garde en reference (empreinte) et fait
+    signer Windows. Il reste sur ce PC (pas de copie sur les autres postes)."""
+    import base64
+    from asn1crypto import x509 as ax
+    der = base64.b64decode(w["der"])
+    info = S._infos_asn1(ax.Certificate.load(der))
+    l = [dict(e) for e in params.get("identites", []) or []]
+    e = next((x for x in l if x.get("empreinte") == info["empreinte"]), None)
+    if e is None:
+        e = {"id": uuid.uuid4().hex[:12], "ajoute": _iso(_dt.datetime.now().astimezone()),
+             "defaut": not any(x.get("defaut") for x in l)}
+        l.append(e)
+    e.update({"origine": "windows", "windows": w["empreinte"], "poste": params.get("machine", ""), "der": w["der"],
+              "nom": info["nom"], "email": info["email"], "organisation": info["organisation"],
+              "emetteur": info["emetteur"], "autosigne": info["autosigne"], "empreinte": info["empreinte"],
+              "fin": info["fin"].isoformat() if info.get("fin") else ""})
+    _enregistrer_liste(params, l)
+    approuver(params, der, soi=True)
     return next(x for x in liste(params) if x["id"] == e["id"])
 
 

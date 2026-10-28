@@ -243,9 +243,30 @@ def _horodateur(journal=None):
     return None, None
 
 
+def signataire_windows(der, signer_hash):
+    """Signataire pyHanko dont la clef reste dans le magasin de certificats de Windows (clef « non exportable » :
+    Windows signe lui-meme, la clef ne sort jamais). signer_hash(donnees) -> signature RSA PKCS#1 v1.5 SHA-256."""
+    from asn1crypto import x509 as ax, algos
+    from pyhanko.sign.signers.pdf_cms import Signer
+    from pyhanko_certvalidator.registry import SimpleCertificateStore
+    cert = ax.Certificate.load(der)
+    taille = cert.public_key.bit_size // 8
+
+    class _Windows(Signer):
+        def __init__(self):
+            super().__init__(signing_cert=cert, cert_registry=SimpleCertificateStore.from_certs([cert]),
+                             signature_mechanism=algos.SignedDigestAlgorithm({"algorithm": "sha256_rsa"}))
+
+        async def async_sign_raw(self, data, digest_algorithm, dry_run=False):
+            if dry_run:
+                return bytes(taille)
+            return signer_hash(data)
+    return _Windows()
+
+
 def signer(source, destination, pfx, mot_de_passe, champ=None, page=0, rect=None, apparence=None,
            raison="", lieu="", contact="", certifier=None, horodatage=True, mot_de_passe_pdf=None,
-           verrou=None, journal=None):
+           verrou=None, journal=None, signataire=None):
     """Signe `source` vers `destination` (ajout incremental).
 
     champ : nom d'un champ de signature vide existant, ou d'un nouveau champ a creer dans `rect` (page `page`).
@@ -260,7 +281,7 @@ def signer(source, destination, pfx, mot_de_passe, champ=None, page=0, rect=None
     from pyhanko.stamp import StaticStampStyle
     from pyhanko.sign.fields import MDPPerm
     from pyhanko.sign.signers.pdf_byterange import BuildProps
-    s = _signataire(pfx, mot_de_passe)
+    s = signataire or _signataire(pfx, mot_de_passe)
     tsa, url = (None, None)
     if horodatage:
         tsa, url = _horodateur(journal)
