@@ -113,6 +113,15 @@ def lire(e):
         return None
 
 
+def regler(params, ident, **valeurs):
+    """Indice du mot de passe, apparence par defaut (« nom », « manuscrite » + id, « texte ») : suivent sur vos postes."""
+    l = [dict(e) for e in params.get("identites", []) or []]
+    for e in l:
+        if e["id"] == ident:
+            e.update(valeurs)
+    _enregistrer_liste(params, l)
+
+
 def supprimer(params, ident):
     l = [e for e in params.get("identites", []) or [] if e["id"] != ident]
     if l and not any(e.get("defaut") for e in l):

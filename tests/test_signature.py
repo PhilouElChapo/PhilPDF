@@ -246,6 +246,21 @@ S.signer(src_w, os.path.join(T, "w_signe.pdf"), None, "", page=0, rect=(72, 600,
 vw = S.verifier(os.path.join(T, "w_signe.pdf"), [der_w])
 verif(vw and vw[0]["intacte"] and vw[0]["approuve"] and vw[0]["nom"] == "Philippe Windows", "signature faite par Windows : valide")
 
+# indice du mot de passe et apparence par defaut de l'identite
+dci = DS.DialogueCreerIdentite(None, params)
+dci.nom.setText("Indice Test"); dci.mdp.setText("secret9"); dci.mdp2.setText("secret9")
+dci.indice.setText("le nom du chat + 9")
+dci.apparence.setCurrentIndex(DS.index_apparence(dci.apparence, "texte"))
+dci.creer()
+ei = next(x for x in ID.liste(params) if x["nom"] == "Indice Test")
+verif(ei.get("indice") == "le nom du chat + 9" and ei.get("apparence", {}).get("genre") == "texte",
+      "identité créée avec un indice et une apparence par défaut")
+dsi = DS.DialogueSigner(o, None, fitz.Rect(0, 0, 180, 45), 0)
+dsi.identite.setCurrentIndex(next(i for i in range(dsi.identite.count()) if (dsi.identite.itemData(i) or {}).get("id") == ei["id"]))
+verif("le nom du chat" in dsi.lbl_indice.text() and tuple(dsi.apparence.currentData())[0] == "texte",
+      "à la signature : indice affiché et apparence de l'identité proposée")
+dsi.close()
+
 n_ok = sum(1 for c, _q in ok if c)
 print(f"\n{n_ok}/{len(ok)} vérifications de signature réussies")
 sys.exit(0 if n_ok == len(ok) else 1)

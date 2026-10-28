@@ -1899,5 +1899,13 @@
  "La clef de cet ID ne peut pas sortir de Windows : PhilPDF demandera à Windows de signer, sans mot de passe PhilPDF. Il sert donc sur ce PC seulement ; sur vos autres postes, importez-y le même ID, ou créez une identité PhilPDF (elle, synchronisée).": "The key of this ID cannot leave Windows: PhilPDF will ask Windows to sign, without a PhilPDF password. So it only works on this PC; on your other computers, import the same ID there, or create a PhilPDF identity (which is synchronised).",
  "Windows refuse d'exporter cet ID ({e}).": "Windows refuses to export this ID ({e}).",
  "pas de mot de passe : Windows signe (il peut demander le sien)": "no password: Windows signs (it may ask for its own)",
- "gardée par Windows sur « {poste} »": "kept by Windows on \"{poste}\""
+ "gardée par Windows sur « {poste} »": "kept by Windows on \"{poste}\"",
+ "Apparence par défaut": "Default appearance",
+ "Identité de {nom}": "Identity of {nom}",
+ "Indice : {x}": "Hint: {x}",
+ "Indice du mot de passe": "Password hint",
+ "Indice, apparence...": "Hint, appearance...",
+ "L'indice est enregistré en clair et suit sur vos autres postes : n'y mettez jamais le mot de passe.": "The hint is saved in plain text and follows you to your other computers: never put the password in it.",
+ "Réglages de l'identité importée": "Settings of the imported identity",
+ "une phrase pour vous en souvenir, sans le mot de passe lui-même": "a phrase to help you remember, without the password itself"
 }

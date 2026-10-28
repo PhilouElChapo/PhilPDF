@@ -64,6 +64,65 @@ def message_erreur(e):
 
 
 # ================================================================ identites
+def _biblio(w):
+    while w is not None and not hasattr(w, "biblio"):
+        w = w.parent()
+    return getattr(w, "biblio", None) if w is not None else None
+
+
+def index_apparence(c, genre, manuscrite=None):
+    """Position de (genre, signature manuscrite) dans une liste d'apparences (-1 si absente)."""
+    for i in range(c.count()):
+        d = c.itemData(i)
+        if d and tuple(d)[0] == (genre or "nom") and (tuple(d)[1] == manuscrite or tuple(d)[0] != "manuscrite"):
+            return i
+    return -1
+
+
+def combo_apparence(biblio, genre="nom", manuscrite=None):
+    """Apparence de la signature : nom en grand, une de vos signatures manuscrites, ou texte seulement."""
+    c = QComboBox()
+    c.addItem(_("Mon nom en grand (comme Acrobat)"), ("nom", None))
+    for e in (biblio.elements("signatures") if biblio else []):
+        c.addItem(icone("signer", "#333"), _("Ma signature manuscrite : {nom}", nom=e["nom"]), ("manuscrite", e["id"]))
+    c.addItem(_("Texte seulement"), ("texte", None))
+    c.setCurrentIndex(max(0, index_apparence(c, genre, manuscrite)))
+    return c
+
+
+class DialogueReglagesIdentite(QDialog):
+    """Indice pour se souvenir du mot de passe, et apparence proposee par defaut pour cette identite."""
+
+    def __init__(self, parent, params, e, titre=None):
+        super().__init__(parent)
+        self.params, self.e = params, e
+        self.setWindowTitle(titre or _("Identité de {nom}", nom=e.get("nom", "")))
+        self.setMinimumWidth(460)
+        f = QFormLayout(self)
+        self.indice = QLineEdit(e.get("indice", ""))
+        self.indice.setObjectName("id_indice")
+        self.indice.setPlaceholderText(_("une phrase pour vous en souvenir, sans le mot de passe lui-même"))
+        f.addRow(_("Indice du mot de passe"), self.indice)
+        app_ = e.get("apparence") or {}
+        self.apparence = combo_apparence(_biblio(parent), app_.get("genre", "nom"), app_.get("manuscrite"))
+        self.apparence.setObjectName("id_apparence")
+        f.addRow(_("Apparence par défaut"), self.apparence)
+        n = QLabel(_("L'indice est enregistré en clair et suit sur vos autres postes : n'y mettez jamais le mot de passe."))
+        n.setWordWrap(True)
+        n.setStyleSheet("color:#555")
+        f.addRow(n)
+        bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
+        bb.accepted.connect(self.valider)
+        bb.rejected.connect(self.reject)
+        f.addRow(bb)
+
+    def valider(self):
+        genre, ident = self.apparence.currentData()
+        ID.regler(self.params, self.e["id"], indice=self.indice.text().strip(),
+                  apparence={"genre": genre, "manuscrite": ident})
+        self.accept()
+
+
 class DialogueCreerIdentite(QDialog):
     """Comme « Ajouter un ID numérique » d'Acrobat : un certificat autosigné a votre nom."""
 
@@ -99,6 +158,15 @@ class DialogueCreerIdentite(QDialog):
         f.addRow(_("Validité"), self.duree)
         f.addRow(_("Mot de passe de l'identité"), self.mdp)
         f.addRow(_("Confirmer le mot de passe"), self.mdp2)
+        self.indice = QLineEdit()
+        self.indice.setObjectName("cree_indice")
+        self.indice.setPlaceholderText(_("une phrase pour vous en souvenir, sans le mot de passe lui-même"))
+        f.addRow(_("Indice du mot de passe"), self.indice)
+        self.apparence = combo_apparence(_biblio(parent))
+        self.apparence.setObjectName("cree_apparence")
+        if self.apparence.count() > 2:                    # une signature manuscrite existe : proposee d'office
+            self.apparence.setCurrentIndex(1)
+        f.addRow(_("Apparence par défaut"), self.apparence)
         n = QLabel(_("Ce mot de passe vous sera demandé à chaque signature. Il ne peut pas être retrouvé : notez-le."))
         n.setWordWrap(True)
         n.setStyleSheet("color:#555")
@@ -123,6 +191,10 @@ class DialogueCreerIdentite(QDialog):
             self.resultat = ID.creer(self.params, self.nom.text(), self.mdp.text(), self.org.text(),
                                      self.service.text(), self.email.text(), self.pays.text() or "FR",
                                      self.duree.value())
+            genre, ident = self.apparence.currentData()
+            ID.regler(self.params, self.resultat["id"], indice=self.indice.text().strip(),
+                      apparence={"genre": genre, "manuscrite": ident})
+            self.resultat = next(x for x in ID.liste(self.params) if x["id"] == self.resultat["id"])
         except Exception as e:                            # noqa: BLE001
             QMessageBox.warning(self, self.windowTitle(), message_erreur(e))
             return
@@ -310,7 +382,7 @@ class DialogueIdentites(QDialog):
         lv.addWidget(aide)
         h = QHBoxLayout()
         for txt, f, nom in ((_("Importer mon ID d'Acrobat..."), self.importer, "imp"), (_("Créer..."), self.creer, "creer"),
-                            (_("Par défaut"), self.defaut, "defaut"),
+                            (_("Par défaut"), self.defaut, "defaut"), (_("Indice, apparence..."), self.regler, "regler"),
                             (_("Exporter le certificat (.cer)..."), self.exporter_cer, "cer"),
                             (_("Exporter l'identité (.pfx)..."), self.exporter_pfx, "pfx"),
                             (_("Supprimer"), self.supprimer, "suppr")):
@@ -379,7 +451,7 @@ class DialogueIdentites(QDialog):
 
     def _etat(self):
         e = self._choisie()
-        for b in (self.b_defaut, self.b_cer, self.b_pfx, self.b_suppr):
+        for b in (self.b_defaut, self.b_regler, self.b_cer, self.b_pfx, self.b_suppr):
             b.setEnabled(e is not None)
         if e is not None:
             self.b_cer.setEnabled(e["ici"] or bool(e.get("der")))
@@ -388,6 +460,12 @@ class DialogueIdentites(QDialog):
     def importer(self):
         e = importer_pfx(self, self.params)
         if e:
+            DialogueReglagesIdentite(self, self.params, e, _("Réglages de l'identité importée")).exec()
+            self.rafraichir(e)
+
+    def regler(self):
+        e = self._choisie()
+        if e and DialogueReglagesIdentite(self, self.params, e).exec() == QDialog.Accepted:
             self.rafraichir(e)
 
     def creer(self):
@@ -404,7 +482,8 @@ class DialogueIdentites(QDialog):
 
     def _mdp(self, e):
         from .dialogues import demander_secret
-        mdp, ok = demander_secret(self, _("Identité numérique"), _("Mot de passe de l'identité « {nom} » :", nom=e["nom"]))
+        mdp, ok = demander_secret(self, _("Identité numérique"), _("Mot de passe de l'identité « {nom} » :", nom=e["nom"]),
+                                  indice=e.get("indice", ""))
         if not ok:
             return None
         try:
@@ -518,6 +597,11 @@ class DialogueSigner(QDialog):
         self.mdp = oeil(QLineEdit())
         self.mdp.setObjectName("sig_mdp")
         f.addRow(_("Mot de passe de l'identité"), self.mdp)
+        self.lbl_indice = QLabel()
+        self.lbl_indice.setObjectName("sig_indice")
+        self.lbl_indice.setStyleSheet("color:#555")
+        self.lbl_indice.setWordWrap(True)
+        f.addRow("", self.lbl_indice)
         self.retenir = QCheckBox(_("Retenir jusqu'à la fermeture de PhilPDF"))
         self.retenir.setChecked(bool(reg.get("retenir", False)))
         f.addRow("", self.retenir)
@@ -527,8 +611,7 @@ class DialogueSigner(QDialog):
         for e in (self.biblio.elements("signatures") if self.biblio else []):
             self.apparence.addItem(icone("signer", "#333"), _("Ma signature manuscrite : {nom}", nom=e["nom"]), ("manuscrite", e["id"]))
         self.apparence.addItem(_("Texte seulement"), ("texte", None))
-        i = self.apparence.findData((reg.get("apparence", "nom"), reg.get("manuscrite")))
-        self.apparence.setCurrentIndex(max(0, i))
+        self.apparence.setCurrentIndex(max(0, index_apparence(self.apparence, reg.get("apparence", "nom"), reg.get("manuscrite"))))
         f.addRow(_("Apparence"), self.apparence)
         self.motif = QComboBox()
         self.motif.setEditable(True)
@@ -611,6 +694,14 @@ class DialogueSigner(QDialog):
 
     def _mdp_retenu(self, *_a):
         e = self.identite.currentData()
+        indice = (e or {}).get("indice", "")
+        self.lbl_indice.setText(_("Indice : {x}", x=indice) if indice else "")
+        self.lbl_indice.setVisible(bool(indice))
+        app_ = (e or {}).get("apparence")
+        if app_ and hasattr(self, "apparence"):
+            i = index_apparence(self.apparence, app_.get("genre") or "nom", app_.get("manuscrite"))
+            if i >= 0:
+                self.apparence.setCurrentIndex(i)
         win = bool(e and e.get("windows") and not ID.lire(e))
         self.mdp.setEnabled(not win)
         self.mdp.setPlaceholderText(_("pas de mot de passe : Windows signe (il peut demander le sien)") if win else "")

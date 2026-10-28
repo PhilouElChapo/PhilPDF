@@ -1899,5 +1899,13 @@
  "La clef de cet ID ne peut pas sortir de Windows : PhilPDF demandera à Windows de signer, sans mot de passe PhilPDF. Il sert donc sur ce PC seulement ; sur vos autres postes, importez-y le même ID, ou créez une identité PhilPDF (elle, synchronisée).": "La clave de este ID no puede salir de Windows: PhilPDF pedirá a Windows que firme, sin contraseña de PhilPDF. Solo sirve en este PC; en sus otros equipos, importe allí el mismo ID o cree una identidad PhilPDF (esta sí se sincroniza).",
  "Windows refuse d'exporter cet ID ({e}).": "Windows se niega a exportar este ID ({e}).",
  "pas de mot de passe : Windows signe (il peut demander le sien)": "sin contraseña: Windows firma (puede pedir la suya)",
- "gardée par Windows sur « {poste} »": "guardada por Windows en «{poste}»"
+ "gardée par Windows sur « {poste} »": "guardada por Windows en «{poste}»",
+ "Apparence par défaut": "Apariencia predeterminada",
+ "Identité de {nom}": "Identidad de {nom}",
+ "Indice : {x}": "Pista: {x}",
+ "Indice du mot de passe": "Pista de la contraseña",
+ "Indice, apparence...": "Pista, apariencia...",
+ "L'indice est enregistré en clair et suit sur vos autres postes : n'y mettez jamais le mot de passe.": "La pista se guarda en claro y le sigue en sus otros equipos: nunca ponga en ella la contraseña.",
+ "Réglages de l'identité importée": "Ajustes de la identidad importada",
+ "une phrase pour vous en souvenir, sans le mot de passe lui-même": "una frase para recordarla, sin la contraseña misma"
 }
