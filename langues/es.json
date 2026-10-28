@@ -1824,5 +1824,15 @@
  "Les ID numériques trouvés sur ce PC. Le bouton « Exporter » d'Acrobat ne donne que le certificat (.fdf, .p7c, .cer), sans la clef qui permet de signer : PhilPDF reprend directement le fichier d'ID d'Acrobat, ou exporte l'ID du magasin Windows.": "Los ID digitales encontrados en este PC. El botón «Exportar» de Acrobat solo da el certificado (.fdf, .p7c, .cer), sin la clave que permite firmar: PhilPDF toma directamente el archivo de ID de Acrobat, o exporta el ID del almacén de Windows.",
  "Magasin Windows : {nom}  (émis par {e}, valable jusqu'au {d})": "Almacén de Windows: {nom}  (emitido por {e}, válido hasta el {d})",
  "Reprendre votre ID numérique d'Acrobat": "Recuperar su ID digital de Acrobat",
- "Windows refuse d'exporter cet ID ({e}). Sa clef est peut-être marquée « non exportable » : dans ce cas, créez une nouvelle identité dans PhilPDF.": "Windows se niega a exportar este ID ({e}). Su clave quizá esté marcada como «no exportable»: en ese caso, cree una nueva identidad en PhilPDF."
+ "Windows refuse d'exporter cet ID ({e}). Sa clef est peut-être marquée « non exportable » : dans ce cas, créez une nouvelle identité dans PhilPDF.": "Windows se niega a exportar este ID ({e}). Su clave quizá esté marcada como «no exportable»: en ese caso, cree una nueva identidad en PhilPDF.",
+ "<b>Formulaire</b> — {n} champ(s). Tracez un rectangle pour ajouter un champ du type choisi ; double-clic sur un champ : ses propriétés (format, date automatique, calcul, listes...) ; clic droit : dupliquer, renommer, supprimer...": "<b>Formulario</b> — {n} campo(s). Trace un rectángulo para añadir un campo del tipo elegido; doble clic en un campo: sus propiedades (formato, fecha automática, cálculo, listas...); clic derecho: duplicar, renombrar, eliminar...",
+ "Aujourd'hui": "Hoy",
+ "Champ dupliqué : « {nom} ».": "Campo duplicado: «{nom}».",
+ "Dupliquer (juste en dessous)": "Duplicar (justo debajo)",
+ "Effacer la valeur": "Borrar el valor",
+ "Mettre la date du jour": "Poner la fecha de hoy",
+ "Passer en mode Formulaire (créer, déplacer, régler les champs)": "Pasar al modo Formulario (crear, mover, ajustar los campos)",
+ "Propriétés du champ...": "Propiedades del campo...",
+ "Supprimer le champ": "Eliminar el campo",
+ "format : {f}": "formato: {f}"
 }

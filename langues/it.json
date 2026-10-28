@@ -1824,5 +1824,15 @@
  "Les ID numériques trouvés sur ce PC. Le bouton « Exporter » d'Acrobat ne donne que le certificat (.fdf, .p7c, .cer), sans la clef qui permet de signer : PhilPDF reprend directement le fichier d'ID d'Acrobat, ou exporte l'ID du magasin Windows.": "Gli ID digitali trovati su questo PC. Il pulsante «Esporta» di Acrobat dà solo il certificato (.fdf, .p7c, .cer), senza la chiave che permette di firmare: PhilPDF riprende direttamente il file ID di Acrobat, o esporta l'ID dall'archivio di Windows.",
  "Magasin Windows : {nom}  (émis par {e}, valable jusqu'au {d})": "Archivio di Windows: {nom}  (rilasciato da {e}, valido fino al {d})",
  "Reprendre votre ID numérique d'Acrobat": "Riprendere il vostro ID digitale di Acrobat",
- "Windows refuse d'exporter cet ID ({e}). Sa clef est peut-être marquée « non exportable » : dans ce cas, créez une nouvelle identité dans PhilPDF.": "Windows rifiuta di esportare questo ID ({e}). La sua chiave è forse contrassegnata come «non esportabile»: in tal caso, create una nuova identità in PhilPDF."
+ "Windows refuse d'exporter cet ID ({e}). Sa clef est peut-être marquée « non exportable » : dans ce cas, créez une nouvelle identité dans PhilPDF.": "Windows rifiuta di esportare questo ID ({e}). La sua chiave è forse contrassegnata come «non esportabile»: in tal caso, create una nuova identità in PhilPDF.",
+ "<b>Formulaire</b> — {n} champ(s). Tracez un rectangle pour ajouter un champ du type choisi ; double-clic sur un champ : ses propriétés (format, date automatique, calcul, listes...) ; clic droit : dupliquer, renommer, supprimer...": "<b>Modulo</b> — {n} campo/i. Tracciate un rettangolo per aggiungere un campo del tipo scelto; doppio clic su un campo: le sue proprietà (formato, data automatica, calcolo, elenchi...); clic destro: duplica, rinomina, elimina...",
+ "Aujourd'hui": "Oggi",
+ "Champ dupliqué : « {nom} ».": "Campo duplicato: «{nom}».",
+ "Dupliquer (juste en dessous)": "Duplica (subito sotto)",
+ "Effacer la valeur": "Cancella il valore",
+ "Mettre la date du jour": "Inserisci la data di oggi",
+ "Passer en mode Formulaire (créer, déplacer, régler les champs)": "Passa alla modalità Modulo (creare, spostare, impostare i campi)",
+ "Propriétés du champ...": "Proprietà del campo...",
+ "Supprimer le champ": "Elimina il campo",
+ "format : {f}": "formato: {f}"
 }

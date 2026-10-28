@@ -471,25 +471,13 @@ class PageWidget(QWidget):
         fmt = regles.get("format") or {}
         qt_date = {"dd/mm/yyyy": "dd/MM/yyyy", "dd/mm/yy": "dd/MM/yy", "dd.mm.yyyy": "dd.MM.yyyy",
                    "yyyy-mm-dd": "yyyy-MM-dd", "mm/dd/yyyy": "MM/dd/yyyy", "d/m/yyyy": "d/M/yyyy"}.get(fmt.get("date"))
-        if w.field_type == fitz.PDF_WIDGET_TYPE_TEXT and fmt.get("genre") == "date" and qt_date:
-            from PySide6.QtWidgets import QDateEdit
-            from PySide6.QtCore import QDate
-            from moteur import champs as _C
-            ed = QDateEdit(self)
-            ed.setCalendarPopup(True)
-            ed.setDisplayFormat(qt_date)
-            d_ = _C.lire_date(fmt["date"], w.field_value or "")
-            ed.setDate(QDate(d_.year, d_.month, d_.day) if d_ else QDate.currentDate())
-            fini = []
-
-            def valider_date():
-                if not fini:
-                    fini.append(1)
-                    q = ed.date()
-                    import datetime as _dt
-                    self.o.valeur_champ(n, xref, _C.ecrire_date(fmt["date"], _dt.datetime(q.year(), q.month(), q.day())))
-                    ed.deleteLater()
-            ed.editingFinished.connect(valider_date)
+        if w.field_type == fitz.PDF_WIDGET_TYPE_TEXT and fmt.get("genre") == "date":
+            from .formulaire_doc import SaisieDate
+            self.saisie = SaisieDate(self, self.o, n, xref, fmt.get("date") or "dd/mm/yyyy", w.field_value or "",
+                                     self.mapToGlobal(r.bottomLeft()))
+            return
+        if False:
+            pass
         elif w.field_type in (fitz.PDF_WIDGET_TYPE_COMBOBOX, fitz.PDF_WIDGET_TYPE_LISTBOX):
             ed = QComboBox(self)
             ed.addItems([c if isinstance(c, str) else c[0] for c in (w.choice_values or [])])
@@ -3053,6 +3041,11 @@ class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
                     self.apres_modif()
 
     def menu_contexte(self, pw, pt, pos_globale):
+        if self.mode in (None, "formulaire", "signer_num", "champ_signature"):
+            w_ = self.champ_sous(pw.num, pt)
+            if w_ is not None:
+                self.menu_champ(pw, w_, pos_globale)
+                return
         obj = self.objet_sous(pw.num, pt)
         if obj:
             self.choisir_objet(obj)
@@ -3470,7 +3463,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
     def _maj_form(self):
         self.lbl_form.setText(_("<b>Formulaire</b> — {n} champ(s). Tracez un rectangle pour ajouter un champ du type "
                                 "choisi ; double-clic sur un champ : ses propriétés (format, date automatique, calcul, "
-                                "listes...) ; Suppr pour l'enlever.", n=self.nb_champs()))
+                                "listes...) ; clic droit : dupliquer, renommer, supprimer...", n=self.nb_champs()))
 
     def detecter_champs(self):
         from moteur import formulaire as FO

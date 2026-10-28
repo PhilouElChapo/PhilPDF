@@ -5,7 +5,9 @@ Melange (mixin) de OngletDocument."""
 import re
 
 import pymupdf as fitz
-from PySide6.QtWidgets import QDialog, QMessageBox, QInputDialog
+from PySide6.QtCore import Qt, QDate, QPoint
+from PySide6.QtWidgets import (QDialog, QMessageBox, QInputDialog, QFrame, QVBoxLayout, QHBoxLayout, QLineEdit,
+                               QCalendarWidget, QPushButton, QLabel, QMenu)
 
 from .langue import _
 from moteur import champs as C
@@ -18,6 +20,60 @@ def types_a_tracer():
     return [("auto", _("Automatique")), ("texte", _("Texte")), ("case", _("Case à cocher")),
             ("radio", _("Bouton radio")), ("liste", _("Liste déroulante")), ("liste_multiple", _("Liste")),
             ("date", _("Date")), ("montant", _("Montant (€)")), ("signature", _("Signature"))]
+
+
+class SaisieDate(QFrame):
+    """Saisie d'une date, simple : un calendrier qui s'ouvre sous le champ, la date tapee au clavier (28/10/26,
+    281026, 28.10.2026...), et deux boutons : Aujourd'hui, Effacer. Entree ou un clic sur un jour : c'est ecrit."""
+
+    def __init__(self, page, onglet, n, xref, fmt, valeur, pos):
+        super().__init__(page.window(), Qt.Popup)
+        import datetime as dt
+        self.o, self.n, self.xref, self.fmt, self.fini = onglet, n, xref, fmt, False
+        self.setObjectName("saisie_date")
+        self.setStyleSheet("QFrame#saisie_date{background:#fff;border:1px solid #9bb4d6;border-radius:6px}")
+        v = QVBoxLayout(self)
+        v.setContentsMargins(8, 8, 8, 8)
+        self.texte = QLineEdit((valeur or "").strip())
+        self.texte.setObjectName("date_texte")
+        self.texte.setPlaceholderText(C.ecrire_date(fmt))
+        self.texte.returnPressed.connect(lambda: self.valider(self.texte.text()))
+        v.addWidget(self.texte)
+        self.cal = QCalendarWidget()
+        self.cal.setGridVisible(False)
+        self.cal.setFirstDayOfWeek(Qt.Monday)
+        self.cal.setVerticalHeaderFormat(QCalendarWidget.NoVerticalHeader)
+        d = C.lire_date(fmt, (valeur or "").strip())
+        if d:
+            self.cal.setSelectedDate(QDate(d.year, d.month, d.day))
+        self.cal.clicked.connect(lambda q: self.valider(C.ecrire_date(fmt, dt.datetime(q.year(), q.month(), q.day()))))
+        v.addWidget(self.cal)
+        h = QHBoxLayout()
+        b = QPushButton(_("Aujourd'hui"))
+        b.setObjectName("date_aujourdhui")
+        b.clicked.connect(lambda: self.valider(C.ecrire_date(fmt)))
+        h.addWidget(b)
+        b = QPushButton(_("Effacer"))
+        b.clicked.connect(lambda: self.valider(""))
+        h.addWidget(b)
+        h.addStretch(1)
+        aide = QLabel(_("format : {f}", f=C.ecrire_date(fmt)))
+        aide.setStyleSheet("color:#777")
+        h.addWidget(aide)
+        v.addLayout(h)
+        self.move(pos + QPoint(0, 2))
+        self.show()
+        self.texte.setFocus()
+
+    def valider(self, texte):
+        if self.fini:
+            return
+        t = (texte or "").strip()
+        if t and t.isdigit() and len(t) in (6, 8):            # 281026 ou 28102026
+            t = f"{t[:2]}/{t[2:4]}/{t[4:]}"
+        self.fini = True
+        self.close()
+        self.o.valeur_champ(self.n, self.xref, t)
 
 
 class MixinFormulaire:
@@ -95,6 +151,71 @@ class MixinFormulaire:
                     w._page_vivante = p
                     out.append(w)
         return out
+
+    # ------------------------------------------------------------ clic droit sur un champ
+    def menu_champ(self, pw, w, pos):
+        """Tout ce qu'on peut faire d'un champ, au clic droit (en mode Formulaire ou en remplissant)."""
+        n = pw.num
+        m = QMenu(self)
+        sig = w.field_type == T.PDF_WIDGET_TYPE_SIGNATURE
+        if self.mode != "formulaire" and not sig:
+            r = self.regles_champ(w)
+            if (r.get("format") or {}).get("genre") == "date":
+                m.addAction(_("Mettre la date du jour"),
+                            lambda: self.valeur_champ(n, w.xref, C.ecrire_date(r["format"].get("date") or "dd/mm/yyyy")))
+            if w.field_value not in (None, "", "Off", False):
+                m.addAction(_("Effacer la valeur"), lambda: self.effacer_valeur(n, w))
+            m.addSeparator()
+        m.addAction(_("Propriétés du champ..."), lambda: self.proprietes_champ(n, w))
+        if not sig:
+            m.addAction(_("Renommer..."), lambda: (setattr(self, "champ_choisi", (n, w.xref)), self.renommer_champ()))
+            m.addAction(_("Dupliquer (juste en dessous)"), lambda: self.dupliquer_champ(n, w))
+        m.addAction(_("Supprimer le champ"), lambda: (setattr(self, "champ_choisi", (n, w.xref)), self.supprimer_champ()))
+        m.addSeparator()
+        m.addAction(_("Ordre de tabulation..."), self.ordre_tabulation)
+        if self.mode != "formulaire":
+            m.addAction(_("Passer en mode Formulaire (créer, déplacer, régler les champs)"),
+                        lambda: self.changer_mode("formulaire"))
+        m.exec(pos)
+
+    def effacer_valeur(self, n, w):
+        self.memoriser(_("Remplissage du formulaire"))
+        w = self._widget((n, w.xref)) or w
+        if w.field_type in (T.PDF_WIDGET_TYPE_CHECKBOX, T.PDF_WIDGET_TYPE_RADIOBUTTON):
+            w.field_value = False
+            self._maj_widget(w)
+        else:
+            self._ecrire_valeur(w, "")
+        self._apres_valeur(w.field_name)
+        self.apres_modif([])
+
+    def dupliquer_champ(self, n, w):
+        """Copie du champ (meme type, memes regles, memes choix) juste en dessous, avec un nom libre."""
+        pris = {x.field_name for _k, x in C.tous_les_champs(self.doc)}
+        base = re.sub(r"\s*\d+$", "", w.field_name) or w.field_name
+        k = 2
+        while f"{base} {k}" in pris:
+            k += 1
+        nom = f"{base} {k}"
+        r = fitz.Rect(w.rect)
+        r = r + (0, r.height + 4, 0, r.height + 4)
+        genre = {T.PDF_WIDGET_TYPE_CHECKBOX: "case", T.PDF_WIDGET_TYPE_COMBOBOX: "liste",
+                 T.PDF_WIDGET_TYPE_LISTBOX: "liste_multiple"}.get(w.field_type, "texte")
+        if w.field_type == T.PDF_WIDGET_TYPE_RADIOBUTTON:
+            self.memoriser(_("Ajout du bouton radio « {nom} »", nom=w.field_name))
+            FO.creer_radio(self.doc, n, r, w.field_name, f"Choix{k}")
+        else:
+            self.memoriser(_("Ajout du champ « {nom} »", nom=nom))
+            FO.creer(self.doc, {n: [{"genre": genre, "rect": r, "nom": nom, "info": w.field_label or "",
+                                     "lignes": bool(w.field_flags & T.PDF_TX_FIELD_IS_MULTILINE),
+                                     "choix": [c if isinstance(c, str) else c[0] for c in (w.choice_values or [])]}]})
+            regles = self.regles_champ(w)
+            nouveau = self._widget_nom(nom)
+            if nouveau is not None and regles.get("_philpdf"):
+                C.ecrire(self.doc, nouveau, regles)
+                C.generer_js(self.doc)
+        self.apres_modif([_("Champ dupliqué : « {nom} ».", nom=nom)])
+        self._maj_form()
 
     # ------------------------------------------------------------ proprietes
     def proprietes_champ(self, n, w):
@@ -212,13 +333,13 @@ class MixinFormulaire:
         aff = C.formater(regles, brut)
         w.field_value = aff
         self._maj_widget(w)
-        if aff != brut:
+        if aff != brut or not brut:
             self.doc.xref_set_key(C.xref_champ(self.doc, w), "V", fitz.get_pdf_str(brut) if brut else "null")
 
     def valeur_auto(self, w):
         """Date ou heure du moment si le champ le demande et qu'il est vide (comme Acrobat a l'entree du champ)."""
         r = self.regles_champ(w)
-        if not r.get("auto") or (w.field_value or ""):
+        if not r.get("auto") or (w.field_value or "").strip():
             return False
         fmt = r.get("format") or {}
         f = fmt.get("date") if fmt.get("genre") == "date" else fmt.get("heure") if fmt.get("genre") == "heure" else None

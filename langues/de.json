@@ -1824,5 +1824,15 @@
  "Les ID numériques trouvés sur ce PC. Le bouton « Exporter » d'Acrobat ne donne que le certificat (.fdf, .p7c, .cer), sans la clef qui permet de signer : PhilPDF reprend directement le fichier d'ID d'Acrobat, ou exporte l'ID du magasin Windows.": "Die auf diesem PC gefundenen digitalen IDs. Die Schaltfläche „Exportieren“ von Acrobat liefert nur das Zertifikat (.fdf, .p7c, .cer) ohne den Schlüssel zum Signieren: PhilPDF übernimmt direkt die ID-Datei von Acrobat oder exportiert die ID aus dem Windows-Speicher.",
  "Magasin Windows : {nom}  (émis par {e}, valable jusqu'au {d})": "Windows-Speicher: {nom}  (ausgestellt von {e}, gültig bis {d})",
  "Reprendre votre ID numérique d'Acrobat": "Ihre digitale ID aus Acrobat übernehmen",
- "Windows refuse d'exporter cet ID ({e}). Sa clef est peut-être marquée « non exportable » : dans ce cas, créez une nouvelle identité dans PhilPDF.": "Windows verweigert den Export dieser ID ({e}). Ihr Schlüssel ist vielleicht als „nicht exportierbar“ markiert: Erstellen Sie dann eine neue Identität in PhilPDF."
+ "Windows refuse d'exporter cet ID ({e}). Sa clef est peut-être marquée « non exportable » : dans ce cas, créez une nouvelle identité dans PhilPDF.": "Windows verweigert den Export dieser ID ({e}). Ihr Schlüssel ist vielleicht als „nicht exportierbar“ markiert: Erstellen Sie dann eine neue Identität in PhilPDF.",
+ "<b>Formulaire</b> — {n} champ(s). Tracez un rectangle pour ajouter un champ du type choisi ; double-clic sur un champ : ses propriétés (format, date automatique, calcul, listes...) ; clic droit : dupliquer, renommer, supprimer...": "<b>Formular</b> — {n} Feld(er). Ziehen Sie ein Rechteck, um ein Feld des gewählten Typs hinzuzufügen; Doppelklick auf ein Feld: seine Eigenschaften (Format, automatisches Datum, Berechnung, Listen...); Rechtsklick: duplizieren, umbenennen, löschen...",
+ "Aujourd'hui": "Heute",
+ "Champ dupliqué : « {nom} ».": "Feld dupliziert: „{nom}“.",
+ "Dupliquer (juste en dessous)": "Duplizieren (direkt darunter)",
+ "Effacer la valeur": "Wert löschen",
+ "Mettre la date du jour": "Heutiges Datum einsetzen",
+ "Passer en mode Formulaire (créer, déplacer, régler les champs)": "In den Formularmodus wechseln (Felder erstellen, verschieben, einstellen)",
+ "Propriétés du champ...": "Feldeigenschaften...",
+ "Supprimer le champ": "Feld löschen",
+ "format : {f}": "Format: {f}"
 }

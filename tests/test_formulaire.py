@@ -146,6 +146,23 @@ verif(etats[0] != "/Off" and etats[1] == "/Off", "radio : changer de choix déco
 o.remplir_champ(pw, o._widget_nom("Total"))
 verif(o._widget_nom("Total").field_value == "3703.5", "champ calculé : non modifiable à la main")
 
+# --- date : calendrier simple (taper 281026, Aujourd'hui, Effacer)
+from app.formulaire_doc import SaisieDate
+pg_ = type("PG", (), {"window": lambda self: None})()
+sd_ = SaisieDate.__new__(SaisieDate)
+sd_.o, sd_.n, sd_.xref, sd_.fmt, sd_.fini = o, 0, o._widget_nom("Date").xref, "dd/mm/yyyy", False
+sd_.close = lambda: None
+sd_.valider("281026")
+verif(o._widget_nom("Date").field_value == "28/10/2026", "date tapée 281026 → 28/10/2026")
+# --- clic droit : dupliquer, effacer
+o.dupliquer_champ(0, o._widget_nom("Prix"))
+verif(o._widget_nom("Prix 2") is not None and C.lire(o.doc, o._widget_nom("Prix 2"))["format"]["genre"] == "nombre",
+      "champ dupliqué avec ses règles")
+o.effacer_valeur(0, o._widget_nom("Date"))
+verif((o._widget_nom("Date").field_value or "") == "", "valeur effacée")
+o.champ_choisi = (0, o._widget_nom("Prix 2").xref)
+o.supprimer_champ()
+verif(o._widget_nom("Prix 2") is None, "champ supprimé")
 # --- ordre de tabulation
 xr = [w.xref for w in o.doc[0].widgets()]
 o.poser_ordre_tabulation(0, list(reversed(xr)))

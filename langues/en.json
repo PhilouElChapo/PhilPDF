@@ -1824,5 +1824,15 @@
  "Les ID numériques trouvés sur ce PC. Le bouton « Exporter » d'Acrobat ne donne que le certificat (.fdf, .p7c, .cer), sans la clef qui permet de signer : PhilPDF reprend directement le fichier d'ID d'Acrobat, ou exporte l'ID du magasin Windows.": "The digital IDs found on this PC. Acrobat's \"Export\" button only gives the certificate (.fdf, .p7c, .cer), without the key used to sign: PhilPDF takes the Acrobat ID file directly, or exports the ID from the Windows store.",
  "Magasin Windows : {nom}  (émis par {e}, valable jusqu'au {d})": "Windows store: {nom}  (issued by {e}, valid until {d})",
  "Reprendre votre ID numérique d'Acrobat": "Take over your Acrobat digital ID",
- "Windows refuse d'exporter cet ID ({e}). Sa clef est peut-être marquée « non exportable » : dans ce cas, créez une nouvelle identité dans PhilPDF.": "Windows refuses to export this ID ({e}). Its key may be marked \"not exportable\": in that case, create a new identity in PhilPDF."
+ "Windows refuse d'exporter cet ID ({e}). Sa clef est peut-être marquée « non exportable » : dans ce cas, créez une nouvelle identité dans PhilPDF.": "Windows refuses to export this ID ({e}). Its key may be marked \"not exportable\": in that case, create a new identity in PhilPDF.",
+ "<b>Formulaire</b> — {n} champ(s). Tracez un rectangle pour ajouter un champ du type choisi ; double-clic sur un champ : ses propriétés (format, date automatique, calcul, listes...) ; clic droit : dupliquer, renommer, supprimer...": "<b>Form</b> — {n} field(s). Draw a rectangle to add a field of the chosen type; double-click a field: its properties (format, automatic date, calculation, lists...); right-click: duplicate, rename, delete...",
+ "Aujourd'hui": "Today",
+ "Champ dupliqué : « {nom} ».": "Field duplicated: \"{nom}\".",
+ "Dupliquer (juste en dessous)": "Duplicate (just below)",
+ "Effacer la valeur": "Clear the value",
+ "Mettre la date du jour": "Insert today's date",
+ "Passer en mode Formulaire (créer, déplacer, régler les champs)": "Switch to Form mode (create, move, set up fields)",
+ "Propriétés du champ...": "Field properties...",
+ "Supprimer le champ": "Delete the field",
+ "format : {f}": "format: {f}"
 }
