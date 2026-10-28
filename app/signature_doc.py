@@ -127,7 +127,7 @@ class MixinSignature:
 
     def _octets_pour_signer(self):
         if self.est_signe():
-            return self._octets()
+            return self.octets_en_ajout()
         from moteur import formulaire as FO
         try:
             FO.normaliser(self.doc)                       # champs comme Acrobat, avant la premiere signature
@@ -201,7 +201,7 @@ class MixinSignature:
         sigs = self.widgets_signature()
         signes = [w for _n, w in sigs if w.is_signed]
         if signes:
-            p = self._fichier_temp(self._octets() if self.est_signe() else self.doc.tobytes())
+            p = self._fichier_temp(self.octets_en_ajout() if self.est_signe() else self.doc.tobytes())
             try:
                 from . import identites as ID
                 self.signatures = S.verifier(p, ID.approuves_der(self.params), getattr(self, "mdp_pdf", None))
@@ -322,8 +322,8 @@ class MixinSignature:
         """Apres la signature : le document est celui du fichier signe ; l'historique repart de zero."""
         with open(chemin, "rb") as f:
             octets = f.read()
-        self.travail = None
-        self.doc = self._ouvrir_travail(octets)
+        self.octets_signes = octets
+        self.doc = self._depuis_octets(octets)
         self.chemin, self.nom = chemin, os.path.basename(chemin)
         self.modifie = False
         self.chiffrement, self.chiffrement_change = None, False

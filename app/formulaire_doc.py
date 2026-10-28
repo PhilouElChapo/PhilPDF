@@ -18,14 +18,58 @@ T = fitz
 
 def types_a_tracer():
     return [("auto", _("Automatique")), ("texte", _("Texte")), ("case", _("Case à cocher")),
-            ("radio", _("Bouton radio")), ("liste", _("Liste déroulante")), ("liste_multiple", _("Liste")),
+            ("radio", _("Bouton radio")), ("liste", _("Liste déroulante")), ("liste_multiple", _("Liste ouverte (plusieurs choix)")),
             ("date", _("Date")), ("montant", _("Montant (€)")), ("signature", _("Signature")),
             ("bouton", _("Bouton (réinitialiser, imprimer, e-mail...)"))]
+
+
+def bulles_types():
+    return {"auto": _("PhilPDF devine le type d'après le texte écrit à gauche du champ (date, montant, e-mail...)"),
+            "liste": _("Une ligne : on clique pour dérouler les choix et en prendre un. Prend peu de place."),
+            "liste_multiple": _("Plusieurs lignes visibles d'un coup ; on peut cocher plusieurs choix (Ctrl + clic)."),
+            "radio": _("Un seul choix parmi plusieurs ronds du même groupe (ex. Oui / Non)."),
+            "case": _("Case à cocher indépendante."),
+            "bouton": _("Bouton qui fait une action : réinitialiser, imprimer, envoyer par e-mail, aller à une page.")}
 
 
 def actions_bouton():
     return [("reinitialiser", _("Réinitialiser le formulaire")), ("imprimer", _("Imprimer")),
             ("email", _("Envoyer par e-mail")), ("page", _("Aller à une page"))]
+
+
+def dessiner_bouton(doc, w, survol=False):
+    """Apparence du bouton : bords arrondis, fond bleu, texte blanc centre (vue pareille dans Acrobat)."""
+    r = fitz.Rect(w.rect)
+    larg, haut = r.width, r.height
+    rayon = min(haut / 2.2, 7)
+    k = 0.5523 * rayon
+    texte = (w.button_caption or w.field_name or "").strip()
+    taille = max(6.0, min(haut * 0.5, 13.0))
+    while taille > 6 and fitz.get_text_length(texte, "helv", taille) > larg - 10:
+        taille -= 0.5
+    tl = fitz.get_text_length(texte, "helv", taille)
+    x, y = (larg - tl) / 2, (haut - taille * 0.72) / 2
+
+    def chemin(x0, y0, x1, y1, rr):
+        kk = 0.5523 * rr
+        return (f"{x0 + rr:.2f} {y0:.2f} m {x1 - rr:.2f} {y0:.2f} l {x1 - rr + kk:.2f} {y0:.2f} {x1:.2f} {y0 + rr - kk:.2f} {x1:.2f} {y0 + rr:.2f} c "
+                f"{x1:.2f} {y1 - rr:.2f} l {x1:.2f} {y1 - rr + kk:.2f} {x1 - rr + kk:.2f} {y1:.2f} {x1 - rr:.2f} {y1:.2f} c "
+                f"{x0 + rr:.2f} {y1:.2f} l {x0 + rr - kk:.2f} {y1:.2f} {x0:.2f} {y1 - rr + kk:.2f} {x0:.2f} {y1 - rr:.2f} c "
+                f"{x0:.2f} {y0 + rr:.2f} l {x0:.2f} {y0 + rr - kk:.2f} {x0 + rr - kk:.2f} {y0:.2f} {x0 + rr:.2f} {y0:.2f} c h")
+    del k
+    fond = "0.165 0.42 0.69" if not survol else "0.11 0.33 0.58"
+    contenu = (f"q 0.55 0.65 0.78 rg {chemin(0.6, 0.0, larg - 0.6, haut - 1.2, rayon)} f Q "     # ombre legere
+               f"q {fond} rg {chemin(0.6, 1.0, larg - 0.6, haut - 0.4, rayon)} f Q "
+               f"BT 1 1 1 rg /Helv {taille:.1f} Tf {x:.2f} {y:.2f} Td {fitz.get_pdf_str(texte)} Tj ET")
+    police = doc.get_new_xref()
+    doc.update_object(police, "<</Type/Font/Subtype/Type1/BaseFont/Helvetica/Encoding/WinAnsiEncoding>>")
+    ap = doc.get_new_xref()
+    doc.update_object(ap, f"<</Type/XObject/Subtype/Form/BBox[0 0 {larg:.2f} {haut:.2f}]"
+                          f"/Resources<</Font<</Helv {police} 0 R>>>>>>")
+    doc.update_stream(ap, contenu.encode("cp1252", "replace"))
+    doc.xref_set_key(w.xref, "AP", f"<</N {ap} 0 R>>")
+    doc.xref_set_key(w.xref, "MK", f"<</BG[0.165 0.42 0.69]/CA{fitz.get_pdf_str(texte)}>>")
+    doc.xref_set_key(w.xref, "DA", "(/Helv 0 Tf 1 g)")
 
 
 class SaisieDate(QFrame):
@@ -141,6 +185,25 @@ class MixinFormulaire:
         self._maj_form()
         return True
 
+    def placer_champ(self, n, xref, r):
+        """Champ deplace ou redimensionne a la souris ou aux fleches."""
+        w = self._widget((n, xref))
+        if w is None:
+            return
+        r = fitz.Rect(r) & self.doc[n].rect
+        if r.is_empty or (abs(r.x0 - w.rect.x0) < 0.2 and abs(r.y0 - w.rect.y0) < 0.2
+                          and abs(r.x1 - w.rect.x1) < 0.2 and abs(r.y1 - w.rect.y1) < 0.2):
+            return
+        if not getattr(self, "_placement_en_cours", False):
+            self.memoriser(_("Champ « {nom} » déplacé ou redimensionné", nom=w.field_name))
+        w = self._widget((n, xref))
+        w.rect = r
+        self._maj_widget(w)
+        if w.field_type == T.PDF_WIDGET_TYPE_BUTTON:
+            dessiner_bouton(self.doc, w)
+        self.champ_choisi = (n, xref)
+        self.apres_modif([])
+
     def creer_bouton(self, n, r):
         """Bouton dans le PDF (marche aussi dans Acrobat) : reinitialiser, imprimer, envoyer par e-mail, aller a une page."""
         acts = actions_bouton()
@@ -184,6 +247,7 @@ class MixinFormulaire:
         self.doc[n].add_widget(w)
         FO.normaliser(self.doc) if not self.est_signe() else None
         w = self._widget_nom(nom)
+        dessiner_bouton(self.doc, w)
         reg = C.vide()
         reg["action"] = action
         C.ecrire(self.doc, w, reg)
@@ -208,7 +272,8 @@ class MixinFormulaire:
                     x.field_value = False
                     self._maj_widget(x)
                 else:
-                    self._ecrire_valeur(x, "")
+                    t_dv, dv = self.doc.xref_get_key(C.xref_champ(self.doc, x), "DV")
+                    self._ecrire_valeur(x, dv if t_dv == "string" else "")
             self.recalculer()
             self.apres_modif([_("Formulaire réinitialisé.")])
         elif g == "imprimer" and hasattr(fen, "imprimer"):
@@ -368,9 +433,19 @@ class MixinFormulaire:
             x.field_display = res["affichage"]
             if res.get("legende"):
                 x.button_caption = res["legende"]
+                self._maj_widget(x)
+                dessiner_bouton(self.doc, x)
             self._maj_widget(x)
             if "alignement" in res:
                 self.doc.xref_set_key(C.xref_champ(self.doc, x), "Q", str(res["alignement"]) if res["alignement"] else "null")
+        if "defaut" in res:                               # valeur par defaut (/DV), et valeur si le champ est vide
+            for x in self._widgets_nom(res["nom"] if res["nom"] != ancien else ancien) or self._widgets_nom(ancien):
+                fx = C.xref_champ(self.doc, x)
+                self.doc.xref_set_key(fx, "DV", fitz.get_pdf_str(res["defaut"]) if res["defaut"] else "null")
+                if res["defaut"] and not (x.field_value or "").strip():
+                    x.field_value = res["defaut"]
+                    self._maj_widget(x)
+                break
         if res["nom"] != ancien:                          # les regles des autres champs suivent le nouveau nom
             self._renommer_dans_regles(ancien, res["nom"])
         w = self._widget_nom(res["nom"])

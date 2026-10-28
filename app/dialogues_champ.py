@@ -43,15 +43,38 @@ class DialogueChamp(QDialog):
         self.o, self.n, self.w, self.doc = onglet, n, w, onglet.doc
         self.r = C.lire(self.doc, w)
         self.setWindowTitle(_("Propriétés du champ « {x} »", x=w.field_name))
-        self.resize(620, 640)
+        self.resize(860, 720)
         ext = QVBoxLayout(self)
-        zone = QScrollArea()
+        corps = QHBoxLayout()
+        ext.addLayout(corps, 1)
+        self.sommaire = QListWidget()
+        self.sommaire.setObjectName("ch_sommaire")
+        self.sommaire.setFixedWidth(200)
+        self.sommaire.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.sommaire.setWordWrap(True)
+        self.sommaire.setToolTip(_("Cliquez pour aller à une partie des propriétés"))
+        self.sommaire.setStyleSheet("QListWidget{border:none;background:#f3f5f8;font-size:13px}"
+                                    "QListWidget::item{padding:7px 10px}"
+                                    "QListWidget::item:selected{background:#dbe6f5;color:#123;border-left:3px solid #1462c2}")
+        corps.addWidget(self.sommaire)
+        zone = self.zone = QScrollArea()
         zone.setWidgetResizable(True)
         zone.setFrameShape(QScrollArea.NoFrame)
+        zone.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         fond = QWidget()
         self.v = QVBoxLayout(fond)
         zone.setWidget(fond)
-        ext.addWidget(zone, 1)
+        corps.addWidget(zone, 1)
+        self._sections = []
+        def _suivre(_v):                       # la partie visible en haut est surlignee dans le sommaire
+            haut = zone.verticalScrollBar().value()
+            i = max((k for k, g in enumerate(self._sections) if g.y() <= haut + 20), default=0)
+            self.sommaire.blockSignals(True)
+            self.sommaire.setCurrentRow(i)
+            self.sommaire.blockSignals(False)
+        zone.verticalScrollBar().valueChanged.connect(_suivre)
+        self.sommaire.currentRowChanged.connect(
+            lambda i: zone.ensureWidgetVisible(self._sections[i], 0, 0) if 0 <= i < len(self._sections) else None)
         ft = w.field_type
         self.est_texte = ft == T.PDF_WIDGET_TYPE_TEXT
         self.est_liste = ft in (T.PDF_WIDGET_TYPE_COMBOBOX, T.PDF_WIDGET_TYPE_LISTBOX)
@@ -82,6 +105,7 @@ class DialogueChamp(QDialog):
         if not self.est_bouton:
             self._aide()
         self.v.addStretch(1)
+        self.sommaire.setCurrentRow(0)
         bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
         bb.accepted.connect(self.valider)
         bb.rejected.connect(self.reject)
@@ -89,9 +113,22 @@ class DialogueChamp(QDialog):
 
     def _groupe(self, titre):
         g = QGroupBox(titre)
+        g.setStyleSheet("QGroupBox{font-weight:600;margin-top:14px} QGroupBox::title{subcontrol-origin:margin;left:6px}")
         f = QFormLayout(g)
         self.v.addWidget(g)
+        self._sections.append(g)
+        court = titre.split(" — ")[0].split(" (")[0]
+        self.sommaire.addItem(court if len(court) <= 24 else court[:23].rstrip() + "…")
+        self.sommaire.item(self.sommaire.count() - 1).setToolTip(titre)
         return f
+
+    @staticmethod
+    def _explication(f, texte):
+        l = QLabel(texte)
+        l.setWordWrap(True)
+        l.setStyleSheet("color:#555;font-weight:normal")
+        f.addRow(l)
+        return l
 
     # ---------------------------------------------------------------- sections
     def _general(self):
@@ -147,6 +184,11 @@ class DialogueChamp(QDialog):
         self.taille.setSpecialValueText(_("automatique"))
         self.taille.setValue(int(w.text_fontsize or 0))
         f.addRow(_("Taille du texte"), self.taille)
+        t_dv, dv = self.doc.xref_get_key(C.xref_champ(self.doc, w), "DV")
+        self.defaut = QLineEdit(dv if t_dv == "string" else "")
+        self.defaut.setObjectName("ch_defaut")
+        self.defaut.setPlaceholderText(_("ce qui est écrit d'avance (et remis par « Réinitialiser »)"))
+        f.addRow(_("Valeur par défaut"), self.defaut)
 
     def _format(self):
         fmt = self.r.get("format") or {"genre": "aucun"}
@@ -354,6 +396,9 @@ class DialogueChamp(QDialog):
         self.c_aide = QLabel(_("Opérations : + − × (*) ÷ (/) et parenthèses. Les noms de champs entre crochets."))
         self.c_aide.setStyleSheet("color:#666")
         f.addRow(self.c_aide)
+        self.c_explique = self._explication(f, "")
+        self.c_explique.setObjectName("ch_calcul_explication")
+        self.c_explique.setStyleSheet("color:#1d4f86;background:#eef4fb;border-radius:4px;padding:6px;font-weight:normal")
         self.c_genre.currentIndexChanged.connect(self._maj_calcul)
         self._maj_calcul()
 
@@ -375,6 +420,21 @@ class DialogueChamp(QDialog):
             wdg.setVisible(g == "ecart_jours")
         for wdg in (self.l_jours, self.c_jours):
             wdg.setVisible(g == "date_plus")
+        self.c_explique.setText({
+            None: _("Le champ se remplit à la main."),
+            "somme": _("Additionne les champs cochés ci-dessous. Exemple : Total = Ligne 1 + Ligne 2 + Ligne 3."),
+            "produit": _("Multiplie les champs cochés. Exemple : Montant = Quantité × Prix."),
+            "moyenne": _("Moyenne des champs cochés. Exemple : la note moyenne de trois notes."),
+            "min": _("Garde la plus petite valeur parmi les champs cochés."),
+            "max": _("Garde la plus grande valeur parmi les champs cochés."),
+            "formule": _("Votre calcul, avec les noms des champs entre crochets. Exemple : [Quantité] * [Prix] * 1,2 "
+                         "pour un prix TTC. Utilisez « Insérer un champ... » pour ne pas faire de faute de nom."),
+            "copie": _("Recopie tout seul la valeur d'un autre champ. Exemple : le nom du patient tapé page 1 réapparaît "
+                       "page 3."),
+            "age": _("Calcule l'âge à partir d'un champ « date de naissance »."),
+            "ecart_jours": _("Nombre de jours entre deux champs date. Exemple : du début à la fin d'un traitement."),
+            "date_plus": _("Une date plus un nombre de jours. Exemple : date du vaccin + 30 jours = date du rappel."),
+        }.get(g, ""))
 
     def _plage(self):
         p = self.r.get("plage") or {}
@@ -399,11 +459,23 @@ class DialogueChamp(QDialog):
     def _liste(self):
         w = self.w
         f = self._groupe(_("Choix de la liste"))
+        self._explication(f, _("Liste déroulante : une seule ligne, on clique pour voir les choix et en prendre un. "
+                               "Liste ouverte : plusieurs lignes visibles d'un coup, utile pour voir tous les choix sans cliquer, "
+                               "et la seule qui permet de cocher plusieurs choix."))
         self.l_items = QPlainTextEdit("\n".join(_choix(w)))
         self.l_items.setObjectName("ch_items")
         self.l_items.setPlaceholderText(_("un choix par ligne"))
         self.l_items.setMaximumHeight(120)
         f.addRow(self.l_items)
+        t_dv, dv = self.doc.xref_get_key(C.xref_champ(self.doc, w), "DV")
+        self.l_defaut = QComboBox()
+        self.l_defaut.setObjectName("ch_liste_defaut")
+        self.l_defaut.addItem(_("(aucun : vide)"), "")
+        for c in _choix(w):
+            self.l_defaut.addItem(c, c)
+        self.l_defaut.setCurrentIndex(max(0, self.l_defaut.findData(dv if t_dv == "string" else "")))
+        self.l_items.textChanged.connect(self._maj_defaut_liste)
+        f.addRow(_("Choix montré par défaut"), self.l_defaut)
         self.l_trier = QCheckBox(_("Trier par ordre alphabétique"))
         self.l_trier.setChecked(bool(w.field_flags & T.PDF_CH_FIELD_IS_SORT))
         f.addRow(self.l_trier)
@@ -415,6 +487,16 @@ class DialogueChamp(QDialog):
             self.l_multi = QCheckBox(_("Plusieurs choix possibles"))
             self.l_multi.setChecked(bool(w.field_flags & T.PDF_CH_FIELD_IS_MULTI_SELECT))
             f.addRow(self.l_multi)
+
+    def _maj_defaut_liste(self):
+        garde = self.l_defaut.currentData()
+        self.l_defaut.blockSignals(True)
+        self.l_defaut.clear()
+        self.l_defaut.addItem(_("(aucun : vide)"), "")
+        for c in [x.strip() for x in self.l_items.toPlainText().splitlines() if x.strip()]:
+            self.l_defaut.addItem(c, c)
+        self.l_defaut.setCurrentIndex(max(0, self.l_defaut.findData(garde)))
+        self.l_defaut.blockSignals(False)
 
     def _depend(self):
         d = self.r.get("depend") or {}
@@ -595,6 +677,10 @@ class DialogueChamp(QDialog):
                          "lecture": self.lecture.isChecked(), "affichage": self.affichage.currentData(), "regles": r}
         if self.est_bouton:
             self.resultat["legende"] = self.b_legende.text().strip()
+        if self.est_texte:
+            self.resultat["defaut"] = self.defaut.text()
+        if self.est_liste:
+            self.resultat["defaut"] = self.l_defaut.currentData() or ""
         if self.est_texte:
             self.resultat.update(multi=self.multi.isChecked(), maxlen=self.maxlen.value(),
                                  alignement=self.alignement.currentData(), taille=self.taille.value())

@@ -116,6 +116,8 @@ class PageWidget(QWidget):
                 continue
             if w.field_display == 1 and o.mode is None:
                 continue                           # champ masque (par une regle « afficher si... »)
+            if w.field_type == fitz.PDF_WIDGET_TYPE_BUTTON and o.mode is None:
+                continue                           # un bouton se montre tel qu'il est dessine
             choisi = o.mode == "formulaire" and o.champ_choisi == (self.num, w.xref)
             if (o.mode is None and w.field_flags & fitz.PDF_FIELD_IS_REQUIRED
                     and (w.field_value or "") in ("", "Off")):
@@ -127,12 +129,23 @@ class PageWidget(QWidget):
             p.setBrush(QColor(255, 196, 120, 90) if choisi else QColor(200, 220, 255, 70))
             p.drawRect(self.vers_ecran(w.rect))
             if o.mode == "formulaire":
-                p.setPen(QColor("#a35c00"))
                 f = p.font()
-                f.setPointSize(7)
+                f.setPointSize(8)
                 p.setFont(f)
                 r = self.vers_ecran(w.rect)
-                p.drawText(QPointF(r.x(), r.y() - 2), w.field_name or "")
+                nom_ = w.field_name or ""
+                lt = p.fontMetrics().horizontalAdvance(nom_) + 8
+                ht = p.fontMetrics().height() + 2
+                chip = QRectF(r.x(), r.y() - ht - 1, lt, ht)
+                p.setPen(Qt.NoPen)
+                p.setBrush(QColor("#a35c00") if choisi else QColor(163, 92, 0, 200))
+                p.drawRoundedRect(chip, 3, 3)
+                p.setPen(QColor("#ffffff"))
+                p.drawText(chip, Qt.AlignCenter, nom_)
+                if choisi:                         # poignee pour agrandir
+                    p.setPen(QPen(QColor("#ffffff"), 1))
+                    p.setBrush(QColor("#a35c00"))
+                    p.drawRect(QRectF(r.right() - 4, r.bottom() - 4, 8, 8))
         sel = o.selection
         if sel and sel["page"] == self.num:
             p.setPen(Qt.NoPen)
@@ -305,8 +318,21 @@ class PageWidget(QWidget):
             w = o.champ_sous(self.num, pt)
             if w:
                 o.champ_choisi = (self.num, w.xref)
+                re_ = self.vers_ecran(w.rect)
+                coin = (abs(e.position().x() - re_.right()) < 9 and abs(e.position().y() - re_.bottom()) < 9)
+                self.glisse = {"genre": "champ", "mode": "redim" if coin else "deplacer", "xref": w.xref,
+                               "debut": pt, "rect0": fitz.Rect(w.rect), "fantome": None}
                 o.rafraichir_pages()
                 return
+            # pres du coin d'un champ choisi (poignee legerement hors du champ)
+            if o.champ_choisi and o.champ_choisi[0] == self.num:
+                wc = o._widget(o.champ_choisi)
+                if wc is not None:
+                    re_ = self.vers_ecran(wc.rect)
+                    if abs(e.position().x() - re_.right()) < 9 and abs(e.position().y() - re_.bottom()) < 9:
+                        self.glisse = {"genre": "champ", "mode": "redim", "xref": wc.xref, "debut": pt,
+                                       "rect0": fitz.Rect(wc.rect), "fantome": None}
+                        return
             o.champ_choisi = None
         if o.mode in ("signer_num", "champ_signature"):
             w = o.champ_sous(self.num, pt)
@@ -363,6 +389,17 @@ class PageWidget(QWidget):
                 g["angle"] = a
                 self.update()
                 return
+            if g["genre"] == "champ":
+                r = fitz.Rect(g["rect0"])
+                if g["mode"] == "redim":
+                    r.x1, r.y1 = max(r.x0 + 6, r.x1 + d.x), max(r.y0 + 6, r.y1 + d.y)
+                elif abs(d.x) + abs(d.y) > 1.5:
+                    r = r + (d.x, d.y, d.x, d.y)
+                else:
+                    return
+                g["fantome"] = r
+                self.update()
+                return
             if g["genre"] == "zone":
                 g["fantome"] = fitz.Rect(g["debut"], pt).normalize()
             elif g["genre"] == "deplacer":
@@ -393,20 +430,36 @@ class PageWidget(QWidget):
             return
         # curseurs
         self.survol = pt
+        if self.toolTip() and not (o.mode in (None, "formulaire", "signer_num", "champ_signature")
+                                   and o.champ_sous(self.num, pt)):
+            self.setToolTip("")
         if self._sur_rotation(e.position()):
             self.setCursor(Qt.PointingHandCursor)
             self.setToolTip(_("Glissez pour tourner (Maj : par pas de 15°) ; clic droit : 90°"))
         elif self._sur_poignee(e.position()) is not None:
             self.setCursor(Qt.SizeFDiagCursor)
         elif o.mode in (None, "formulaire", "signer_num", "champ_signature") and o.champ_sous(self.num, pt):
-            self.setCursor(Qt.PointingHandCursor)
             w_ = o.champ_sous(self.num, pt)
-            if w_.field_type == fitz.PDF_WIDGET_TYPE_SIGNATURE:
-                self.setToolTip(_("Signature : cliquez pour voir qui a signé") if w_.is_signed else
-                                _("Cliquez pour signer avec votre identité numérique"))
-            elif o.champ_verrouille(w_):
-                self.setToolTip(_("Champ verrouillé par une signature"))
+            re_ = self.vers_ecran(w_.rect)
+            coin = abs(e.position().x() - re_.right()) < 9 and abs(e.position().y() - re_.bottom()) < 9
+            if o.mode == "formulaire":
+                self.setCursor(Qt.SizeFDiagCursor if coin else Qt.SizeAllCursor)
+                self.setToolTip(_("« {nom} » : glissez pour déplacer, coin en bas à droite pour agrandir ; "
+                                  "double-clic : propriétés ; clic droit : plus d'options", nom=w_.field_name))
+            else:
+                self.setCursor(Qt.PointingHandCursor)
+                if w_.field_type == fitz.PDF_WIDGET_TYPE_SIGNATURE:
+                    self.setToolTip(_("Signature : cliquez pour voir qui a signé") if w_.is_signed else
+                                    _("Cliquez pour signer avec votre identité numérique"))
+                elif o.champ_verrouille(w_):
+                    self.setToolTip(_("Champ verrouillé par une signature"))
+                elif w_.field_type == fitz.PDF_WIDGET_TYPE_BUTTON:
+                    self.setToolTip(_("Bouton « {nom} »", nom=w_.button_caption or w_.field_name))
+                else:
+                    self.setToolTip((w_.field_label or w_.field_name) +
+                                    ("  (" + _("obligatoire") + ")" if w_.field_flags & fitz.PDF_FIELD_IS_REQUIRED else ""))
         elif o.objet_sous(self.num, pt, survol=True):
+            self.setToolTip("")
             self.setCursor(Qt.SizeAllCursor)
         elif o.mode in ("poser", "ajout_texte", "ajout_image", "lien", "recadrer", "biffer", "formulaire",
                         "signer_num", "champ_signature"):
@@ -425,6 +478,11 @@ class PageWidget(QWidget):
             if g["genre"] == "rotation":
                 if g.get("angle"):
                     o.tourner_objet(g["angle"])
+                self.update()
+                return
+            if g["genre"] == "champ":
+                if g["fantome"] is not None:
+                    o.placer_champ(self.num, g["xref"], g["fantome"])
                 self.update()
                 return
             if g["genre"] == "zone" and g["fantome"] is not None and g["fantome"].width > 4:
@@ -451,6 +509,17 @@ class PageWidget(QWidget):
             o.editer_annotation(obj)
 
     def keyPressEvent(self, e):
+        fleches = {Qt.Key_Left: (-1, 0), Qt.Key_Right: (1, 0), Qt.Key_Up: (0, -1), Qt.Key_Down: (0, 1)}
+        if e.key() in fleches and self.o.mode == "formulaire" and self.o.champ_choisi:
+            w_ = self.o._widget(self.o.champ_choisi)
+            if w_ is not None:                     # fleches : deplacer (Maj : de 10) ; Ctrl : agrandir / reduire
+                pas = 10 if e.modifiers() & Qt.ShiftModifier else 1
+                dx, dy = fleches[e.key()][0] * pas, fleches[e.key()][1] * pas
+                r = fitz.Rect(w_.rect)
+                r = (fitz.Rect(r.x0, r.y0, max(r.x0 + 6, r.x1 + dx), max(r.y0 + 6, r.y1 + dy))
+                     if e.modifiers() & Qt.ControlModifier else r + (dx, dy, dx, dy))
+                self.o.placer_champ(self.o.champ_choisi[0], w_.xref, r)
+                return
         if e.key() in (Qt.Key_Delete, Qt.Key_Backspace) and self.o.mode == "formulaire" and self.o.champ_choisi:
             self.o.supprimer_champ()
         elif e.key() in (Qt.Key_Delete, Qt.Key_Backspace) and self.o.objet:
@@ -1451,14 +1520,14 @@ class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
         self.params, self.biblio = params, biblio
         self.chemin = chemin
         self.mdp_pdf = None
-        self.travail = None        # document signe : copie de travail sur disque, enregistree en ajout seulement
+        self.octets_signes = None  # document signe : le fichier tel qu'enregistre ; on ne fait qu'y ajouter
         if doc is None:
             with open(chemin, "rb") as f:
                 donnees = f.read()
             doc = fitz.open(stream=donnees, filetype="pdf")
             self.poids_initial = len(donnees)
             if _signe(doc):
-                doc = self._ouvrir_travail(donnees)
+                self.octets_signes = donnees
         else:
             self.poids_initial = 0
         self.doc = doc
@@ -1528,8 +1597,11 @@ class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
         from PySide6.QtWidgets import QComboBox as _QCB
         self.type_trace = _QCB()
         self.type_trace.setObjectName("type_trace")
+        from .formulaire_doc import bulles_types
         for k_, t_ in types_a_tracer():
             self.type_trace.addItem(t_, k_)
+            if k_ in bulles_types():
+                self.type_trace.setItemData(self.type_trace.count() - 1, bulles_types()[k_], Qt.ToolTipRole)
         self.type_trace.setToolTip(_("Type du champ que vous tracez (Automatique : petit carré = case à cocher)"))
         hf.addWidget(self.type_trace)
         b = QPushButton(_("Détecter les champs"))
@@ -3652,6 +3724,9 @@ class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
             except Exception:                             # noqa: BLE001
                 pass
         w.update()
+        if w.field_type == fitz.PDF_WIDGET_TYPE_BUTTON:
+            from .formulaire_doc import dessiner_bouton
+            dessiner_bouton(self.doc, w)
         for k, (t, v) in avant.items():
             try:
                 if self.doc.xref_get_key(w.xref, k) != (t, v):
@@ -3845,49 +3920,29 @@ class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
     }
 
     # ---- document signe : tout en ajout (comme Acrobat), pour ne jamais casser une signature
-    def _ouvrir_travail(self, octets):
-        """Ouvre le document depuis une copie de travail sur disque (l'ajout incremental exige un fichier)."""
-        import tempfile
-        if not self.travail:
-            fd, self.travail = tempfile.mkstemp(prefix="philpdf-signe-", suffix=".pdf")
-            os.close(fd)
-        try:
-            if getattr(self, "doc", None) is not None and self.doc.name == self.travail:
-                self.doc.close()
-        except Exception:                                 # noqa: BLE001
-            pass
-        with open(self.travail, "wb") as f:
-            f.write(octets)
-        d = fitz.open(self.travail)
+    def verifier_signe(self, chemin):
+        """Apres le mot de passe d'un PDF protege : est-il signe ?"""
+        if not self.octets_signes and _signe(self.doc):
+            with open(chemin, "rb") as f:
+                self.octets_signes = f.read()
+
+    def _octets(self):
+        """Etat actuel du document (pour l'historique Annuler : en memoire seulement)."""
+        return self.doc.tobytes()
+
+    def octets_en_ajout(self):
+        """Signe : le fichier d'origine + une mise a jour avec ce qui a change (signatures intactes)."""
+        from moteur import increment
+        return increment.ajout(self.octets_signes, self.doc, getattr(self, "mdp_pdf", None))
+
+    def _depuis_octets(self, octets):
+        d = fitz.open(stream=octets, filetype="pdf")
         if d.needs_pass:
             d.authenticate(getattr(self, "mdp_pdf", None) or (self.chiffrement or {}).get("owner_pw") or "")
         return d
 
-    def verifier_signe(self, chemin):
-        """Apres le mot de passe d'un PDF protege : s'il est signe, passer en copie de travail."""
-        if not self.travail and _signe(self.doc):
-            with open(chemin, "rb") as f:
-                self.doc = self._ouvrir_travail(f.read())
-
-    def _octets(self):
-        """Etat actuel du document. Signe : ajout incremental sur la copie de travail, puis ses octets."""
-        if self.travail and self.doc.name == self.travail:
-            if self.doc.is_dirty or self.doc.can_save_incrementally():
-                try:
-                    self.doc.save(self.travail, incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP)
-                except Exception:                         # noqa: BLE001 (rien a ajouter)
-                    pass
-            with open(self.travail, "rb") as f:
-                return f.read()
-        return self.doc.tobytes()
-
-    def _depuis_octets(self, octets):
-        if self.travail:
-            return self._ouvrir_travail(octets)
-        return fitz.open(stream=octets, filetype="pdf")
-
     def est_signe(self):
-        return bool(self.travail)
+        return bool(self.octets_signes)
 
     def _verifier_signatures_tard(self):
         try:
@@ -3928,8 +3983,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
     def remplacer_document(self, octets):
         """Remplace le contenu du document (apres un memoriser()) : allegement, traitement global...
         Un document signe reecrit en entier perd ses signatures : il redevient un document ordinaire."""
-        if self.travail:
-            self.travail = None
+        self.octets_signes = None
         self._recharger(octets)
         self.modifie = True
         self.titre_change.emit()
@@ -3988,14 +4042,19 @@ class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
                             page.show_pdf_page(r, fitz.open("pdf", pm_doc[0]), 0)
                             page.delete_annot(a)
         tmp = chemin + ".philpdf-tmp"
-        if self.travail and self.doc.name == self.travail and not self.chiffrement_change:
-            with open(tmp, "wb") as f:                    # signe : ajout seulement, signatures intactes
-                f.write(self._octets())
+        if self.octets_signes and not self.chiffrement_change:
+            donnees = self.octets_en_ajout()              # signe : ajout seulement, signatures intactes
+            with open(tmp, "wb") as f:
+                f.write(donnees)
+            self.octets_signes = donnees
+            self.doc = self._depuis_octets(donnees)
+            self.construire_pages()
         else:
             opts = dict(garbage=3, deflate=True)
             if self.chiffrement:
                 opts.update(self.chiffrement)
             self.doc.save(tmp, **opts)
+            self.octets_signes = None                     # reecrit en entier (protection) : plus de signature valide
         os.replace(tmp, chemin)
         self.chiffrement_change = False
         self.chemin, self.nom, self.modifie = chemin, os.path.basename(chemin), False

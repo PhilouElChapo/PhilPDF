@@ -70,10 +70,11 @@ verif(len([w for w in o.doc[0].widgets() if w.field_name == "Avis"]) == 2, "deux
 verif(C.lire(o.doc, o._widget_nom("Prix"))["format"]["genre"] == "nombre", "montant : format nombre en euros")
 
 
-def proprietes(nom, regler):
-    w = o._widget_nom(nom)
+def proprietes(nom, regler, og=None):
+    og = og or o
+    w = og._widget_nom(nom)
     DC.DialogueChamp.exec = lambda self: (regler(self), self.valider(), QDialog.Accepted if hasattr(self, "resultat") else QDialog.Rejected)[-1]
-    o.proprietes_champ(0, w)
+    og.proprietes_champ(0, w)
 
 
 def coche(lst, *noms_):
@@ -257,6 +258,27 @@ o3.changer_mode(None)
 o3.clic_bouton(bt_)
 verif(not (o3._widget_nom(nom_nom).field_value or "") and not (o3._widget_nom("Age").field_value or ""),
       "bouton Réinitialiser : le formulaire est vidé dans PhilPDF")
+# bouton dessine (apparence arrondie avec sa legende), deplacement / redimension
+ap_ = o3.doc.xref_get_key(bt_.xref, "AP/N")
+flux_ = o3.doc.xref_stream(int(ap_[1].split()[0])) if ap_[0] == "xref" else b""
+verif(b"Effacer" in flux_ and b" c" in flux_, "bouton : apparence arrondie avec sa légende")
+o3.changer_mode("formulaire")
+r_new = fitz.Rect(70, 540, 230, 570)
+o3.placer_champ(0, bt_.xref, r_new)
+bt2_ = next(w for w in o3.doc[0].widgets() if w.xref == bt_.xref)
+verif(abs(bt2_.rect.x0 - 70) < 0.5 and abs(bt2_.rect.width - 160) < 0.5, "champ déplacé et redimensionné")
+# valeur par defaut d'une liste, remise par Reinitialiser
+import moteur.formulaire as MF
+MF.creer(o3.doc, {0: [{"nom": "Vaccin", "rect": (300, 600, 420, 620), "genre": "liste", "choix": ["Grippe", "Covid", "Zona"]}]})
+lst_ = o3._widget_nom("Vaccin")
+verif(lst_ is not None, "liste créée")
+if lst_ is not None:
+    ch_ = "Covid"
+    proprietes("Vaccin", lambda d: d.l_defaut.setCurrentIndex(d.l_defaut.findData(ch_)), o3)
+    verif(o3._widget_nom("Vaccin").field_value == ch_, "liste : choix montré par défaut")
+    o3.changer_mode(None)
+    o3.clic_bouton(next(w for w in o3.doc[0].widgets() if w.xref == bt_.xref))
+    verif(o3._widget_nom(lst_.field_name).field_value == ch_, f"liste : valeur par défaut remise ({ch_})")
 import subprocess as _sp
 js_ = [v for w in o3.doc[0].widgets() for v in C.scripts(o3.doc, w).values()]
 open(os.path.join(T, "js.js"), "w", encoding="utf-8").write(

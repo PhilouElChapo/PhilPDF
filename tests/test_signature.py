@@ -151,6 +151,12 @@ if os.environ.get("DIAG"):
 verif(v[0]["intacte"] and v[0]["modifs"] == "formulaires", f"rempli après signature + annuler/rétablir : signature intacte ({v[0]['modifs']} {v[0].get('detail_modifs', '')})")
 verif(fitz.open(signe)[0].widgets().__next__() is not None and
       [w.field_value for w in fitz.open(signe)[0].widgets() if w.field_name == "Ville"] == ["Cannes"], "valeur gardée")
+# plusieurs enregistrements de suite (MuPDF corrompait le fichier au 2e ajout) : fichier toujours lisible
+for k_ in range(3):
+    o.valeur_champ(0, next(w.xref for w in o.doc[0].widgets() if w.field_name == "Ville"), f"Ville {k_}")
+    o.enregistrer(signe)
+    verif(fitz.open(signe).page_count == 1 and S.verifier(signe, ID.approuves_der(params))[0]["intacte"],
+          f"enregistrement n° {k_ + 1} d'un document signé : fichier sain, signature intacte")
 # deuxieme signature dans un rectangle trace : la premiere reste valide
 pfx2 = S.creer_identite("Paul Second", "secret2")
 e2 = ID.ajouter_pfx(params, pfx2, "secret2")
