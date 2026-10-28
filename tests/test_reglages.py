@@ -151,4 +151,10 @@ verifie(_ph["identites"] and reglages.lire_drive(reglages.chemin_drive(_ph))["co
 _ch2 = reglages.changements_communs(_ca)
 reglages.appliquer_communs(_ca, _ch2, [i["cle"] for i in _ch2["items"]])
 verifie(_ca["identites"] == [{"id": "a1", "nom": "Philippe"}], "identités retrouvées sur l'autre poste")
+# meme ID d'Acrobat importe sur les deux postes : une seule ligne apres la fusion, un seul « par defaut »
+from app.miroir import unir as _unir
+_u = _unir("identites", [{"id": "c9", "nom": "Philippe", "empreinte": "E1", "defaut": True}],
+           [{"id": "a1", "nom": "Philippe", "empreinte": "E1", "defaut": True}, {"id": "b2", "nom": "Autre", "empreinte": "E2"}])
+verifie(len(_u) == 2 and _u[0]["alias"] == ["c9"] and sum(1 for x in _u if x.get("defaut")) == 1,
+        "même ID importé sur deux postes : une seule identité (l'autre numéro gardé en alias)")
 print(f"\n{ok} vérifications de préférences réussies")

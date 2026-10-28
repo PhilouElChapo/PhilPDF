@@ -501,7 +501,9 @@ def secrets_nouveaux(params, phrase, secrets=None):
             out.append({"cle": k, "libelle": _("clef IA : {x}", x="Claude" if "claude" in k else "Gemini")})
         elif k.startswith("identite:") and v:
             from . import identites
-            if not os.path.exists(identites._fichier(k.split(":", 1)[1])):
+            ident = k.split(":", 1)[1]
+            deja = any(ident in (e.get("alias") or []) and e.get("ici") for e in identites.liste(params))
+            if not deja and not os.path.exists(identites._fichier(ident)):
                 out.append({"cle": k, "libelle": _("identité numérique : {x}", x=identites.nom_identite(params, k))})
     return out
 

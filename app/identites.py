@@ -34,7 +34,7 @@ def liste(params):
     out = []
     for e in params.get("identites", []) or []:
         e = dict(e)
-        e["ici"] = os.path.exists(_fichier(e["id"])) or (bool(e.get("windows")) and e.get("poste") == params.get("machine")
+        e["ici"] = any(os.path.exists(_fichier(i)) for i in [e["id"]] + list(e.get("alias") or [])) or (bool(e.get("windows")) and e.get("poste") == params.get("machine")
                                                          and __import__("sys").platform == "win32")
         e["expire"] = bool(e.get("fin")) and e["fin"] < _dt.datetime.now(_dt.timezone.utc).isoformat()
         e.setdefault("nom", "")
@@ -108,12 +108,14 @@ def creer(params, nom, mot_de_passe, organisation="", service="", email="", pays
 
 
 def lire(e):
-    """Octets du .pfx sur ce poste, ou None."""
-    try:
-        with open(_fichier(e["id"]), "rb") as f:
-            return f.read()
-    except OSError:
-        return None
+    """Octets du .pfx sur ce poste (sous son numero ou un de ses alias), ou None."""
+    for i in [e["id"]] + list(e.get("alias") or []):
+        try:
+            with open(_fichier(i), "rb") as f:
+                return f.read()
+        except OSError:
+            continue
+    return None
 
 
 def regler(params, ident, **valeurs):
@@ -231,7 +233,7 @@ def retrouver_orphelines(params):
     perdue lors d'une fusion) : ajoutes comme « a deverrouiller » ; leur mot de passe redonne nom et validite.
     Renvoie le nombre d'identites retrouvees."""
     l = [dict(e) for e in params.get("identites", []) or []]
-    connus = {e["id"] for e in l}
+    connus = {e["id"] for e in l} | {a for e in l for a in (e.get("alias") or [])}
     supprimees = set(params.get("identites_supprimees") or [])
     n = 0
     for f in sorted(os.listdir(_dossier())):
@@ -262,9 +264,11 @@ def deverrouiller(params, ident, mot_de_passe):
             x.update({"nom": info["nom"], "email": info["email"], "organisation": info["organisation"],
                       "emetteur": info["emetteur"], "autosigne": info["autosigne"], "empreinte": info["empreinte"],
                       "debut": _iso(info["debut"]), "fin": _iso(info["fin"])})
-    _enregistrer_liste(params, l)
+    from .miroir import _sans_doublons                  # deja connue sous un autre numero : une seule ligne
+    _enregistrer_liste(params, _sans_doublons(l))
     try:
         approuver(params, S.exporter_cer(octets, mot_de_passe), soi=True)
     except S.ErreurSignature:
         pass
-    return next(x for x in liste(params) if x["id"] == ident)
+    emp = info["empreinte"]
+    return next(x for x in liste(params) if x["id"] == ident or x.get("empreinte") == emp)

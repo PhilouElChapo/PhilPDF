@@ -366,7 +366,8 @@ def retrouver_identites(params):
         from . import reglages as R, coffre
         phrase = coffre.lire(R.PHRASE)
         if phrase and params.get("synchro_secrets"):
-            connus = {e["id"] for e in params.get("identites", []) or []}
+            connus = {e["id"] for e in params.get("identites", []) or []} | \
+                {a for e in params.get("identites", []) or [] for a in (e.get("alias") or [])}
             supprimees = set(params.get("identites_supprimees") or [])
             for k, v in R.lire_secrets_drive(params, phrase).items():
                 if k.startswith("identite:") and v and k[9:] not in connus and k[9:] not in supprimees:

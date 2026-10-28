@@ -85,7 +85,43 @@ def unir(cle, local, autre, retires=()):
             continue
         out[k] = x
     retires = set(retires or ())
-    return [out[k] for k in ordre if k not in retires]
+    res = [out[k] for k in ordre if k not in retires]
+    if cle == "identites":
+        res = _sans_doublons(res)
+    return res
+
+
+def _sans_doublons(ids):
+    """Meme ID importe sur deux postes (meme certificat, deux numeros) : une seule ligne, qui retient l'autre
+    numero (alias) ; une seule identite par defaut."""
+    par_emp, out = {}, []
+    for e in ids:
+        emp = e.get("empreinte")
+        if not emp:
+            out.append(e)
+            continue
+        if emp in par_emp:
+            garde = par_emp[emp]
+            autre = e
+            # on prefere celle dont le fichier voyage (.pfx) a une reference au magasin Windows d'un seul poste
+            if garde.get("windows") and not autre.get("windows"):
+                garde, autre = autre, garde
+                out[out.index(par_emp[emp])] = garde
+                par_emp[emp] = garde
+            garde = dict(garde, alias=sorted(set(garde.get("alias") or []) | set(autre.get("alias") or []) | {autre["id"]}))
+            garde["defaut"] = bool(garde.get("defaut") or autre.get("defaut"))
+            out[out.index(par_emp[emp])] = garde
+            par_emp[emp] = garde
+            continue
+        par_emp[emp] = e
+        out.append(e)
+    vu = False
+    for i, e in enumerate(out):
+        if e.get("defaut"):
+            if vu:
+                out[i] = dict(e, defaut=False)
+            vu = True
+    return out
 
 
 def _fusion(local, dist):
