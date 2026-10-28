@@ -363,8 +363,28 @@ class PageAccueil(QWidget):
         self.liste.setContextMenuPolicy(Qt.CustomContextMenu)
         self.liste.customContextMenuRequested.connect(self._menu_fichier)
         self.liste.itemClicked.connect(self._clic_recent)
-        v.addWidget(self.liste, 1)
+        self.liste.setMouseTracking(True)
+        self.liste.itemEntered.connect(lambda it: self._survol(it))
+        self.liste.currentItemChanged.connect(lambda it, _p: self._survol(it))
+        corps = QHBoxLayout()
+        corps.setSpacing(16)
+        corps.addWidget(self.liste, 1)
+        self.fiche = FicheFichier()
+        corps.addWidget(self.fiche)
+        v.addLayout(corps, 1)
+        from PySide6.QtCore import QTimer
+        self._t_fiche = QTimer(self)
+        self._t_fiche.setSingleShot(True)
+        self._t_fiche.timeout.connect(lambda: self.fiche.montrer(getattr(self, "_l_fiche", None)))
         self.rafraichir()
+
+    def _survol(self, it):
+        """Le fichier survole (ou choisi au clavier) s'affiche dans la fiche de droite, apres un court instant."""
+        l = it.data(Qt.UserRole + 1) if it is not None else None
+        if l is None or l is getattr(self, "_l_fiche", None):
+            return
+        self._l_fiche = l
+        self._t_fiche.start(140)
 
     def lignes_recents(self):
         """Recents de ce poste et des autres (session partagee), 30 jours, 30 fichiers, une seule liste."""
@@ -412,8 +432,7 @@ class PageAccueil(QWidget):
                                  f"{l['nom']}\n{l['dossier']}" + ("   ·   " + "   ·   ".join(infos) if infos else ""))
             it.setData(Qt.UserRole, ici or "")
             it.setData(Qt.UserRole + 1, l)
-            it.setToolTip(ici or (_("Sur {poste} : {chemin}", poste=l["poste"], chemin=l["chemin_origine"] or "?") + "\n"
-                                  + _("Cliquez pour le chercher sur ce poste ou l'indiquer vous-même.")))
+            # plus de bulle : la fiche de droite montre l'apercu, le detail et le debut du texte
             if not ici:
                 it.setForeground(Qt.gray)
             else:
@@ -665,3 +684,152 @@ def miniature(chemin, hauteur=52):
             pass
     _MINIATURES[cle] = QIcon(pm)
     return _MINIATURES[cle]
+
+
+_FICHES = {}
+
+
+def fiche_fichier(chemin):
+    """Ce que la fiche de l'Accueil montre d'un PDF : pages, poids, dates, etats (signe, formulaire, protege,
+    scan sans texte), debut du texte et apercu de la page 1. Garde en cache (chemin + date + taille)."""
+    import datetime
+    import pymupdf as fitz
+    try:
+        st = os.stat(chemin)
+    except OSError:
+        return None
+    cle = (os.path.normcase(chemin), st.st_mtime_ns, st.st_size)
+    if cle in _FICHES:
+        return _FICHES[cle]
+    f = {"taille": st.st_size, "modifie": datetime.datetime.fromtimestamp(st.st_mtime), "pages": 0, "etats": [],
+         "texte": "", "image": None}
+    try:
+        with fitz.open(chemin) as d:
+            if d.needs_pass:
+                f["etats"].append(("cadenas", _("Protégé par mot de passe")))
+            else:
+                f["pages"] = len(d)
+                p = d[0]
+                z = 300 / max(1, p.rect.height)
+                f["image"] = p.get_pixmap(matrix=fitz.Matrix(z, z), alpha=False).tobytes("png")
+                txt = " ".join(p.get_text("text").split())
+                f["texte"] = (txt[:260] + "…") if len(txt) > 260 else txt
+                if not txt:
+                    f["etats"].append(("scan", _("Scan sans texte (OCR possible)")))
+                try:
+                    signes = [w for pg in d for w in (pg.widgets() or []) if w.field_type == fitz.PDF_WIDGET_TYPE_SIGNATURE]
+                    champs = [w for pg in d for w in (pg.widgets() or []) if w.field_type != fitz.PDF_WIDGET_TYPE_SIGNATURE]
+                except Exception:
+                    signes, champs = [], []
+                if any(w.is_signed for w in signes):
+                    f["etats"].append(("signe", _("Signé numériquement")))
+                elif signes:
+                    f["etats"].append(("signe", _("Champ de signature à remplir")))
+                if champs:
+                    f["etats"].append(("formulaire", _("Formulaire ({n} champs)", n=len(champs))))
+                if d.is_encrypted or (d.permissions is not None and d.permissions != -1 and d.permissions < 0xFFFFF000):
+                    pass
+                try:
+                    if "pdfaid:part" in (d.get_xml_metadata() or ""):
+                        f["etats"].append(("archive", _("PDF/A (archivage)")))
+                except Exception:
+                    pass
+    except Exception:
+        f["etats"].append(("erreur", _("Fichier illisible ou abîmé")))
+    _FICHES[cle] = f
+    return f
+
+
+class FicheFichier(QFrame):
+    """Fiche du fichier survole, a droite de la liste : grand apercu, detail, etats, debut du texte."""
+
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("fiche")
+        self.setFixedWidth(300)
+        self.setStyleSheet("#fiche{background:#ffffff;border:1px solid #e2e2e2;border-radius:12px}"
+                           "QLabel{background:transparent}")
+        v = QVBoxLayout(self)
+        v.setContentsMargins(18, 18, 18, 18)
+        v.setSpacing(10)
+        self.apercu = QLabel()
+        self.apercu.setAlignment(Qt.AlignCenter)
+        self.apercu.setMinimumHeight(240)
+        self.apercu.setStyleSheet("background:#f3f4f6;border-radius:8px")
+        v.addWidget(self.apercu)
+        self.titre = QLabel()
+        self.titre.setWordWrap(True)
+        self.titre.setStyleSheet("font-size:15px;font-weight:600;color:#1f1f1f")
+        v.addWidget(self.titre)
+        self.detail = QLabel()
+        self.detail.setWordWrap(True)
+        self.detail.setTextFormat(Qt.RichText)
+        self.detail.setStyleSheet("color:#555;font-size:12px")
+        v.addWidget(self.detail)
+        self.etats = QLabel()
+        self.etats.setWordWrap(True)
+        self.etats.setTextFormat(Qt.RichText)
+        v.addWidget(self.etats)
+        self.texte = QLabel()
+        self.texte.setWordWrap(True)
+        self.texte.setStyleSheet("color:#444;font-size:12px;font-style:italic;border-left:3px solid #e6e6e6;"
+                                 "padding-left:8px")
+        v.addWidget(self.texte)
+        v.addStretch(1)
+        self.montrer(None)
+
+    def montrer(self, l):
+        from PySide6.QtGui import QPixmap
+        import html
+        if not l:
+            self.apercu.setPixmap(QPixmap())
+            self.apercu.setText(_("Passez la souris sur un fichier pour voir son aperçu"))
+            self.apercu.setStyleSheet("background:#f3f4f6;border-radius:8px;color:#888;font-size:12px")
+            for w in (self.titre, self.detail, self.etats, self.texte):
+                w.setText("")
+            self.texte.hide()
+            return
+        self.apercu.setStyleSheet("background:#f3f4f6;border-radius:8px")
+        self.titre.setText(l.get("nom", ""))
+        chemin = l.get("chemin")
+        f = fiche_fichier(chemin) if chemin else None
+        lignes = []
+        if f is None:
+            self.apercu.setPixmap(QPixmap())
+            self.apercu.setText(_("Introuvable sur ce poste"))
+            lignes.append(_("Ouvert sur {poste}", poste=html.escape(l.get("poste", "?"))))
+            if l.get("chemin_origine"):
+                lignes.append(html.escape(l["chemin_origine"]))
+            lignes.append(_("Cliquez pour le chercher ici ou l'indiquer vous-même."))
+            self.detail.setText("<br>".join(lignes))
+            self.etats.setText("")
+            self.texte.hide()
+            return
+        if f["image"]:
+            pm = QPixmap()
+            pm.loadFromData(f["image"], "PNG")
+            self.apercu.setPixmap(pm.scaled(264, 240, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            self.apercu.setPixmap(QPixmap())
+            self.apercu.setText("")
+        ko = f["taille"] / 1024
+        poids = f"{ko / 1024:.1f} Mo".replace(".", ",") if ko >= 1024 else f"{ko:.0f} Ko"
+        if f["pages"]:
+            lignes.append(_("{n} page(s) · {p}", n=f["pages"], p=poids))
+        else:
+            lignes.append(poids)
+        lignes.append(_("Modifié le {d}", d=f["modifie"].strftime("%d/%m/%Y à %H:%M")))
+        if l.get("date"):
+            from .session import date_fr
+            lignes.append(_("Ouvert {d}", d=date_fr(l["date"])))
+        if l.get("ouvert_sur"):
+            lignes.append(_("Ouvert en ce moment sur {p}", p=", ".join(l["ouvert_sur"])))
+        self.detail.setText("<br>".join(lignes))
+        couleurs = {"signe": ("#e6f4ea", "#1e6b34"), "formulaire": ("#fdf1e2", "#8a4b00"),
+                    "cadenas": ("#fdecea", "#9b1c1c"), "scan": ("#eef2f7", "#3d5168"),
+                    "archive": ("#e6f0fc", "#1452a0"), "erreur": ("#fdecea", "#9b1c1c")}
+        self.etats.setText(" ".join(
+            f"<span style='background:{couleurs[k][0]};color:{couleurs[k][1]};border-radius:8px;padding:2px 8px;"
+            f"font-size:11px'>&nbsp;{html.escape(t)}&nbsp;</span>" for k, t in f["etats"]))
+        self.texte.setText(f["texte"])
+        self.texte.setVisible(bool(f["texte"]))

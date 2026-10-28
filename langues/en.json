@@ -2185,5 +2185,20 @@
  "Identité retrouvée (nom inconnu) — choisissez « Déverrouiller... » et tapez son mot de passe": "Identity found (name unknown) — choose “Unlock...” and type its password",
  "Mot de passe de cette identité :": "Password of this identity:",
  "Déverrouiller...": "Unlock...",
- "{n} identité(s) numérique(s) retrouvée(s) sur ce poste, mais leur nom n'était plus dans la liste. Choisissez-les puis « Déverrouiller... » : leur mot de passe suffit pour tout retrouver.": "{n} digital identity(ies) found on this computer, but their name was no longer in the list. Choose them then “Unlock...”: their password is enough to recover everything."
+ "{n} identité(s) numérique(s) retrouvée(s) sur ce poste, mais leur nom n'était plus dans la liste. Choisissez-les puis « Déverrouiller... » : leur mot de passe suffit pour tout retrouver.": "{n} digital identity(ies) found on this computer, but their name was no longer in the list. Choose them then “Unlock...”: their password is enough to recover everything.",
+ "Modifié le {d}": "Modified on {d}",
+ "Passez la souris sur un fichier pour voir son aperçu": "Hover over a file to see its preview",
+ "Introuvable sur ce poste": "Not found on this computer",
+ "Ouvert sur {poste}": "Opened on {poste}",
+ "Cliquez pour le chercher ici ou l'indiquer vous-même.": "Click to search for it here or point to it yourself.",
+ "{n} page(s) · {p}": "{n} page(s) · {p}",
+ "Ouvert {d}": "Opened {d}",
+ "Ouvert en ce moment sur {p}": "Currently open on {p}",
+ "Fichier illisible ou abîmé": "Unreadable or damaged file",
+ "Protégé par mot de passe": "Password protected",
+ "Scan sans texte (OCR possible)": "Scan without text (OCR possible)",
+ "Signé numériquement": "Digitally signed",
+ "Formulaire ({n} champs)": "Form ({n} fields)",
+ "Champ de signature à remplir": "Signature field to fill in",
+ "PDF/A (archivage)": "PDF/A (archive)"
 }
