@@ -203,7 +203,8 @@ di.close()
 
 # reprendre l'ID d'Acrobat sans « Exporter » : le fichier d'ID est retrouve tout seul (Security\*.pfx)
 from app import identites_systeme as IS
-sec_ = os.path.join(os.environ["HOME"], ".adobe", "Acrobat", "DC", "Security")
+sec_ = (os.path.join(os.environ["APPDATA"], "Adobe", "Acrobat", "DC", "Security") if sys.platform == "win32"
+        else os.path.join(os.environ["HOME"], ".adobe", "Acrobat", "DC", "Security"))
 os.makedirs(sec_, exist_ok=True)
 pfx3 = S.creer_identite("Philippe Acrobat", "acro123")
 open(os.path.join(sec_, "PhilippeAcrobat.pfx"), "wb").write(pfx3)
