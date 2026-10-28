@@ -108,7 +108,9 @@ def decrire(plan, params, compte=None, emplacement=None):
                                poste=par, date=date_locale(c.get("maj")) or "?")
                 else:
                     detail = _("état de vos autres postes (rien ne change sur ce poste)")
-                    routine = True
+                # toujours recu sans demander : rien n'est applique ici sans la fenetre « Réglages de vos autres
+                # postes », ou chaque reglage se coche ou s'ignore (ignore = plus propose, sauf nouveau changement)
+                routine = True
             else:
                 detail = _("réglages et état de ce poste")
         elif rel == "session.json":
@@ -176,6 +178,7 @@ class DialoguePlan(QDialog):
     """Liste a cocher, en deux parties : recu de vos autres postes / envoye depuis ce poste."""
 
     def __init__(self, parent, lignes, lieu, icone_compte=None):
+        self._routine = {l["rel"] for l in lignes if l.get("routine")}
         super().__init__(parent)
         self.setWindowTitle(_("Synchronisation avec {lieu}", lieu=lieu))
         self.resize(900, 560)
@@ -204,7 +207,7 @@ class DialoguePlan(QDialog):
         familles = {"biblio": _("Tampons et signatures"), "apprentissage": _("Apprentissage (OCR, classement)")}
         for groupe, titre_g, ic in (("recevoir", _("Recevoir de vos autres postes"), "mise_a_jour"),
                                     ("envoyer", _("Envoyer depuis ce poste"), "exporter")):
-            ls = [l for l in lignes if l["groupe"] == groupe]
+            ls = [l for l in lignes if l["groupe"] == groupe and not l.get("routine")]
             if not ls:
                 continue
             g = QTreeWidgetItem(t, [f"{titre_g} ({len(ls)})"])
@@ -252,7 +255,7 @@ class DialoguePlan(QDialog):
         b_ok.clicked.connect(self.accept)
 
     def choisis(self):
-        out = set()
+        out = set(self._routine)                          # la routine (non montree) se fait toujours
 
         def tour(it):
             for i in range(it.childCount()):

@@ -860,7 +860,27 @@ abs_ = [i for i in range(w.accueil.liste.count()) if "Absent.pdf" in w.accueil.l
 verif(abs_ and "introuvable sur ce poste" in w.accueil.liste.item(abs_[0]).text()
       and w.accueil.liste.item(abs_[0]).foreground().color() == D.Qt.gray, "récents : fichier de l'autre poste introuvable ici, grisé")
 verif(not any("Vieux.pdf" in t for t in textes_) and w.accueil.liste.count() <= 30, "récents : 30 derniers jours, 30 au plus")
+loc_ = [i for i in range(w.accueil.liste.count()) if not (w.accueil.liste.item(i).data(D.Qt.UserRole + 1) or {}).get("autre_poste")
+        and w.accueil.liste.item(i).flags() != D.Qt.NoItemFlags]
+tete_ = [i for i in range(w.accueil.liste.count()) if w.accueil.liste.item(i).text() == "Sur vos autres postes"]
+verif(tete_ and loc_ and max(loc_) < tete_[0] < abs_[0], "récents : ce poste d'abord, puis « Sur vos autres postes » en dessous")
+verif(any("Commun.pdf" in t and "aussi sur Cannes" in t for t in textes_) or any("Commun.pdf" in t for t in textes_),
+      "récents : fichier présent des deux côtés sur une seule ligne")
 capture(w.accueil, "50_recents_communs.png")
+# --- fenetre de synchro : les reglages recus ne se cochent plus (toujours recus, choisis ensuite un par un)
+import app.synchro_plan as _SPL
+lg_ = [{"groupe": "recevoir", "rel": "preferences.json", "titre": "Réglages", "detail": "x", "date": "", "famille": "reglages", "routine": True},
+       {"groupe": "recevoir", "rel": "sauvegarde/t.pdf", "titre": "Tampon", "detail": "", "date": "", "famille": "biblio", "routine": False}]
+dp_ = _SPL.DialoguePlan(w, lg_, "Drive")
+visibles_ = []
+for i_ in range(dp_.arbre.topLevelItemCount()):
+    g_ = dp_.arbre.topLevelItem(i_)
+    visibles_ += [g_.child(j_).data(0, D.Qt.UserRole) for j_ in range(g_.childCount())]
+for i_ in range(dp_.arbre.topLevelItemCount()):
+    dp_.arbre.topLevelItem(i_).setCheckState(0, D.Qt.Unchecked)
+verif(visibles_ == ["sauvegarde/t.pdf"] and dp_.choisis() == {"preferences.json"},
+      "synchro : réglages toujours reçus sans case (choix ensuite réglage par réglage)")
+dp_.close()
 
 # --- tampons : glisser un apercu a une autre place change l'ordre (garde)
 for n_ in ("T-un", "T-deux"):

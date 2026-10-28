@@ -1810,5 +1810,8 @@
  "Acrobat › Edition › Préférences › Signatures › Identités et certificats approuvés › Plus... › ID numériques › Fichiers d'ID numériques : choisissez votre ID, puis Exporter › Enregistrer les données dans un fichier (.pfx). Importez ensuite ce fichier ici avec son mot de passe.": "Acrobat › Modifica › Preferenze › Firme › Identità e certificati attendibili › Altro... › ID digitali › File ID digitali: scegliete il vostro ID, poi Esporta › Salva i dati in un file (.pfx). Importate poi questo file qui con la sua password.",
  "Exporter votre ID numérique d'Acrobat": "Esportare il vostro ID digitale di Acrobat",
  "Signature numérique de": "Firmato digitalmente da",
- "Date : {x}": "Data: {x}"
+ "Date : {x}": "Data: {x}",
+ "Sur vos autres postes": "Sugli altri computer",
+ "aussi sur {poste}": "anche su {poste}",
+ "retrouvé sur ce poste": "trovato su questo computer"
 }

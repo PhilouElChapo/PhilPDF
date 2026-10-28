@@ -380,15 +380,28 @@ class PageAccueil(QWidget):
         from .session import date_fr
         self.liste.clear()
         moi = self.params.get("machine", "")
+        titre_mis = False
         for l in self.lignes_recents():
             ici = l["chemin"]
+            if l.get("autre_poste") and not titre_mis:    # separation : ce poste en haut, les autres en dessous
+                titre_mis = True
+                t = QListWidgetItem(_("Sur vos autres postes"))
+                t.setFlags(Qt.NoItemFlags)
+                f = t.font()
+                f.setBold(True)
+                t.setFont(f)
+                t.setForeground(__import__("PySide6.QtGui", fromlist=["QColor"]).QColor("#555555"))
+                t.setData(Qt.UserRole, "")
+                self.liste.addItem(t)
             infos = []
-            if l["date"]:
-                infos.append((l["poste"] + ", " if l["poste"] != moi else "") + date_fr(l["date"]))
-            elif l["poste"] != moi:
-                infos.append(l["poste"])
+            if l.get("autre_poste"):
+                infos.append(l["poste"] + (", " + date_fr(l["date"]) if l["date"] else ""))
+            if l.get("aussi_sur"):
+                infos.append(_("aussi sur {poste}", poste=", ".join(l["aussi_sur"])))
             if l["ouvert_sur"]:
                 infos.append("● " + _("ouvert sur {poste}", poste=", ".join(l["ouvert_sur"])))
+            if l.get("autre_poste") and ici:
+                infos.append(_("retrouvé sur ce poste"))
             if not ici:
                 infos.append(_("introuvable sur ce poste"))
             it = QListWidgetItem(icone("creer", "#c9252d" if ici else "#bbbbbb"),

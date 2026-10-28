@@ -226,40 +226,38 @@ class Session:
         return e
 
     def recents_communs(self, jours=None, n=None):
-        """Recents de ce poste et de vos autres postes, en une liste triee par date (le plus recent d'abord) :
-        [{chemin (ici, ou None si introuvable), nom, dossier, date, poste, ouvert_sur: [postes], machine, e}].
-        Un fichier present a la fois ici et ailleurs n'apparait qu'une fois. Recherche instantanee seulement
-        (pas de parcours du disque) ; ce qu'une recherche plus longue a trouve est garde pour la suite."""
+        """Recents en une liste : d'abord ceux de CE poste (dans leur ordre), puis ceux de vos autres postes, plus bas.
+        Un fichier d'un autre poste retrouve parmi les recents d'ici n'est pas repete : la ligne d'ici le signale
+        (« aussi sur Cannes »). Ceux des autres postes retrouves sur ce PC sont utilisables ; les autres sont grises.
+        [{chemin (ici, ou None), nom, dossier, date, poste, ouvert_sur, aussi_sur, autre_poste, machine, e}].
+        Recherche instantanee seulement (pas de parcours du disque)."""
         jours, n = jours or JOURS_RECENTS, n or NB_RECENTS
         moi = self.params.get("machine", "")
         limite = (datetime.datetime.now() - datetime.timedelta(days=jours)).isoformat(timespec="minutes")
         dates = self.params.get("recents_dates") or {}
-        lignes, par_chemin = [], {}
-
-        def ajouter(l):
-            k = _norm(l["chemin"]) if l["chemin"] else None
-            if k and k in par_chemin:                     # meme fichier : une seule ligne, la date la plus recente
-                x = par_chemin[k]
-                x["ouvert_sur"] = sorted(set(x["ouvert_sur"]) | set(l["ouvert_sur"]))
-                if l["date"] > x["date"]:
-                    x.update(date=l["date"], poste=l["poste"])
-                return
-            lignes.append(l)
-            if k:
-                par_chemin[k] = l
+        ici_l, autres, par_chemin = [], [], {}
         for i, p in enumerate(self.params.get("recents", [])):
             q = dates.get(p) or ""
             if q and q < limite:
                 continue
-            ajouter({"chemin": p if os.path.exists(p) else None, "chemin_origine": p, "nom": os.path.basename(p),
-                     "dossier": os.path.dirname(p), "date": q or "", "rang": i, "poste": moi, "ouvert_sur": [],
-                     "machine": moi, "e": None, "introuvable_ici": not os.path.exists(p)})
+            k = _norm(p)
+            if k in par_chemin:                           # meme fichier ecrit deux fois (C:/ et C:\)
+                continue
+            l = {"chemin": p if os.path.exists(p) else None, "chemin_origine": p, "nom": os.path.basename(p),
+                 "dossier": os.path.normpath(os.path.dirname(p)), "date": q or "", "rang": i, "poste": moi,
+                 "ouvert_sur": [], "aussi_sur": [], "autre_poste": False, "machine": moi, "e": None,
+                 "introuvable_ici": not os.path.exists(p)}
+            par_chemin[k] = l
+            ici_l.append(l)
+            if len(ici_l) >= n:
+                break
+        vus_autres = {}
         for m, v in self.lire().items():
             if m == moi or not isinstance(v, dict):
                 continue
             ouverts = {(f.get("empreinte"), f.get("nom")) for f in v.get("fichiers", [])}
             entrees = [dict(f, date=f.get("date") or "") for f in v.get("recents", [])]
-            for f in v.get("fichiers", []):             # ouverts la-bas : en tete, a la date de sa session
+            for f in v.get("fichiers", []):             # ouverts la-bas, a la date de sa session
                 if not any((x.get("empreinte"), x.get("nom")) == (f.get("empreinte"), f.get("nom")) for x in entrees):
                     entrees.append(dict(f, date=v.get("maj", "")))
             for e in entrees:
@@ -269,16 +267,36 @@ class Session:
                 cle = (m, e.get("chemin"), e.get("empreinte"))
                 if cle not in _RESOLUS:
                     _RESOLUS[cle] = self.retrouver_direct(m, e)[0]
-                ici = _RESOLUS[cle]
-                if ici and ici.startswith("distant:"):
-                    ici = None
-                ajouter({"chemin": ici, "chemin_origine": e.get("chemin"), "nom": e.get("nom") or "?",
-                         "dossier": os.path.dirname(ici) if ici else _dossier_autre(e.get("chemin") or ""),
-                         "date": e["date"] if not ouvert else max(e["date"], v.get("maj", "")), "rang": 999,
-                         "poste": m, "ouvert_sur": [m] if ouvert else [], "machine": m, "e": e,
-                         "introuvable_ici": not ici})
-        lignes.sort(key=lambda l: (l["date"] or "", -l["rang"]), reverse=True)
-        return lignes[:n]
+                trouve = _RESOLUS[cle]
+                if trouve and trouve.startswith("distant:"):
+                    trouve = None
+                k = _norm(trouve) if trouve else None
+                if k and k in par_chemin:                 # deja dans les recents d'ici : signale a cote
+                    x = par_chemin[k]
+                    if m not in x["aussi_sur"]:
+                        x["aussi_sur"].append(m)
+                    if ouvert and m not in x["ouvert_sur"]:
+                        x["ouvert_sur"].append(m)
+                    continue
+                kk = k or ("?", e.get("empreinte") or "", e.get("nom") or "")
+                date = e["date"] if not ouvert else max(e["date"], v.get("maj", ""))
+                if kk in vus_autres:                      # vu sur deux autres postes : une ligne
+                    x = vus_autres[kk]
+                    if m not in x["aussi_sur"] and m != x["poste"]:
+                        x["aussi_sur"].append(m)
+                    if ouvert and m not in x["ouvert_sur"]:
+                        x["ouvert_sur"].append(m)
+                    continue
+                l = {"chemin": trouve, "chemin_origine": e.get("chemin"), "nom": e.get("nom") or "?",
+                     "dossier": os.path.normpath(os.path.dirname(trouve)) if trouve else _dossier_autre(e.get("chemin") or ""),
+                     "date": date, "rang": 999, "poste": m, "ouvert_sur": [m] if ouvert else [], "aussi_sur": [],
+                     "autre_poste": True, "machine": m, "e": e, "introuvable_ici": not trouve}
+                vus_autres[kk] = l
+                autres.append(l)
+        # autres postes : retrouves ici d'abord, puis les introuvables (grises), chacun du plus recent au plus ancien
+        autres.sort(key=lambda l: l["date"] or "", reverse=True)
+        autres.sort(key=lambda l: l["chemin"] is None)
+        return ici_l + autres[:n]
 
     def autres_machines(self):
         """[(machine, date, nb_fichiers)] des autres machines, la plus recente d'abord."""
