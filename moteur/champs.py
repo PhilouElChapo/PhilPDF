@@ -30,7 +30,7 @@ _MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "aoû
 
 def vide():
     return {"format": {"genre": "aucun"}, "auto": None, "calcul": None, "plage": None, "depend": None, "affiche": None,
-            "majuscules": False, "controle": None, "aide": None, "action": None}
+            "majuscules": False, "controle": None, "aide": None, "action": None, "js_seul": []}
 
 
 CONTROLES = ("email", "nir", "iban", "siret", "rpps")
@@ -199,6 +199,8 @@ def depuis_js(sc):
     m = re.search(r"AFSpecial_KeystrokeEx\s*\(\s*[\"']([^\"']+)", f)
     if m:
         r["format"] = {"genre": "masque", "masque": m.group(1)}
+    if re.search(r"event\.change\s*=\s*event\.change\.toUpperCase", sc.get("K", "")):
+        r["majuscules"] = "tout"
     c = sc.get("C", "")
     m = re.search(r"AFSimple_Calculate\s*\(\s*[\"'](\w+)[\"']\s*,\s*new\s+Array\s*\(([^)]*)\)", c)
     if m:
@@ -445,7 +447,8 @@ def generer_js(doc):
         fmt = (r.get("format") if r.get("_philpdf") else None) or {"genre": "aucun"}
         jf, jk = _js_format(fmt)
         cal = _js_calcul(r.get("calcul"), formats, fmt) if r.get("_philpdf") else ""
-        if r.get("_philpdf") and r.get("majuscules"):
+        maj = r.get("majuscules") if r.get("_philpdf") else None
+        if maj in (True, "tout"):
             jk = ("if (!event.willCommit) event.change = event.change.toUpperCase();\n" + jk).strip()
         if r.get("calcul"):
             calcules.append(nom)
@@ -455,6 +458,12 @@ def generer_js(doc):
             jv = "AFRange_Validate({}, {}, {}, {});".format(
                 "true" if plage.get("min") is not None else "false", plage.get("min") or 0,
                 "true" if plage.get("max") is not None else "false", plage.get("max") or 0)
+        if maj == "premiere":
+            jv = ("if (event.value) event.value = event.value.charAt(0).toUpperCase() + event.value.slice(1);\n"
+                  + jv).strip()
+        elif maj == "mots":
+            jv = ("if (event.value) event.value = event.value.toLowerCase().replace(/(^|[\\s\\-'\u2019])(\\S)/g, "
+                  "function (m, a, b) { return a + b.toUpperCase(); });\n" + jv).strip()
         if r.get("_philpdf") and r.get("controle"):
             jv = (jv + "\n" + _js_controle(r["controle"])).strip()
         jv = "\n".join(x for x in [jv] + sur_source.get(nom, []) +
@@ -462,8 +471,9 @@ def generer_js(doc):
                         else sur_source.get(("affiche", nom), [])) if x)
         ja = "\n".join(sur_source.get(("affiche", nom), [])) if w.field_type in (
             fitz.PDF_WIDGET_TYPE_CHECKBOX, fitz.PDF_WIDGET_TYPE_RADIOBUTTON) else ""
+        seul = set(r.get("js_seul") or []) if r.get("_philpdf") else set()
         for cle, texte in (("F", jf), ("K", jk), ("C", cal), ("V", jv)):
-            _poser_js(doc, fx, cle, _remplacer_bloc(_js(doc, fx, cle), texte))
+            _poser_js(doc, fx, cle, _remplacer_bloc(_js(doc, fx, cle), "" if cle in seul else texte))
         aide = (r.get("aide") or {}) if r.get("_philpdf") else {}
         jfo = _js_auto(r.get("auto") if r.get("_philpdf") else None, fmt)
         if aide.get("entree"):
@@ -474,10 +484,19 @@ def generer_js(doc):
         if act:
             ja = (ja + "\n" + act).strip()
         for nn, ww in l:                                  # widgets : valeur auto au clic, aide, action du bouton
-            _poser_js(doc, ww.xref, "Fo", _remplacer_bloc(_js(doc, ww.xref, "Fo"), jfo))
-            _poser_js(doc, ww.xref, "Bl", _remplacer_bloc(_js(doc, ww.xref, "Bl"), jbl))
-            _poser_js(doc, ww.xref, "U", _remplacer_bloc(_js(doc, ww.xref, "U"), ja))
+            for cle, texte in (("Fo", jfo), ("Bl", jbl), ("U", ja)):
+                _poser_js(doc, ww.xref, cle, _remplacer_bloc(_js(doc, ww.xref, cle), "" if cle in seul else texte))
     _ordre_calcul(doc, par_nom, regles, calcules)
+
+
+def acroform(doc):
+    """(xref, prefixe) pour ecrire dans le dictionnaire du formulaire : Acrobat le range souvent a part
+    (/AcroForm 29 0 R), et un chemin « AcroForm/CO » ne peut alors pas etre ecrit depuis le catalogue."""
+    racine = doc.pdf_catalog()
+    t, v = doc.xref_get_key(racine, "AcroForm")
+    if t == "xref":
+        return int(v.split()[0]), ""
+    return racine, "AcroForm/"
 
 
 def _ordre_calcul(doc, par_nom, regles, calcules):
@@ -503,7 +522,8 @@ def _ordre_calcul(doc, par_nom, regles, calcules):
     for n in ordre:
         w = par_nom[n][0][1]
         refs.append(f"{xref_champ(doc, w)} 0 R")
-    doc.xref_set_key(racine, "AcroForm/CO", "[" + " ".join(refs) + "]" if refs else "null")
+    x_af, pre = acroform(doc)
+    doc.xref_set_key(x_af, pre + "CO", "[" + " ".join(refs) + "]" if refs else "null")
 
 
 def sources(calcul):
@@ -659,6 +679,17 @@ def appliquer_masque(masque, texte):
     return "".join(out) if not brut else None
 
 
+def casse(texte, genre):
+    """Majuscules : True ou "tout" -> DUPONT ; "premiere" -> Première lettre ; "mots" -> Jean-Pierre Dupont."""
+    if genre in (True, "tout"):
+        return texte.upper()
+    if genre == "premiere":
+        return texte[:1].upper() + texte[1:]
+    if genre == "mots":
+        return re.sub(r"(^|[\s\-'’])(\S)", lambda m: m.group(1) + m.group(2).upper(), texte.lower())
+    return texte
+
+
 def saisie(regles, texte):
     """Valeur tapee par l'utilisateur -> (valeur a garder, message d'erreur ou None)."""
     fmt = (regles or {}).get("format") or {"genre": "aucun"}
@@ -667,7 +698,7 @@ def saisie(regles, texte):
     if texte.strip() == "":
         return "", None
     if (regles or {}).get("majuscules"):
-        texte = texte.upper()
+        texte = casse(texte, regles["majuscules"])
     if (regles or {}).get("controle") and not controle_ok(regles["controle"], texte):
         return None, "controle"
     val = texte
@@ -773,3 +804,40 @@ def valeur_brute(v):
     if abs(v - round(v)) < 1e-9:
         return str(int(round(v)))
     return ("%.6f" % v).rstrip("0").rstrip(".")
+
+
+EVENEMENTS = [("K", "frappe"), ("F", "mise en forme"), ("V", "validation"), ("C", "calcul"),
+              ("Fo", "entrée dans le champ"), ("Bl", "sortie du champ"), ("U", "clic (souris relâchée)")]
+SUR_WIDGET = ("Fo", "Bl", "U")
+
+
+def separer_js(texte):
+    """Script -> (partie PhilPDF, votre code)."""
+    texte = texte or ""
+    m = re.search(re.escape(DEBUT) + r"\s*(.*?)\s*" + re.escape(FIN), texte, re.S)
+    philpdf = m.group(1) if m else ""
+    perso = re.sub(re.escape(DEBUT) + r".*?" + re.escape(FIN), "", texte, flags=re.S).strip()
+    return philpdf, perso
+
+
+def js_du_champ(doc, w):
+    """{evenement: (code PhilPDF, votre code)} du champ (et de son premier widget)."""
+    fx = xref_champ(doc, w)
+    out = {}
+    for k, _l in EVENEMENTS:
+        out[k] = separer_js(_js(doc, w.xref if k in SUR_WIDGET else fx, k))
+    return out
+
+
+def poser_js_perso(doc, widgets, perso):
+    """Ecrit « votre code » (perso : {evenement: code}) en gardant la partie PhilPDF ; generer_js() la refait ensuite."""
+    if not widgets:
+        return
+    fx = xref_champ(doc, widgets[0])
+    for k, code in perso.items():
+        cibles = [x.xref for x in widgets] if k in SUR_WIDGET else [fx]
+        for x in cibles:
+            philpdf, _p = separer_js(_js(doc, x, k))
+            code = (code or "").strip()
+            texte = "\n".join(t for t in (code, f"{DEBUT}\n{philpdf}\n{FIN}" if philpdf else "") if t)
+            _poser_js(doc, x, k, texte)

@@ -22,12 +22,22 @@ PREREGLAGES = [  # nom, dpi max, qualite, seuil (on ne touche qu'aux images au-d
 def alleger(octets, reglages):
     """Copie allegee du PDF (octets) selon les reglages ; renvoie les octets."""
     d = fitz.open("pdf", octets)
+    journal = reglages.setdefault("journal", [])
+    from moteur import jbig2
+    if reglages.get("noir_blanc"):                    # scans de texte en gris / couleur -> noir et blanc
+        jbig2.en_noir_et_blanc(d, journal=journal)
     if reglages["images"]:
+        # les images noir et blanc ne sont pas reduites (le texte deviendrait flou) : JBIG2 s'en charge
         try:
             d.rewrite_images(dpi_threshold=reglages["seuil"], dpi_target=reglages["dpi"], quality=reglages["qualite"],
-                             set_to_gray=reglages["gris"])
-        except TypeError:                              # ancienne version de PyMuPDF : sans niveaux de gris
+                             set_to_gray=reglages["gris"], bitonal=False)
+        except TypeError:                              # ancienne version de PyMuPDF
             d.rewrite_images(dpi_threshold=reglages["seuil"], dpi_target=reglages["dpi"], quality=reglages["qualite"])
+    if reglages.get("jbig2", True):
+        jbig2.recompresser(d, journal=journal)
+    if reglages.get("polices_formulaire", True):
+        from moteur import formulaire
+        formulaire.alleger_polices(d, journal=journal)
     if reglages["polices"]:
         try:
             d.subset_fonts()
@@ -102,11 +112,31 @@ class DialogueAlleger(QDialog):
         fi.addRow(_("Qualité JPEG"), self.qualite)
         fi.addRow(self.gris)
         g.addWidget(bi)
+        bn = QGroupBox(_("Scans noir et blanc"))
+        fn = QVBoxLayout(bn)
+        self.jbig2 = QCheckBox(_("Compression JBIG2 sans perte des images noir et blanc (2 à 10 fois plus léger)"))
+        self.jbig2.setObjectName("al_jbig2")
+        self.jbig2.setToolTip(_("Chaque point est gardé : aucune lettre ni aucun chiffre ne peut changer (contrairement "
+                                "au JBIG2 « avec perte » de certains scanners)."))
+        self.jbig2.setChecked(True)
+        fn.addWidget(self.jbig2)
+        self.noir_blanc = QCheckBox(_("Passer en noir et blanc les scans de texte en gris ou en couleur "
+                                      "(avec perte : les gris et couleurs disparaissent)"))
+        self.noir_blanc.setObjectName("al_noir_blanc")
+        self.noir_blanc.setToolTip(_("Seulement les pages qui ne sont que du texte foncé sur fond clair ; les photos "
+                                     "et les fonds colorés ne sont pas touchés. Regardez l'aperçu."))
+        fn.addWidget(self.noir_blanc)
+        g.addWidget(bn)
         bs = QGroupBox(_("Sans perte (le document reste identique à l'œil)"))
         fs = QVBoxLayout(bs)
         self.polices = QCheckBox(_("Polices : ne garder que les lettres utilisées"))
         self.nettoyer = QCheckBox(_("Nettoyer le fichier (objets inutiles, compression maximale)"))
         self.infos = QCheckBox(_("Retirer les informations du fichier (auteur, logiciel, métadonnées)"))
+        self.polices_form = QCheckBox(_("Polices des champs : garder les lettres du clavier (é, à, ç, €...) et "
+                                        "retirer les autres alphabets"))
+        self.polices_form.setObjectName("al_polices_form")
+        fs.addWidget(self.polices_form)
+        self.polices_form.setChecked(True)
         for c in (self.polices, self.nettoyer):
             c.setChecked(True)
             fs.addWidget(c)
@@ -151,7 +181,7 @@ class DialogueAlleger(QDialog):
         v.addLayout(hb)
         for w in (self.dpi, self.seuil, self.qualite):
             w.valueChanged.connect(self._modifie)
-        for w in (self.gris, self.polices, self.nettoyer, self.infos):
+        for w in (self.gris, self.polices, self.nettoyer, self.infos, self.jbig2, self.noir_blanc, self.polices_form):
             w.toggled.connect(self._modifie)
         bi.toggled.connect(self._modifie)
         self._prereglage(0)
@@ -161,7 +191,8 @@ class DialogueAlleger(QDialog):
     def reglages(self):
         return {"images": self.b_images.isChecked(), "dpi": self.dpi.value(), "seuil": max(self.seuil.value(), self.dpi.value()),
                 "qualite": self.qualite.value(), "gris": self.gris.isChecked(), "polices": self.polices.isChecked(),
-                "nettoyer": self.nettoyer.isChecked(), "infos": self.infos.isChecked()}
+                "nettoyer": self.nettoyer.isChecked(), "infos": self.infos.isChecked(), "jbig2": self.jbig2.isChecked(),
+                "noir_blanc": self.noir_blanc.isChecked(), "polices_formulaire": self.polices_form.isChecked()}
 
     def _prereglage(self, i):
         if i >= len(PREREGLAGES):
@@ -197,7 +228,8 @@ class DialogueAlleger(QDialog):
             return
         self.poids.setText(_("Calcul en cours..."))
         self.b_calc.setEnabled(False)
-        self.calcul = _Calcul(self.octets, self.reglages())
+        self._regl = self.reglages()
+        self.calcul = _Calcul(self.octets, self._regl)
 
         def fini(res, err):
             self.b_calc.setEnabled(True)
@@ -208,7 +240,9 @@ class DialogueAlleger(QDialog):
             avant, apres = len(self.octets), len(res)
             gain = 100 - apres * 100 // max(1, avant)
             self.poids.setText(_("<b>{a} Ko → {b} Ko</b> ({g} % de moins)", a=avant // 1024, b=apres // 1024, g=gain) +
-                               ("" if gain > 3 else "<br>" + _("Peu de gain : ce document est déjà léger.")))
+                               ("" if gain > 3 else "<br>" + _("Peu de gain : ce document est déjà léger.")) +
+                               "".join("<br><span style='color:#555;font-size:12px'>· " + l + "</span>"
+                                       for l in self._regl.get("journal", [])[:6]))
             self.ap.setPixmap(self._apercu(res))
         self.calcul.fini.connect(fini)
         self.calcul.start()

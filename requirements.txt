@@ -9,3 +9,5 @@ keyring
 pyspellchecker
 pyhanko>=0.25
 pyhanko-certvalidator
+openpyxl
+fonttools

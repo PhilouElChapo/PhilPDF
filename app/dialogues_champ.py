@@ -1,6 +1,8 @@
 """Proprietes d'un champ de formulaire, en une seule fenetre simple (ce qu'Acrobat range dans six onglets et du
 JavaScript) : general, format, valeur automatique, calcul, plage, listes, listes dependantes, afficher / masquer.
 Et l'ordre de tabulation."""
+import re
+
 import pymupdf as fitz
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QLineEdit, QComboBox, QCheckBox,
@@ -87,6 +89,8 @@ class DialogueChamp(QDialog):
             self._texte()
         if self.est_liste:
             self._liste()
+        if self.est_texte or self.est_liste:
+            self._police()
         if self.est_texte or ft == T.PDF_WIDGET_TYPE_COMBOBOX:
             self._format()
         self.est_bouton = ft == T.PDF_WIDGET_TYPE_BUTTON
@@ -98,6 +102,8 @@ class DialogueChamp(QDialog):
             self._plage()
         if self.est_liste:
             self._depend()
+        if self.est_case:
+            self._case()
         if self.est_case or self.est_liste:
             self._affiche()
         if self.est_bouton:
@@ -109,7 +115,21 @@ class DialogueChamp(QDialog):
         bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
         bb.accepted.connect(self.valider)
         bb.rejected.connect(self.reject)
-        ext.addWidget(bb)
+        bas = QHBoxLayout()
+        b_js = QPushButton(_("JavaScript..."))
+        b_js.setObjectName("ch_javascript")
+        b_js.setToolTip(_("Voir le code produit par ces réglages, ou ajouter le vôtre (pour Acrobat)"))
+        b_js.clicked.connect(self.ouvrir_js)
+        bas.addWidget(b_js)
+        bas.addStretch(1)
+        bas.addWidget(bb)
+        ext.addLayout(bas)
+        self.js_perso = None
+
+    def ouvrir_js(self):
+        d = DialogueJavaScript(self, self.doc, self.w, self.r.get("js_seul") or [])
+        if d.exec() == QDialog.Accepted:
+            self.js_perso, self.js_seul = d.perso, d.seul
 
     def _groupe(self, titre):
         g = QGroupBox(titre)
@@ -162,6 +182,33 @@ class DialogueChamp(QDialog):
         self.affichage.setCurrentIndex(max(0, self.affichage.findData(w.field_display or 0)))
         f.addRow(_("Affichage"), self.affichage)
 
+    def _case(self):
+        from moteur import formulaire as FO
+        w = self.w
+        f = self._groupe(_("Coche"))
+        self.c_style = QComboBox()
+        self.c_style.setObjectName("ch_style_coche")
+        noms = {"coche": _("Coche"), "croix": _("Croix"), "rond": _("Rond"), "carre": _("Carré"),
+                "losange": _("Losange"), "etoile": _("Étoile")}
+        for k, (_c, sym) in FO.STYLES_COCHE.items():
+            self.c_style.addItem(f"{sym}   {noms[k]}", k)
+        self.c_style.setCurrentIndex(max(0, self.c_style.findData(FO.style_coche(self.doc, w))))
+        f.addRow(_("Signe quand c'est coché"), self.c_style)
+        self.c_couleur = QComboBox()
+        for k, t in (("0 0 0", _("Noir")), ("0.08 0.38 0.76", _("Bleu")), ("0.79 0.15 0.18", _("Rouge")),
+                     ("0.13 0.52 0.24", _("Vert"))):
+            self.c_couleur.addItem(t, k)
+        f.addRow(_("Couleur"), self.c_couleur)
+        if w.field_type == T.PDF_WIDGET_TYPE_CHECKBOX:
+            self.c_valeur = QLineEdit(w.on_state() if hasattr(w, "on_state") and w.on_state() not in (True, None) else "Oui")
+            self.c_valeur.setObjectName("ch_valeur_case")
+            self.c_valeur.setToolTip(_("Ce que vaut la case cochée (lu par les calculs et quand on exporte les "
+                                       "données) : Oui, X, Positif..."))
+            f.addRow(_("Valeur quand c'est coché"), self.c_valeur)
+            self.c_defaut = QCheckBox(_("Cochée par défaut (et remise cochée par « Réinitialiser »)"))
+            self.c_defaut.setChecked(self.doc.xref_get_key(C.xref_champ(self.doc, w), "DV")[1] not in ("null", "/Off"))
+            f.addRow(self.c_defaut)
+
     def _texte(self):
         w = self.w
         f = self._groupe(_("Texte"))
@@ -179,16 +226,52 @@ class DialogueChamp(QDialog):
         tq, q = self.doc.xref_get_key(C.xref_champ(self.doc, w), "Q")
         self.alignement.setCurrentIndex(max(0, self.alignement.findData(int(q) if tq == "int" else 0)))
         f.addRow(_("Alignement"), self.alignement)
-        self.taille = QSpinBox()
-        self.taille.setRange(0, 72)
-        self.taille.setSpecialValueText(_("automatique"))
-        self.taille.setValue(int(w.text_fontsize or 0))
-        f.addRow(_("Taille du texte"), self.taille)
         t_dv, dv = self.doc.xref_get_key(C.xref_champ(self.doc, w), "DV")
         self.defaut = QLineEdit(dv if t_dv == "string" else "")
         self.defaut.setObjectName("ch_defaut")
         self.defaut.setPlaceholderText(_("ce qui est écrit d'avance (et remis par « Réinitialiser »)"))
         f.addRow(_("Valeur par défaut"), self.defaut)
+
+    def _police(self):
+        """Police, taille et couleur du texte du champ (comme l'onglet Aspect d'Acrobat)."""
+        from moteur import apparence as AP
+        w = self.w
+        f = self._groupe(_("Police du texte"))
+        police, taille, couleur = AP.lire_da(self.doc, w)
+        self.police = QComboBox()
+        self.police.setObjectName("ch_police")
+        for k, lib in (("Helv", "Helvetica"), ("HeBo", "Helvetica gras"), ("HeOb", "Helvetica italique"),
+                       ("TiRo", "Times"), ("TiBo", "Times gras"), ("TiIt", "Times italique"),
+                       ("Cour", "Courier"), ("CoBo", "Courier gras")):
+            self.police.addItem(lib, k)
+        for k, x in AP.polices_formulaire(self.doc).items():   # polices du document (ex. une police manuscrite)
+            if k in AP.STANDARD or k in ("ZaDb", "Symb"):
+                continue
+            nom = self.doc.xref_get_key(x, "BaseFont")[1].lstrip("/").split("+")[-1] or k
+            self.police.addItem(nom + "  " + _("(du document)"), k)
+        if self.police.findData(police) < 0:
+            self.police.addItem(police, police)
+        self.police.setCurrentIndex(self.police.findData(police))
+        f.addRow(_("Police"), self.police)
+        self.taille = QSpinBox()
+        self.taille.setObjectName("ch_taille")
+        self.taille.setRange(0, 96)
+        self.taille.setSuffix(" pt")
+        self.taille.setSpecialValueText(_("automatique (s'adapte au champ)"))
+        self.taille.setValue(int(round(taille or 0)))
+        f.addRow(_("Taille"), self.taille)
+        self.couleur_txt = QComboBox()
+        self.couleur_txt.setObjectName("ch_couleur")
+        choix = [((0, 0, 0), _("Noir")), ((0.08, 0.38, 0.76), _("Bleu")), ((0, 0, 0.55), _("Bleu foncé")),
+                 ((0.79, 0.15, 0.18), _("Rouge")), ((0.13, 0.52, 0.24), _("Vert")), ((0.4, 0.4, 0.4), _("Gris"))]
+        for c, lib in choix:
+            self.couleur_txt.addItem(lib, c)
+        i = next((k for k, (c, _l) in enumerate(choix) if all(abs(a - b) < 0.02 for a, b in zip(c, couleur))), None)
+        if i is None:
+            self.couleur_txt.addItem(_("Couleur actuelle"), tuple(couleur))
+            i = self.couleur_txt.count() - 1
+        self.couleur_txt.setCurrentIndex(i)
+        f.addRow(_("Couleur"), self.couleur_txt)
 
     def _format(self):
         fmt = self.r.get("format") or {"genre": "aucun"}
@@ -273,10 +356,15 @@ class DialogueChamp(QDialog):
 
     def _controle(self):
         f = self._groupe(_("Contrôle de la saisie"))
-        self.majuscules = QCheckBox(_("Mettre en majuscules ce qui est tapé (noms, villes...)"))
+        self.majuscules = QComboBox()
         self.majuscules.setObjectName("ch_majuscules")
-        self.majuscules.setChecked(bool(self.r.get("majuscules")))
-        f.addRow(self.majuscules)
+        for k, t in ((False, _("Laisser tel que tapé")), ("tout", _("TOUT EN MAJUSCULES (noms, villes...)")),
+                     ("premiere", _("Première lettre en majuscule")),
+                     ("mots", _("Première Lettre De Chaque Mot (prénoms, Jean-Pierre)"))):
+            self.majuscules.addItem(t, k)
+        m_ = self.r.get("majuscules")
+        self.majuscules.setCurrentIndex(max(0, self.majuscules.findData("tout" if m_ is True else (m_ or False))))
+        f.addRow(_("Majuscules"), self.majuscules)
         self.controle = QComboBox()
         self.controle.setObjectName("ch_controle")
         for k, t in ((None, _("Aucun")), ("email", _("Adresse e-mail")), ("nir", _("N° de Sécurité sociale (avec la clef)")),
@@ -593,6 +681,7 @@ class DialogueChamp(QDialog):
 
     def regles(self):
         r = C.vide()
+        r["js_seul"] = list(getattr(self, "js_seul", self.r.get("js_seul") or []))
         if hasattr(self, "f_genre"):
             g = self.f_genre.currentData()
             if g in ("nombre", "montant"):
@@ -629,7 +718,7 @@ class DialogueChamp(QDialog):
             else:
                 r["calcul"] = {"genre": g, "champs": self._coches(self.c_champs)}
         if hasattr(self, "majuscules"):
-            r["majuscules"] = self.majuscules.isChecked()
+            r["majuscules"] = self.majuscules.currentData() or False
             r["controle"] = self.controle.currentData()
         if hasattr(self, "aide_entree") and (self.aide_entree.text().strip() or self.aide_vide.text().strip()):
             r["aide"] = {"entree": self.aide_entree.text().strip(), "vide": self.aide_vide.text().strip()}
@@ -674,9 +763,18 @@ class DialogueChamp(QDialog):
                 QMessageBox.warning(self, self.windowTitle(), _("Champ inconnu dans la formule : {x}", x=", ".join(inconnus)))
                 return
         self.resultat = {"nom": nom, "info": self.info.text().strip(), "obligatoire": self.obligatoire.isChecked(),
-                         "lecture": self.lecture.isChecked(), "affichage": self.affichage.currentData(), "regles": r}
+                         "lecture": self.lecture.isChecked(), "affichage": self.affichage.currentData(), "regles": r,
+                         "js_perso": self.js_perso}
         if self.est_bouton:
             self.resultat["legende"] = self.b_legende.text().strip()
+        if getattr(self, "police", None) is not None:
+            self.resultat["police"] = {"nom": self.police.currentData(), "taille": self.taille.value(),
+                                       "couleur": tuple(self.couleur_txt.currentData())}
+        if getattr(self, "c_style", None) is not None:
+            self.resultat["coche"] = {"style": self.c_style.currentData(),
+                                      "couleur": tuple(float(x) for x in self.c_couleur.currentData().split()),
+                                      "valeur": self.c_valeur.text().strip() if hasattr(self, "c_valeur") else None,
+                                      "defaut": self.c_defaut.isChecked() if hasattr(self, "c_defaut") else None}
         if self.est_texte:
             self.resultat["defaut"] = self.defaut.text()
         if self.est_liste:
@@ -736,3 +834,83 @@ class DialogueTabulation(QDialog):
 
     def ordre(self):
         return [self.liste.item(i).data(Qt.UserRole) for i in range(self.liste.count())]
+
+
+class DialogueJavaScript(QDialog):
+    """Le JavaScript du champ, evenement par evenement : ce que PhilPDF produit (suit les reglages, en lecture seule)
+    et votre code, garde tel quel. « Mon code seul » : PhilPDF n'ecrit plus rien pour cet evenement."""
+
+    def __init__(self, parent, doc, w, seul):
+        super().__init__(parent)
+        from PySide6.QtWidgets import QTabWidget
+        from PySide6.QtGui import QFont
+        self.setWindowTitle(_("JavaScript du champ « {nom} »", nom=w.field_name))
+        self.resize(820, 600)
+        v = QVBoxLayout(self)
+        l = QLabel(_("En haut, le code que PhilPDF écrit d'après vos réglages (il se refait tout seul). En bas, votre "
+                     "code : il est gardé tel quel. Il marche dans Acrobat et les lecteurs qui gèrent le JavaScript ; "
+                     "PhilPDF, lui, applique ses propres réglages sans exécuter votre code."))
+        l.setWordWrap(True)
+        l.setStyleSheet("color:#555")
+        v.addWidget(l)
+        self.onglets = QTabWidget()
+        v.addWidget(self.onglets, 1)
+        mono = QFont("Consolas")
+        mono.setStyleHint(QFont.Monospace)
+        self.editeurs, self.cases = {}, {}
+        codes = C.js_du_champ(doc, w)
+        noms = {"K": _("Frappe"), "F": _("Mise en forme"), "V": _("Validation"), "C": _("Calcul"),
+                "Fo": _("Entrée dans le champ"), "Bl": _("Sortie du champ"), "U": _("Clic")}
+        aides = {"K": _("À chaque touche tapée (event.change, event.willCommit)."),
+                 "F": _("Pour afficher la valeur (event.value), sans la changer."),
+                 "V": _("Quand la valeur est validée ; event.rc = false la refuse."),
+                 "C": _("Pour calculer la valeur à partir d'autres champs (this.getField(\"Nom\").value)."),
+                 "Fo": _("Quand on entre dans le champ."), "Bl": _("Quand on quitte le champ."),
+                 "U": _("Quand on clique (boutons, cases).")}
+        for k, _l in C.EVENEMENTS:
+            philpdf, perso = codes.get(k, ("", ""))
+            page = QWidget()
+            pv = QVBoxLayout(page)
+            a = QLabel(aides[k])
+            a.setStyleSheet("color:#555")
+            pv.addWidget(a)
+            pv.addWidget(QLabel("<b>" + _("Produit par PhilPDF") + "</b>"))
+            g = QPlainTextEdit(philpdf or _("(rien pour cet événement)"))
+            g.setReadOnly(True)
+            g.setFont(mono)
+            g.setStyleSheet("background:#f4f4f4;color:#444")
+            g.setMaximumHeight(140)
+            pv.addWidget(g)
+            pv.addWidget(QLabel("<b>" + _("Votre code") + "</b>"))
+            e = QPlainTextEdit(perso)
+            e.setFont(mono)
+            e.setObjectName("js_" + k)
+            e.setPlaceholderText(_("Exemple : if (event.value == \"\") app.alert(\"Champ à remplir\");"))
+            pv.addWidget(e, 1)
+            c = QCheckBox(_("Mon code seul : ne plus écrire le code PhilPDF de cet événement"))
+            c.setChecked(k in seul)
+            pv.addWidget(c)
+            if philpdf:
+                bc = QPushButton(_("Reprendre le code PhilPDF pour le modifier"))
+                bc.clicked.connect(lambda _x=False, e=e, c=c, code=philpdf: (
+                    e.setPlainText((e.toPlainText().strip() + "\n" + code).strip()), c.setChecked(True)))
+                pv.addWidget(bc)
+            self.editeurs[k], self.cases[k] = e, c
+            self.onglets.addTab(page, noms[k] + (" ●" if philpdf or perso else ""))
+        bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
+        bb.accepted.connect(self.valider)
+        bb.rejected.connect(self.reject)
+        v.addWidget(bb)
+
+    def valider(self):
+        for k, e in self.editeurs.items():           # controle simple : accolades et parentheses equilibrees
+            t = re.sub(r"(\"(?:\\.|[^\"])*\"|'(?:\\.|[^'])*'|//[^\n]*|/\*.*?\*/)", "", e.toPlainText(), flags=re.S)
+            if t.count("{") != t.count("}") or t.count("(") != t.count(")"):
+                QMessageBox.warning(self, self.windowTitle(),
+                                    _("Onglet « {e} » : une accolade ou une parenthèse n'est pas refermée.",
+                                      e=self.onglets.tabText(list(self.editeurs).index(k)).rstrip(" ●")))
+                self.onglets.setCurrentIndex(list(self.editeurs).index(k))
+                return
+        self.perso = {k: e.toPlainText() for k, e in self.editeurs.items()}
+        self.seul = [k for k, c in self.cases.items() if c.isChecked()]
+        self.accept()

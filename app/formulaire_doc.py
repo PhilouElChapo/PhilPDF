@@ -136,7 +136,8 @@ class MixinFormulaire:
         if genre == "bouton":
             return self.creer_bouton(n, r)
         if genre == "auto":
-            genre = "case" if r.width <= 20 and r.height <= 20 else "texte"
+            carre = 0.7 <= r.width / max(1, r.height) <= 1.45
+            genre = "case" if (r.width <= 20 and r.height <= 20) or (carre and max(r.width, r.height) <= 50) else "texte"
         if genre in ("case", "radio"):
             cote = max(min(r.width, r.height), 10)
             r = fitz.Rect(r.x0, r.y0, r.x0 + cote, r.y0 + cote)
@@ -269,7 +270,9 @@ class MixinFormulaire:
                 if x.field_type in (T.PDF_WIDGET_TYPE_BUTTON, T.PDF_WIDGET_TYPE_SIGNATURE) or self.champ_verrouille(x):
                     continue
                 if x.field_type in (T.PDF_WIDGET_TYPE_CHECKBOX, T.PDF_WIDGET_TYPE_RADIOBUTTON):
-                    x.field_value = False
+                    t_dv, dv = self.doc.xref_get_key(C.xref_champ(self.doc, x), "DV")
+                    x.field_value = (x.on_state() if t_dv == "name" and dv not in ("/Off",) and
+                                     dv.lstrip("/") == str(x.on_state()) else False)
                     self._maj_widget(x)
                 else:
                     t_dv, dv = self.doc.xref_get_key(C.xref_champ(self.doc, x), "DV")
@@ -294,12 +297,41 @@ class MixinFormulaire:
 
     def aide_entree(self, pw, w):
         """Message d'aide du champ, montre a l'entree (comme Acrobat, sans fenetre a fermer)."""
+        ancienne = getattr(self, "_bulle_aide", None)
+        if ancienne is not None:
+            try:
+                ancienne.deleteLater()
+            except RuntimeError:
+                pass
+            self._bulle_aide = None
         aide = (self.regles_champ(w).get("aide") or {}).get("entree")
-        if aide:
-            from PySide6.QtWidgets import QToolTip
+        if aide:                                      # bulle jaune sous le champ, tant qu'on y ecrit
+            from PySide6.QtWidgets import QLabel
             r = pw.vers_ecran(w.rect).toRect()
-            QToolTip.showText(pw.mapToGlobal(r.bottomLeft()), aide, pw)
+            b = QLabel("ⓘ  " + aide, pw)
+            b.setObjectName("bulle_aide")
+            b.setWordWrap(True)
+            b.setMaximumWidth(max(260, r.width()))
+            b.setStyleSheet("QLabel{background:#fff8c5;color:#3d3000;border:1px solid #e0c200;border-radius:5px;"
+                            "padding:5px 9px;font-size:12px}")
+            b.adjustSize()
+            y = r.bottom() + 4
+            if y + b.height() > pw.height():
+                y = max(0, r.top() - b.height() - 4)
+            b.move(max(0, min(r.left(), pw.width() - b.width())), y)
+            b.show()
+            b.raise_()
+            self._bulle_aide = b
             self.message(aide)
+
+    def fermer_bulle_aide(self):
+        b = getattr(self, "_bulle_aide", None)
+        if b is not None:
+            try:
+                b.deleteLater()
+            except RuntimeError:
+                pass
+            self._bulle_aide = None
 
     def avant_enregistrer(self):
         """Champs obligatoires vides : on le dit (avec leurs messages), on enregistre si vous le voulez."""
@@ -409,7 +441,16 @@ class MixinFormulaire:
         if d.exec() != QDialog.Accepted:
             return
         self.memoriser(_("Propriétés du champ « {nom} »", nom=w.field_name))
-        res = d.resultat
+        try:
+            self._appliquer_proprietes(d.resultat, w)
+        except Exception as e:                            # rien a moitie : on revient en arriere et on le dit
+            import traceback
+            traceback.print_exc()
+            self.annuler()
+            QMessageBox.warning(self, _("Propriétés du champ"),
+                                _("Les propriétés n'ont pas pu être enregistrées (rien n'a été changé) :\n{e}", e=e))
+
+    def _appliquer_proprietes(self, res, w):
         ancien = w.field_name
         for x in self._widgets_nom(ancien):
             if res["nom"] != ancien:
@@ -431,13 +472,31 @@ class MixinFormulaire:
                 x.choice_values = sorted(res["items"], key=str.lower) if res["trier"] else res["items"]
             x.field_flags = fl
             x.field_display = res["affichage"]
+            if res.get("police"):                         # police, taille, couleur : ecrites avant de redessiner
+                from moteur import apparence as AP
+                po = res["police"]
+                AP.assurer_police(self.doc, po["nom"])
+                AP.ecrire_da(self.doc, x, po["nom"], float(po["taille"]), po["couleur"])
+                if po["nom"] in AP.PYMUPDF:
+                    x.text_font = po["nom"]
+                x.text_fontsize = po["taille"]
+                x.text_color = po["couleur"]
             if res.get("legende"):
                 x.button_caption = res["legende"]
                 self._maj_widget(x)
                 dessiner_bouton(self.doc, x)
-            self._maj_widget(x)
             if "alignement" in res:
                 self.doc.xref_set_key(C.xref_champ(self.doc, x), "Q", str(res["alignement"]) if res["alignement"] else "null")
+                if C.xref_champ(self.doc, x) != x.xref:
+                    self.doc.xref_set_key(x.xref, "Q", str(res["alignement"]) if res["alignement"] else "null")
+            self._maj_widget(x)
+        if res.get("coche"):                              # style de la coche, valeur exportee, cochee par defaut
+            co = res["coche"]
+            for x in self._widgets_nom(res["nom"]) or self._widgets_nom(ancien):
+                etat = FO.dessiner_case(self.doc, x, co["style"], co["couleur"],
+                                        co["valeur"] if x.field_type == T.PDF_WIDGET_TYPE_CHECKBOX else None)
+                if co.get("defaut") is not None:
+                    self.doc.xref_set_key(C.xref_champ(self.doc, x), "DV", f"/{etat}" if co["defaut"] else "null")
         if "defaut" in res:                               # valeur par defaut (/DV), et valeur si le champ est vide
             for x in self._widgets_nom(res["nom"] if res["nom"] != ancien else ancien) or self._widgets_nom(ancien):
                 fx = C.xref_champ(self.doc, x)
@@ -450,6 +509,8 @@ class MixinFormulaire:
             self._renommer_dans_regles(ancien, res["nom"])
         w = self._widget_nom(res["nom"])
         C.ecrire(self.doc, w, res["regles"])
+        if res.get("js_perso") is not None:               # votre JavaScript, garde a cote de celui de PhilPDF
+            C.poser_js_perso(self.doc, self._widgets_nom(res["nom"]), res["js_perso"])
         C.generer_js(self.doc)
         if w.field_value:                                 # reaffiche la valeur avec son format
             self._ecrire_valeur(w, w.field_value, res["regles"])

@@ -57,6 +57,16 @@ def verifier(sortie):
         lignes.append(f"signature numerique: {ex}")
     ok &= bon
     lignes.append(f"signature numerique: {'OK' if bon else 'ECHEC'}")
+    try:                                         # JBIG2 (bibliotheque C embarquee) et Excel
+        from moteur import jbig2, tableaux
+        flux = jbig2.encoder(bytes([0x0F, 0xF0] * 64), 16, 64)
+        bon = jbig2.rapide() and flux[:4] == b"\0\0\0\0"
+        tableaux.ecrire_xlsx(os.path.join(tempfile.mkdtemp(), "v.xlsx"), [("A", [["a", "1,5"]])])
+    except Exception as ex:
+        bon = False
+        lignes.append(f"jbig2 / excel: {ex}")
+    ok &= bon
+    lignes.append(f"moteur jbig2 et excel: {'OK' if bon else 'ECHEC'}")
     d = fitz.open(); p = d.new_page()
     p.insert_text((72, 100), "Net à payer : 130,00 EUR", fontname="hebo", fontsize=12)
     tmp = tempfile.mkdtemp(); src = os.path.join(tmp, "t.pdf"); d.save(src)

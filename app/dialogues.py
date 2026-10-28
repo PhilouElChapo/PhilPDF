@@ -922,7 +922,8 @@ class DialogueEntete(QDialog):
         corps = QWidget()
         f = QFormLayout(corps)
         f.setContentsMargins(0, 0, 0, 0)
-        aide = QLabel(_('Codes : {page} numéro de page, {pages} nombre de pages, {date} date du jour.'))
+        aide = QLabel(_('Codes : {page} numéro de page, {pages} nombre de pages, {date} date du jour, '
+                        '{bates} numéro Bates (réglé plus bas).'))
         aide.setWordWrap(True)
         aide.setStyleSheet("color:#616161")
         f.addRow(aide)
@@ -941,6 +942,32 @@ class DialogueEntete(QDialog):
         self.marge.setValue(36)
         self.marge.setSuffix(" pt")
         f.addRow(_('Marge'), self.marge)
+        # numerotation Bates : un numero unique et continu sur chaque page (pieces d'un dossier, avocats, expertises)
+        tb = QLabel("<b>" + _("Numérotation Bates") + "</b>")
+        f.addRow(tb)
+        self.b_prefixe = QLineEdit()
+        self.b_prefixe.setObjectName("bates_prefixe")
+        self.b_prefixe.setPlaceholderText(_("ex. DOSSIER-"))
+        f.addRow(_("Préfixe"), self.b_prefixe)
+        self.b_debut = QSpinBox()
+        self.b_debut.setObjectName("bates_debut")
+        self.b_debut.setRange(0, 99999999)
+        self.b_debut.setValue(1)
+        f.addRow(_("Premier numéro"), self.b_debut)
+        self.b_chiffres = QSpinBox()
+        self.b_chiffres.setObjectName("bates_chiffres")
+        self.b_chiffres.setRange(1, 12)
+        self.b_chiffres.setValue(6)
+        f.addRow(_("Nombre de chiffres"), self.b_chiffres)
+        self.b_suffixe = QLineEdit()
+        self.b_suffixe.setPlaceholderText(_("ex. -A"))
+        f.addRow(_("Suffixe"), self.b_suffixe)
+        self.b_exemple = QLabel()
+        self.b_exemple.setStyleSheet("color:#1462c2")
+        b_mettre = QPushButton(_("Mettre le numéro Bates en bas à droite"))
+        b_mettre.setObjectName("bates_poser")
+        b_mettre.clicked.connect(lambda: self.champs["bd"].setText("{bates}"))
+        f.addRow(self.b_exemple, b_mettre)
         bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -952,7 +979,24 @@ class DialogueEntete(QDialog):
             e.textChanged.connect(self.apercu.maj)
         self.taille.valueChanged.connect(self.apercu.maj)
         self.marge.valueChanged.connect(self.apercu.maj)
+        for w in (self.b_prefixe, self.b_suffixe):
+            w.textChanged.connect(self._maj_bates)
+        for w in (self.b_debut, self.b_chiffres):
+            w.valueChanged.connect(self._maj_bates)
+        self._maj_bates()
         self.apercu.maj()
+
+    def bates(self, n):
+        """Numero Bates de la n-ieme page numerotee (0 = la premiere)."""
+        return f"{self.b_prefixe.text()}{self.b_debut.value() + n:0{self.b_chiffres.value()}d}{self.b_suffixe.text()}"
+
+    def _maj_bates(self, *_a):
+        self.b_exemple.setText(_("Pages : {a} à {b}", a=self.bates(0), b=self.bates(max(0, self.total - 1))))
+        self.apercu.maj()
+
+    def dernier_bates(self):
+        """Prochain numero libre apres ce document (pour continuer sur le document suivant)."""
+        return self.b_debut.value() + self.total
 
     def appliquer(self, doc, premier=1, total=None):
         date = datetime.date.today().strftime("%d/%m/%Y")
@@ -963,7 +1007,8 @@ class DialogueEntete(QDialog):
             R = page.rect
             for cle, e in self.champs.items():
                 try:
-                    txt = e.text().format(page=premier + n, pages=total, date=date) if e.text() else ""
+                    txt = e.text().format(page=premier + n, pages=total, date=date,
+                                          bates=self.bates(premier - 1 + n)) if e.text() else ""
                 except (KeyError, IndexError, ValueError):
                     txt = e.text()
                 if not txt:
@@ -1108,7 +1153,8 @@ class DialogueExporter(QDialog):
         self.setWindowTitle(_('Exporter'))
         f = QFormLayout(self)
         self.format = QComboBox()
-        self.format.addItems([_('Word (.docx)'), _('Images JPG'), _('Images PNG'), _('Texte (.txt)')])
+        self.format.addItems([_('Word (.docx)'), _('Images JPG'), _('Images PNG'), _('Texte (.txt)'),
+                              _('Excel (.xlsx) : les tableaux')])
         f.addRow(_('Format'), self.format)
         self.dpi = QComboBox()
         self.dpi.addItems(["96", "150", "200", "300"])

@@ -1342,6 +1342,12 @@ class Fenetre(QMainWindow):
             from .dialogues_ia import comparer
             comparer(self, o, avec_ia=(oid == "ia_comparer"))
             return
+        if oid == "lot":
+            from .lot import DialogueLot
+            dossier = os.path.dirname(o.chemin) if o and getattr(o, "chemin", None) else self.dossier_depart()
+            self._lot = DialogueLot(self, self.params, dossier)
+            self._lot.show()
+            return
         if oid == "imprimer" and not o:
             self.imprimer_plusieurs()
             return
@@ -1396,6 +1402,8 @@ class Fenetre(QMainWindow):
                     o.detecter_champs()
         elif oid == "biffer":
             o.changer_mode("biffer")
+        elif oid == "mesure":
+            o.changer_mode("mesure")
         elif oid == "commentaires":
             self.statusBar().showMessage(_('Sélectionnez du texte : la barre rapide apparaît au-dessus de la sélection.'), 10000)
         elif oid == "remplir_signer":
@@ -1403,7 +1411,16 @@ class Fenetre(QMainWindow):
         elif oid == "exporter":
             d = DialogueExporter(self)
             if d.exec() == QDialog.Accepted:
+                if d.format.currentIndex() == 4:
+                    self.lancer_outil("excel")
+                    return
                 self.exporter(["docx", "jpg", "png", "txt"][d.format.currentIndex()], int(d.dpi.currentText()), d.qualite.value())
+        elif oid == "archiver":
+            from .archiver import DialogueArchiver
+            DialogueArchiver(self, o).exec()
+        elif oid == "excel":
+            from .dialogues_excel import DialogueExcel
+            DialogueExcel(o).exec()
         elif oid == "imprimer":
             self.imprimer([o])
         elif oid == "alleger":

@@ -279,6 +279,68 @@ if lst_ is not None:
     o3.changer_mode(None)
     o3.clic_bouton(next(w for w in o3.doc[0].widgets() if w.xref == bt_.xref))
     verif(o3._widget_nom(lst_.field_name).field_value == ch_, f"liste : valeur par défaut remise ({ch_})")
+# premiere lettre en majuscule, chaque mot ; votre JavaScript garde a cote de celui de PhilPDF
+verif(C.casse("dupont", "premiere") == "Dupont" and C.casse("jean-PIERRE de la tour", "mots") == "Jean-Pierre De La Tour",
+      "majuscules : première lettre, chaque mot")
+MF.creer(o3.doc, {0: [{"nom": "Prenom", "rect": (300, 640, 420, 660), "genre": "texte"}]})
+o3.changer_mode("formulaire")
+def _regl_prenom(d):
+    d.majuscules.setCurrentIndex(d.majuscules.findData("mots"))
+    d.js_perso, d.js_seul = {"Bl": 'app.alert("au revoir");'}, []
+proprietes("Prenom", _regl_prenom, o3)
+w_pr = o3._widget_nom("Prenom")
+sc_ = C.scripts(o3.doc, w_pr)
+verif("toUpperCase" in sc_.get("V", "") and 'app.alert("au revoir")' in sc_.get("Bl", ""),
+      "JavaScript : chaque mot (validation) et votre code gardé")
+o3.changer_mode(None)
+o3.valeur_champ(0, w_pr.xref, "marie-claire")
+verif(o3._widget_nom("Prenom").field_value == "Marie-Claire", "saisie : Première Lettre De Chaque Mot")
+C.generer_js(o3.doc)
+verif('app.alert("au revoir")' in C.scripts(o3.doc, o3._widget_nom("Prenom")).get("Bl", ""),
+      "votre code survit à la régénération")
+# style de coche, couleur, valeur exportee ; police et taille ; formulaire range a part (comme Acrobat)
+import moteur.formulaire as MF2
+d5 = fitz.open()
+p5 = d5.new_page()
+MF2.creer(d5, {0: [{"nom": "Resultat", "rect": (100, 100, 130, 130), "genre": "case"},
+                   {"nom": "Patient", "rect": (100, 200, 300, 220), "genre": "texte"}]})
+cat5 = d5.pdf_catalog()
+af5 = d5.xref_get_key(cat5, "AcroForm")
+if af5[0] == "dict":                                 # AcroForm en objet separe
+    x5 = d5.get_new_xref()
+    d5.update_object(x5, af5[1])
+    d5.xref_set_key(cat5, "AcroForm", f"{x5} 0 R")
+f5 = os.path.join(T, "acroform_a_part.pdf")
+d5.save(f5)
+o5 = OngletDocument(Parametres(), f5)
+o5.changer_mode("formulaire")
+def _r5(d):
+    if d.est_case:
+        d.c_style.setCurrentIndex(d.c_style.findData("etoile"))
+        d.c_valeur.setText("Positif")
+    else:
+        d.police.setCurrentIndex(d.police.findData("TiBo"))
+        d.taille.setValue(14)
+proprietes("Resultat", _r5, o5)
+proprietes("Patient", _r5, o5)
+w5 = o5._widget_nom("Resultat")
+verif(w5.on_state() == "Positif" and o5.doc.xref_get_key(w5.xref, "MK/CA")[1] == "H",
+      "case : style étoile (MK/CA d'Acrobat) et valeur exportée")
+o5.changer_mode(None)
+o5.remplir_champ(o5.page_widgets[0], w5)
+ap5 = o5.doc.xref_get_key(o5._widget_nom("Resultat").xref, "AP/N")[1]
+verif(o5._widget_nom("Resultat").field_value == "Positif" and "/Positif" in ap5, "case cochée : apparence gardée")
+o5.valeur_champ(0, o5._widget_nom("Patient").xref, "Dupont")
+verif("/TiBo 14 Tf" in o5.doc.xref_get_key(o5._widget_nom("Patient").xref, "DA")[1],
+      "police Times gras 14 gardée après la saisie (formulaire rangé à part)")
+verif("Dupont" in o5.doc[0].get_text(), "texte dessiné dans le champ")
+# bulle d'aide a l'entree
+o5.changer_mode("formulaire")
+proprietes("Patient", lambda d: d.aide_entree.setText("Nom de naissance"), o5)
+o5.changer_mode(None)
+o5.remplir_champ(o5.page_widgets[0], o5._widget_nom("Patient"))
+b5 = o5.page_widgets[0].findChild(__import__("PySide6.QtWidgets", fromlist=["QLabel"]).QLabel, "bulle_aide")
+verif(b5 is not None and "Nom de naissance" in b5.text(), "message d'aide affiché à l'entrée du champ")
 import subprocess as _sp
 js_ = [v for w in o3.doc[0].widgets() for v in C.scripts(o3.doc, w).values()]
 open(os.path.join(T, "js.js"), "w", encoding="utf-8").write(

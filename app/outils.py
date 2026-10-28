@@ -22,6 +22,9 @@ OUTILS = [
      _('Clic droit sur une vignette : pivoter, supprimer, extraire. Glissez les vignettes pour réordonner.'), True),
     ("exporter", "creer", "exporter", _('Exporter'), _('Vers Word, JPG, PNG ou texte'),
      _('Convertir le PDF en document Word (.docx), en images JPG ou PNG, ou en texte.'), True),
+    ("excel", "creer", "excel", _('Tableaux vers Excel'), _('Relevés, factures, bordereaux'),
+     _("Repère les tableaux du PDF, vous montre exactement ce qui sera mis dans chaque cellule (nombres et dates "
+       "reconnus), puis crée le fichier Excel. Un tableau manquant se trace à la souris."), True),
     ("imprimer", "creer", "imprimer", _('Imprimer'), _("Un ou plusieurs documents d'un coup"),
      _("Imprimer le document ouvert, ou plusieurs PDF d'un coup sur la même imprimante."), True),
     ("modifier", "modifier", "modifier", _('Modifier texte et images'), _("Corriger en gardant la police d'origine"),
@@ -32,6 +35,9 @@ OUTILS = [
      _('Ajouter numéros de page, date ou numérotation Bates.'), True),
     ("filigrane", "modifier", "filigrane", _('Filigrane et fond'), _('Modèles prêts ou les vôtres, synchronisés'),
      _('Ajouter (Copie, Confidentiel, Brouillon, Payé, date automatique, vos modèles texte ou image) ou retirer un filigrane.'), True),
+    ("mesure", "annoter", "mesure", _('Mesurer'), _('Distances, périmètres, surfaces'),
+     _("Mesurer sur un plan ou le cadastre : réglez l'échelle de la page (1:100, 1 cm = 1 m, ou une cote connue), "
+       "puis cliquez. Les mesures restent dans le PDF, lisibles dans Acrobat, et s'exportent vers Excel."), True),
     ("commentaires", "annoter", "commentaire", _('Commentaires'), _('Notes, surligner, barrer'),
      _('Sélectionnez du texte : la barre rapide propose surligner, souligner, barrer, note.'), True),
     ("tampons", "annoter", "tampon", _('Tampons'), _('"Reçu le", "Payé", vos tampons'),
@@ -55,7 +61,8 @@ OUTILS = [
     ("comparer", "comparer", "comparer", _('Comparer deux fichiers'), _('Différences surlignées, sans IA'),
      _('Deux versions côte à côte, différences de texte surlignées. Sans IA, tout reste sur votre PC.'), True),
     ("lot", "comparer", "lot", _('Traitement par lot'), _('Une action sur tout un dossier'),
-     _('OCR, allègement, tampon ou archivage sur tout un dossier.'), False),
+     _("OCR, allègement, filigrane, numérotation Bates, PDF/A et renommage sur tout un dossier ; vous voyez les "
+       "noms des fichiers produits avant de lancer, les originaux restent intacts."), True),
     ("ia_resume", "ia", "ia", _("Résumer avec l'IA"), _('Résumé, points clefs, échéances'),
      _('Envoie le texte à Claude ou Gemini avec votre clef API, seulement quand vous cliquez.'), True),
     ("ia_classer", "ia", "archiver", _('Renommer et classer'), _('Nom et dossier proposés, appris'),
@@ -78,7 +85,8 @@ OUTILS = [
     ("biffer", "optimiser", "biffer", _('Biffer'), _('Effacer pour de vrai un passage'),
      _('Sélectionnez un passage : il est supprimé du fichier, pas seulement masqué.'), True),
     ("archiver", "optimiser", "archiver", _('Archiver (PDF/A)'), _('Format exigé par les administrations'),
-     _("Conversion au format d'archivage PDF/A."), False),
+     _("Conversion au format d'archivage PDF/A-2b : polices intégrées, couleurs, métadonnées ; PhilPDF montre ce "
+       "qui change et vérifie le résultat avant d'enregistrer."), True),
 ]
 
 

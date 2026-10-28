@@ -6,3 +6,7 @@ Output/
 tesseract/
 *.spec
 app/identifiants.py
+
+moteur/jbig2/*.dll
+moteur/jbig2/*.so
+moteur/jbig2/*.dylib

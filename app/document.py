@@ -16,6 +16,7 @@ from .dialogues import boutons_fr, DialogueBibliotheque
 from moteur.modifier import Editeur, CANDIDATS
 from moteur import objets
 from .signature_doc import MixinSignature
+from .mesure_doc import MixinMesure
 from .formulaire_doc import MixinFormulaire, types_a_tracer
 from .langue import _
 
@@ -145,7 +146,7 @@ class PageWidget(QWidget):
                 if choisi:                         # poignee pour agrandir
                     p.setPen(QPen(QColor("#ffffff"), 1))
                     p.setBrush(QColor("#a35c00"))
-                    p.drawRect(QRectF(r.right() - 4, r.bottom() - 4, 8, 8))
+                    p.drawRect(QRectF(r.right() - 5, r.bottom() - 5, 10, 10))
         sel = o.selection
         if sel and sel["page"] == self.num:
             p.setPen(Qt.NoPen)
@@ -251,6 +252,8 @@ class PageWidget(QWidget):
                 p.setPen(Qt.NoPen)
                 p.setBrush(QColor("#1462c2"))
                 p.drawEllipse(re.topLeft(), 3, 3)
+        if o.mode == "mesure":
+            o.dessiner_mesure(p, self)
         p.end()
 
     def leaveEvent(self, e):
@@ -291,13 +294,41 @@ class PageWidget(QWidget):
                 return i
         return None
 
+    def _bord_champ(self, pos):
+        """En mode Formulaire : (widget, axes) si la souris est sur le coin ou un bord du champ (pour agrandir).
+        axes : "xy" coin bas droit, "x" bord droit, "y" bord bas. Le champ choisi d'abord (sa poignee depasse)."""
+        o = self.o
+        cands = []
+        if o.champ_choisi and o.champ_choisi[0] == self.num:
+            wc = o._widget(o.champ_choisi)
+            if wc is not None:
+                cands.append(wc)
+        cands += [w for w in o.doc[self.num].widgets() if not cands or w.xref != cands[0].xref]
+        x, y = pos.x(), pos.y()
+        for w in cands:
+            r = self.vers_ecran(w.rect)
+            if abs(x - r.right()) <= 8 and abs(y - r.bottom()) <= 8:
+                return w, "xy"
+            if abs(x - r.right()) <= 4 and r.top() <= y <= r.bottom():
+                return w, "x"
+            if abs(y - r.bottom()) <= 4 and r.left() <= x <= r.right():
+                return w, "y"
+        return None, None
+
     # ---- souris
     def mousePressEvent(self, e):
         o = self.o
         o.barre_rapide.hide()
+        o.fermer_bulle_aide()
         if self.editeur:
             self.editeur.valider()
         pt = self.vers_pdf(e.position())
+        if o.mode == "mesure":
+            if e.button() == Qt.RightButton:
+                o.menu_mesure(self, pt, e.globalPosition().toPoint())
+            elif e.button() == Qt.LeftButton:
+                o.clic_mesure(self, pt, e.modifiers())
+            return
         if e.button() == Qt.RightButton:
             o.menu_contexte(self, pt, e.globalPosition().toPoint())
             return
@@ -315,24 +346,20 @@ class PageWidget(QWidget):
                 o.ajouter_image_ici(self.num, hg)
             return
         if o.mode == "formulaire":
+            wb, axes = self._bord_champ(e.position())
+            if wb is not None:                     # coin ou bord : agrandir / reduire
+                o.champ_choisi = (self.num, wb.xref)
+                self.glisse = {"genre": "champ", "mode": "redim", "axes": axes, "xref": wb.xref, "debut": pt,
+                               "rect0": fitz.Rect(wb.rect), "fantome": None}
+                o.rafraichir_pages()
+                return
             w = o.champ_sous(self.num, pt)
             if w:
                 o.champ_choisi = (self.num, w.xref)
-                re_ = self.vers_ecran(w.rect)
-                coin = (abs(e.position().x() - re_.right()) < 9 and abs(e.position().y() - re_.bottom()) < 9)
-                self.glisse = {"genre": "champ", "mode": "redim" if coin else "deplacer", "xref": w.xref,
+                self.glisse = {"genre": "champ", "mode": "deplacer", "xref": w.xref,
                                "debut": pt, "rect0": fitz.Rect(w.rect), "fantome": None}
                 o.rafraichir_pages()
                 return
-            # pres du coin d'un champ choisi (poignee legerement hors du champ)
-            if o.champ_choisi and o.champ_choisi[0] == self.num:
-                wc = o._widget(o.champ_choisi)
-                if wc is not None:
-                    re_ = self.vers_ecran(wc.rect)
-                    if abs(e.position().x() - re_.right()) < 9 and abs(e.position().y() - re_.bottom()) < 9:
-                        self.glisse = {"genre": "champ", "mode": "redim", "xref": wc.xref, "debut": pt,
-                                       "rect0": fitz.Rect(wc.rect), "fantome": None}
-                        return
             o.champ_choisi = None
         if o.mode in ("signer_num", "champ_signature"):
             w = o.champ_sous(self.num, pt)
@@ -378,6 +405,10 @@ class PageWidget(QWidget):
     def mouseMoveEvent(self, e):
         o = self.o
         pt = self.vers_pdf(e.position())
+        if o.mode == "mesure":
+            self.setCursor(Qt.CrossCursor)
+            o.survol_mesure(self, pt, e.modifiers())
+            return
         g = self.glisse
         if g and e.buttons() & Qt.LeftButton:
             d = pt - g["debut"]
@@ -392,7 +423,11 @@ class PageWidget(QWidget):
             if g["genre"] == "champ":
                 r = fitz.Rect(g["rect0"])
                 if g["mode"] == "redim":
-                    r.x1, r.y1 = max(r.x0 + 6, r.x1 + d.x), max(r.y0 + 6, r.y1 + d.y)
+                    ax = g.get("axes", "xy")
+                    if "x" in ax:
+                        r.x1 = max(r.x0 + 6, r.x1 + d.x)
+                    if "y" in ax:
+                        r.y1 = max(r.y0 + 6, r.y1 + d.y)
                 elif abs(d.x) + abs(d.y) > 1.5:
                     r = r + (d.x, d.y, d.x, d.y)
                 else:
@@ -438,12 +473,16 @@ class PageWidget(QWidget):
             self.setToolTip(_("Glissez pour tourner (Maj : par pas de 15°) ; clic droit : 90°"))
         elif self._sur_poignee(e.position()) is not None:
             self.setCursor(Qt.SizeFDiagCursor)
+        elif o.mode == "formulaire" and self._bord_champ(e.position())[0] is not None:
+            wb, axes = self._bord_champ(e.position())
+            self.setCursor({"xy": Qt.SizeFDiagCursor, "x": Qt.SizeHorCursor, "y": Qt.SizeVerCursor}[axes])
+            self.setToolTip(_("Glissez pour agrandir ou réduire « {nom} »", nom=wb.field_name))
         elif o.mode in (None, "formulaire", "signer_num", "champ_signature") and o.champ_sous(self.num, pt):
             w_ = o.champ_sous(self.num, pt)
             re_ = self.vers_ecran(w_.rect)
             coin = abs(e.position().x() - re_.right()) < 9 and abs(e.position().y() - re_.bottom()) < 9
             if o.mode == "formulaire":
-                self.setCursor(Qt.SizeFDiagCursor if coin else Qt.SizeAllCursor)
+                self.setCursor(Qt.SizeAllCursor)
                 self.setToolTip(_("« {nom} » : glissez pour déplacer, coin en bas à droite pour agrandir ; "
                                   "double-clic : propriétés ; clic droit : plus d'options", nom=w_.field_name))
             else:
@@ -497,6 +536,10 @@ class PageWidget(QWidget):
     def mouseDoubleClickEvent(self, e):
         pt = self.vers_pdf(e.position())
         o = self.o
+        if o.mode == "mesure":
+            if e.button() == Qt.LeftButton:
+                o.finir_mesure()
+            return
         if o.mode == "formulaire" and o.champ_sous(self.num, pt):
             w_ = o.champ_sous(self.num, pt)
             o.proprietes_champ(self.num, w_)
@@ -509,6 +552,16 @@ class PageWidget(QWidget):
             o.editer_annotation(obj)
 
     def keyPressEvent(self, e):
+        if self.o.mode == "mesure":
+            if e.key() in (Qt.Key_Return, Qt.Key_Enter):
+                self.o.finir_mesure()
+                return
+            if e.key() == Qt.Key_Backspace and self.o.annuler_point_mesure():
+                return
+            if e.key() == Qt.Key_Escape:
+                if not self.o.abandonner_mesure():
+                    self.o.changer_mode(None)
+                return
         fleches = {Qt.Key_Left: (-1, 0), Qt.Key_Right: (1, 0), Qt.Key_Up: (0, -1), Qt.Key_Down: (0, 1)}
         if e.key() in fleches and self.o.mode == "formulaire" and self.o.champ_choisi:
             w_ = self.o._widget(self.o.champ_choisi)
@@ -549,6 +602,7 @@ class PageWidget(QWidget):
             pass
         elif w.field_type in (fitz.PDF_WIDGET_TYPE_COMBOBOX, fitz.PDF_WIDGET_TYPE_LISTBOX):
             ed = QComboBox(self)
+            ed.addItem("")                          # vide d'abord : rien n'est choisi a votre place
             ed.addItems([c if isinstance(c, str) else c[0] for c in (w.choice_values or [])])
             if w.field_type == fitz.PDF_WIDGET_TYPE_COMBOBOX and w.field_flags & fitz.PDF_CH_FIELD_IS_EDIT:
                 ed.setEditable(True)
@@ -1510,7 +1564,7 @@ def _signe(doc):
     return False
 
 
-class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
+class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, QWidget):
     titre_change = Signal()
     outil_demande = Signal(str)
     statut = Signal(str)
@@ -1617,6 +1671,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
         self.bandeau_form.hide()
         v.addWidget(self.bandeau_form)
         self._construire_bandeau_sig(v)
+        self._construire_bandeau_mesure(v)
         self.champ_choisi = None           # (page, xref) du champ choisi en mode formulaire
         self.marques_biffage = []          # [(page, rect)] a biffer
         self.sp = QSplitter()
@@ -3685,6 +3740,12 @@ class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
                 w = self._widget((pw.num, w.xref)) or w
             self.aide_entree(pw, w)
             pw.ouvrir_saisie_champ(w)
+            ed = getattr(pw, "saisie", None)
+            if ed is not None and getattr(self, "_bulle_aide", None) is not None:
+                try:                                       # la bulle part avec la zone de saisie
+                    ed.destroyed.connect(self.fermer_bulle_aide)
+                except (RuntimeError, AttributeError):
+                    pass
 
     def choisir_radio(self, w):
         """Coche ce bouton radio, decoche les autres du groupe (un seul choix)."""
@@ -3723,7 +3784,22 @@ class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
                 avant[k] = self.doc.xref_get_key(w.xref, k)
             except Exception:                             # noqa: BLE001
                 pass
+        from moteur import apparence as _AP
+        texte = w.field_type in (fitz.PDF_WIDGET_TYPE_TEXT, fitz.PDF_WIDGET_TYPE_COMBOBOX)
+        da0 = _AP.lire_da(self.doc, w) if texte else None
         w.update()
+        if texte and da0 and da0[0] not in _AP.PYMUPDF:  # police que PyMuPDF remplacerait par Helvetica
+            try:
+                _AP.ecrire_da(self.doc, w, *da0)
+                _AP.dessiner(self.doc, w)
+            except Exception:
+                pass
+        if w.field_type in (fitz.PDF_WIDGET_TYPE_CHECKBOX, fitz.PDF_WIDGET_TYPE_RADIOBUTTON):
+            from moteur import formulaire as _FO           # garde le style et la couleur de la coche, sans police
+            try:
+                _FO.dessiner_case(self.doc, w)
+            except Exception:
+                pass
         if w.field_type == fitz.PDF_WIDGET_TYPE_BUTTON:
             from .formulaire_doc import dessiner_bouton
             dessiner_bouton(self.doc, w)
@@ -3825,6 +3901,10 @@ class OngletDocument(MixinSignature, MixinFormulaire, QWidget):
             self.pile_volet.setCurrentIndex(0)
         if mode is None:
             self.objet = None
+        if mode == "mesure":
+            self.entrer_mesure()
+        elif hasattr(self, "bandeau_mesure"):
+            self.sortir_mesure()
         self.rafraichir_pages()
 
     # ------------------------------------------------------------ pages : rotation, organisation

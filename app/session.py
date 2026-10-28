@@ -295,8 +295,12 @@ class Session:
                 autres.append(l)
         # autres postes : retrouves ici d'abord, puis les introuvables (grises), chacun du plus recent au plus ancien
         autres.sort(key=lambda l: l["date"] or "", reverse=True)
-        autres.sort(key=lambda l: l["chemin"] is None)
-        return ici_l + autres[:n]
+        autres = autres[:n]
+        # trois sections : trouves sur ce poste, trouves venant des autres postes, puis tous les introuvables
+        for l in ici_l + autres:
+            l["section"] = "introuvable" if not l["chemin"] else ("autres" if l["autre_poste"] else "ici")
+        rang = {"ici": 0, "autres": 1, "introuvable": 2}
+        return sorted(ici_l + autres, key=lambda l: rang[l["section"]])     # tri stable : l'ordre de chacun reste
 
     def autres_machines(self):
         """[(machine, date, nb_fichiers)] des autres machines, la plus recente d'abord."""

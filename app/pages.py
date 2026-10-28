@@ -356,6 +356,7 @@ class PageAccueil(QWidget):
         r.setStyleSheet("font-size:18px;font-weight:600")
         v.addWidget(r)
         self.liste = QListWidget()
+        self.liste.setIconSize(QSize(40, 52))
         self.liste.setStyleSheet("QListWidget{background:#fff;border:1px solid #e2e2e2;border-radius:10px;font-size:14px}"
                                  "QListWidget::item{padding:10px;border-bottom:1px solid #f0f0f0}"
                                  "QListWidget::item:hover{background:#f4f7fb}")
@@ -380,12 +381,15 @@ class PageAccueil(QWidget):
         from .session import date_fr
         self.liste.clear()
         moi = self.params.get("machine", "")
-        titre_mis = False
+        section = "ici"
+        titres = {"autres": _("Sur vos autres postes"), "introuvable": _("Introuvables sur ce poste")}
+        self._a_vignetter = []
         for l in self.lignes_recents():
             ici = l["chemin"]
-            if l.get("autre_poste") and not titre_mis:    # separation : ce poste en haut, les autres en dessous
-                titre_mis = True
-                t = QListWidgetItem(_("Sur vos autres postes"))
+            sec = l.get("section") or ("introuvable" if not ici else "autres" if l.get("autre_poste") else "ici")
+            if sec != section and sec in titres:          # separation : ce poste, les autres postes, les introuvables
+                section = sec
+                t = QListWidgetItem(titres[sec])
                 t.setFlags(Qt.NoItemFlags)
                 f = t.font()
                 f.setBold(True)
@@ -412,7 +416,10 @@ class PageAccueil(QWidget):
                                   + _("Cliquez pour le chercher sur ce poste ou l'indiquer vous-même.")))
             if not ici:
                 it.setForeground(Qt.gray)
+            else:
+                self._a_vignetter.append(it)
             self.liste.addItem(it)
+        self._vignetter()
         self.bandeau.setText(_('Poste : <b>{machine}</b>. ', machine=self.params['machine']) + (
                 _('Synchronisation : ') + self._lieu_synchro() + self._etat_synchro() + " &nbsp;<a href='changer_synchro'>" + _("changer") + "</a>"
                 + self._rappel_autre()
@@ -436,6 +443,20 @@ class PageAccueil(QWidget):
             self.echeances.show()
         else:
             self.echeances.hide()
+
+    def _vignetter(self):
+        """Miniature de la premiere page a la place de l'icone (comme Acrobat), une par une pour ne pas bloquer."""
+        from PySide6.QtCore import QTimer
+        if not getattr(self, "_a_vignetter", None):
+            return
+        it = self._a_vignetter.pop(0)
+        try:
+            pm = miniature(it.data(Qt.UserRole))
+            if pm is not None:
+                it.setIcon(pm)
+        except RuntimeError:                              # liste reconstruite entre-temps
+            return
+        QTimer.singleShot(0, self._vignetter)
 
     def _echeance_lien(self, lien):
         from urllib.parse import unquote
@@ -595,3 +616,52 @@ class PageAccueil(QWidget):
         self.doublon_choisi.emit(a[0], a[2][i], p)
         self.doublons = {k: v for k, v in self.doublons.items() if k != i}
         return p
+
+
+_MINIATURES = {}
+
+
+def miniature(chemin, hauteur=52):
+    """Icone : premiere page du PDF en petit, avec un fin cadre ; gardee en cache disque (chemin + date + taille).
+    None si le fichier ne s'ouvre pas (protege, abime)."""
+    import hashlib
+    from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor, QPen
+    from .config import dossier_donnees
+    try:
+        st = os.stat(chemin)
+    except OSError:
+        return None
+    cle = hashlib.sha1(f"{os.path.normcase(chemin)}|{st.st_mtime_ns}|{st.st_size}|{hauteur}".encode()).hexdigest()
+    if cle in _MINIATURES:
+        return _MINIATURES[cle]
+    d = os.path.join(dossier_donnees(), "miniatures")
+    f = os.path.join(d, cle + ".png")
+    pm = QPixmap()
+    if not (os.path.exists(f) and pm.load(f)):
+        import pymupdf as fitz
+        try:
+            with fitz.open(chemin) as doc:
+                if doc.needs_pass or not len(doc):
+                    _MINIATURES[cle] = None
+                    return None
+                p = doc[0]
+                z = hauteur * 2 / max(1, p.rect.height)
+                img = p.get_pixmap(matrix=fitz.Matrix(z, z), alpha=False, annots=True)
+        except Exception:
+            _MINIATURES[cle] = None
+            return None
+        pm.loadFromData(img.tobytes("png"), "PNG")
+        pm = pm.scaledToHeight(hauteur * 2, Qt.SmoothTransformation)
+        cadre = QPixmap(pm.width() + 2, pm.height() + 2)
+        cadre.fill(QColor("#cfcfcf"))
+        pt = QPainter(cadre)
+        pt.drawPixmap(1, 1, pm)
+        pt.end()
+        pm = cadre
+        try:
+            os.makedirs(d, exist_ok=True)
+            pm.save(f, "PNG")
+        except OSError:
+            pass
+    _MINIATURES[cle] = QIcon(pm)
+    return _MINIATURES[cle]
