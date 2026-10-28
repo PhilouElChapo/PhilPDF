@@ -153,8 +153,28 @@ def main():
     except Exception:
         pass
     fichiers = [os.path.abspath(a) for a in sys.argv[1:] if a.lower().endswith(".pdf") and os.path.exists(a)]
-    if "--nouvelle-instance" not in sys.argv and confier_a_instance_ouverte(fichiers):
-        sys.exit(0)                                   # PhilPDF tourne deja : il ouvre les fichiers lui-meme
+    # un seul PhilPDF a la fois : verrou du systeme (meme si deux lancements arrivent ensemble), puis les fichiers
+    # sont confies a celui qui est deja ouvert ; apres une mise a jour, le nouveau attend que l'ancien soit ferme
+    global _VERROU
+    _VERROU = verrou_instance()
+    if not _VERROU.tryLock(20000 if "--nouvelle-instance" in sys.argv else 0):
+        import time
+        libre = False
+        for _i in range(25):                          # l'autre est peut-etre occupe (synchronisation) : on insiste
+            if _VERROU.tryLock(0):                    # ...ou il vient de se fermer (redemarrage) : on prend sa place
+                libre = True
+                break
+            if confier_a_instance_ouverte(fichiers):
+                sys.exit(0)
+            app.processEvents()
+            time.sleep(0.4)
+        if libre:
+            pass
+        else:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.information(None, "PhilPDF", "PhilPDF est déjà ouvert sur ce PC (il est peut-être occupé). "
+                                                     "Utilisez sa fenêtre, ou fermez-le avant de le relancer.")
+            sys.exit(0)
     preparer(app)
     w = Fenetre(fichiers)
     ecouter_autres_lancements(w)
@@ -162,11 +182,27 @@ def main():
     sys.exit(app.exec())
 
 
+_VERROU = None
+
+
 def _nom_instance():
-    """Un PhilPDF par utilisateur et par dossier de donnees (la version portable reste independante)."""
+    """Un seul PhilPDF par utilisateur de ce PC (version installee et portable comprises : elles partagent la
+    synchronisation, deux a la fois se marcheraient dessus)."""
+    import getpass
     import hashlib
-    from app.config import dossier_donnees
-    return "PhilPDF-" + hashlib.sha1(dossier_donnees().encode("utf-8")).hexdigest()[:12]
+    try:
+        u = getpass.getuser()
+    except Exception:
+        u = os.environ.get("USERNAME") or os.environ.get("USER") or "?"
+    return "PhilPDF-" + hashlib.sha1(u.lower().encode("utf-8")).hexdigest()[:12]
+
+
+def verrou_instance():
+    """Verrou du systeme : libere tout seul si PhilPDF s'arrete, meme brutalement (processus disparu)."""
+    from PySide6.QtCore import QLockFile, QDir
+    v = QLockFile(os.path.join(QDir.tempPath(), _nom_instance() + ".lock"))
+    v.setStaleLockTime(0)
+    return v
 
 
 def confier_a_instance_ouverte(fichiers):
@@ -179,10 +215,10 @@ def confier_a_instance_ouverte(fichiers):
         return False
     s.write((json.dumps({"ouvrir": fichiers}) + "\n").encode("utf-8"))
     s.flush()
-    s.waitForBytesWritten(1000)
-    ok = s.waitForReadyRead(2000) and s.readAll().data().startswith(b"ok")
+    s.waitForBytesWritten(3000)
+    s.waitForReadyRead(5000)                          # reponse attendue, mais il tourne de toute facon : on s'arrete
     s.disconnectFromServer()
-    return ok
+    return True
 
 
 def ecouter_autres_lancements(fenetre):

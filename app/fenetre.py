@@ -2620,7 +2620,8 @@ class Fenetre(QMainWindow):
             prog, args = sys.executable, []
         else:
             prog, args = sys.executable, [os.path.abspath(sys.argv[0])]
-        args += [o.chemin for o in self.documents() if o.chemin and not o.modifie and not o.distant]
+        args += ["--nouvelle-instance"] + [o.chemin for o in self.documents()
+                                           if o.chemin and not o.modifie and not o.distant]
         self._redemarrage = (prog, args)
         self.close()
 
