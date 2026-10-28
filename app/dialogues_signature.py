@@ -127,12 +127,80 @@ class DialogueCreerIdentite(QDialog):
         self.accept()
 
 
-def importer_pfx(parent, params):
-    """Importe un .pfx / .p12 (par exemple exporte d'Acrobat). Renvoie l'entree ou None."""
-    f, _x = QFileDialog.getOpenFileName(parent, _("Importer une identité numérique"), "",
-                                        _("Identités numériques (*.pfx *.p12)"))
-    if not f:
-        return None
+class DialogueSourcesID(QDialog):
+    """Les identites deja sur ce PC : fichiers d'ID d'Acrobat (.pfx) et ID du magasin Windows ; ou un autre fichier."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        from . import identites_systeme as IS
+        self.setWindowTitle(_("Importer mon ID numérique"))
+        self.resize(640, 380)
+        v = QVBoxLayout(self)
+        n = QLabel(_("Les ID numériques trouvés sur ce PC. Le bouton « Exporter » d'Acrobat ne donne que le certificat "
+                     "(.fdf, .p7c, .cer), sans la clef qui permet de signer : PhilPDF reprend directement le fichier "
+                     "d'ID d'Acrobat, ou exporte l'ID du magasin Windows."))
+        n.setWordWrap(True)
+        v.addWidget(n)
+        self.liste = QListWidget()
+        self.liste.setObjectName("sources_id")
+        for f, quand in IS.fichiers_acrobat():
+            it = QListWidgetItem(icone("certificat", "#0f6cbd"),
+                                 _("Fichier d'ID d'Acrobat : {nom}  (modifié le {d})", nom=os.path.basename(f),
+                                   d=quand.strftime("%d/%m/%Y")) + "\n" + f)
+            it.setData(Qt.UserRole, ("fichier", f))
+            self.liste.addItem(it)
+        for w in IS.windows_identites():
+            fin = _date(w["fin"])
+            it = QListWidgetItem(icone("certificat", "#2e7d32"),
+                                 _("Magasin Windows : {nom}  (émis par {e}, valable jusqu'au {d})", nom=w["nom"] or w["sujet"],
+                                   e=w["emetteur"], d=fin) + "\n" + w["sujet"])
+            it.setData(Qt.UserRole, ("windows", w))
+            self.liste.addItem(it)
+        if not self.liste.count():
+            it = QListWidgetItem(_("Aucun ID trouvé automatiquement : choisissez un fichier .pfx ci-dessous."))
+            it.setFlags(Qt.NoItemFlags)
+            self.liste.addItem(it)
+        else:
+            self.liste.setCurrentRow(0)
+        self.liste.itemDoubleClicked.connect(lambda _i: self.accept())
+        v.addWidget(self.liste, 1)
+        h = QHBoxLayout()
+        b = QPushButton(_("Autre fichier .pfx..."))
+        b.clicked.connect(self.autre)
+        h.addWidget(b)
+        h.addStretch(1)
+        bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
+        bb.button(QDialogButtonBox.Ok).setText(_("Importer"))
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        h.addWidget(bb)
+        v.addLayout(h)
+        self.choix = None
+
+    def autre(self):
+        f, _x = QFileDialog.getOpenFileName(self, _("Importer une identité numérique"), "",
+                                            _("Identités numériques (*.pfx *.p12)"))
+        if f:
+            self.choix = ("fichier", f)
+            super().accept()
+
+    def accept(self):
+        it = self.liste.currentItem()
+        if it is not None and it.data(Qt.UserRole):
+            self.choix = it.data(Qt.UserRole)
+            super().accept()
+
+
+def importer_pfx(parent, params, source=None):
+    """Importe une identite : fichier d'ID d'Acrobat, ID du magasin Windows, ou autre .pfx. Renvoie l'entree ou None."""
+    if source is None:
+        d = DialogueSourcesID(parent)
+        if d.exec() != QDialog.Accepted or not d.choix:
+            return None
+        source = d.choix
+    if source[0] == "windows":
+        return _importer_windows(parent, params, source[1])
+    f = source[1]
     with open(f, "rb") as h:
         octets = h.read()
     from .dialogues import demander_secret
@@ -155,6 +223,45 @@ def importer_pfx(parent, params):
         return e
 
 
+def _importer_windows(parent, params, w):
+    """ID du magasin Windows : exporte en .pfx avec un mot de passe choisi pour PhilPDF, puis importe."""
+    from . import identites_systeme as IS
+    d = QDialog(parent)
+    d.setWindowTitle(_("Importer mon ID numérique"))
+    f = QFormLayout(d)
+    l = QLabel(_("Choisissez le mot de passe de cet ID dans PhilPDF (il sera demandé à chaque signature) :"))
+    l.setWordWrap(True)
+    f.addRow(l)
+    m1, m2 = oeil(QLineEdit()), oeil(QLineEdit())
+    f.addRow(_("Mot de passe"), m1)
+    f.addRow(_("Confirmer le mot de passe"), m2)
+    bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
+    bb.accepted.connect(d.accept)
+    bb.rejected.connect(d.reject)
+    f.addRow(bb)
+    while True:
+        if d.exec() != QDialog.Accepted:
+            return None
+        if len(m1.text()) < 6:
+            QMessageBox.warning(parent, d.windowTitle(), _("Mot de passe trop court (6 caractères au moins)."))
+        elif m1.text() != m2.text():
+            QMessageBox.warning(parent, d.windowTitle(), _("Les deux mots de passe ne sont pas identiques."))
+        else:
+            break
+    try:
+        octets = IS.windows_exporter(w["empreinte"], m1.text())
+        e = ID.ajouter_pfx(params, octets, m1.text(), origine="windows")
+    except Exception as ex:                               # noqa: BLE001
+        QMessageBox.warning(parent, d.windowTitle(),
+                            _("Windows refuse d'exporter cet ID ({e}). Sa clef est peut-être marquée « non exportable » : "
+                              "dans ce cas, créez une nouvelle identité dans PhilPDF.", e=ex))
+        return None
+    _ecrire_secrets(parent)
+    QMessageBox.information(parent, d.windowTitle(), _("Identité de {nom} ajoutée.", nom=e.get("nom")) +
+                            ("\n" + _("Attention : elle a expiré le {d}.", d=_date(e.get("fin"))) if e.get("expire") else ""))
+    return e
+
+
 def _ecrire_secrets(w):
     """Envoie l'identite (chiffree) sur le Drive, avec les autres mots de passe, si la synchro est active."""
     while w is not None and not hasattr(w, "_ecrire_secrets"):
@@ -164,10 +271,11 @@ def _ecrire_secrets(w):
 
 
 def aide_acrobat():
-    return ("<b>" + _("Exporter votre ID numérique d'Acrobat") + "</b><br>" +
-            _("Acrobat › Edition › Préférences › Signatures › Identités et certificats approuvés › Plus... › "
-              "ID numériques › Fichiers d'ID numériques : choisissez votre ID, puis Exporter › Enregistrer les "
-              "données dans un fichier (.pfx). Importez ensuite ce fichier ici avec son mot de passe."))
+    return ("<b>" + _("Reprendre votre ID numérique d'Acrobat") + "</b><br>" +
+            _("Cliquez sur « Importer mon ID d'Acrobat... » : PhilPDF trouve tout seul les fichiers d'ID d'Acrobat "
+              "et les ID du magasin Windows de ce PC. Il vous demande ensuite le mot de passe de l'ID, le même "
+              "que dans Acrobat. (Le bouton « Exporter » d'Acrobat ne donne que le certificat, sans la clef : "
+              "inutile ici.)"))
 
 
 class DialogueIdentites(QDialog):
@@ -194,7 +302,7 @@ class DialogueIdentites(QDialog):
         aide.setTextInteractionFlags(Qt.TextSelectableByMouse)
         lv.addWidget(aide)
         h = QHBoxLayout()
-        for txt, f, nom in ((_("Importer (.pfx)..."), self.importer, "imp"), (_("Créer..."), self.creer, "creer"),
+        for txt, f, nom in ((_("Importer mon ID d'Acrobat..."), self.importer, "imp"), (_("Créer..."), self.creer, "creer"),
                             (_("Par défaut"), self.defaut, "defaut"),
                             (_("Exporter le certificat (.cer)..."), self.exporter_cer, "cer"),
                             (_("Exporter l'identité (.pfx)..."), self.exporter_pfx, "pfx"),

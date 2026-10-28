@@ -1813,5 +1813,16 @@
  "Date : {x}": "Data: {x}",
  "Sur vos autres postes": "Sugli altri computer",
  "aussi sur {poste}": "anche su {poste}",
- "retrouvé sur ce poste": "trovato su questo computer"
+ "retrouvé sur ce poste": "trovato su questo computer",
+ "Aucun ID trouvé automatiquement : choisissez un fichier .pfx ci-dessous.": "Nessun ID trovato automaticamente: scegliete un file .pfx qui sotto.",
+ "Autre fichier .pfx...": "Altro file .pfx...",
+ "Choisissez le mot de passe de cet ID dans PhilPDF (il sera demandé à chaque signature) :": "Scegliete la password di questo ID in PhilPDF (verrà chiesta a ogni firma):",
+ "Cliquez sur « Importer mon ID d'Acrobat... » : PhilPDF trouve tout seul les fichiers d'ID d'Acrobat et les ID du magasin Windows de ce PC. Il vous demande ensuite le mot de passe de l'ID, le même que dans Acrobat. (Le bouton « Exporter » d'Acrobat ne donne que le certificat, sans la clef : inutile ici.)": "Fate clic su «Importa il mio ID di Acrobat...»: PhilPDF trova da solo i file ID di Acrobat e gli ID dell'archivio di Windows di questo PC. Poi chiede la password dell'ID, la stessa di Acrobat. (Il pulsante «Esporta» di Acrobat dà solo il certificato, senza la chiave: inutile qui.)",
+ "Fichier d'ID d'Acrobat : {nom}  (modifié le {d})": "File ID di Acrobat: {nom}  (modificato il {d})",
+ "Importer mon ID d'Acrobat...": "Importa il mio ID di Acrobat...",
+ "Importer mon ID numérique": "Importa il mio ID digitale",
+ "Les ID numériques trouvés sur ce PC. Le bouton « Exporter » d'Acrobat ne donne que le certificat (.fdf, .p7c, .cer), sans la clef qui permet de signer : PhilPDF reprend directement le fichier d'ID d'Acrobat, ou exporte l'ID du magasin Windows.": "Gli ID digitali trovati su questo PC. Il pulsante «Esporta» di Acrobat dà solo il certificato (.fdf, .p7c, .cer), senza la chiave che permette di firmare: PhilPDF riprende direttamente il file ID di Acrobat, o esporta l'ID dall'archivio di Windows.",
+ "Magasin Windows : {nom}  (émis par {e}, valable jusqu'au {d})": "Archivio di Windows: {nom}  (rilasciato da {e}, valido fino al {d})",
+ "Reprendre votre ID numérique d'Acrobat": "Riprendere il vostro ID digitale di Acrobat",
+ "Windows refuse d'exporter cet ID ({e}). Sa clef est peut-être marquée « non exportable » : dans ce cas, créez une nouvelle identité dans PhilPDF.": "Windows rifiuta di esportare questo ID ({e}). La sua chiave è forse contrassegnata come «non esportabile»: in tal caso, create una nuova identità in PhilPDF."
 }

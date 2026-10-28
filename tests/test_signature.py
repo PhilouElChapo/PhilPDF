@@ -201,6 +201,32 @@ di = DS.DialogueIdentites(None, params)
 verif(di.liste.count() == 2 and di.certs.count() >= 2, "fenêtre des identités : identités et certificats")
 di.close()
 
+# reprendre l'ID d'Acrobat sans « Exporter » : le fichier d'ID est retrouve tout seul (Security\*.pfx)
+from app import identites_systeme as IS
+sec_ = os.path.join(os.environ["HOME"], ".adobe", "Acrobat", "DC", "Security")
+os.makedirs(sec_, exist_ok=True)
+pfx3 = S.creer_identite("Philippe Acrobat", "acro123")
+open(os.path.join(sec_, "PhilippeAcrobat.pfx"), "wb").write(pfx3)
+dsrc = DS.DialogueSourcesID(None)
+verif(dsrc.liste.count() >= 1 and dsrc.liste.item(0).data(DS.Qt.UserRole)[0] == "fichier", "fichier d'ID d'Acrobat retrouvé tout seul")
+import app.dialogues as _DG
+_DG.demander_secret = lambda *a, **k: ("acro123", True)
+e3 = DS.importer_pfx(None, params, dsrc.liste.item(0).data(DS.Qt.UserRole))
+verif(e3 and e3["nom"] == "Philippe Acrobat", "ID d'Acrobat importé avec son mot de passe")
+# magasin Windows : export simule
+appels_ = []
+IS._powershell = lambda script, timeout=40: (appels_.append(script), (0, "", ""))[1]
+try:
+    IS.windows_exporter("ABC123", "mdp'x")
+    verif(False, "export Windows : erreur si rien n'est produit")
+except IS.ErreurExport:
+    verif("'mdp''x'" in appels_[-1] and "Cert:\\CurrentUser\\My\\ABC123" in appels_[-1], "export Windows : commande sûre (guillemets échappés)")
+try:
+    IS.windows_exporter("ABC; rm", "x")
+    verif(False, "empreinte suspecte refusée")
+except IS.ErreurExport:
+    verif(True, "empreinte suspecte refusée")
+
 n_ok = sum(1 for c, _q in ok if c)
 print(f"\n{n_ok}/{len(ok)} vérifications de signature réussies")
 sys.exit(0 if n_ok == len(ok) else 1)

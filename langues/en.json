@@ -1813,5 +1813,16 @@
  "Date : {x}": "Date: {x}",
  "Sur vos autres postes": "On your other computers",
  "aussi sur {poste}": "also on {poste}",
- "retrouvé sur ce poste": "found on this computer"
+ "retrouvé sur ce poste": "found on this computer",
+ "Aucun ID trouvé automatiquement : choisissez un fichier .pfx ci-dessous.": "No ID found automatically: choose a .pfx file below.",
+ "Autre fichier .pfx...": "Other .pfx file...",
+ "Choisissez le mot de passe de cet ID dans PhilPDF (il sera demandé à chaque signature) :": "Choose the password of this ID in PhilPDF (it will be asked at each signature):",
+ "Cliquez sur « Importer mon ID d'Acrobat... » : PhilPDF trouve tout seul les fichiers d'ID d'Acrobat et les ID du magasin Windows de ce PC. Il vous demande ensuite le mot de passe de l'ID, le même que dans Acrobat. (Le bouton « Exporter » d'Acrobat ne donne que le certificat, sans la clef : inutile ici.)": "Click \"Import my Acrobat ID...\": PhilPDF finds the Acrobat ID files and the Windows store IDs on this PC by itself. It then asks for the ID password, the same as in Acrobat. (Acrobat's \"Export\" button only gives the certificate, without the key: useless here.)",
+ "Fichier d'ID d'Acrobat : {nom}  (modifié le {d})": "Acrobat ID file: {nom}  (modified on {d})",
+ "Importer mon ID d'Acrobat...": "Import my Acrobat ID...",
+ "Importer mon ID numérique": "Import my digital ID",
+ "Les ID numériques trouvés sur ce PC. Le bouton « Exporter » d'Acrobat ne donne que le certificat (.fdf, .p7c, .cer), sans la clef qui permet de signer : PhilPDF reprend directement le fichier d'ID d'Acrobat, ou exporte l'ID du magasin Windows.": "The digital IDs found on this PC. Acrobat's \"Export\" button only gives the certificate (.fdf, .p7c, .cer), without the key used to sign: PhilPDF takes the Acrobat ID file directly, or exports the ID from the Windows store.",
+ "Magasin Windows : {nom}  (émis par {e}, valable jusqu'au {d})": "Windows store: {nom}  (issued by {e}, valid until {d})",
+ "Reprendre votre ID numérique d'Acrobat": "Take over your Acrobat digital ID",
+ "Windows refuse d'exporter cet ID ({e}). Sa clef est peut-être marquée « non exportable » : dans ce cas, créez une nouvelle identité dans PhilPDF.": "Windows refuses to export this ID ({e}). Its key may be marked \"not exportable\": in that case, create a new identity in PhilPDF."
 }
