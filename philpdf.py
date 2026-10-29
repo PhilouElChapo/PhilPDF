@@ -178,6 +178,11 @@ def main():
                                                      "Utilisez sa fenêtre, ou fermez-le avant de le relancer.")
             sys.exit(0)
     preparer(app)
+    try:                                          # aucune fenetre plus grande que l'ecran (ex. 1024 x 768)
+        from app import ecran
+        ecran.installer(app)
+    except Exception:
+        pass
     surveiller_plantages()
     nettoyer_temporaires()
     w = Fenetre(fichiers)

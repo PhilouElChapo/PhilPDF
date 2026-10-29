@@ -122,7 +122,18 @@ class DialogueImprimante(QDialog):
         v.addWidget(t)
         self.etat = QLabel()
         self.etat.setWordWrap(True)
+        self.etat.setTextFormat(Qt.RichText)
         v.addWidget(self.etat)
+        hn = QHBoxLayout()
+        hn.addWidget(QLabel(_("Nom dans Windows")))
+        self.nom = QLineEdit(params.get("imprimante_nom") or I.NOM)
+        self.nom.setToolTip(_("Le nom affiché dans la liste des imprimantes (ex. « Adobe PhilPDF » pour qu'elle soit "
+                              "en tête de liste)"))
+        hn.addWidget(self.nom, 1)
+        self.b_renommer = QPushButton(_("Renommer"))
+        self.b_renommer.clicked.connect(self.renommer)
+        hn.addWidget(self.b_renommer)
+        v.addLayout(hn)
         h = QHBoxLayout()
         self.b_inst = QPushButton(_("Installer l'imprimante PhilPDF"))
         self.b_inst.setProperty("primaire", True)
@@ -131,6 +142,14 @@ class DialogueImprimante(QDialog):
         self.b_desinst = QPushButton(_("La retirer"))
         self.b_desinst.clicked.connect(self.desinstaller)
         h.addWidget(self.b_desinst)
+        self.b_essai = QPushButton(_("Imprimer une page d'essai"))
+        self.b_essai.setToolTip(_("La page d'essai de Windows doit s'ouvrir dans PhilPDF quelques secondes après"))
+        self.b_essai.clicked.connect(self.essai)
+        h.addWidget(self.b_essai)
+        b = QPushButton(_("Vérifier"))
+        b.setToolTip(_("Etat de l'imprimante, de la surveillance et des impressions en attente"))
+        b.clicked.connect(self._maj)
+        h.addWidget(b)
         h.addStretch(1)
         v.addLayout(h)
         g = QGroupBox(_("Paramètres de conversion"))
@@ -193,17 +212,35 @@ class DialogueImprimante(QDialog):
             self.b_inst.setEnabled(False)
             self.b_desinst.setEnabled(False)
             return
-        ok = self.I.installee()
-        self.etat.setText(("<span style='color:#1e6b34'>✓ " + _("L'imprimante PhilPDF est installée.") + "</span>")
-                          if ok else _("L'imprimante n'est pas encore installée. Windows demandera une fois "
-                                       "l'autorisation (droits d'administrateur)."))
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            e = self.I.etat()
+        finally:
+            QApplication.restoreOverrideCursor()
+        ok = bool(e["nom"])
+        if ok:
+            lignes = ["<span style='color:#1e6b34'>✓ " + _("Installée dans Windows sous le nom « {n} ».", n=e["nom"]) + "</span>"]
+            lignes.append(("✓ " + _("Surveillance active (PhilPDF fermé, une impression l'ouvre).")) if e["surveillance"] else
+                          ("<span style='color:#a35c00'>" + _("Surveillance arrêtée : les impressions s'ouvrent seulement "
+                                                             "si PhilPDF est ouvert.") + "</span>"))
+            for doc, st in e["travaux"]:
+                lignes.append("<span style='color:#b3261e'>" + _("En attente dans Windows : « {d} » ({s})", d=doc, s=st)
+                              + "</span>")
+            self.nom.setText(e["nom"])
+            self.params["imprimante_installee"] = True
+        else:
+            lignes = [_("L'imprimante n'est pas encore installée. Windows demandera une fois l'autorisation "
+                        "(droits d'administrateur).")]
+        self.etat.setText("<br>".join(lignes))
         self.b_inst.setVisible(not ok)
         self.b_desinst.setVisible(ok)
+        self.b_essai.setVisible(ok)
+        self.b_renommer.setVisible(ok)
 
     def installer(self):
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
-            ok, msg = self.I.installer()
+            ok, msg = self.I.installer(self.nom.text().strip() or None)
         finally:
             QApplication.restoreOverrideCursor()
         if ok:
@@ -213,6 +250,27 @@ class DialogueImprimante(QDialog):
                                                                  "PhilPDF depuis Word ou votre navigateur."))
         else:
             QMessageBox.warning(self, self.windowTitle(), _("Installation impossible : {e}", e=msg))
+        self._maj()
+
+    def renommer(self):
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            ok, msg = self.I.renommer(self.nom.text().strip())
+        finally:
+            QApplication.restoreOverrideCursor()
+        if not ok and msg:
+            QMessageBox.warning(self, self.windowTitle(), msg)
+        self.params["imprimante_nom"] = self.nom.text().strip()
+        self.params.enregistrer()
+        self._maj()
+
+    def essai(self):
+        self.I.lancer_surveillance()
+        if self.I.page_essai():
+            QMessageBox.information(self, self.windowTitle(), _("Page d'essai envoyée : elle doit s'ouvrir dans PhilPDF "
+                                                                 "dans quelques secondes. Sinon, cliquez « Vérifier »."))
+        else:
+            QMessageBox.warning(self, self.windowTitle(), _("Windows n'a pas pu imprimer la page d'essai."))
         self._maj()
 
     def desinstaller(self):

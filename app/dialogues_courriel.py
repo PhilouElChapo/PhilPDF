@@ -382,8 +382,14 @@ class PanneauCarnet(QWidget):
             return
         n = C.ajouter_contacts(self.params, contacts)
         self._remplir()
+        try:
+            fiches = C.nombre_fiches(f)
+        except Exception:                            # noqa: BLE001
+            fiches = len(contacts)
+        sans = max(0, fiches - getattr(C.lire_contacts, "fiches_avec", fiches))
         QMessageBox.information(self, _("Carnet d'adresses"),
-                                _("{n} contact(s) ajouté(s) ({t} lu(s) dans le fichier).", n=n, t=len(contacts)))
+                                _("{f} contact(s) dans le fichier : {n} ajouté(s) au carnet, {d} déjà présent(s), {s} sans "
+                                  "adresse e-mail (ignoré(s)).", f=fiches, n=n, d=len(contacts) - n, s=sans))
 
 
 class FluxBoutons(QWidget):

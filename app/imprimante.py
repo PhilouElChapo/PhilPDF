@@ -37,14 +37,76 @@ def _ps(script, admin=False, timeout=120):
     return r.returncode, (r.stdout or "") + (r.stderr or "")
 
 
-def installee():
+def nom_installe():
+    """Nom de l'imprimante PhilPDF dans Windows (retrouvee par son port, meme si vous l'avez renommee), ou ""."""
     if sys.platform != "win32":
-        return False
+        return ""
+    port = fichier_port().replace("'", "''")
     try:
-        code, out = _ps(f"if (Get-Printer -Name '{NOM}' -ErrorAction SilentlyContinue) {{ 'oui' }}", timeout=30)
-        return "oui" in out
+        code, out = _ps(f"Get-Printer -ErrorAction SilentlyContinue | Where-Object {{ $_.PortName -eq '{port}' }} | "
+                        "Select-Object -First 1 | ForEach-Object { 'NOM=' + $_.Name }", timeout=30)
+        for l in out.splitlines():
+            if l.startswith("NOM="):
+                return l[4:].strip()
     except Exception:
+        pass
+    return ""
+
+
+def installee():
+    return bool(nom_installe())
+
+
+def etat():
+    """Diagnostic : {nom, surveillance, travaux: [(document, etat)], fichier_en_attente}."""
+    nom = nom_installe()
+    travaux = []
+    if nom:
+        try:
+            code, out = _ps(f"Get-PrintJob -PrinterName {_ps_chaine(nom)} -ErrorAction SilentlyContinue | "
+                            "ForEach-Object { 'JOB=' + $_.DocumentName + '|' + $_.JobStatus }", timeout=30)
+            travaux = [tuple(l[4:].split("|", 1)) for l in out.splitlines() if l.startswith("JOB=")]
+        except Exception:
+            pass
+    return {"nom": nom, "surveillance": surveillance_active(), "travaux": travaux,
+            "fichier_en_attente": os.path.exists(fichier_port())}
+
+
+def renommer(nouveau):
+    ancien = nom_installe()
+    if not ancien or not nouveau or nouveau == ancien:
+        return False, ""
+    code, out = _ps(f"Rename-Printer -Name {_ps_chaine(ancien)} -NewName {_ps_chaine(nouveau)}", admin=True)
+    return nom_installe() == nouveau, out.strip()[:300]
+
+
+def page_essai():
+    """Imprime une page de test de Windows sur l'imprimante PhilPDF (elle doit s'ouvrir dans PhilPDF)."""
+    nom = nom_installe()
+    if not nom:
         return False
+    code, out = _ps(f"$p = Get-CimInstance Win32_Printer -Filter \"Name='{nom.replace(chr(39), chr(39) * 2)}'\"; "
+                    "Invoke-CimMethod -InputObject $p -MethodName PrintTestPage | Out-Null", timeout=60)
+    return code == 0
+
+
+def prendre_impression():
+    """Impression terminee dans le port (le pilote a fini d'ecrire) : renommee et renvoyee, sinon None.
+    Utilise par PhilPDF ouvert (toutes les 2 secondes) ; la surveillance PowerShell fait de meme PhilPDF ferme."""
+    import time
+    p = fichier_port()
+    try:
+        if not os.path.exists(p) or os.path.getsize(p) == 0:
+            return None
+        if time.time() - os.path.getmtime(p) < 1.5:     # encore en cours d'ecriture
+            return None
+        with open(p, "r+b"):
+            pass
+        nom = os.path.join(dossier(), "Impression " + time.strftime("%Y-%m-%d %H-%M-%S") + ".pdf")
+        os.replace(p, nom)
+        return nom
+    except OSError:
+        return None
 
 
 def _commande():
@@ -119,21 +181,24 @@ def surveillance_active():
         return False
 
 
-def installer():
+def installer(nom=None):
     """Cree l'imprimante (droits d'administrateur demandes par Windows) et la surveillance. Renvoie (ok, message)."""
     if sys.platform != "win32":
         return False, "Windows seulement pour l'instant (Linux : CUPS-PDF, plus tard)"
     port = fichier_port().replace("'", "''")
     script = (f"$ErrorActionPreference = 'Stop'; "
               f"if (-not (Get-PrinterPort -Name '{port}' -ErrorAction SilentlyContinue)) {{ Add-PrinterPort -Name '{port}' }}; "
-              f"if (-not (Get-Printer -Name '{NOM}' -ErrorAction SilentlyContinue)) {{ "
-              f"Add-Printer -Name '{NOM}' -DriverName 'Microsoft Print To PDF' -PortName '{port}' }}")
+              f"if (-not (Get-Printer -ErrorAction SilentlyContinue | Where-Object {{ $_.PortName -eq '{port}' }})) {{ "
+              f"Add-Printer -Name '{(nom or NOM).replace(chr(39), chr(39) * 2)}' -DriverName 'Microsoft Print To PDF' "
+              f"-PortName '{port}' }}")
     try:
         code, out = _ps(script, admin=True, timeout=180)
     except Exception as e:
         return False, str(e)
     if not installee():
         return False, (out.strip() or "installation refusée ou annulée")[:300]
+    if nom and nom_installe() != nom:
+        renommer(nom)
     ecrire_surveillance()
     lancer_surveillance()
     return True, ""
@@ -141,7 +206,8 @@ def installer():
 
 def desinstaller():
     port = fichier_port().replace("'", "''")
-    script = (f"Remove-Printer -Name '{NOM}' -ErrorAction SilentlyContinue; "
+    nom = (nom_installe() or NOM).replace("'", "''")
+    script = (f"Remove-Printer -Name '{nom}' -ErrorAction SilentlyContinue; "
               f"Start-Sleep -Seconds 2; Remove-PrinterPort -Name '{port}' -ErrorAction SilentlyContinue")
     try:
         _ps(script, admin=True, timeout=120)

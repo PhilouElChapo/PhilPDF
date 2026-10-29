@@ -520,6 +520,9 @@ DRIVE_ENVOI = "https://www.googleapis.com/upload/drive/v3"
 DOSSIER_MIME = "application/vnd.google-apps.folder"
 
 
+_JETONS = {}        # jetons d'acces gardes en memoire (1 h) : pas de renouvellement a chaque synchronisation
+
+
 class _DriveOAuth(_Http):
     """Base des Drives autorises par OAuth : jeton d'acces renouvele a partir du jeton durable du coffre."""
     RACINE_ID = None
@@ -534,6 +537,10 @@ class _DriveOAuth(_Http):
             return self.jeton
         nom = TYPES[self.c["type"]]
         rt = coffre.lire(self.c["id"] + ".jeton")
+        garde = _JETONS.get(self.c["id"])
+        if garde and garde[2] == rt and time.time() < garde[1]:
+            self.jeton, self.expire = garde[0], garde[1]
+            return self.jeton
         if not rt:
             raise ErreurDistant(_("{nom} n'est pas encore autorisé : cliquez sur « Autoriser l'accès » dans le compte.", nom=nom))
         try:
@@ -544,6 +551,7 @@ class _DriveOAuth(_Http):
         if j.get("refresh_token") and j["refresh_token"] != rt:      # Box (et parfois Microsoft) renouvellent le jeton durable
             coffre.enregistrer(self.c["id"] + ".jeton", j["refresh_token"])
         self.jeton, self.expire = j["access_token"], j["expire"]
+        _JETONS[self.c["id"]] = (self.jeton, self.expire, coffre.lire(self.c["id"] + ".jeton"))
         return self.jeton
 
     @staticmethod

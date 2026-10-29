@@ -623,7 +623,17 @@ class PageAccueil(QWidget):
         j, _t, h = e["quand"].partition("T")
         quand = h[:5] if j == __import__("datetime").date.today().isoformat() else f"{j[8:10]}/{j[5:7]} {h[:5]}"
         if e.get("ok"):
-            return " · <span style='color:#1d7a35'>" + _("✓ synchronisé à {h}", h=quand) + "</span>"
+            autres = []
+            try:
+                from .session import session_de
+                moi = self.params.get("machine", "")
+                autres = [m for m, v in session_de(self.params).lire().items() if m != moi and isinstance(v, dict)]
+            except Exception:                        # noqa: BLE001
+                autres = None
+            seul = "" if autres or autres is None else (
+                " · <span style='color:#a35c00'>" + _("aucun autre poste trouvé à cet emplacement : vos autres postes "
+                                                      "utilisent peut-être un autre compte") + "</span>")
+            return " · <span style='color:#1d7a35'>" + _("✓ synchronisé à {h}", h=quand) + "</span>" + seul
         return " · <span style='color:#c9252d'>" + _("✕ échec à {h} : {raison}", h=quand, raison=html.escape(e.get("erreur", "")[:90])) + "</span>"
 
     def _rappel_autre(self):

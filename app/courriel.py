@@ -83,7 +83,7 @@ def noms_adresses(texte):
     for nom, adr in getaddresses([(texte or "").replace(";", ",")]):
         adr = adr.strip()
         if "@" in adr:
-            out.append((nom.strip(), adr))
+            out.append((_decoder(nom.strip()), adr))
     return out
 
 
@@ -385,13 +385,30 @@ def mot_de_passe(compte):
 
 
 # ------------------------------------------------------------------ carnet d'adresses
+def _decoder(nom):
+    """Nom stocke encode (« =?utf-8?q?...?= ») : remis en clair."""
+    if nom and "=?" in nom:
+        from email.header import decode_header, make_header
+        try:
+            return str(make_header(decode_header(nom)))
+        except Exception:                            # noqa: BLE001
+            return nom
+    return nom
+
+
 def carnet(params):
-    return sorted(params.get("carnet") or [], key=lambda c: ((c.get("nom") or c["email"]).lower()))
+    return sorted(({**c, "nom": _decoder(c.get("nom", ""))} for c in params.get("carnet") or []),
+                  key=lambda c: ((c.get("nom") or c["email"]).lower()))
 
 
 def formater(c):
-    from email.utils import formataddr
-    return formataddr((c.get("nom") or "", c["email"])) if c.get("nom") else c["email"]
+    """« Sébastien Corner <s@ex.fr> » tel quel (lisible, accents compris) ; guillemets si le nom a une virgule."""
+    nom = (c.get("nom") or "").strip()
+    if not nom:
+        return c["email"]
+    if any(x in nom for x in ',;<>"'):
+        nom = '"' + nom.replace('"', "'") + '"'
+    return f"{nom} <{c['email']}>"
 
 
 def ajouter_contacts(params, contacts):
@@ -423,25 +440,47 @@ def lire_contacts(chemin):
             continue
     out = []
     if "BEGIN:VCARD" in texte.upper():
+        avec = 0
         for carte in re.split(r"(?i)BEGIN:VCARD", texte)[1:]:
             nom = re.search(r"(?im)^FN[^:]*:(.*)$", carte)
-            for m in re.findall(r"(?im)^(?:item\d+\.)?EMAIL[^:]*:(.*)$", carte):
+            mails = re.findall(r"(?im)^(?:item\d+\.)?EMAIL[^:]*:(.*)$", carte)
+            avec += bool(mails)
+            for m in mails:
                 out.append({"nom": nom.group(1).strip() if nom else "", "email": m.strip()})
+        lire_contacts.fiches_avec = avec
         return out
     import csv
     import io
     lecteur = csv.DictReader(io.StringIO(texte), delimiter=";" if texte.split("\n", 1)[0].count(";") >
                              texte.split("\n", 1)[0].count(",") else ",")
+    avec = 0
     for l in lecteur:
+        avant = len(out)
         l = {(k or "").strip().lower(): (v or "").strip() for k, v in l.items()}
         nom = l.get("name") or l.get("nom") or " ".join(x for x in (l.get("first name") or l.get("prénom") or
                                                                      l.get("given name") or "",
+                                                                     l.get("middle name") or "",
                                                                      l.get("last name") or l.get("nom de famille") or
                                                                      l.get("family name") or "") if x)
+        nom = nom or l.get("file as") or l.get("organization name") or l.get("company") or l.get("nickname") or ""
         for k, v in l.items():
             if v and ("mail" in k) and ("value" in k or "address" in k or "adresse" in k or k in ("e-mail", "email",
                                                                                                   "courriel")):
                 for x in re.split(r"\s*:::\s*|;", v):
                     if "@" in x:
                         out.append({"nom": nom, "email": x.strip()})
+        avec += len(out) > avant
+    lire_contacts.fiches_avec = avec
     return out
+
+
+def nombre_fiches(chemin):
+    """Nombre de contacts dans le fichier (avec ou sans adresse e-mail)."""
+    import csv
+    import io
+    with open(chemin, "rb") as f:
+        brut = f.read()
+    texte = brut.decode("utf-8-sig", "replace")
+    if "BEGIN:VCARD" in texte.upper():
+        return len(re.findall(r"(?i)BEGIN:VCARD", texte))
+    return max(0, sum(1 for _l in csv.reader(io.StringIO(texte))) - 1)

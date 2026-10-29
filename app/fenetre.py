@@ -3,7 +3,7 @@ import json, os, sys
 import pymupdf as fitz
 from PySide6.QtCore import Qt, QThread, Signal, QSize, QTimer
 from PySide6.QtGui import QAction, QKeySequence, QImage, QPainter
-from PySide6.QtWidgets import (QProgressBar, QToolButton, QMainWindow, QTabWidget, QFileDialog, QMessageBox, QDialog, QFormLayout,
+from PySide6.QtWidgets import (QScrollArea, QProgressBar, QToolButton, QMainWindow, QTabWidget, QFileDialog, QMessageBox, QDialog, QFormLayout,
                                QLineEdit, QCheckBox, QComboBox, QDialogButtonBox, QListWidget, QVBoxLayout,
                                QHBoxLayout, QPushButton, QLabel, QProgressDialog, QApplication, QInputDialog, QMenu,
                                QListWidgetItem, QWidget, QFrame, QGroupBox)
@@ -1595,14 +1595,28 @@ class Fenetre(MixinCoteACote, QMainWindow):
         try:
             from . import imprimante
             tous = list(dict.fromkeys(list(chemins) + imprimante.en_attente()))
-            if self.params.get("imprimante_installee"):
+            if self.params.get("imprimante_installee") and sys.platform == "win32":
                 imprimante.ecrire_surveillance()         # chemin de PhilPDF a jour (apres une mise a jour)
-                imprimante.lancer_surveillance()
+                from .dialogues_courriel import lancer
+                lancer(imprimante.lancer_surveillance, lambda _r: None)   # sans bloquer la fenetre
+            if not getattr(self, "_t_impr", None):       # PhilPDF ouvert : il prend lui-meme chaque impression
+                self._t_impr = QTimer(self)
+                self._t_impr.setInterval(2000)
+                self._t_impr.timeout.connect(self._guetter_impression)
+                self._t_impr.start()
         except Exception:
             tous = list(chemins)
         for c in tous:
             if os.path.exists(c):
                 self.ouvrir_impression(c)
+
+    def _guetter_impression(self):
+        from . import imprimante
+        c = imprimante.prendre_impression()
+        if c:
+            self.raise_()
+            self.activateWindow()
+            self.ouvrir_impression(c)
 
     def ouvrir_impression(self, chemin):
         from . import imprimante
@@ -2085,15 +2099,25 @@ class Fenetre(MixinCoteACote, QMainWindow):
     def preferences(self, onglet=None):
         d = QDialog(self)
         d.setWindowTitle(_('Préférences'))
-        d.setMinimumWidth(920)
+        d.setMinimumWidth(min(920, int((d.screen() or QApplication.primaryScreen()).availableGeometry().width() * 0.95)))
         vd = QVBoxLayout(d)
         tabs = QTabWidget()
+        tabs.setUsesScrollButtons(True)              # petit ecran : fleches pour les onglets, pas de fenetre trop large
+        tabs.tabBar().setExpanding(False)
         vd.addWidget(tabs)
+
+        def onglet(w, titre):
+            """Chaque onglet defile s'il ne tient pas (petit ecran) : la fenetre reste a la taille de l'ecran."""
+            z = QScrollArea()
+            z.setWidgetResizable(True)
+            z.setFrameShape(QFrame.NoFrame)
+            z.setWidget(w)
+            tabs.addTab(z, titre)
 
         def page(titre):
             w = QWidget()
             f = QFormLayout(w)
-            tabs.addTab(w, titre)
+            onglet(w, titre)
             return f
 
         def note(f, texte, couleur="#555"):
@@ -2122,7 +2146,9 @@ class Fenetre(MixinCoteACote, QMainWindow):
             langue.addItem(nom, code)
         langue.setCurrentIndex(max(0, langue.findData(self.params.get("langue", "auto"))))
         f.addRow(_("Langue"), langue)
-        hp = QHBoxLayout()
+        from .document import FluxLayout as _Flux
+        hp_w = QWidget()
+        hp = _Flux(hp_w, marge=0, espace=6)          # boutons qui passent a la ligne (petit ecran)
         be = QPushButton(_("Exporter mes préférences..."))
         be.clicked.connect(lambda: self.exporter_reglages(d))
         hp.addWidget(be)
@@ -2147,8 +2173,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
         bv_.setToolTip(_("La liste de vos postes (dernière activité, synchronisation, fichiers ouverts) et leurs réglages"))
         bv_.clicked.connect(lambda: self.mes_postes(d))
         hp.addWidget(bv_)
-        hp.addStretch()
-        f.addRow(_("Sauvegarde"), hp)
+        f.addRow(_("Sauvegarde"), hp_w)
         note(f, _("Vos préférences sont aussi copiées automatiquement sur votre Drive : une nouvelle installation "
                   "propose de les reprendre."))
         hs_ = QHBoxLayout()
@@ -2216,7 +2241,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
         lc.setStyleSheet("color:#555")
         vc.addWidget(lc)
         vc.addWidget(PanneauComptes(w, self.params), 1)
-        tabs.addTab(w, _("Comptes"))
+        onglet(w, _("Comptes"))
         tabs.currentChanged.connect(lambda _i: drive.rafraichir())   # comptes ajoutes : aussitot proposes pour la synchro
         if onglet == "comptes":
             tabs.setCurrentWidget(w)
@@ -2225,7 +2250,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
         from .dialogues import PanneauBibliotheque
         w = QWidget()
         vt = QVBoxLayout(w)
-        tabs.addTab(w, _('Tampons et signatures'))
+        onglet(w, _('Tampons et signatures'))
         panneaux = []
         for genre, titre in (("tampons", _('Mes tampons')), ("signatures", _('Mes signatures'))):
             t = QLabel(titre)
@@ -2350,6 +2375,14 @@ class Fenetre(MixinCoteACote, QMainWindow):
         f.addRow("", bt)
         note(f, _('Gemini en offre gratuite : Google peut réutiliser les documents envoyés. A éviter pour les documents sensibles.'), "#a35c00")
 
+        # ---------------- Imprimante PhilPDF
+        f = page(_("Imprimante"))
+        note(f, _("L'imprimante PhilPDF : Imprimer › PhilPDF depuis Word, Excel ou le navigateur ouvre le PDF dans "
+                  "PhilPDF, polices intégrées. Installation, nom dans Windows, qualité, dossier de sortie, page d'essai."))
+        b_impr = QPushButton(icone("imprimer", "#c9252d"), _(" Régler l'imprimante PhilPDF..."))
+        b_impr.clicked.connect(lambda: __import__("app.creer", fromlist=["DialogueImprimante"]).DialogueImprimante(
+            d, self.params).exec())
+        f.addRow(b_impr)
         # ---------------- Recherche (emplacements)
         f = page(_("Recherche"))
         note(f, _("Où « Rechercher dans tous mes PDF » cherche vos documents : dossiers de ce PC (et leurs "
