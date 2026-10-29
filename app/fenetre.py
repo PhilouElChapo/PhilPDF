@@ -382,6 +382,11 @@ class Fenetre(MixinCoteACote, QMainWindow):
         self.onglets.tabBar().setContextMenuPolicy(Qt.CustomContextMenu)
         self.onglets.tabBar().customContextMenuRequested.connect(self._menu_onglet)
         self._liste_fichiers()
+        b_ = self.params.get("barre")                # nouveau bouton E-mail : ajoute une fois a une barre personnalisee
+        if b_ and "courriel" not in b_ and not self.params.get("barre_courriel_vu"):
+            i_ = b_.index("imprimer") + 1 if "imprimer" in b_ else len(b_)
+            self.params["barre"] = b_[:i_] + ["courriel"] + b_[i_:]
+        self.params["barre_courriel_vu"] = True
         try:                                         # ancien chemin reste dans les reglages : on le remet sur la copie du compte
             c_ = miroir.compte_drive(self.params)
             if c_ and self.params.get("drive") != miroir.dossier_miroir(c_):
@@ -471,6 +476,8 @@ class Fenetre(MixinCoteACote, QMainWindow):
         m.addSeparator()
         act(m, _('Imprimer...'), lambda: self.lancer_outil("imprimer"), "Ctrl+P", "imprimer")
         act(m, _('Imprimer plusieurs documents...'), self.imprimer_plusieurs, None, "lot")
+        act(m, _('Envoyer par e-mail...'), lambda: self.lancer_outil("courriel"), "Ctrl+Shift+E", "courriel")
+        act(m, _("Comptes d'envoi d'e-mails..."), self.comptes_mail, None, "courriel")
         m.addSeparator()
         act(m, _("Protéger à l'aide d'un mot de passe..."), lambda: self.lancer_outil("motdepasse"), None, "motdepasse")
         act(m, _('Propriétés du document...'), self.proprietes, "Ctrl+D", "info")
@@ -698,6 +705,10 @@ class Fenetre(MixinCoteACote, QMainWindow):
         if not self.documents():
             a = menu.addAction(_("Aucun fichier ouvert"))
             a.setEnabled(False)
+
+    def comptes_mail(self):
+        from .dialogues_courriel import DialogueComptesMail
+        DialogueComptesMail(self, self.params).exec()
 
     def montrer_document(self, o):
         if o is self.doc_droite:
@@ -1473,6 +1484,8 @@ class Fenetre(MixinCoteACote, QMainWindow):
                 self.statusBar().showMessage(_("{n} fichier(s) créés dans {d}", n=len(d.faits), d=d.dossier_fait), 8000)
         elif oid == "paraphe":
             o.parapher()
+        elif oid == "courriel":
+            o.montrer_envoi(self)
         elif oid == "ia_reformuler":
             o.reformuler_ia()
         elif oid == "ia_mise_en_page":

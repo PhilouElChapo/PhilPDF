@@ -174,7 +174,7 @@ def traiter(chemin, reglages):
         octets = f.read()
     if q in ("leger", "standard"):
         from .alleger import alleger, PREREGLAGES
-        _n, dpi, qual, seuil = PREREGLAGES[2 if q == "leger" else 1]
+        _n, dpi, qual, seuil = PREREGLAGES[2 if q == "leger" else 0]
         octets = alleger(octets, {"images": True, "dpi": dpi, "qualite": qual, "seuil": seuil, "gris": False,
                                   "polices": True, "nettoyer": True, "infos": False, "jbig2": True,
                                   "noir_blanc": False, "polices_formulaire": True})

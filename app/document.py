@@ -1833,8 +1833,9 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
 
     def barre_par_defaut(self):
         favoris = [o for o in self.params.get("outils_epingles", []) if o not in ("imprimer", "remplacer", "enregistrer")]
-        return ["vignettes", "ouvrir", "enregistrer", "imprimer", "rechercher", "annuler", "retablir", "navigation",
-                "zoom", "pivoter", "|"] + favoris + ["volet"]
+        favoris = [o for o in favoris if o != "courriel"]
+        return ["vignettes", "ouvrir", "enregistrer", "imprimer", "courriel", "rechercher", "annuler", "retablir",
+                "navigation", "zoom", "pivoter", "|"] + favoris + ["volet"]
 
     def libelle_element(self, cle):
         fixes = {"vignettes": _("Vignettes (volet gauche)"), "ouvrir": _("Ouvrir"), "enregistrer": _("Enregistrer"),
@@ -3934,6 +3935,21 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             except Exception:                             # noqa: BLE001
                 pass
 
+    # ---- envoi par e-mail (volet de droite)
+    def montrer_envoi(self, fenetre):
+        if getattr(self, "panneau_envoi", None) is None:
+            from .dialogues_courriel import PanneauEnvoyer
+            self.panneau_envoi = PanneauEnvoyer(self, fenetre)
+            self._idx_volet_envoi = self.pile_volet.addWidget(self.panneau_envoi)
+        else:
+            self.panneau_envoi.oublier()
+            self.panneau_envoi._maj()
+        self.pile_volet.setCurrentIndex(self._idx_volet_envoi)
+        self._montrer_volet()
+        if self.volet.isHidden():
+            self.mode_volet("complet", memoriser=False)
+        self.panneau_envoi.a.setFocus()
+
     # ---- IA sur un paragraphe
     def reformuler_ia(self):
         """Paragraphe selectionne ouvert en edition, menu IA deja deroule ; sinon, explique comment faire."""
@@ -4273,6 +4289,8 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         if hasattr(self, "liste_comm"):
             self.remplir_volet_commentaires()
         self.maj_onglet_signets()
+        if getattr(self, "panneau_envoi", None) is not None:
+            self.panneau_envoi.oublier()
         if journal:
             self.message(journal[-1])
 

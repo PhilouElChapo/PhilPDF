@@ -87,6 +87,10 @@ jobs:
         run: python tests/test_organiser.py
         env:
           QT_QPA_PLATFORM: offscreen
+      - name: Envoi par e-mail
+        run: python tests/test_courriel.py
+        env:
+          QT_QPA_PLATFORM: offscreen
 
       - name: Tesseract (embarque dans le paquet)
         shell: pwsh
@@ -142,7 +146,7 @@ jobs:
           --add-data "fonts;fonts" --add-data "langues;langues" --add-data "tessdata;tessdata" --add-data "tesseract;tesseract"
           --hidden-import moteur.modifier --hidden-import moteur.scan --hidden-import moteur.objets
           --hidden-import moteur.scanner --hidden-import moteur.comparer --hidden-import moteur.traduire --hidden-import moteur.formulaire --hidden-import moteur.index --hidden-import app.ia --hidden-import app.dialogues_ia --hidden-import app.recherche --hidden-import app.apprentissage --hidden-import app.bienvenue --hidden-import app.synchro_choix --hidden-import app.alleger --hidden-import app.polices --hidden-import app.orthographe --hidden-import app.agenda --hidden-import app.avatars --hidden-import app.synchro_plan --hidden-import moteur.metadonnees --hidden-import moteur.retouche --hidden-import app.dialogues_retouche_ia --hidden-import app.styles_ia --hidden-import moteur.signature_num --hidden-import app.identites --hidden-import app.identites_systeme --hidden-import app.dialogues_signature --hidden-import app.signature_doc --hidden-import moteur.champs --hidden-import moteur.increment --hidden-import app.dialogues_champ --hidden-import app.formulaire_doc --hidden-import moteur.mesure --hidden-import moteur.tableaux --hidden-import moteur.jbig2 --hidden-import app.mesure_doc --hidden-import app.dialogues_mesure --hidden-import app.dialogues_excel --hidden-import app.lot --hidden-import app.reseau --collect-submodules truststore --hidden-import app.archiver --hidden-import moteur.pdfa --hidden-import moteur.apparence --add-binary "moteur/jbig2/philpdf_jbig2.dll;moteur/jbig2" --collect-submodules openpyxl --collect-submodules fontTools --collect-submodules pyhanko --collect-submodules pyhanko_certvalidator --collect-data pyhanko --collect-submodules asn1crypto --collect-submodules oscrypto --collect-submodules tzlocal --hidden-import PySide6.QtNetwork --collect-data spellchecker --hidden-import sqlite3 --hidden-import win32com.client --collect-submodules pdf2docx
-          --collect-submodules keyring --hidden-import win32ctypes.core --hidden-import app.identifiants --hidden-import app.commentaires_doc --hidden-import app.creer --hidden-import app.imprimante --hidden-import moteur.office --hidden-import pythoncom --hidden-import app.signets_doc --hidden-import app.cote_a_cote --hidden-import app.dialogues_organiser --hidden-import app.ia_texte --hidden-import moteur.fractionner --hidden-import moteur.paraphe
+          --collect-submodules keyring --hidden-import win32ctypes.core --hidden-import app.identifiants --hidden-import app.commentaires_doc --hidden-import app.creer --hidden-import app.imprimante --hidden-import moteur.office --hidden-import pythoncom --hidden-import app.signets_doc --hidden-import app.cote_a_cote --hidden-import app.dialogues_organiser --hidden-import app.ia_texte --hidden-import moteur.fractionner --hidden-import moteur.paraphe --hidden-import app.courriel --hidden-import app.dialogues_courriel --hidden-import smtplib --hidden-import imaplib
           --exclude-module scipy --exclude-module onnxruntime --exclude-module pymupdf_layout
           --exclude-module pymupdf4llm --exclude-module matplotlib --exclude-module pandas --exclude-module tkinter
           philpdf.py

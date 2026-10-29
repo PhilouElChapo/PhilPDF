@@ -20,6 +20,9 @@ OUTILS = [
     ("imprimante", "creer", "imprimer", _('Imprimante PhilPDF'), _('Imprimer vers PDF depuis tout logiciel'),
      _("Comme l'imprimante Adobe PDF : Imprimer › PhilPDF depuis Word, un navigateur... ouvre le PDF dans PhilPDF, "
        "polices intégrées. Qualité, dossier de sortie et affichage réglables."), True),
+    ("courriel", "creer", "courriel", _('Envoyer par e-mail'), _('Tel quel, allégé, figé ou protégé'),
+     _("Joindre le PDF à un e-mail : votre logiciel de messagerie (PDF déjà joint), votre adresse Orange, Gmail, "
+       "Free... (envoi direct ou brouillon dans votre messagerie web) ; poids de chaque version affiché."), True),
     ("combiner", "creer", "combiner", _('Combiner des fichiers'), _('Fusionner plusieurs fichiers en un seul PDF'),
      _("Assembler plusieurs fichiers en un seul PDF, dans l'ordre de votre choix."), True),
     ("organiser", "creer", "organiser", _('Organiser les pages'), _('Réordonner, pivoter, extraire, supprimer'),

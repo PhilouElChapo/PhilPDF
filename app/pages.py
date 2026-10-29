@@ -457,6 +457,10 @@ class PageAccueil(QWidget):
             it.setData(Qt.UserRole, ici or "")
             it.setData(Qt.UserRole + 1, l)
             # plus de bulle : la fiche de droite montre l'apercu, le detail et le debut du texte
+            if l.get("aussi_sur") and ici:             # aussi sur un autre poste : en gras
+                fo = it.font()
+                fo.setBold(True)
+                it.setFont(fo)
             if not ici:
                 it.setForeground(Qt.gray)
             else:
@@ -800,19 +804,18 @@ class FicheFichier(QFrame):
                                  "padding-left:8px")
         v.addWidget(self.texte)
         v.addStretch(1)
+        sp = self.sizePolicy()                      # cachee, elle garde sa place : la liste ne bouge pas
+        sp.setRetainSizeWhenHidden(True)
+        self.setSizePolicy(sp)
         self.montrer(None)
 
     def montrer(self, l):
         from PySide6.QtGui import QPixmap
         import html
-        if not l:
-            self.apercu.setPixmap(QPixmap())
-            self.apercu.setText(_("Passez la souris sur un fichier pour voir son aperçu"))
-            self.apercu.setStyleSheet("background:#f3f4f6;border-radius:8px;color:#888;font-size:12px")
-            for w in (self.titre, self.detail, self.etats, self.texte):
-                w.setText("")
-            self.texte.hide()
+        if not l:                                   # rien sous la souris : la fiche disparait
+            self.hide()
             return
+        self.show()
         self.apercu.setStyleSheet("background:#f3f4f6;border-radius:8px")
         self.titre.setText(l.get("nom", ""))
         chemin = l.get("chemin")
@@ -851,6 +854,12 @@ class FicheFichier(QFrame):
             lignes.append(_("Ouvert {d}", d=date_fr(l["date"])))
         if l.get("ouvert_sur"):
             lignes.append(_("Ouvert en ce moment sur {p}", p=", ".join(l["ouvert_sur"])))
+        if l.get("autre_poste") and l.get("chemin_origine"):
+            lignes.append(_("<b>Sur {poste}</b> : {c}", poste=html.escape(l.get("poste", "?")),
+                            c=html.escape(l["chemin_origine"])))
+        for poste in l.get("aussi_sur") or []:
+            c = (l.get("chemins_autres") or {}).get(poste) or ""
+            lignes.append(_("<b>Aussi sur {poste}</b> : {c}", poste=html.escape(poste), c=html.escape(c) or "?"))
         self.detail.setText("<br>".join(lignes))
         couleurs = {"signe": ("#e6f4ea", "#1e6b34"), "formulaire": ("#fdf1e2", "#8a4b00"),
                     "cadenas": ("#fdecea", "#9b1c1c"), "scan": ("#eef2f7", "#3d5168"),

@@ -245,7 +245,7 @@ class Session:
                 continue
             l = {"chemin": p if os.path.exists(p) else None, "chemin_origine": p, "nom": os.path.basename(p),
                  "dossier": os.path.normpath(os.path.dirname(p)), "date": q or "", "rang": i, "poste": moi,
-                 "ouvert_sur": [], "aussi_sur": [], "autre_poste": False, "machine": moi, "e": None,
+                 "ouvert_sur": [], "aussi_sur": [], "chemins_autres": {}, "autre_poste": False, "machine": moi, "e": None,
                  "introuvable_ici": not os.path.exists(p)}
             par_chemin[k] = l
             ici_l.append(l)
@@ -275,6 +275,7 @@ class Session:
                     x = par_chemin[k]
                     if m not in x["aussi_sur"]:
                         x["aussi_sur"].append(m)
+                    x.setdefault("chemins_autres", {})[m] = e.get("chemin") or ""
                     if ouvert and m not in x["ouvert_sur"]:
                         x["ouvert_sur"].append(m)
                     continue
@@ -284,12 +285,14 @@ class Session:
                     x = vus_autres[kk]
                     if m not in x["aussi_sur"] and m != x["poste"]:
                         x["aussi_sur"].append(m)
+                        x.setdefault("chemins_autres", {})[m] = e.get("chemin") or ""
                     if ouvert and m not in x["ouvert_sur"]:
                         x["ouvert_sur"].append(m)
                     continue
                 l = {"chemin": trouve, "chemin_origine": e.get("chemin"), "nom": e.get("nom") or "?",
                      "dossier": os.path.normpath(os.path.dirname(trouve)) if trouve else _dossier_autre(e.get("chemin") or ""),
                      "date": date, "rang": 999, "poste": m, "ouvert_sur": [m] if ouvert else [], "aussi_sur": [],
+                     "chemins_autres": {},
                      "autre_poste": True, "machine": m, "e": e, "introuvable_ici": not trouve}
                 vus_autres[kk] = l
                 autres.append(l)
