@@ -225,8 +225,19 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          set -e
-          for t in tests/test_*.py; do echo "::group::$t"; python "$t"; echo "::endgroup::"; done
+          echec=0
+          for t in tests/test_*.py; do
+            echo "::group::$t"
+            python "$t" > sortie.txt 2>&1; r=$?
+            cat sortie.txt
+            echo "::endgroup::"
+            if [ $r -ne 0 ]; then
+              echec=1
+              msg=$(grep -v "^OK" sortie.txt | tail -n 25 | cut -c1-300 | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')
+              echo "::error title=$t::$msg"
+            fi
+          done
+          exit $echec
       - name: Version et identifiants
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID || vars.GOOGLE_CLIENT_ID }}
