@@ -14,6 +14,7 @@ TRAITS = {
     "remplacer": '<circle cx="10" cy="10" r="6"/><path d="M20 20l-5.6-5.6"/><path d="M8 10h4"/>',
     "entete": '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 8h16M4 16h16"/>',
     "filigrane": '<path d="M12 2.7l5.7 5.7a8 8 0 1 1-11.4 0z"/>',
+    "carnet": '<path d="M5 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5z"/><path d="M5 3v18"/><circle cx="12" cy="10" r="2.5"/><path d="M8.5 16c.8-1.8 2-2.6 3.5-2.6s2.7.8 3.5 2.6"/><path d="M19 7h2M19 12h2M19 17h2"/>',
     "courriel": '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/>',
     "liste_fichiers": '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>',
     "fractionner": '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/>',

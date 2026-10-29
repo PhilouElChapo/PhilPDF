@@ -223,9 +223,14 @@ def reprendre_secret(params, cle, valeur, ecraser=False):
 
 
 def nom_identite(params, cle):
+    from .langue import _
     ident = cle.split(":", 1)[1]
-    e = next((x for x in params.get("identites", []) or [] if x["id"] == ident), None)
-    return e.get("nom", ident) if e else ident
+    e = next((x for x in params.get("identites", []) or [] if x["id"] == ident or ident in (x.get("alias") or [])),
+             None)
+    if e and e.get("nom"):
+        fin = e.get("fin") or ""
+        return e["nom"] + (" (" + _("valable jusqu'au {d}", d="/".join(reversed(fin[:10].split("-")))) + ")" if fin else "")
+    return _("nom inconnu, n° {i}", i=ident[:8]) if not e else ident
 
 
 def retrouver_orphelines(params):

@@ -125,6 +125,9 @@ class VueZones(QWidget):
         return bytes(buf.data())
 
 
+_EN_COURS = set()
+
+
 class TacheIA(QThread):
     fini = Signal(object, str)
     info = Signal(str)
@@ -350,6 +353,8 @@ class DialogueRetoucheIA(QDialog):
         self._tic()
         self.chrono.start()
         self.tache = TacheIA(self.params, png(envoi), consigne, zones_png)
+        _EN_COURS.add(self.tache)                    # vit jusqu'au bout, meme si la fenetre est fermee pendant l'attente
+        self.tache.finished.connect(lambda t=self.tache: _EN_COURS.discard(t))
         self.tache.info.connect(self._ajouter_suivi)
         self.tache.fini.connect(self._recu)
         self.tache.start()

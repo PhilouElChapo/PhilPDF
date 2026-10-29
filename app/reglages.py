@@ -21,8 +21,8 @@ COMMUNS = ["auteur", "langue", "outils_epingles", "barre_rapide", "volet", "vign
            "filigranes_perso", "ia_moteur", "maj_source", "maj_auto", "synchro", "comptes", "comptes_icone", "theme", "synchro_secrets", "barre", "couleurs_annotations",
            "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "agenda", "messagerie", "ia_styles_perso",
            "identites", "certificats_approuves", "signature_reglages", "identites_supprimees", "certificats_retires",
-           "formulaire_detection", "formulaire_types_auto", "comptes_mail", "courriel", "courriel_recents"]
-POSTE = ["disposition_vue", "volet_largeur", "vignettes_largeur", "biblio_replies", "sessions_vues", "synchro_etat", "machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
+           "formulaire_detection", "formulaire_types_auto", "comptes_mail", "courriel", "courriel_recents", "ordre_outils"]
+POSTE = ["secrets_refuses", "disposition_vue", "volet_largeur", "vignettes_largeur", "biblio_replies", "sessions_vues", "synchro_etat", "machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
 CLEFS_IA = ["clef_claude", "clef_gemini"]
 FICHIER_DRIVE = "preferences.json"
 
@@ -315,7 +315,7 @@ def libelle_commun(k):
             "signature_reglages": _("Réglages de la signature numérique"),
             "formulaire_detection": _("Repérage des champs en mode Formulaire"),
             "comptes_mail": _("Comptes d'envoi d'e-mails"), "courriel": _("Réglages de l'envoi par e-mail"),
-            "courriel_recents": _("Destinataires récents"),
+            "courriel_recents": _("Destinataires récents"), "ordre_outils": _("Ordre des outils (page Outils)"),
             "formulaire_types_auto": _("Type des champs deviné d'après le libellé")}.get(k, k)
 
 
@@ -498,7 +498,12 @@ def secrets_nouveaux(params, phrase, secrets=None):
     noms = {c["id"]: c.get("nom") or c["id"] for c in params.get("comptes", [])}
     noms.update({"mail_" + c["id"]: c.get("adresse") or c["id"] for c in params.get("comptes_mail", [])})
     out = []
+    import hashlib
+    refuses = params.get("secrets_refuses") or {}
+    supprimees = set(params.get("identites_supprimees") or [])
     for k, v in (lire_secrets_drive(params, phrase) if secrets is None else secrets).items():
+        if v and refuses.get(k) == hashlib.sha1(str(v).encode()).hexdigest()[:16]:
+            continue                                 # deja refuse sur ce poste (meme valeur) : plus propose
         if k.startswith("coffre:"):
             if v and not coffre.lire(k[7:]):
                 cid, _p, suffixe = k[7:].partition(".")
@@ -509,10 +514,28 @@ def secrets_nouveaux(params, phrase, secrets=None):
         elif k.startswith("identite:") and v:
             from . import identites
             ident = k.split(":", 1)[1]
-            deja = any(ident in (e.get("alias") or []) and e.get("ici") for e in identites.liste(params))
+            if ident in supprimees:                  # supprimee sur un poste : jamais reproposee
+                continue
+            deja = any(ident in (e.get("alias") or []) and (e.get("ici") or os.path.exists(identites._fichier(e["id"])))
+                       for e in identites.liste(params))
             if not deja and not os.path.exists(identites._fichier(ident)):
                 out.append({"cle": k, "libelle": _("identité numérique : {x}", x=identites.nom_identite(params, k))})
     return out
+
+
+def refuser_secrets(params, phrase, cles):
+    """Secrets decoches dans la fenetre : retenus (avec leur valeur) pour ne plus les proposer sur ce poste,
+    sauf s'ils changent un jour sur l'autre poste."""
+    import hashlib
+    if not cles:
+        return
+    tous = lire_secrets_drive(params, phrase)
+    r = dict(params.get("secrets_refuses") or {})
+    for k in cles:
+        if tous.get(k):
+            r[k] = hashlib.sha1(str(tous[k]).encode()).hexdigest()[:16]
+    params["secrets_refuses"] = r
+    params.enregistrer()
 
 
 def reprendre_secrets_choisis(params, phrase, cles):

@@ -382,6 +382,8 @@ class Fenetre(MixinCoteACote, QMainWindow):
         self.onglets.tabBar().setContextMenuPolicy(Qt.CustomContextMenu)
         self.onglets.tabBar().customContextMenuRequested.connect(self._menu_onglet)
         self._liste_fichiers()
+        from PySide6.QtCore import QTimer as _QT
+        _QT.singleShot(15000, self.proposer_imprimante)
         b_ = self.params.get("barre")                # nouveau bouton E-mail : ajoute une fois a une barre personnalisee
         if b_ and "courriel" not in b_ and not self.params.get("barre_courriel_vu"):
             i_ = b_.index("imprimer") + 1 if "imprimer" in b_ else len(b_)
@@ -705,6 +707,24 @@ class Fenetre(MixinCoteACote, QMainWindow):
         if not self.documents():
             a = menu.addAction(_("Aucun fichier ouvert"))
             a.setEnabled(False)
+
+    def proposer_imprimante(self):
+        """Une fois : sous Windows, si l'imprimante PhilPDF n'est pas installee, on propose de l'installer
+        (pour Imprimer › PhilPDF depuis Word, Excel, le navigateur...)."""
+        if sys.platform != "win32" or self.params.get("imprimante_proposee"):
+            return
+        from . import imprimante
+        from .dialogues_courriel import lancer
+
+        def vu(installee):
+            self.params["imprimante_proposee"] = True
+            self.params.enregistrer()
+            if installee is True:
+                return
+            Notification(self, _("L'imprimante PhilPDF n'est pas encore dans les imprimantes de Windows : "
+                                 "installez-la pour faire Imprimer › PhilPDF depuis Word, Excel ou le navigateur."),
+                         _("Installer..."), lambda: self.lancer_outil("imprimante"))
+        lancer(imprimante.installee, vu)
 
     def comptes_mail(self):
         from .dialogues_courriel import DialogueComptesMail
@@ -2330,6 +2350,21 @@ class Fenetre(MixinCoteACote, QMainWindow):
         f.addRow("", bt)
         note(f, _('Gemini en offre gratuite : Google peut réutiliser les documents envoyés. A éviter pour les documents sensibles.'), "#a35c00")
 
+        # ---------------- Recherche (emplacements)
+        f = page(_("Recherche"))
+        note(f, _("Où « Rechercher dans tous mes PDF » cherche vos documents : dossiers de ce PC (et leurs "
+                  "sous-dossiers), NAS et Drives. Ces emplacements sont propres à ce poste."))
+        from .recherche import EditeurLieux
+        f.addRow(EditeurLieux(self.params, d, self.dossier_depart()))
+        # ---------------- E-mail (adresses d'envoi, carnet)
+        f = page(_("E-mail"))
+        note(f, _("Vos adresses d'envoi (Orange, Gmail, Free...) et votre carnet d'adresses. Ils suivent sur vos "
+                  "autres postes ; les mots de passe voyagent chiffrés."))
+        from .dialogues_courriel import PanneauComptesMail, PanneauCarnet
+        f.addRow(QLabel("<b>" + _("Adresses d'envoi") + "</b>"))
+        f.addRow(PanneauComptesMail(self.params, d))
+        f.addRow(QLabel("<b>" + _("Carnet d'adresses") + "</b>"))
+        f.addRow(PanneauCarnet(self.params, d))
         # ---------------- Mises à jour
         f = page(_('Mises à jour'))
         majs = QComboBox()
@@ -2481,7 +2516,11 @@ class Fenetre(MixinCoteACote, QMainWindow):
         if manuel or ouvrir:
             self.choisir_reglages_distants(ch, sec)
             return
-        Notification(self, _("{n} réglage(s) modifié(s) sur vos autres postes{par}.", n=n,
+        sig = (tuple(sorted(i["cle"] for i in visibles)), tuple(sorted(i["cle"] for i in sec)))
+        if sig == getattr(self, "_reglages_reportes", None):
+            return                                   # « Plus tard » : pas redemande avant le prochain demarrage
+        Notification(self, _("{n} réglage(s) ou mot(s) de passe venant de vos autres postes{par}. Une fenêtre va "
+                             "vous les montrer un par un, à reprendre ou non.", n=n,
                              par=_(" (dernier : « {poste} »)", poste=ch["par"]) if ch else ""),
                      _("Voir et choisir..."), lambda: self.choisir_reglages_distants(ch, sec))
 
@@ -2574,8 +2613,11 @@ class Fenetre(MixinCoteACote, QMainWindow):
         d.setWindowTitle(_("Réglages de vos autres postes"))
         d.resize(900, 480)
         v = QVBoxLayout(d)
-        lb = QLabel(_("Voici ce qui a changé ailleurs. Cochez à droite ce que vous voulez reprendre sur ce poste ; "
-                      "ce qui reste décoché garde la valeur de ce poste.") +
+        lb = QLabel(_("<b>Voici ce qui a changé sur vos autres postes.</b><br>"
+                      "• <b>Coché</b> : copié sur ce poste quand vous cliquez « Appliquer la sélection ».<br>"
+                      "• <b>Décoché</b> : ce poste garde sa valeur, et PhilPDF ne vous le reproposera plus (sauf "
+                      "s'il change encore sur l'autre poste).<br>"
+                      "• <b>Plus tard</b> : rien ne change ; la question reviendra au prochain démarrage de PhilPDF.") +
                     (_("<br>Réglages de « {poste} » : {date}. Réglages de ce poste ({ici}) : {date_ici}. "
                        "Les cases du plus récent sont cochées d'avance.", poste=ch["par"], date=_date_heure(ch["maj"]),
                        ici=self.params.get("machine", ""),
@@ -2587,7 +2629,8 @@ class Fenetre(MixinCoteACote, QMainWindow):
         v.addWidget(lb)
         lignes = [("c", it["cle"], it["libelle"], it["detail"], it.get("coche", True)) for it in (ch["items"] if ch else [])
                   if not it.get("cache")] + \
-                 [("s", it["cle"], it["libelle"], _("nouveau, absent de ce poste (valeur chiffrée, non affichée)"), True) for it in sec] + \
+                 [("s", it["cle"], it["libelle"], _("absent de ce poste : sera copié ici, chiffré (la valeur n'est "
+                                                    "jamais affichée)"), True) for it in sec] + \
                  [("p", it["cle"], it["libelle"] + _(" (disposition de « {poste} »)", poste=self._dispo["poste"]), it["detail"], False)
                   for it in ((getattr(self, "_dispo", None) or {}).get("items") or [])]
         t = QTableWidget(len(lignes), 3)
@@ -2626,9 +2669,18 @@ class Fenetre(MixinCoteACote, QMainWindow):
         v.addLayout(hb)
         b_ok.clicked.connect(d.accept)
         b_tard.clicked.connect(d.reject)
+        for r, (genre, cle, *_x) in enumerate(lignes):          # apercu : icone du genre de reglage
+            ic = "certificat" if cle.startswith("identite:") else "motdepasse" if genre == "s" else "parametres"
+            t.item(r, 0).setIcon(icone(ic, "#2b6cb0"))
         self._dlg_reglages = d                        # pour les tests
         if d.exec() != QDialog.Accepted:
+            self._reglages_reportes = (tuple(sorted(i["cle"] for i in (ch["items"] if ch else []) if not i.get("cache"))),
+                                       tuple(sorted(i["cle"] for i in sec)))
             return
+        refuses = [t.item(r, 2).data(Qt.UserRole)[1] for r in range(t.rowCount())
+                   if t.item(r, 2).checkState() != Qt.Checked and t.item(r, 2).data(Qt.UserRole)[0] == "s"]
+        if refuses:
+            reglages.refuser_secrets(self.params, coffre.lire(reglages.PHRASE), refuses)
         choisis = [t.item(r, 2).data(Qt.UserRole) for r in range(t.rowCount()) if t.item(r, 2).checkState() == Qt.Checked]
         communs = [k for g, k in choisis if g == "c"]
         if getattr(self, "_dispo", None):              # disposition : reprise ou non, elle n'est plus proposee

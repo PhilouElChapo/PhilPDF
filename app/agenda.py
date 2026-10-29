@@ -60,13 +60,19 @@ def fichier_ics(titre, debut, fin, journee, details=""):
     return p
 
 
-def lien_message(messagerie, sujet, corps, a=""):
+def lien_message(messagerie, sujet, corps, a="", cc="", cci=""):
     if messagerie == "gmail":
-        return "https://mail.google.com/mail/?" + urllib.parse.urlencode({"view": "cm", "fs": "1", "to": a, "su": sujet, "body": corps})
+        q = {"view": "cm", "fs": "1", "to": a, "su": sujet, "body": corps}
+        q.update({k: v for k, v in (("cc", cc), ("bcc", cci)) if v})
+        return "https://mail.google.com/mail/?" + urllib.parse.urlencode(q)
     if messagerie in ("outlook", "office"):
         base = "https://outlook.live.com" if messagerie == "outlook" else "https://outlook.office.com"
-        return base + "/mail/deeplink/compose?" + urllib.parse.urlencode({"to": a, "subject": sujet, "body": corps})
-    return f"mailto:{urllib.parse.quote(a)}?" + urllib.parse.urlencode({"subject": sujet, "body": corps}, quote_via=urllib.parse.quote)
+        q = {"to": a, "subject": sujet, "body": corps}
+        q.update({k: v for k, v in (("cc", cc), ("bcc", cci)) if v})
+        return base + "/mail/deeplink/compose?" + urllib.parse.urlencode(q)
+    q = {"subject": sujet, "body": corps}
+    q.update({k: v for k, v in (("cc", cc), ("bcc", cci)) if v})
+    return f"mailto:{urllib.parse.quote(a)}?" + urllib.parse.urlencode(q, quote_via=urllib.parse.quote)
 
 
 def ouvrir(cible):

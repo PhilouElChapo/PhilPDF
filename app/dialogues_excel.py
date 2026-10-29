@@ -300,7 +300,8 @@ class DialogueExcel(QDialog):
         coches = self._coches()
         for t, c in zip(self.tableaux, coches):
             t["coche"] = c
-        cadres = [(i, t["rect"], t["coche"]) for i, t in enumerate(self.tableaux) if t["page"] == self.num]
+        cadres = [(i, r, t["coche"]) for i, t in enumerate(self.tableaux)          # suite d'un tableau : cadre aussi
+                  for pg, r in (t.get("cadres") or [(t["page"], t["rect"])]) if pg == self.num and r is not None]
         self.vue.montrer(self.doc, self.num, cadres, self.liste.currentRow())
         n = sum(coches)
         self.b_exporter.setEnabled(n > 0)

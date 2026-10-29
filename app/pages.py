@@ -120,9 +120,79 @@ class Tuile(QFrame):
         c = self.etoile.isChecked()
         self.etoile.setIcon(icone("etoile", "#e8a317" if c else "#b5b5b5", 36, rempli=c))
 
-    def mouseReleaseEvent(self, e):
+    def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
+            self._depart = e.position().toPoint()
+            self._glisse = False
+
+    def mouseMoveEvent(self, e):
+        """Glisser une tuile la deplace parmi celles de sa famille (ordre garde et synchronise)."""
+        d = getattr(self, "_depart", None)
+        if d is None or not (e.buttons() & Qt.LeftButton):
+            return
+        if (e.position().toPoint() - d).manhattanLength() < 12:
+            return
+        from PySide6.QtGui import QDrag
+        from PySide6.QtCore import QMimeData
+        self._glisse = True
+        self._depart = None
+        m = QMimeData()
+        m.setData("application/x-philpdf-tuile", self.oid.encode())
+        dr = QDrag(self)
+        dr.setMimeData(m)
+        pm = self.grab()
+        dr.setPixmap(pm.scaledToWidth(180, Qt.SmoothTransformation))
+        dr.setHotSpot(d * 180 / max(1, pm.width()))
+        dr.exec(Qt.MoveAction)
+
+    def mouseReleaseEvent(self, e):
+        if e.button() == Qt.LeftButton and not getattr(self, "_glisse", False):
             self.clique.emit(self.oid)
+        self._glisse = False
+
+
+class GrilleTuiles(QWidget):
+    """Grille d'une famille : on y depose une tuile glissee pour changer l'ordre."""
+    deplace = Signal(str, int)
+
+    def __init__(self, fid):
+        super().__init__()
+        self.fid = fid
+        self.setAcceptDrops(True)
+
+    def _ok(self, e):
+        return e.mimeData().hasFormat("application/x-philpdf-tuile")
+
+    def dragEnterEvent(self, e):
+        if self._ok(e):
+            e.acceptProposedAction()
+
+    def dragMoveEvent(self, e):
+        if self._ok(e):
+            e.acceptProposedAction()
+
+    def dropEvent(self, e):
+        if not self._ok(e):
+            return
+        oid = bytes(e.mimeData().data("application/x-philpdf-tuile")).decode()
+        pos = e.position().toPoint()
+        fl = self.layout()
+        rang = fl.count()
+        for i in range(fl.count()):
+            w = fl.itemAt(i).widget()
+            g = w.geometry()
+            if pos.y() < g.top() or (pos.y() <= g.bottom() and pos.x() < g.center().x()):
+                rang = i
+                break
+        e.acceptProposedAction()
+        self.deplace.emit(oid, rang)
+
+
+def ordre_outils(params, outils):
+    """Les outils dans l'ordre choisi a la souris (les nouveaux a leur place d'origine, a la fin de leur famille)."""
+    ordre = list(params.get("ordre_outils") or [])
+    rang = {o: i for i, o in enumerate(ordre)}
+    return sorted(outils, key=lambda o: (rang.get(o[0], 10000 + outils.index(o))))
 
 
 class PageOutils(QScrollArea):
@@ -179,9 +249,10 @@ class PageOutils(QScrollArea):
                            + (' <span style="font-size:13px;font-weight:400;color:#555">· optionnel, à la demande, avec votre clef API</span>' if fid == "ia" else ""))
             titre.setStyleSheet("font-size:18px;font-weight:600")
             sv.addWidget(titre)
-            grille = QWidget()
+            grille = GrilleTuiles(fid)
+            grille.deplace.connect(self._deplacer)
             fl = FlowLayout(grille)
-            for o in OUTILS:
+            for o in ordre_outils(params, OUTILS):
                 if o[1] == fid:
                     t = Tuile(o, o[0] in params["outils_epingles"])
                     t.clique.connect(self.outil_choisi)
@@ -191,11 +262,37 @@ class PageOutils(QScrollArea):
             sv.addWidget(grille)
             self.sections[fid] = sec
             v.addWidget(sec)
-        aide = QLabel(_("L'étoile épingle un outil dans le volet de droite des fichiers ouverts. Survolez un outil pour sa bulle d'aide."))
+        aide = QLabel(_("L'étoile épingle un outil dans le volet de droite des fichiers ouverts. Glissez une tuile pour "
+                        "changer l'ordre (gardé sur vos autres postes). Survolez un outil pour sa bulle d'aide."))
+        aide.setWordWrap(True)
         aide.setStyleSheet("color:#555;font-size:13px")
         v.addWidget(aide)
         v.addStretch()
         self.famille_active = None
+
+    def _deplacer(self, oid, rang):
+        grille = self.sender()
+        fl = grille.layout()
+        items = [fl.itemAt(i).widget() for i in range(fl.count())]
+        t = next((w for w in items if w.oid == oid), None)
+        if t is None:                                # tuile d'une autre famille : elle reste dans la sienne
+            return
+        avant = items.index(t)
+        items.remove(t)
+        items.insert(rang - (1 if rang > avant else 0), t)
+        while fl.count():
+            fl.takeAt(0)
+        for w in items:
+            fl.addWidget(w)
+        fl.invalidate()
+        grille.updateGeometry()
+        ordre = [o[0] for o in ordre_outils(self.params, OUTILS)]
+        fam = [w.oid for w in items]
+        pos = sorted(ordre.index(x) for x in fam)        # memes places, nouvel ordre dans la famille
+        for p_, x in zip(pos, fam):
+            ordre[p_] = x
+        self.params["ordre_outils"] = ordre
+        self.params.enregistrer()
 
     def _style_filtres(self, actif):
         self.bouton_tous.setStyleSheet(
@@ -360,6 +457,7 @@ class PageAccueil(QWidget):
         self.liste.setStyleSheet("QListWidget{background:#fff;border:1px solid #e2e2e2;border-radius:10px;font-size:14px}"
                                  "QListWidget::item{padding:10px;border-bottom:1px solid #f0f0f0}"
                                  "QListWidget::item:hover{background:#f4f7fb}")
+        self.liste.setItemDelegate(DelegueRecent(self.liste))
         self.liste.setContextMenuPolicy(Qt.CustomContextMenu)
         self.liste.customContextMenuRequested.connect(self._menu_fichier)
         self.liste.itemClicked.connect(self._clic_recent)
@@ -446,6 +544,7 @@ class PageAccueil(QWidget):
                 infos.append(l["poste"] + (", " + date_fr(l["date"]) if l["date"] else ""))
             if l.get("aussi_sur"):
                 infos.append(_("aussi sur {poste}", poste=", ".join(l["aussi_sur"])))
+            aussi = infos[-1] if l.get("aussi_sur") else None
             if l["ouvert_sur"]:
                 infos.append("● " + _("ouvert sur {poste}", poste=", ".join(l["ouvert_sur"])))
             if l.get("autre_poste") and ici:
@@ -454,13 +553,13 @@ class PageAccueil(QWidget):
                 infos.append(_("introuvable sur ce poste"))
             it = QListWidgetItem(icone("creer", "#c9252d" if ici else "#bbbbbb"),
                                  f"{l['nom']}\n{l['dossier']}" + ("   ·   " + "   ·   ".join(infos) if infos else ""))
+            import html as _h                         # meme texte, « aussi sur ... » seul en gras
+            it.setData(Qt.UserRole + 2, _h.escape(l["nom"]) + "<br>" + _h.escape(l["dossier"]) + "".join(
+                "&nbsp;&nbsp;&nbsp;·&nbsp;&nbsp;&nbsp;" + (f"<b>{_h.escape(x)}</b>" if x == aussi else _h.escape(x))
+                for x in infos))
             it.setData(Qt.UserRole, ici or "")
             it.setData(Qt.UserRole + 1, l)
             # plus de bulle : la fiche de droite montre l'apercu, le detail et le debut du texte
-            if l.get("aussi_sur") and ici:             # aussi sur un autre poste : en gras
-                fo = it.font()
-                fo.setBold(True)
-                it.setFont(fo)
             if not ici:
                 it.setForeground(Qt.gray)
             else:
@@ -766,6 +865,41 @@ def fiche_fichier(chemin):
         f["etats"].append(("erreur", _("Fichier illisible ou abîmé")))
     _FICHES[cle] = f
     return f
+
+
+from PySide6.QtWidgets import QStyledItemDelegate as _Delegue
+
+
+class DelegueRecent(_Delegue):
+    """Ligne des Recents dessinee en texte riche (« aussi sur Cannes » en gras), sinon comme d'habitude."""
+
+    def paint(self, painter, option, index):
+        html = index.data(Qt.UserRole + 2)
+        if not html:
+            return super().paint(painter, option, index)
+        from PySide6.QtWidgets import QStyleOptionViewItem, QStyle, QApplication as _A
+        from PySide6.QtGui import QTextDocument, QAbstractTextDocumentLayout, QPalette
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        w = opt.widget
+        st = w.style() if w else _A.style()
+        texte = opt.text
+        opt.text = ""
+        st.drawControl(QStyle.CE_ItemViewItem, opt, painter, w)
+        opt.text = texte
+        zone = st.subElementRect(QStyle.SE_ItemViewItemText, opt, w)
+        doc = QTextDocument()
+        doc.setDefaultFont(opt.font)
+        doc.setDocumentMargin(0)
+        doc.setHtml(html)
+        painter.save()
+        painter.translate(zone.left() + 4, zone.top() + max(0, (zone.height() - doc.size().height()) / 2))
+        ctx = QAbstractTextDocumentLayout.PaintContext()
+        coul = index.data(Qt.ForegroundRole)
+        ctx.palette.setColor(QPalette.Text, coul.color() if hasattr(coul, "color") else
+                             (coul if coul is not None else opt.palette.color(QPalette.Text)))
+        doc.documentLayout().draw(painter, ctx)
+        painter.restore()
 
 
 class FicheFichier(QFrame):

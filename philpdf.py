@@ -178,7 +178,11 @@ def main():
                                                      "Utilisez sa fenêtre, ou fermez-le avant de le relancer.")
             sys.exit(0)
     preparer(app)
+    surveiller_plantages()
+    nettoyer_temporaires()
     w = Fenetre(fichiers)
+    QTimer_ = __import__("PySide6.QtCore", fromlist=["QTimer"]).QTimer
+    QTimer_.singleShot(3000, lambda: signaler_plantage(w))
     ecouter_autres_lancements(w)
     w.show()
     from PySide6.QtCore import QTimer
@@ -187,6 +191,82 @@ def main():
 
 
 _VERROU = None
+_FICHIER_PLANTAGE = None
+
+
+def _chemin_plantage():
+    from app.config import dossier_donnees
+    return os.path.join(dossier_donnees(), "plantage.txt")
+
+
+def surveiller_plantages():
+    """Si PhilPDF se ferme brutalement, la cause est notee dans plantage.txt (signalee au lancement suivant) ;
+    une erreur ordinaire est notee dans le journal et affichee, sans fermer PhilPDF."""
+    global _FICHIER_PLANTAGE
+    import faulthandler, traceback
+    try:
+        _FICHIER_PLANTAGE = open(_chemin_plantage(), "a", encoding="utf-8")
+        faulthandler.enable(_FICHIER_PLANTAGE, all_threads=True)
+    except Exception:
+        pass
+
+    def crochet(typ, val, tb):
+        texte = "".join(traceback.format_exception(typ, val, tb))
+        try:
+            from app.journal import ecrire
+            ecrire("erreur", texte)
+        except Exception:
+            pass
+        try:
+            from PySide6.QtWidgets import QMessageBox, QApplication
+            if QApplication.instance():
+                QMessageBox.warning(None, "PhilPDF", "Une erreur est survenue (PhilPDF reste ouvert) :\n\n"
+                                    + str(val)[:400] + "\n\nLe détail est dans Aide › Journal des échanges.")
+        except Exception:
+            pass
+    sys.excepthook = crochet
+    import threading
+    threading.excepthook = lambda a: crochet(a.exc_type, a.exc_value, a.exc_traceback)
+
+
+def signaler_plantage(fenetre):
+    """Au lancement : si la derniere session s'est fermee brutalement, on le dit et on montre la cause."""
+    try:
+        p = _chemin_plantage()
+        with open(p, encoding="utf-8", errors="replace") as f:
+            texte = f.read()
+    except OSError:
+        return
+    if "Fatal Python error" not in texte and "Windows fatal exception" not in texte:
+        return
+    try:
+        from app.journal import ecrire
+        ecrire("plantage", texte[-6000:])
+        with open(p + ".precedent", "w", encoding="utf-8") as f:
+            f.write(texte)
+        if _FICHIER_PLANTAGE:
+            _FICHIER_PLANTAGE.seek(0)
+            _FICHIER_PLANTAGE.truncate()
+    except Exception:
+        pass
+    from PySide6.QtWidgets import QMessageBox
+    QMessageBox.information(fenetre, "PhilPDF", "PhilPDF s'est fermé brutalement la dernière fois. La cause a été "
+                            "notée dans le journal (Aide › Journal des échanges) : envoyez-la si vous voulez qu'elle soit corrigée.")
+
+
+def nettoyer_temporaires(age_jours=1):
+    """Copies temporaires (pieces jointes preparees pour un e-mail, apercus, conversions) de plus d'un jour :
+    effacees. Celles d'aujourd'hui restent, le temps de les glisser dans un message."""
+    import tempfile, time, shutil
+    base = tempfile.gettempdir()
+    try:
+        for n in os.listdir(base):
+            if n.startswith(("philpdf-envoi-", "philpdf-apercu-", "philpdf-office-")):
+                p = os.path.join(base, n)
+                if time.time() - os.path.getmtime(p) > age_jours * 86400:
+                    shutil.rmtree(p, ignore_errors=True)
+    except OSError:
+        pass
 
 
 def _nom_instance():

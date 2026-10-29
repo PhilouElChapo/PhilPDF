@@ -76,8 +76,19 @@ def nouveau_compte():
             "securite": "ssl", "signature": ""}
 
 
+def noms_adresses(texte):
+    """« Jean Martin <jean@ex.fr>, anne@ex.fr ; paul@ex.fr » -> [(nom, adresse)]."""
+    from email.utils import getaddresses
+    out = []
+    for nom, adr in getaddresses([(texte or "").replace(";", ",")]):
+        adr = adr.strip()
+        if "@" in adr:
+            out.append((nom.strip(), adr))
+    return out
+
+
 def adresses(texte):
-    return [a.strip() for a in re.split(r"[;,\s]+", texte or "") if "@" in a]
+    return [a for _n, a in noms_adresses(texte)]
 
 
 # ------------------------------------------------------------------ fichier joint
@@ -112,7 +123,7 @@ def preparer_fichier(onglet, version, nom, mdp=""):
 
 
 # ------------------------------------------------------------------ logiciel de messagerie
-def _mapi(chemin, a, sujet, corps):
+def _mapi(chemin, a, sujet, corps, cc="", cci=""):
     """Nouveau message du logiciel de messagerie par defaut, PDF joint. 0 = ouvert ; autre = code d'erreur MAPI."""
     import ctypes
     from ctypes import wintypes as W
@@ -131,10 +142,10 @@ def _mapi(chemin, a, sujet, corps):
                     ("lpszConversationID", W.LPWSTR), ("flFlags", W.ULONG), ("lpOriginator", ctypes.POINTER(Recip)),
                     ("nRecipCount", W.ULONG), ("lpRecips", ctypes.POINTER(Recip)), ("nFileCount", W.ULONG),
                     ("lpFiles", ctypes.POINTER(Fichier))]
-    dests = adresses(a)
+    dests = [(1, x) for x in adresses(a)] + [(2, x) for x in adresses(cc)] + [(3, x) for x in adresses(cci)]
     recips = (Recip * max(1, len(dests)))()
-    for i, x in enumerate(dests):
-        recips[i] = Recip(0, 1, x, "SMTP:" + x, 0, None)
+    for i, (genre, x) in enumerate(dests):                 # 1 = A, 2 = Cc, 3 = Cci
+        recips[i] = Recip(0, genre, x, "SMTP:" + x, 0, None)
     fichiers = (Fichier * 1)(Fichier(0, 0, 0xFFFFFFFF, chemin, os.path.basename(chemin), None))
     m = Message(0, sujet, corps.replace("\n", "\r\n"), None, None, None, 0, None, len(dests),
                 recips if dests else None, 1, fichiers)
@@ -145,7 +156,7 @@ def _mapi(chemin, a, sujet, corps):
     return f(0, 0, ctypes.byref(m), 0x1 | 0x8, 0)          # MAPI_LOGON_UI | MAPI_DIALOG
 
 
-def _outlook(chemin, a, sujet, corps):
+def _outlook(chemin, a, sujet, corps, cc="", cci=""):
     import pythoncom
     import win32com.client as wc
     pythoncom.CoInitialize()
@@ -153,6 +164,8 @@ def _outlook(chemin, a, sujet, corps):
         ol = wc.Dispatch("Outlook.Application")
         m = ol.CreateItem(0)
         m.To = "; ".join(adresses(a))
+        m.CC = "; ".join(adresses(cc))
+        m.BCC = "; ".join(adresses(cci))
         m.Subject = sujet
         m.Display()                                  # affiche d'abord : la signature d'Outlook est ajoutee
         import html
@@ -166,23 +179,23 @@ def _outlook(chemin, a, sujet, corps):
         pythoncom.CoUninitialize()
 
 
-def par_logiciel(chemin, a, sujet, corps, rappel):
+def par_logiciel(chemin, a, sujet, corps, rappel, cc="", cci=""):
     """Ouvre le message dans le logiciel de messagerie (en arriere-plan : MAPI attend la fermeture du message).
     rappel(ok, message) est appele depuis un autre fil : a relayer vers l'interface."""
     def travail():
         if sys.platform != "win32":
-            ok = _xdg_email(chemin, a, sujet, corps)
+            ok = _xdg_email(chemin, a, sujet, corps, cc, cci)
             rappel(ok, "" if ok else _("Aucun logiciel de messagerie trouvé."))
             return
         try:
-            code = _mapi(chemin, a, sujet, corps)
+            code = _mapi(chemin, a, sujet, corps, cc, cci)
         except Exception as e:                       # noqa: BLE001
             code = str(e)
         if code in (0, 1):                           # 1 = message ferme sans l'envoyer : rien a signaler
             rappel(True, "")
             return
         try:
-            _outlook(chemin, a, sujet, corps)
+            _outlook(chemin, a, sujet, corps, cc, cci)
             rappel(True, "")
         except Exception as e:                       # noqa: BLE001
             rappel(False, _("Le logiciel de messagerie n'a pas répondu (code MAPI {c} ; Outlook : {e}). Le « nouvel "
@@ -191,9 +204,14 @@ def par_logiciel(chemin, a, sujet, corps, rappel):
     threading.Thread(target=travail, daemon=True).start()
 
 
-def _xdg_email(chemin, a, sujet, corps):
+def _xdg_email(chemin, a, sujet, corps, cc="", cci=""):
     try:
-        args = ["xdg-email", "--subject", sujet, "--body", corps, "--attach", chemin] + adresses(a)
+        args = ["xdg-email", "--subject", sujet, "--body", corps, "--attach", chemin]
+        for x in adresses(cc):
+            args += ["--cc", x]
+        for x in adresses(cci):
+            args += ["--bcc", x]
+        args += adresses(a)
         return subprocess.run(args, timeout=30).returncode == 0
     except Exception:                                # noqa: BLE001
         return False
@@ -255,16 +273,17 @@ def tester(compte, mdp):
         return expliquer(e)
 
 
-def _message(compte, a, cc, sujet, corps, chemin, copie_moi=False):
+def _message(compte, a, cc, sujet, corps, chemin, copie_moi=False, cci=""):
     from email.message import EmailMessage
     from email.utils import formataddr, formatdate, make_msgid
     m = EmailMessage()
     m["From"] = formataddr((compte.get("nom") or "", compte["adresse"]))
-    m["To"] = ", ".join(adresses(a))
+    m["To"] = ", ".join(formataddr(x) for x in noms_adresses(a))
     if adresses(cc):
-        m["Cc"] = ", ".join(adresses(cc))
-    if copie_moi:
-        m["Bcc"] = compte["adresse"]
+        m["Cc"] = ", ".join(formataddr(x) for x in noms_adresses(cc))
+    caches = adresses(cci) + ([compte["adresse"]] if copie_moi else [])
+    if caches:
+        m["Bcc"] = ", ".join(caches)
     m["Subject"] = sujet
     m["Date"] = formatdate(localtime=True)
     m["Message-ID"] = make_msgid(domain=compte["adresse"].rsplit("@", 1)[-1])
@@ -275,9 +294,9 @@ def _message(compte, a, cc, sujet, corps, chemin, copie_moi=False):
     return m
 
 
-def envoyer(compte, mdp, a, cc, sujet, corps, chemin, copie_moi=False):
-    """Envoie le message ; leve une exception (a expliquer()) en cas d'echec."""
-    m = _message(compte, a, cc, sujet, corps, chemin, copie_moi)
+def envoyer(compte, mdp, a, cc, sujet, corps, chemin, copie_moi=False, cci=""):
+    """Envoie le message ; leve une exception (a expliquer()) en cas d'echec. Cci : envoye sans apparaitre."""
+    m = _message(compte, a, cc, sujet, corps, chemin, copie_moi, cci)
     s = _connexion(compte, mdp)
     try:
         s.send_message(m)
@@ -297,7 +316,7 @@ def webmail_de(compte):
                                              ("", ""))[1]
 
 
-def brouillon(compte, mdp, a, cc, sujet, corps, chemin):
+def brouillon(compte, mdp, a, cc, sujet, corps, chemin, cci=""):
     """Depose le message (PDF joint) dans le dossier Brouillons de la messagerie (IMAP), comme Acrobat ;
     renvoie le nom du dossier. Il reste a l'ouvrir dans la messagerie web et cliquer « Envoyer »."""
     import imaplib
@@ -306,8 +325,7 @@ def brouillon(compte, mdp, a, cc, sujet, corps, chemin):
     serveur = imap_de(compte)
     if not serveur:
         raise RuntimeError(_("Serveur de réception (IMAP) inconnu pour ce compte : indiquez-le dans le compte."))
-    m = _message(compte, a, cc, sujet, corps, chemin)
-    del m["Bcc"]
+    m = _message(compte, a, cc, sujet, corps, chemin, cci=cci)      # le brouillon garde ses Cci
     try:
         import truststore
         ctx = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -364,3 +382,66 @@ def logiciel_par_defaut():
 
 def mot_de_passe(compte):
     return coffre.lire(ident_coffre(compte)) or ""
+
+
+# ------------------------------------------------------------------ carnet d'adresses
+def carnet(params):
+    return sorted(params.get("carnet") or [], key=lambda c: ((c.get("nom") or c["email"]).lower()))
+
+
+def formater(c):
+    from email.utils import formataddr
+    return formataddr((c.get("nom") or "", c["email"])) if c.get("nom") else c["email"]
+
+
+def ajouter_contacts(params, contacts):
+    """Ajoute au carnet (sans doublon d'adresse) ; renvoie le nombre ajoute."""
+    l = list(params.get("carnet") or [])
+    vus = {c["email"].lower() for c in l}
+    n = 0
+    for c in contacts:
+        m = (c.get("email") or "").strip()
+        if "@" in m and m.lower() not in vus:
+            l.append({"nom": (c.get("nom") or "").strip(), "email": m})
+            vus.add(m.lower())
+            n += 1
+    if n:
+        params["carnet"] = l
+        params.enregistrer()
+    return n
+
+
+def lire_contacts(chemin):
+    """Contacts d'un export Google Contacts ou Outlook (CSV) ou d'un fichier vCard : [{nom, email}]."""
+    with open(chemin, "rb") as f:
+        brut = f.read()
+    for enc in ("utf-8-sig", "utf-16", "cp1252"):
+        try:
+            texte = brut.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    out = []
+    if "BEGIN:VCARD" in texte.upper():
+        for carte in re.split(r"(?i)BEGIN:VCARD", texte)[1:]:
+            nom = re.search(r"(?im)^FN[^:]*:(.*)$", carte)
+            for m in re.findall(r"(?im)^(?:item\d+\.)?EMAIL[^:]*:(.*)$", carte):
+                out.append({"nom": nom.group(1).strip() if nom else "", "email": m.strip()})
+        return out
+    import csv
+    import io
+    lecteur = csv.DictReader(io.StringIO(texte), delimiter=";" if texte.split("\n", 1)[0].count(";") >
+                             texte.split("\n", 1)[0].count(",") else ",")
+    for l in lecteur:
+        l = {(k or "").strip().lower(): (v or "").strip() for k, v in l.items()}
+        nom = l.get("name") or l.get("nom") or " ".join(x for x in (l.get("first name") or l.get("prénom") or
+                                                                     l.get("given name") or "",
+                                                                     l.get("last name") or l.get("nom de famille") or
+                                                                     l.get("family name") or "") if x)
+        for k, v in l.items():
+            if v and ("mail" in k) and ("value" in k or "address" in k or "adresse" in k or k in ("e-mail", "email",
+                                                                                                  "courriel")):
+                for x in re.split(r"\s*:::\s*|;", v):
+                    if "@" in x:
+                        out.append({"nom": nom, "email": x.strip()})
+    return out

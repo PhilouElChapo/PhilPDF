@@ -111,6 +111,7 @@ def decrire(plan, params, compte=None, emplacement=None):
     out = []
     for a in plan:
         rel, act = a["rel"], a["action"]
+        apercu = None
         recoit = act in miroir.RECEPTIONS
         # envois : seuls les nouveaux tampons, signatures et filigranes de ce poste meritent la fenetre ; le reste
         # (listes, reglages, apprentissage...) part sans rien demander, comme chaque minute
@@ -188,6 +189,20 @@ def decrire(plan, params, compte=None, emplacement=None):
             titre = _("{genre} « {nom} »", genre=genres.get(genre, genre), nom=x.get("nom") or ident)
             if x.get("categorie"):
                 detail = _("catégorie {c}", c=x["categorie"])
+            if rel.lower().endswith(".pdf"):
+                try:
+                    if recoit:
+                        if e is None:
+                            e = emplacement or distant.emplacement(compte)
+                        tmp = os.path.join(tempfile.mkdtemp(prefix="philpdf-apercu-"), "a.pdf")
+                        e.telecharger(posixpath.join(miroir.racine_distante(compte), rel), tmp)
+                    else:
+                        tmp = os.path.join(local, *rel.split("/"))
+                    with open(tmp, "rb") as fh:
+                        from moteur import objets
+                        apercu = objets.apercu(fh.read(), 40)
+                except Exception:                        # noqa: BLE001
+                    apercu = None
         elif rel.startswith("apprentissage/"):
             famille = "apprentissage"
             titre = _("Apprentissage")
@@ -198,7 +213,8 @@ def decrire(plan, params, compte=None, emplacement=None):
             detail = (detail + " — " if detail else "") + _("supprimé sur l'autre poste : sera retiré de la copie de ce poste")
         out.append({"rel": rel, "action": act, "groupe": "recevoir" if recoit else "envoyer", "titre": titre,
                     "detail": detail, "date": date_locale(a.get("date")) if recoit else "", "famille": famille,
-                    "routine": routine})
+                    "routine": routine, "apercu": apercu,
+                    "reglages_ensuite": rel == "preferences.json" and recoit and "choisirez ensuite" in detail})
     return out
 
 
@@ -216,9 +232,15 @@ class DialoguePlan(QDialog):
             ic = QLabel()
             ic.setPixmap(icone_compte.pixmap(36, 36))
             h.addWidget(ic, 0, Qt.AlignTop)
-        lb = QLabel(_("<b>Voici ce qui va être fait.</b> Décochez ce que vous ne voulez pas maintenant : ce ne sera pas perdu, "
-                      "PhilPDF vous le proposera à la prochaine synchronisation. Les envois de ce poste n'écrasent rien "
-                      "sur vos autres postes : les listes sont réunies."))
+        ensuite = any(l.get("reglages_ensuite") for l in lignes)
+        lb = QLabel(_("<b>Voici ce qui va être fait si vous cliquez « Synchroniser la sélection ».</b><br>"
+                      "• <b>Recevoir</b> : ce qui est coché est copié sur ce poste (tampons, signatures, mots de passe...)."
+                      "<br>• <b>Envoyer</b> : ce qui est coché part vers vos autres postes ; rien n'y est écrasé, les "
+                      "listes sont réunies.<br>• Ce qui reste <b>décoché</b> n'est pas perdu : ce sera proposé à la "
+                      "prochaine synchronisation. « Plus tard » : rien n'est fait maintenant.") +
+                    ("<br><br>" + _("<b>Ensuite</b>, une deuxième fenêtre « Réglages de vos autres postes » vous "
+                                    "montrera les réglages modifiés ailleurs, un par un, à reprendre ou non.")
+                     if ensuite else ""))
         lb.setWordWrap(True)
         h.addWidget(lb, 1)
         v.addLayout(h)
@@ -226,6 +248,8 @@ class DialoguePlan(QDialog):
         t.setColumnCount(2)
         t.setHeaderLabels([_("Elément"), _("Modifié le")])
         t.setRootIsDecorated(True)
+        from PySide6.QtCore import QSize
+        t.setIconSize(QSize(64, 40))
         t.setWordWrap(True)
         t.setUniformRowHeights(False)
         hh = t.header()
@@ -257,6 +281,11 @@ class DialoguePlan(QDialog):
                 detail = "\n".join(textwrap.wrap(l["detail"], 95)) if l["detail"] else ""
                 it = QTreeWidgetItem(parent, [l["titre"] + ("\n" + detail if detail else ""), l["date"]])
                 it.setToolTip(0, l["detail"])
+                if l.get("apercu"):
+                    from PySide6.QtGui import QPixmap, QIcon
+                    pm = QPixmap()
+                    pm.loadFromData(l["apercu"])
+                    it.setIcon(0, QIcon(pm))
                 it.setForeground(1, Qt.darkGray)
                 it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
                 it.setCheckState(0, Qt.Checked)

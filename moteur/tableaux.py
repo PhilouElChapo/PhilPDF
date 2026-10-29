@@ -195,8 +195,10 @@ def assembler(tableaux):
             lignes = t["lignes"][1:] if p["entete"] and t["lignes"][0] == p["lignes"][0] else t["lignes"]
             p["lignes"] += lignes
             p["page_fin"] = t["page"]
+            p["cadres"].append((t["page"], t.get("rect")))     # le cadre de la suite, sur sa page
             continue
-        out.append(dict(t, lignes=[list(l) for l in t["lignes"]], page_fin=t["page"]))
+        out.append(dict(t, lignes=[list(l) for l in t["lignes"]], page_fin=t["page"],
+                        cadres=[(t["page"], t.get("rect"))]))
     return out
 
 
