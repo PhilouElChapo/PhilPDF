@@ -75,6 +75,8 @@ import app.bienvenue as BV
 vu_bienvenue = []
 BV.DialogueBienvenue.exec = lambda self: (vu_bienvenue.append(1), QDialog.Rejected)[1]
 
+import app.pages as _PG
+_PG.PageAccueil.SYNCHRONE = True               # les recents sont d'habitude cherches en arriere-plan
 w = Fenetre()
 w.resize(1440, 900)
 w.show()

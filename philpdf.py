@@ -239,9 +239,12 @@ def main():
     _t0 = _tm.monotonic()
     demarrage = EcranDemarrage(app)
     demarrage.etape("Chargement du moteur PDF...", 20)
+    _t1 = _tm.monotonic()
     import pymupdf                                # noqa: F401  (le plus long a charger)
     demarrage.etape("Chargement de l'interface...", 45)
+    _t2 = _tm.monotonic()
     from app.fenetre import Fenetre
+    _t3 = _tm.monotonic()
     demarrage.etape("Préparation...", 70)
     preparer(app)
     try:                                          # aucune fenetre plus grande que l'ecran (ex. 1024 x 768)
@@ -252,7 +255,9 @@ def main():
     surveiller_plantages()
     nettoyer_temporaires()
     demarrage.etape("Ouverture de la fenêtre...", 85)
+    _t4 = _tm.monotonic()
     w = Fenetre(fichiers)
+    _t5 = _tm.monotonic()
     QTimer_ = __import__("PySide6.QtCore", fromlist=["QTimer"]).QTimer
     QTimer_.singleShot(3000, lambda: signaler_plantage(w))
     ecouter_autres_lancements(w)
@@ -260,7 +265,8 @@ def main():
     demarrage.fermer(w)
     try:                                          # duree du lancement, dans le journal (pour l'ameliorer)
         from app.journal import ecrire
-        ecrire("démarrage", f"fenêtre prête en {_tm.monotonic() - _t0:.1f} s")
+        ecrire("démarrage", f"fenêtre prête en {_tm.monotonic() - _t0:.1f} s (Qt {_t1 - _t0:.1f} s, moteur PDF "
+                            f"{_t2 - _t1:.1f} s, interface {_t3 - _t2:.1f} s, fenêtre {_t5 - _t4:.1f} s)")
     except Exception:
         pass
     from PySide6.QtCore import QTimer

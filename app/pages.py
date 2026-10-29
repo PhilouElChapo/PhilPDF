@@ -339,7 +339,11 @@ class PageOutils(QScrollArea):
         self.epingles_changes.emit(e)
 
 
+_TACHES_ACCUEIL = set()
+
+
 class PageAccueil(QWidget):
+    SYNCHRONE = False
     ouvrir = Signal(str)
     ouvrir_dialogue = Signal()
     ouvrir_distant = Signal()
@@ -529,14 +533,54 @@ class PageAccueil(QWidget):
                      "machine": self.params.get("machine", ""), "e": None, "introuvable_ici": not os.path.exists(p)}
                     for p in self.params["recents"][:30]]
 
-    def rafraichir(self):
+    def rafraichir(self, lignes=None):
+        """Les recents sont cherches hors de l'interface (fichiers sur le NAS, ceux des autres postes retrouves sur ce
+        PC) : la fenetre reste utilisable pendant ce temps, et la liste se remplit quand c'est pret."""
+        if lignes is None and self.SYNCHRONE:          # tests : tout de suite
+            lignes = self.lignes_recents()
+        if lignes is None:
+            self._gen_recents = getattr(self, "_gen_recents", 0) + 1
+            gen = self._gen_recents
+            if not self.liste.count():
+                it = QListWidgetItem(_("Recherche de vos fichiers récents..."))
+                it.setFlags(Qt.NoItemFlags)
+                self.liste.addItem(it)
+            from PySide6.QtCore import QThread, Signal as _S
+
+            class _T(QThread):
+                pret = _S(object)
+
+                def __init__(s_, f):
+                    super().__init__()
+                    s_.f = f
+
+                def run(s_):
+                    try:
+                        s_.pret.emit(s_.f())
+                    except Exception:                # noqa: BLE001
+                        s_.pret.emit([])
+            def calcul():
+                lignes_ = self.lignes_recents()
+                for l_ in lignes_[:40]:              # miniatures fabriquees ici aussi (fichiers sur le NAS)
+                    if l_.get("chemin") and not str(l_["chemin"]).startswith("distant:"):
+                        try:
+                            preparer_miniature(l_["chemin"])
+                        except Exception:            # noqa: BLE001
+                            pass
+                return lignes_
+            t = _T(calcul)
+            _TACHES_ACCUEIL.add(t)
+            t.pret.connect(lambda l, g=gen: self._gen_recents == g and self.rafraichir(l))
+            t.finished.connect(lambda t=t: _TACHES_ACCUEIL.discard(t))
+            t.start()
+            return
         from .session import date_fr
         self.liste.clear()
         moi = self.params.get("machine", "")
         section = "ici"
         titres = {"autres": _("Sur vos autres postes"), "introuvable": _("Introuvables sur ce poste")}
         self._a_vignetter = []
-        for l in self.lignes_recents():
+        for l in lignes:
             ici = l["chemin"]
             sec = l.get("section") or ("introuvable" if not ici else "autres" if l.get("autre_poste") else "ici")
             if sec != section and sec in titres:          # separation : ce poste, les autres postes, les introuvables
@@ -810,48 +854,66 @@ class PageAccueil(QWidget):
 _MINIATURES = {}
 
 
+def _cle_miniature(chemin, hauteur):
+    import hashlib
+    st = os.stat(chemin)
+    return hashlib.sha1(f"{os.path.normcase(chemin)}|{st.st_mtime_ns}|{st.st_size}|{hauteur}".encode()).hexdigest()
+
+
+def preparer_miniature(chemin, hauteur=52):
+    """Fabrique la miniature dans le cache disque (utilisable hors de l'interface : QImage seulement).
+    Renvoie le chemin du PNG, ou None si le fichier ne s'ouvre pas."""
+    from PySide6.QtGui import QImage, QPainter, QColor
+    from .config import dossier_donnees
+    try:
+        cle = _cle_miniature(chemin, hauteur)
+    except OSError:
+        return None
+    d = os.path.join(dossier_donnees(), "miniatures")
+    f = os.path.join(d, cle + ".png")
+    if os.path.exists(f):
+        return f
+    import pymupdf as fitz
+    try:
+        with fitz.open(chemin) as doc:
+            if doc.needs_pass or not len(doc):
+                return None
+            p = doc[0]
+            z = hauteur * 2 / max(1, p.rect.height)
+            png = p.get_pixmap(matrix=fitz.Matrix(z, z), alpha=False, annots=True).tobytes("png")
+    except Exception:                                # noqa: BLE001
+        return None
+    img = QImage()
+    img.loadFromData(png, "PNG")
+    img = img.scaledToHeight(hauteur * 2, Qt.SmoothTransformation)
+    cadre = QImage(img.width() + 2, img.height() + 2, QImage.Format_RGB32)
+    cadre.fill(QColor("#cfcfcf"))
+    pt = QPainter(cadre)
+    pt.drawImage(1, 1, img)
+    pt.end()
+    try:
+        os.makedirs(d, exist_ok=True)
+        cadre.save(f, "PNG")
+    except OSError:
+        return None
+    return f
+
+
 def miniature(chemin, hauteur=52):
     """Icone : premiere page du PDF en petit, avec un fin cadre ; gardee en cache disque (chemin + date + taille).
     None si le fichier ne s'ouvre pas (protege, abime)."""
-    import hashlib
-    from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor, QPen
-    from .config import dossier_donnees
+    from PySide6.QtGui import QIcon, QPixmap
     try:
-        st = os.stat(chemin)
+        cle = _cle_miniature(chemin, hauteur)
     except OSError:
         return None
-    cle = hashlib.sha1(f"{os.path.normcase(chemin)}|{st.st_mtime_ns}|{st.st_size}|{hauteur}".encode()).hexdigest()
     if cle in _MINIATURES:
         return _MINIATURES[cle]
-    d = os.path.join(dossier_donnees(), "miniatures")
-    f = os.path.join(d, cle + ".png")
+    f = preparer_miniature(chemin, hauteur)
     pm = QPixmap()
-    if not (os.path.exists(f) and pm.load(f)):
-        import pymupdf as fitz
-        try:
-            with fitz.open(chemin) as doc:
-                if doc.needs_pass or not len(doc):
-                    _MINIATURES[cle] = None
-                    return None
-                p = doc[0]
-                z = hauteur * 2 / max(1, p.rect.height)
-                img = p.get_pixmap(matrix=fitz.Matrix(z, z), alpha=False, annots=True)
-        except Exception:
-            _MINIATURES[cle] = None
-            return None
-        pm.loadFromData(img.tobytes("png"), "PNG")
-        pm = pm.scaledToHeight(hauteur * 2, Qt.SmoothTransformation)
-        cadre = QPixmap(pm.width() + 2, pm.height() + 2)
-        cadre.fill(QColor("#cfcfcf"))
-        pt = QPainter(cadre)
-        pt.drawPixmap(1, 1, pm)
-        pt.end()
-        pm = cadre
-        try:
-            os.makedirs(d, exist_ok=True)
-            pm.save(f, "PNG")
-        except OSError:
-            pass
+    if not f or not pm.load(f):
+        _MINIATURES[cle] = None
+        return None
     _MINIATURES[cle] = QIcon(pm)
     return _MINIATURES[cle]
 

@@ -2627,5 +2627,8 @@
  "Une copie dans un dossier (ce document reste ouvert tel quel)...": "A copy in a folder (this document stays open as it is)...",
  "Copie à faire signer": "Copy to be signed",
  "Dans ce fichier ({f})": "In this file ({f})",
- "Enregistrer...": "Save..."
+ "Enregistrer...": "Save...",
+ "Recherche de vos fichiers récents...": "Looking for your recent files...",
+ "Adresses d'envoi retirées": "Removed sending addresses",
+ "Contacts retirés du carnet": "Contacts removed from the address book"
 }

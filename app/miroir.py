@@ -67,7 +67,9 @@ def _empreinte(chemin):
 
 
 # listes fusionnees element par element (aucune ne remplace l'autre) : cle de l'element, liste des retraits voulus
-UNIONS = {"identites": ("id", "identites_supprimees"), "certificats_approuves": ("empreinte", "certificats_retires")}
+UNIONS = {"identites": ("id", "identites_supprimees"), "certificats_approuves": ("empreinte", "certificats_retires"),
+          "comptes_mail": ("id", "comptes_mail_retires"), "carnet": ("email", "carnet_retires")}
+RETRAITS = tuple(v[1] for v in UNIONS.values())
 
 
 def unir(cle, local, autre, retires=()):
@@ -83,6 +85,8 @@ def unir(cle, local, autre, retires=()):
             ordre.append(k)
         if k in out and x.get("orpheline") and not out[k].get("orpheline"):
             continue
+        if k in out and (out[k].get("maj") or "") > (x.get("maj") or ""):
+            continue                                 # modifie plus recemment sur l'autre poste : on le garde
         out[k] = x
     retires = set(retires or ())
     res = [out[k] for k in ordre if k not in retires]
@@ -143,7 +147,7 @@ def _fusion(local, dist):
             out[k] = list(vus.values())
         elif k in UNIONS and isinstance(v, list) and isinstance(w, list):
             out[k] = unir(k, v, w)
-        elif k in ("identites_supprimees", "certificats_retires") and isinstance(v, list) and isinstance(w, list):
+        elif k in RETRAITS and isinstance(v, list) and isinstance(w, list):
             out[k] = sorted(set(v) | set(w))
         elif isinstance(v, dict) and isinstance(w, dict):
             if _date(v) or _date(w):

@@ -415,11 +415,16 @@ def ajouter_contacts(params, contacts):
     """Ajoute au carnet (sans doublon d'adresse) ; renvoie le nombre ajoute."""
     l = list(params.get("carnet") or [])
     vus = {c["email"].lower() for c in l}
+    retires = {x.lower() for x in params.get("carnet_retires") or []}
     n = 0
     for c in contacts:
         m = (c.get("email") or "").strip()
         if "@" in m and m.lower() not in vus:
-            l.append({"nom": (c.get("nom") or "").strip(), "email": m})
+            if m.lower() in retires:                # supprime puis rajoute expres : il revient partout
+                params["carnet_retires"] = [x for x in params.get("carnet_retires") or [] if x.lower() != m.lower()]
+                retires.discard(m.lower())
+            import time as _t
+            l.append({"nom": (c.get("nom") or "").strip(), "email": m, "maj": _t.strftime("%Y-%m-%dT%H:%M:%S")})
             vus.add(m.lower())
             n += 1
     if n:

@@ -181,6 +181,8 @@ class DialogueCompteMail(QDialog):
         if "@" not in c["adresse"] or not c["serveur"]:
             QMessageBox.information(self, self.windowTitle(), _("Indiquez l'adresse e-mail et le serveur d'envoi."))
             return
+        import time as _t
+        c["maj"] = _t.strftime("%Y-%m-%dT%H:%M:%S")
         self.compte = c
         coffre.enregistrer(C.ident_coffre(c), self.mdp.text())
         self.accept()
@@ -245,6 +247,7 @@ class PanneauComptesMail(QWidget):
         c = self._choisi()
         if c and QMessageBox.question(self, _("Adresses d'envoi"), _("Supprimer le compte {a} ?", a=c["adresse"])) == QMessageBox.Yes:
             coffre.supprimer(C.ident_coffre(c))
+            self.params["comptes_mail_retires"] = sorted(set(self.params.get("comptes_mail_retires") or []) | {c["id"]})
             self._ecrire([x for x in C.comptes(self.params) if x["id"] != c["id"]])
 
 
@@ -339,7 +342,8 @@ class PanneauCarnet(QWidget):
         bb.rejected.connect(d.reject)
         f.addRow(bb)
         if d.exec() and "@" in mail.text():
-            return {"nom": nom.text().strip(), "email": mail.text().strip()}
+            import time as _t
+            return {"nom": nom.text().strip(), "email": mail.text().strip(), "maj": _t.strftime("%Y-%m-%dT%H:%M:%S")}
         return None
 
     def nouveau(self):
@@ -365,7 +369,8 @@ class PanneauCarnet(QWidget):
         mails = {it.data(Qt.UserRole + 1) for it in self.liste.selectedItems()}
         if mails and QMessageBox.question(self, _("Carnet d'adresses"),
                                           _("Supprimer {n} contact(s) du carnet ?", n=len(mails))) == QMessageBox.Yes:
-            self.params["carnet"] = [x for x in C.carnet(self.params) if x["email"] not in mails]
+            self.params["carnet_retires"] = sorted(set(self.params.get("carnet_retires") or []) | mails)
+            self.params["carnet"] = [x for x in self.params.get("carnet") or [] if x["email"] not in mails]
             self.params.enregistrer()
             self._remplir()
 

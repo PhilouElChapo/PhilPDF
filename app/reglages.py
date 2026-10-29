@@ -21,7 +21,8 @@ COMMUNS = ["auteur", "langue", "outils_epingles", "barre_rapide", "volet", "vign
            "filigranes_perso", "ia_moteur", "maj_source", "maj_auto", "synchro", "comptes", "comptes_icone", "theme", "synchro_secrets", "barre", "couleurs_annotations",
            "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "agenda", "messagerie", "ia_styles_perso",
            "identites", "certificats_approuves", "signature_reglages", "identites_supprimees", "certificats_retires",
-           "formulaire_detection", "formulaire_types_auto", "comptes_mail", "courriel", "courriel_recents", "ordre_outils"]
+           "formulaire_detection", "formulaire_types_auto", "comptes_mail", "courriel", "courriel_recents", "ordre_outils",
+           "carnet", "comptes_mail_retires", "carnet_retires"]
 POSTE = ["secrets_refuses", "disposition_vue", "volet_largeur", "vignettes_largeur", "biblio_replies", "sessions_vues", "synchro_etat", "machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
 CLEFS_IA = ["clef_claude", "clef_gemini"]
 FICHIER_DRIVE = "preferences.json"
@@ -316,6 +317,8 @@ def libelle_commun(k):
             "formulaire_detection": _("Repérage des champs en mode Formulaire"),
             "comptes_mail": _("Comptes d'envoi d'e-mails"), "courriel": _("Réglages de l'envoi par e-mail"),
             "courriel_recents": _("Destinataires récents"), "ordre_outils": _("Ordre des outils (page Outils)"),
+            "carnet": _("Carnet d'adresses"), "comptes_mail_retires": _("Adresses d'envoi retirées"),
+            "carnet_retires": _("Contacts retirés du carnet"),
             "formulaire_types_auto": _("Type des champs deviné d'après le libellé")}.get(k, k)
 
 
@@ -392,12 +395,13 @@ def _valeur_reprise(params, communs, k, v):
     if k in UNIONS and isinstance(v, list):
         ret = set(params.get(UNIONS[k][1]) or []) | set(communs.get(UNIONS[k][1]) or [])
         return unir(k, params.get(k) or [], v, ret)
-    if k in ("identites_supprimees", "certificats_retires") and isinstance(v, list):
+    from .miroir import RETRAITS
+    if k in RETRAITS and isinstance(v, list):
         return sorted(set(v) | set(params.get(k) or []))
     return v
 
 
-UNIONS_CLES = ("identites", "certificats_approuves")
+UNIONS_CLES = ("identites", "certificats_approuves", "comptes_mail", "carnet")
 
 
 def changements_communs(params):
