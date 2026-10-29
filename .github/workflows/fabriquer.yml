@@ -299,7 +299,9 @@ jobs:
           fi
           tail -n 20 fb.log
       - name: Auto-controle dans le Flatpak
+        shell: bash
         run: |
+          set +e
           flatpak-builder --run build-flatpak linux/io.github.PhilouElChapo.PhilPDF.yml sh -c '
             export QT_QPA_PLATFORM=offscreen; for d in /app/lib/python3*/site-packages; do export PYTHONPATH=$d; done
             python3 /app/philpdf/philpdf.py --verifier /tmp/verif.txt; r=$?
