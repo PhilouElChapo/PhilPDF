@@ -572,6 +572,7 @@ class _DriveOAuth(_Http):
             except ErreurDistant:
                 if self.dernier_code == 401 and essai == 0:
                     self.jeton = None          # jeton expire : on en redemande un
+                    _JETONS.pop(self.c["id"], None)
                     continue
                 raise
         if brut:
