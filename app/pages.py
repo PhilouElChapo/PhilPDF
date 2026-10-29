@@ -368,6 +368,7 @@ class PageAccueil(QWidget):
         h.addWidget(lg)
         t = QLabel('<span style="font-size:26px;font-weight:700">Phil<span style="color:#c9252d">PDF</span></span>'
                    '<br><span style="color:#555">Editeur PDF · éditez, signez, allégez en toute liberté</span>')
+        self._marque = t
         h.addWidget(t)
         h.addStretch()
         b = QPushButton(_('  Ouvrir un fichier...'))
@@ -391,8 +392,17 @@ class PageAccueil(QWidget):
         hb_.addWidget(br)
         hb_.addWidget(bd)
         hb_.addWidget(b)
-        from .document import defilable
-        h.addWidget(defilable(bw), 1)
+        from PySide6.QtWidgets import QSizePolicy as _SP
+        bw.setSizePolicy(_SP.Ignored, _SP.Preferred)   # la fenetre peut retrecir : les boutons s'adaptent
+        bw.setMinimumWidth(200)
+        self._marque.setSizePolicy(_SP.Preferred, _SP.Preferred)
+        self._marque.setMinimumWidth(110)
+        h.addWidget(bw, 1)
+        # fenetre etroite : d'abord sans le sous-titre, puis boutons en icones seules (nom en bulle) : rien de tronque
+        self._boutons_tete = [(x, x.text()) for x in (br, bd, b)]
+        for x, txt in self._boutons_tete:
+            x.setToolTip(x.toolTip() or txt.strip())
+        self._tete_mode = None
         v.addLayout(h)
         # --- carte "session plus recente sur un autre poste" (reste la tant qu'elle n'est pas traitee)
         self.carte = QFrame()
@@ -475,7 +485,7 @@ class PageAccueil(QWidget):
         self._t_fiche = QTimer(self)
         self._t_fiche.setSingleShot(True)
         self._t_fiche.timeout.connect(lambda: self.fiche.montrer(getattr(self, "_l_fiche", None)))
-        self.rafraichir()
+        QTimer.singleShot(50, self.rafraichir)       # apres l'affichage : un NAS lent ne retarde plus l'ouverture
 
     def eventFilter(self, obj, ev):
         """Apercu seulement quand la souris est sur l'icone, le nom ou le chemin : pas dans le blanc de la ligne."""
@@ -613,6 +623,29 @@ class PageAccueil(QWidget):
             return
         marquer_echeance(self.params, cle, retirer=(action == "retirer"))
         self.rafraichir()
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._adapter_tete()
+
+    def _adapter_tete(self):
+        if not hasattr(self, "_boutons_tete"):
+            return
+        if not hasattr(self, "_larg_tete"):          # largeurs reelles (police grasse du style comprise), une fois
+            self._larg_tete = (sum(x.sizeHint().width() + 8 for x, _t in self._boutons_tete),
+                               self._marque.sizeHint().width())
+        dispo = self.width() - 64 - 56 - 40
+        plein, marque = self._larg_tete
+        mode = "complet" if dispo >= plein + marque else "court" if dispo >= plein + 150 else "icones"
+        if mode == self._tete_mode:
+            return
+        self._tete_mode = mode
+        self._marque.setText('<span style="font-size:26px;font-weight:700">Phil<span style="color:#c9252d">PDF</span></span>'
+                             + ('<br><span style="color:#555">Editeur PDF · éditez, signez, allégez en toute liberté</span>'
+                                if mode == "complet" else ""))
+        for x, t in self._boutons_tete:
+            x.setText(t if mode != "icones" else "")
+            x.setIconSize(QSize(20, 20) if mode == "icones" else QSize(16, 16))
 
     def _etat_synchro(self):
         """Derniere synchronisation de ce poste : reussie (heure) ou echec (raison), visible sur l'Accueil."""

@@ -99,7 +99,7 @@ class EditeurLieux(QWidget):
         self._remplir()
 
     def _ajouter_dossier(self):
-        p = QFileDialog.getExistingDirectory(self, _("Où chercher"), self.depart or os.path.expanduser("~"))
+        p = __import__('app.choix_dossier', fromlist=['x']).choisir_dossier(self, _("Où chercher"), self.depart or os.path.expanduser("~"))
         if p:
             self._ecrire(racines(self.params) + [{"genre": "local", "chemin": p}])
 

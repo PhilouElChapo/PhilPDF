@@ -355,7 +355,7 @@ class DialogueLot(QDialog):
         s = self.sortie.currentData()
         self.suffixe.setVisible(s == "cote")
         if s == "dossier" and not getattr(self, "autre_dossier", ""):
-            d = QFileDialog.getExistingDirectory(self, _("Dossier des fichiers produits"), self.dossier.text())
+            d = __import__('app.choix_dossier', fromlist=['x']).choisir_dossier(self, _("Dossier des fichiers produits"), self.dossier.text())
             if d:
                 self.autre_dossier = d
             else:
@@ -363,7 +363,7 @@ class DialogueLot(QDialog):
         self.maj_apercu()
 
     def choisir_dossier(self):
-        d = QFileDialog.getExistingDirectory(self, _("Dossier des PDF"), self.dossier.text())
+        d = __import__('app.choix_dossier', fromlist=['x']).choisir_dossier(self, _("Dossier des PDF"), self.dossier.text())
         if d:
             self.dossier.setText(d)
             self.lister()

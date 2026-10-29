@@ -469,6 +469,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
         act(m, _('Enregistrer'), lambda: self.enregistrer(), "Ctrl+S", "enregistrer")
         act(m, _('Enregistrer sous...'), lambda: self.enregistrer(sous=True), "Shift+Ctrl+S", "enregistrer_sous")
         act(m, _("Enregistrer vers un emplacement (NAS, FTP, Drive)..."), lambda: self.enregistrer_distant(), None, "archiver")
+        act(m, _('Enregistrer une copie...'), self.enregistrer_copie, None, "enregistrer_sous")
         act(m, _('Enregistrer une copie allégée...'), lambda: self.lancer_outil("alleger"), None, "alleger")
         sm = m.addMenu(icone("exporter"), _('Exporter vers'))
         act(sm, _('Word (.docx)...'), lambda: self.exporter("docx"))
@@ -1287,13 +1288,37 @@ class Fenetre(MixinCoteACote, QMainWindow):
             n.placer()
 
     # ------------------------------------------------------------ enregistrer
-    def enregistrer(self, o=None, sous=False):
+    def enregistrer_copie(self, o=None):
+        """Copie du document dans le dossier de votre choix ; l'onglet reste sur le fichier d'origine."""
+        o = o or self.doc_courant()
+        if not o:
+            return None
+        base = os.path.splitext(o.nom)[0]
+        dossier = os.path.dirname(o.chemin) if o.chemin and not getattr(o, "distant", None) else self.dossier_depart()
+        c, _x = QFileDialog.getSaveFileName(self, _("Enregistrer une copie"),
+                                           os.path.join(dossier, _("{nom} (copie).pdf", nom=base)), FILTRE)
+        if not c:
+            return None
+        if not c.lower().endswith(".pdf"):
+            c += ".pdf"
+        try:
+            with open(c, "wb") as f:
+                f.write(o.octets_en_ajout() if o.octets_signes else o.doc.tobytes(garbage=3, deflate=True))
+        except OSError as e:
+            QMessageBox.warning(self, _("Enregistrer une copie"), _("Enregistrement impossible : {e}", e=e))
+            return None
+        self.statusBar().showMessage(_("Copie enregistrée : {f} (le document ouvert n'a pas changé).", f=c), 10000)
+        return c
+
+    def enregistrer(self, o=None, sous=False, nom_propose=None):
         o = o or self.doc_courant()
         if not o:
             return False
         chemin = o.chemin
         if sous or not chemin:
             depart = chemin or os.path.join(getattr(o, "dossier_propose", None) or self.dossier_depart(), o.nom)
+            if nom_propose:
+                depart = os.path.join(os.path.dirname(depart), nom_propose)
             chemin, _x = QFileDialog.getSaveFileName(self, _('Enregistrer sous'), depart, FILTRE)
             if not chemin:
                 return False
@@ -1767,7 +1792,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
                 QMessageBox.warning(self, _('Exporter'), _('Conversion impossible :\n{e}', e=e))
             prog.close()
         else:
-            dossier = QFileDialog.getExistingDirectory(self, _('Dossier des images'), os.path.dirname(base))
+            dossier = __import__('app.choix_dossier', fromlist=['x']).choisir_dossier(self, _('Dossier des images'), os.path.dirname(base))
             if dossier:
                 for n, p in enumerate(o.doc):
                     pm = p.get_pixmap(dpi=dpi, alpha=False)
@@ -2127,7 +2152,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
             f.addRow(lb)
 
         def choisir_dossier(champ, titre):
-            p = QFileDialog.getExistingDirectory(d, titre, champ.text() or os.path.expanduser("~"))
+            p = __import__('app.choix_dossier', fromlist=['x']).choisir_dossier(d, titre, champ.text() or os.path.expanduser("~"))
             if p:
                 champ.setText(p)
 
@@ -2309,7 +2334,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
             racines.addItem(r)
         hr = QHBoxLayout()
         br = QPushButton(_('Ajouter un emplacement...'))
-        br.clicked.connect(lambda: (lambda p: p and racines.addItem(p))(QFileDialog.getExistingDirectory(d, _('Emplacement de vos documents'))))
+        br.clicked.connect(lambda: (lambda p: p and racines.addItem(p))(__import__('app.choix_dossier', fromlist=['x']).choisir_dossier(d, _('Emplacement de vos documents'))))
         hr.addWidget(br)
         bs = QPushButton(_('Retirer'))
         bs.clicked.connect(lambda: [racines.takeItem(racines.row(i)) for i in racines.selectedItems()])

@@ -113,7 +113,7 @@ class DialogueFractionner(QDialog):
         return os.path.splitext(self.o.nom)[0]
 
     def _parcourir(self):
-        d = QFileDialog.getExistingDirectory(self, _("Dossier des fichiers fractionnés"), self.dossier.text())
+        d = __import__('app.choix_dossier', fromlist=['x']).choisir_dossier(self, _("Dossier des fichiers fractionnés"), self.dossier.text())
         if d:
             self.dossier.setText(d)
 

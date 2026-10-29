@@ -10,7 +10,65 @@ if sys.stderr is None:
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QFont, QPalette, QColor
 from PySide6.QtCore import Qt
-from app.fenetre import Fenetre
+# app.fenetre (et tout PhilPDF) est charge apres l'affichage de l'ecran de demarrage : voir main()
+
+
+class EcranDemarrage:
+    """Fenetre de lancement affichee tout de suite (logo, version, etape en cours, barre qui avance), le temps
+    de charger les moteurs PDF et d'ouvrir la fenetre : on voit que PhilPDF demarre."""
+
+    def __init__(self, app):
+        from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QProgressBar
+        from app.config import VERSION
+        from app.icones import logo
+        self.app = app
+        w = self.w = QWidget(None, Qt.SplashScreen | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        w.setObjectName("demarrage")
+        w.setStyleSheet("#demarrage{background:#ffffff;border:1px solid #d9d9d9;border-radius:14px}"
+                        "QLabel{background:transparent}")
+        w.setAttribute(Qt.WA_TranslucentBackground, False)
+        w.setFixedSize(420, 230)
+        v = QVBoxLayout(w)
+        v.setContentsMargins(28, 24, 28, 22)
+        h = __import__("PySide6.QtWidgets", fromlist=["QHBoxLayout"]).QHBoxLayout()
+        ic = QLabel()
+        ic.setPixmap(logo(64).pixmap(64, 64))
+        h.addWidget(ic)
+        t = QLabel("<span style='font-size:28px;font-weight:700;color:#1f1f1f'>Phil</span>"
+                   "<span style='font-size:28px;font-weight:700;color:#c9252d'>PDF</span>"
+                   f"<br><span style='color:#666;font-size:12px'>Version {VERSION}</span>")
+        h.addWidget(t, 1)
+        v.addLayout(h)
+        v.addStretch(1)
+        self.etat = QLabel("Démarrage...")
+        self.etat.setStyleSheet("color:#444;font-size:13px")
+        v.addWidget(self.etat)
+        self.barre = QProgressBar()
+        self.barre.setRange(0, 100)
+        self.barre.setTextVisible(False)
+        self.barre.setFixedHeight(6)
+        self.barre.setStyleSheet("QProgressBar{background:#eee;border:none;border-radius:3px}"
+                                 "QProgressBar::chunk{background:#c9252d;border-radius:3px}")
+        v.addWidget(self.barre)
+        ecr = app.primaryScreen().availableGeometry()
+        w.move(ecr.center() - w.rect().center())
+        w.show()
+        try:                                         # image de lancement de l'exe (avant Python) : remplacee
+            import pyi_splash
+            pyi_splash.close()
+        except Exception:
+            pass
+        self.etape("Démarrage...", 5)
+
+    def etape(self, texte, pourcent):
+        self.etat.setText(texte)
+        self.barre.setValue(pourcent)
+        for _i in range(3):
+            self.app.processEvents()
+
+    def fermer(self, fenetre=None):
+        self.etape("Prêt.", 100)
+        self.w.close()
 
 
 def verifier(sortie):
@@ -177,6 +235,14 @@ def main():
             QMessageBox.information(None, "PhilPDF", "PhilPDF est déjà ouvert sur ce PC (il est peut-être occupé). "
                                                      "Utilisez sa fenêtre, ou fermez-le avant de le relancer.")
             sys.exit(0)
+    import time as _tm
+    _t0 = _tm.monotonic()
+    demarrage = EcranDemarrage(app)
+    demarrage.etape("Chargement du moteur PDF...", 20)
+    import pymupdf                                # noqa: F401  (le plus long a charger)
+    demarrage.etape("Chargement de l'interface...", 45)
+    from app.fenetre import Fenetre
+    demarrage.etape("Préparation...", 70)
     preparer(app)
     try:                                          # aucune fenetre plus grande que l'ecran (ex. 1024 x 768)
         from app import ecran
@@ -185,11 +251,18 @@ def main():
         pass
     surveiller_plantages()
     nettoyer_temporaires()
+    demarrage.etape("Ouverture de la fenêtre...", 85)
     w = Fenetre(fichiers)
     QTimer_ = __import__("PySide6.QtCore", fromlist=["QTimer"]).QTimer
     QTimer_.singleShot(3000, lambda: signaler_plantage(w))
     ecouter_autres_lancements(w)
     w.show()
+    demarrage.fermer(w)
+    try:                                          # duree du lancement, dans le journal (pour l'ameliorer)
+        from app.journal import ecrire
+        ecrire("démarrage", f"fenêtre prête en {_tm.monotonic() - _t0:.1f} s")
+    except Exception:
+        pass
     from PySide6.QtCore import QTimer
     QTimer.singleShot(800, lambda: w.impressions_en_attente(impressions))
     sys.exit(app.exec())

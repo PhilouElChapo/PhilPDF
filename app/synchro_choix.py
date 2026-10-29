@@ -99,7 +99,7 @@ def _brancher(cb, parent, params):
                 else:
                     remettre()
         elif donnee == "dossier:":
-            p = QFileDialog.getExistingDirectory(parent, _("Dossier partagé entre vos postes"))
+            p = __import__('app.choix_dossier', fromlist=['x']).choisir_dossier(parent, _("Dossier partagé entre vos postes"))
             if p:
                 cb.blockSignals(True)
                 cb.insertItem(1, p, p)

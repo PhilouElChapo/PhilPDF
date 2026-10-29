@@ -477,7 +477,7 @@ class DialogueClasser(QDialog):
     def _dest_choisie(self, i):
         d = self.dest.itemData(i)
         if d == "__choisir__":
-            p = QFileDialog.getExistingDirectory(self, _("Ranger dans"), self.fenetre.dossier_depart())
+            p = __import__('app.choix_dossier', fromlist=['x']).choisir_dossier(self, _("Ranger dans"), self.fenetre.dossier_depart())
             if p:
                 self.dest.insertItem(0, p, p)
             self.dest.setCurrentIndex(0)

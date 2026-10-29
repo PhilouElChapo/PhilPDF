@@ -231,7 +231,7 @@ class DialogueCompte(QDialog):
         self.b_choisir = QPushButton(_("Choisir..."))
         from PySide6.QtWidgets import QFileDialog
         self.b_choisir.clicked.connect(lambda: (lambda p: p and self.adresse.setText(p))(
-            QFileDialog.getExistingDirectory(self, _("Dossier réseau"))))
+            __import__('app.choix_dossier', fromlist=['x']).choisir_dossier(self, _("Dossier réseau"))))
         ha = QWidget()
         h = QHBoxLayout(ha)
         h.setContentsMargins(0, 0, 0, 0)

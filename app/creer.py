@@ -198,7 +198,7 @@ class DialogueImprimante(QDialog):
         self._maj()
 
     def _parcourir(self):
-        d = QFileDialog.getExistingDirectory(self, _("Dossier des PDF imprimés"), self.dossier.text())
+        d = __import__('app.choix_dossier', fromlist=['x']).choisir_dossier(self, _("Dossier des PDF imprimés"), self.dossier.text())
         if d:
             self.dossier.setText(d)
 

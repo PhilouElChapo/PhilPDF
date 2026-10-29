@@ -406,10 +406,46 @@ class MixinSignature:
             self.doc.xref_set_key(fx, "Lock", f"<</Type/SigFieldLock/Action/{act}{champs}>>")
 
     def envoyer_pour_signature(self):
-        """Enregistre le document, ouvre la messagerie avec un message pret, et montre le fichier a joindre."""
+        """Choix du fichier a envoyer (celui-ci, un autre nom, ou une copie dans un dossier sans changer le document
+        ouvert), puis le volet E-mail s'ouvre avec
+        le message pret et le PDF deja joint (champs de signature intacts)."""
         fen = self.window()
-        if (self.modifie or not self.chemin) and hasattr(fen, "enregistrer"):
-            if not fen.enregistrer(self):
+        base = os.path.splitext(self.nom)[0]
+        propose = _("{nom} - à signer.pdf", nom=base)
+        copie = None
+        if hasattr(fen, "enregistrer"):
+            from .document import question
+            choix = question(self, _("Envoyer pour signature"),
+                             _("Le document à faire signer doit être enregistré. Où l'enregistrer ?"),
+                             [(_("Dans ce fichier ({f})", f=self.nom) if self.chemin else _("Enregistrer..."),
+                               QMessageBox.AcceptRole),
+                              (_("Sous un autre nom (« {p} »)...", p=propose), QMessageBox.ActionRole),
+                              (_("Une copie dans un dossier (ce document reste ouvert tel quel)..."),
+                               QMessageBox.ActionRole),
+                              (_("Annuler"), QMessageBox.RejectRole)])
+            if choix == 3:
+                return
+            if choix == 1:
+                if not fen.enregistrer(self, sous=True, nom_propose=propose):
+                    return
+            elif choix == 2:
+                dossier = os.path.dirname(self.chemin) if self.chemin and not getattr(self, "distant", None) else \
+                    (fen.dossier_depart() if hasattr(fen, "dossier_depart") else os.path.expanduser("~"))
+                c, _x = QFileDialog.getSaveFileName(self, _("Copie à faire signer"), os.path.join(dossier, propose),
+                                                   _("PDF (*.pdf)"))
+                if not c:
+                    return
+                if not c.lower().endswith(".pdf"):
+                    c += ".pdf"
+                try:
+                    with open(c, "wb") as f:
+                        f.write(self.octets_en_ajout() if self.octets_signes else
+                                self.doc.tobytes(garbage=3, deflate=True))
+                except OSError as e:
+                    QMessageBox.warning(self, _("Envoyer pour signature"), _("Enregistrement impossible : {e}", e=e))
+                    return
+                copie = os.path.basename(c)
+            elif (self.modifie or not self.chemin) and not fen.enregistrer(self):
                 return
         vides = [(self.infos_champ_sig(w), w.field_name) for _n, w in self.widgets_signature() if not w.is_signed]
         vides.sort(key=lambda x: x[0]["ordre"] or 99)
@@ -417,18 +453,23 @@ class MixinSignature:
         corps = _("Bonjour,\n\nVous trouverez ci-joint le document « {doc} » à signer.\n\nChamp(s) de signature :\n{champs}\n\n"
                   "Dans Acrobat ou Acrobat Reader : cliquez sur le champ de signature, choisissez votre identité "
                   "numérique, puis enregistrez et renvoyez-moi le fichier.\n\nMerci,\n{auteur}",
-                  doc=self.nom, champs="\n".join(lignes), auteur=self.params.get("auteur", ""))
+                  doc=copie or self.nom, champs="\n".join(lignes), auteur=self.params.get("auteur", ""))
+        if hasattr(self, "montrer_envoi") and hasattr(fen, "statusBar"):
+            self.montrer_envoi(fen)
+            p = self.panneau_envoi
+            p.nom.setText(copie or self.nom)
+            p.radios["tel_quel"].setChecked(True)          # tel quel : les champs de signature restent utilisables
+            for k in ("allege", "fige"):
+                p.radios[k].setEnabled(False)
+                p.radios[k].setToolTip(_("Document à signer : il part tel quel."))
+            p.sujet.setText(_("Document à signer : {doc}", doc=self.nom))
+            p.corps.setPlainText(corps)
+            p.oublier()
+            p._maj()
+            return
         from . import agenda
         agenda.ouvrir(agenda.lien_message(self.params.get("messagerie") or "gmail",
                                           _("Document à signer : {doc}", doc=self.nom), corps))
-        try:
-            from .fenetre import montrer_dans_explorateur
-            montrer_dans_explorateur(self.chemin)
-        except Exception:                                 # noqa: BLE001
-            pass
-        QMessageBox.information(self, _("Envoyer pour signature"),
-                                _("Le message est prêt dans votre messagerie. Joignez-y le fichier, montré dans "
-                                  "l'explorateur :\n{f}", f=self.chemin))
 
     def champ_verrouille(self, w):
         return w.field_name in getattr(self, "champs_verrouilles", set())

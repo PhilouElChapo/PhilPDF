@@ -2615,5 +2615,17 @@
  "Imprimante": "Printer",
  "L'imprimante PhilPDF : Imprimer › PhilPDF depuis Word, Excel ou le navigateur ouvre le PDF dans PhilPDF, polices intégrées. Installation, nom dans Windows, qualité, dossier de sortie, page d'essai.": "The PhilPDF printer: Print › PhilPDF from Word, Excel or the browser opens the PDF in PhilPDF, fonts embedded. Installation, name in Windows, quality, output folder, test page.",
  " Régler l'imprimante PhilPDF...": " Set up the PhilPDF printer...",
- "aucun autre poste trouvé à cet emplacement : vos autres postes utilisent peut-être un autre compte": "no other computer found at this location: your other computers may use another account"
+ "aucun autre poste trouvé à cet emplacement : vos autres postes utilisent peut-être un autre compte": "no other computer found at this location: your other computers may use another account",
+ "Enregistrer une copie...": "Save a copy...",
+ "Enregistrer une copie": "Save a copy",
+ "Copie enregistrée : {f} (le document ouvert n'a pas changé).": "Copy saved: {f} (the open document has not changed).",
+ "{nom} (copie).pdf": "{nom} (copy).pdf",
+ "{nom} - à signer.pdf": "{nom} - to sign.pdf",
+ "Le document à faire signer doit être enregistré. Où l'enregistrer ?": "The document to be signed must be saved. Where should it be saved?",
+ "Document à signer : il part tel quel.": "Document to sign: it is sent as is.",
+ "Sous un autre nom (« {p} »)...": "Under another name (“{p}”)...",
+ "Une copie dans un dossier (ce document reste ouvert tel quel)...": "A copy in a folder (this document stays open as it is)...",
+ "Copie à faire signer": "Copy to be signed",
+ "Dans ce fichier ({f})": "In this file ({f})",
+ "Enregistrer...": "Save..."
 }
