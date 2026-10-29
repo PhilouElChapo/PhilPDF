@@ -55,6 +55,18 @@ def existe(chemin, fichier=False):
     return os.path.isfile(chemin) if fichier else os.path.exists(chemin)
 
 
+def en_nuage(chemin):
+    """Vrai pour un fichier OneDrive (ou autre nuage) « disponible en ligne uniquement » : le lire le
+    telecharge. On ne l'ouvre donc pas pour une miniature ou une verification."""
+    if sys.platform != "win32":
+        return False
+    try:
+        a = os.stat(chemin).st_file_attributes
+    except (OSError, AttributeError):
+        return False
+    return bool(a & (0x400000 | 0x40000 | 0x1000))     # RECALL_ON_DATA_ACCESS, RECALL_ON_OPEN, OFFLINE
+
+
 LIMITE_FICHIERS = 30_000           # recherche rapide et silencieuse : quelques secondes au plus
 DELAI_SILENCIEUX = 8               # secondes, verification au demarrage
 IGNORES = {"AppData", "node_modules", "Windows", "Program Files", "Program Files (x86)", "ProgramData",
@@ -136,6 +148,72 @@ def _dossier_autre(chemin):
 def retenir_trouve(machine, e, chemin):
     """Fichier d'un autre poste retrouve ici par une recherche plus longue (ou designe a la main)."""
     _RESOLUS[(machine, e.get("chemin"), e.get("empreinte"))] = chemin
+    _memoriser(machine, e, chemin)
+
+
+# Fichiers des autres postes deja retrouves ici, gardes d'un lancement a l'autre : au lancement suivant,
+# un simple coup d'oeil a la taille et a la date suffit (rien n'est relu).
+_CONNUS_DISQUE = None
+
+
+def _fichier_resolus():
+    from .config import dossier_donnees
+    return os.path.join(dossier_donnees(), "recents_retrouves.json")
+
+
+def _resolus_disque():
+    global _CONNUS_DISQUE
+    if _CONNUS_DISQUE is None:
+        try:
+            with open(_fichier_resolus(), encoding="utf-8") as f:
+                _CONNUS_DISQUE = json.load(f)
+        except (OSError, ValueError):
+            _CONNUS_DISQUE = {}
+    return _CONNUS_DISQUE
+
+
+def _cle_disque(machine, e):
+    return f"{machine}|{e.get('chemin') or ''}|{e.get('empreinte') or ''}"
+
+
+def _memoriser(machine, e, chemin):
+    d = _resolus_disque()
+    try:
+        st = os.stat(chemin) if chemin and not chemin.startswith("distant:") else None
+    except OSError:
+        st = None
+    k = _cle_disque(machine, e)
+    if st:
+        d[k] = [chemin, st.st_size, st.st_mtime_ns]
+    else:
+        d.pop(k, None)
+    if len(d) > 2000:                                  # garde les plus recents
+        for x in list(d)[:len(d) - 2000]:
+            d.pop(x, None)
+
+
+def enregistrer_resolus():
+    if _CONNUS_DISQUE is None:
+        return
+    try:
+        t = _fichier_resolus() + ".tmp"
+        with open(t, "w", encoding="utf-8") as f:
+            json.dump(_CONNUS_DISQUE, f, ensure_ascii=False)
+        os.replace(t, _fichier_resolus())
+    except OSError:
+        pass
+
+
+def _deja_retrouve(machine, e):
+    """Chemin ici deja confirme a un lancement precedent, si le fichier n'a pas change depuis."""
+    x = _resolus_disque().get(_cle_disque(machine, e))
+    if not x or not joignable(x[0]):
+        return None
+    try:
+        st = os.stat(x[0])
+    except OSError:
+        return None
+    return x[0] if (st.st_size, st.st_mtime_ns) == (x[1], x[2]) else None
 
 
 def empreinte(chemin):
@@ -244,6 +322,7 @@ class Session:
     def _decrire(self, chemin, maison, connus):
         """Ce qu'il faut pour retrouver un fichier sur un autre poste (jamais le fichier lui-meme)."""
         e = {"chemin": chemin, "nom": os.path.basename(chemin), "taille": os.path.getsize(chemin),
+             "modifie": int(os.path.getmtime(chemin)),
              "empreinte": empreinte(chemin), "relatif_maison": _relatif(chemin, maison)}
         # dossier par defaut le plus precis qui le contient (Documents plutot que dossier utilisateur)
         for clef, base in sorted(connus.items(), key=lambda kv: -len(kv[1])):
@@ -258,12 +337,13 @@ class Session:
                 break
         return e
 
-    def recents_communs(self, jours=None, n=None):
+    def recents_communs(self, jours=None, n=None, rapide=False):
         """Recents en une liste : d'abord ceux de CE poste (dans leur ordre), puis ceux de vos autres postes, plus bas.
         Un fichier d'un autre poste retrouve parmi les recents d'ici n'est pas repete : la ligne d'ici le signale
         (« aussi sur Cannes »). Ceux des autres postes retrouves sur ce PC sont utilisables ; les autres sont grises.
         [{chemin (ici, ou None), nom, dossier, date, poste, ouvert_sur, aussi_sur, autre_poste, machine, e}].
-        Recherche instantanee seulement (pas de parcours du disque)."""
+        Recherche instantanee seulement (pas de parcours du disque).
+        rapide : les recents de ce poste seulement, sans toucher au reseau (affichage immediat)."""
         jours, n = jours or JOURS_RECENTS, n or NB_RECENTS
         moi = self.params.get("machine", "")
         limite = (datetime.datetime.now() - datetime.timedelta(days=jours)).isoformat(timespec="minutes")
@@ -276,7 +356,7 @@ class Session:
             k = _norm(p)
             if k in par_chemin:                           # meme fichier ecrit deux fois (C:/ et C:\)
                 continue
-            ici_ok = existe(p)
+            ici_ok = (os.path.exists(p) if not p.replace("/", "\\").startswith("\\\\") else True) if rapide else existe(p)
             l = {"chemin": p if ici_ok else None, "chemin_origine": p, "nom": os.path.basename(p),
                  "dossier": os.path.normpath(os.path.dirname(p)), "date": q or "", "rang": i, "poste": moi,
                  "ouvert_sur": [], "aussi_sur": [], "chemins_autres": {}, "autre_poste": False, "machine": moi, "e": None,
@@ -286,7 +366,7 @@ class Session:
             if len(ici_l) >= n:
                 break
         vus_autres = {}
-        for m, v in self.lire().items():
+        for m, v in ({} if rapide else self.lire()).items():
             if m == moi or not isinstance(v, dict):
                 continue
             ouverts = {(f.get("empreinte"), f.get("nom")) for f in v.get("fichiers", [])}
@@ -300,7 +380,10 @@ class Session:
                 ouvert = (e.get("empreinte"), e.get("nom")) in ouverts
                 cle = (m, e.get("chemin"), e.get("empreinte"))
                 if cle not in _RESOLUS:
-                    _RESOLUS[cle] = self.retrouver_direct(m, e)[0]
+                    deja = _deja_retrouve(m, e)
+                    _RESOLUS[cle] = deja or self.retrouver_direct(m, e)[0]
+                    if not deja:
+                        _memoriser(m, e, _RESOLUS[cle])
                 trouve = _RESOLUS[cle]
                 if trouve and trouve.startswith("distant:"):
                     trouve = None
@@ -337,6 +420,8 @@ class Session:
         for l in ici_l + autres:
             l["section"] = "introuvable" if not l["chemin"] else ("autres" if l["autre_poste"] else "ici")
         rang = {"ici": 0, "autres": 1, "introuvable": 2}
+        if not rapide:
+            enregistrer_resolus()
         return sorted(ici_l + autres, key=lambda l: rang[l["section"]])     # tri stable : l'ordre de chacun reste
 
     def autres_machines(self):
@@ -400,6 +485,10 @@ class Session:
             return False
         if e.get("taille") is not None and os.path.getsize(chemin) != e["taille"]:
             return False
+        if e.get("modifie") is not None and abs(int(os.path.getmtime(chemin)) - e["modifie"]) <= 2:
+            return True                               # meme nom, meme taille, meme date : c'est lui (rien n'est relu)
+        if en_nuage(chemin):                          # en ligne seulement : ne pas le telecharger pour verifier
+            return True
         return not e.get("empreinte") or empreinte(chemin) == e["empreinte"]
 
     def retrouver_direct(self, machine, e):

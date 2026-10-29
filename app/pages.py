@@ -534,46 +534,111 @@ class PageAccueil(QWidget):
                     for p in self.params["recents"][:30]]
 
     def rafraichir(self, lignes=None):
-        """Les recents sont cherches hors de l'interface (fichiers sur le NAS, ceux des autres postes retrouves sur ce
-        PC) : la fenetre reste utilisable pendant ce temps, et la liste se remplit quand c'est pret."""
+        """Affichage en deux temps, pour que l'Accueil soit immediat :
+        1. tout de suite : les recents de CE poste (rien n'est lu sur le reseau) et ce qu'on savait des autres
+           postes au lancement precedent ; miniatures deja faites seulement ;
+        2. en arriere-plan : les autres postes revus (« aussi sur Pharma »), puis les miniatures qui manquent,
+           une par une, en commencant par le haut de la liste. La liste n'est redessinee que si elle a change."""
         if lignes is None and self.SYNCHRONE:          # tests : tout de suite
             lignes = self.lignes_recents()
         if lignes is None:
-            self._gen_recents = getattr(self, "_gen_recents", 0) + 1
-            gen = self._gen_recents
-            if not self.liste.count():
-                it = QListWidgetItem(_("Recherche de vos fichiers récents..."))
-                it.setFlags(Qt.NoItemFlags)
-                self.liste.addItem(it)
-            from PySide6.QtCore import QThread, Signal as _S
+            import time
+            t0 = time.monotonic()
+            self._gen_recents = gen = getattr(self, "_gen_recents", 0) + 1
+            lignes = self._recents_immediats()
+            self._t_local = time.monotonic() - t0
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(0, lambda: self._lancer_complet(gen, t0))
+        self._afficher_recents(lignes)
 
-            class _T(QThread):
-                pret = _S(object)
+    # ---- recents : affichage immediat, puis complet en arriere-plan
+    def _cache_accueil(self):
+        from .config import dossier_donnees
+        return os.path.join(dossier_donnees(), "accueil_recents.json")
 
-                def __init__(s_, f):
-                    super().__init__()
-                    s_.f = f
+    def _recents_immediats(self):
+        """Recents de ce poste (instantane) completes par la derniere liste complete connue."""
+        try:
+            from .session import session_de, _norm
+            ici = session_de(self.params).recents_communs(rapide=True)
+        except Exception:                            # noqa: BLE001
+            return self.lignes_recents()
+        if not hasattr(self, "_derniere_complete"):
+            try:
+                import json
+                with open(self._cache_accueil(), encoding="utf-8") as f:
+                    self._derniere_complete = json.load(f)
+            except (OSError, ValueError):
+                self._derniere_complete = []
+        avant = {_norm(l.get("chemin_origine") or l.get("chemin") or ""): l
+                 for l in self._derniere_complete if not l.get("autre_poste")}
+        for l in ici:                                # « aussi sur Pharma » deja connu : affiche tout de suite
+            x = avant.get(_norm(l["chemin_origine"]))
+            if x:
+                l["aussi_sur"] = list(x.get("aussi_sur") or [])
+                l["chemins_autres"] = dict(x.get("chemins_autres") or {})
+        autres = []
+        for x in self._derniere_complete:
+            if x.get("autre_poste"):
+                x = dict(x)
+                c = x.get("chemin")
+                if c and not c.replace("/", "\\").startswith("\\\\") and not os.path.exists(c):
+                    x["chemin"], x["section"], x["introuvable_ici"] = None, "introuvable", True
+                autres.append(x)
+        rang = {"ici": 0, "autres": 1, "introuvable": 2}
+        return sorted(ici + autres, key=lambda l: rang.get(l.get("section") or "ici", 0))
 
-                def run(s_):
-                    try:
-                        s_.pret.emit(s_.f())
-                    except Exception:                # noqa: BLE001
-                        s_.pret.emit([])
-            def calcul():
-                lignes_ = self.lignes_recents()
-                for l_ in lignes_[:40]:              # miniatures fabriquees ici aussi (fichiers sur le NAS)
-                    if l_.get("chemin") and not str(l_["chemin"]).startswith("distant:"):
-                        try:
-                            preparer_miniature(l_["chemin"])
-                        except Exception:            # noqa: BLE001
-                            pass
-                return lignes_
-            t = _T(calcul)
-            _TACHES_ACCUEIL.add(t)
-            t.pret.connect(lambda l, g=gen: self._gen_recents == g and self.rafraichir(l))
-            t.finished.connect(lambda t=t: _TACHES_ACCUEIL.discard(t))
-            t.start()
+    @staticmethod
+    def _signature(lignes):
+        return [(l.get("chemin"), l.get("chemin_origine"), l.get("section"), tuple(l.get("aussi_sur") or ()),
+                 tuple(l.get("ouvert_sur") or ()), l.get("poste"), l.get("date")) for l in lignes]
+
+    def _lancer_complet(self, gen, t0):
+        if self._gen_recents != gen:
             return
+        from PySide6.QtCore import QThread, Signal as _S
+
+        class _T(QThread):
+            pret = _S(object)
+
+            def __init__(s_, f):
+                super().__init__()
+                s_.f = f
+
+            def run(s_):
+                try:
+                    s_.pret.emit(s_.f())
+                except Exception:                    # noqa: BLE001
+                    s_.pret.emit(None)
+        t = _T(self.lignes_recents)
+        _TACHES_ACCUEIL.add(t)
+        t.pret.connect(lambda l, g=gen, t0=t0: self._recents_complets(l, g, t0))
+        t.finished.connect(lambda t=t: _TACHES_ACCUEIL.discard(t))
+        t.start()
+
+    def _recents_complets(self, lignes, gen, t0):
+        import time, json
+        if lignes is None or self._gen_recents != gen:
+            return
+        self._t_complet = time.monotonic() - t0
+        propres = [{k: v for k, v in l.items() if k != "e" or isinstance(v, (dict, type(None)))} for l in lignes]
+        self._derniere_complete = propres
+        try:
+            with open(self._cache_accueil(), "w", encoding="utf-8") as f:
+                json.dump(propres, f, ensure_ascii=False, default=str)
+        except OSError:
+            pass
+        change = self._signature(lignes) != getattr(self, "_sig_affichee", None)
+        if change:
+            self._afficher_recents(lignes)
+        if not getattr(self, "_mesure_faite", False):     # une ligne dans le journal, au premier affichage
+            self._mesure_faite = True
+            _ecrire_journal(f"accueil : {sum(1 for l in lignes if not l.get('autre_poste'))} récents de ce poste affichés en "
+                            f"{_duree(self._t_local)}, autres postes revus en {_duree(self._t_complet)}"
+                            + (" (liste mise à jour)" if change else " (rien n'avait changé)"))
+
+    def _afficher_recents(self, lignes):
+        self._sig_affichee = self._signature(lignes)
         from .session import date_fr
         self.liste.clear()
         moi = self.params.get("machine", "")
@@ -645,18 +710,84 @@ class PageAccueil(QWidget):
             self.echeances.hide()
 
     def _vignetter(self):
-        """Miniature de la premiere page a la place de l'icone (comme Acrobat), une par une pour ne pas bloquer."""
-        from PySide6.QtCore import QTimer
-        if not getattr(self, "_a_vignetter", None):
-            return
-        it = self._a_vignetter.pop(0)
-        try:
-            pm = miniature(it.data(Qt.UserRole))
+        """Miniature de la premiere page a la place de l'icone (comme Acrobat). Celles deja faites tout de suite ;
+        les autres sont fabriquees en arriere-plan, une par une, du haut de la liste vers le bas. Les fichiers
+        OneDrive « en ligne uniquement » gardent d'abord leur icone : ils passent en dernier (Windows les telecharge)."""
+        import time
+        from .session import en_nuage
+        a_faire, nuages = [], []
+        for it in getattr(self, "_a_vignetter", []):
+            c = it.data(Qt.UserRole)
+            if not c or str(c).startswith("distant:"):
+                continue
+            if c.replace("/", "\\").startswith("\\\\"):    # NAS : jamais regarde depuis l'interface
+                if c not in a_faire:
+                    a_faire.append(c)
+                continue
+            pm = miniature_cachee(c)
             if pm is not None:
                 it.setIcon(pm)
-        except RuntimeError:                              # liste reconstruite entre-temps
+            elif pm is None and c not in _SANS_MINIATURE:
+                if en_nuage(c):
+                    if c not in nuages:
+                        nuages.append(c)
+                elif c not in a_faire:
+                    a_faire.append(c)
+        self._a_vignetter = []
+        self._gen_vign = gen = getattr(self, "_gen_vign", 0) + 1
+        nuage = len(nuages)
+        a_faire += nuages
+        if not a_faire:
             return
-        QTimer.singleShot(0, self._vignetter)
+        from PySide6.QtCore import QThread, Signal as _S
+
+        class _V(QThread):
+            faite = _S(str)
+            fin = _S(int, int, float)
+
+            def run(s_):
+                t0, ok, ko = time.monotonic(), 0, 0
+                for c in a_faire:
+                    if self._gen_vign != gen:
+                        return
+                    try:
+                        from .session import joignable
+                        r = preparer_miniature(c) if joignable(c) else None
+                    except Exception:                # noqa: BLE001
+                        r = None
+                    if r:
+                        ok += 1
+                        s_.faite.emit(c)
+                    else:
+                        ko += 1
+                        _SANS_MINIATURE.add(c)
+                s_.fin.emit(ok, ko, time.monotonic() - t0)
+        v = _V()
+        _TACHES_ACCUEIL.add(v)
+        v.faite.connect(lambda c, g=gen: self._gen_vign == g and self._poser_miniature(c))
+        v.fin.connect(lambda ok, ko, d, n=nuage: self._noter_miniatures(ok, ko, n, d))
+        v.finished.connect(lambda v=v: _TACHES_ACCUEIL.discard(v))
+        v.start()
+
+    def _poser_miniature(self, chemin):
+        pm = miniature_cachee(chemin)
+        if pm is None:
+            return
+        try:
+            for i in range(self.liste.count()):
+                it = self.liste.item(i)
+                if it.data(Qt.UserRole) == chemin:
+                    it.setIcon(pm)
+        except RuntimeError:
+            pass
+
+    def _noter_miniatures(self, ok, ko, nuage, duree):
+        if getattr(self, "_journal_ecrit", False) or not (ok or ko or nuage):
+            return
+        self._journal_ecrit = True
+        _ecrire_journal(f"accueil : miniatures {ok} faites en {_duree(duree)}"
+                        + (f", {ko} impossibles (protégés ou abîmés)" if ko else "")
+                        + (f", dont {nuage} OneDrive en ligne uniquement (téléchargés en dernier)" if nuage else ""))
 
     def _echeance_lien(self, lien):
         from urllib.parse import unquote
@@ -897,6 +1028,41 @@ def preparer_miniature(chemin, hauteur=52):
     except OSError:
         return None
     return f
+
+
+def _duree(x):
+    return f"{x * 1000:.0f} ms" if x < 1 else f"{x:.1f} s"
+
+
+def _ecrire_journal(texte):
+    try:
+        from .journal import ecrire
+        ecrire("démarrage", texte)
+    except Exception:                                # noqa: BLE001
+        pass
+
+
+_SANS_MINIATURE = set()     # fichiers qui ne s'ouvrent pas : pas la peine de reessayer
+
+
+def miniature_cachee(chemin, hauteur=52):
+    """Miniature deja faite (memoire ou disque), sans jamais ouvrir le PDF : None sinon."""
+    from PySide6.QtGui import QIcon, QPixmap
+    from .config import dossier_donnees
+    if not chemin or str(chemin).startswith("distant:"):
+        return None
+    try:
+        cle = _cle_miniature(chemin, hauteur)
+    except OSError:
+        return None
+    if _MINIATURES.get(cle) is not None:
+        return _MINIATURES[cle]
+    f = os.path.join(dossier_donnees(), "miniatures", cle + ".png")
+    pm = QPixmap()
+    if os.path.exists(f) and pm.load(f):
+        _MINIATURES[cle] = QIcon(pm)
+        return _MINIATURES[cle]
+    return None
 
 
 def miniature(chemin, hauteur=52):

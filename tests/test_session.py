@@ -1,3 +1,4 @@
+import time
 """Cascade de reprise de session : deux machines simulees, fichiers deplaces, renommes, appris."""
 import os, shutil, sys, tempfile, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -57,6 +58,7 @@ pdf(os.path.join(maison, "Documents", "Ordonnances", "a.pdf"), b"A")       # mem
 pdf(os.path.join(nas, "Archives", "Ordo", "b.pdf"), b"B")                   # autre dossier, meme nom
 pdf(os.path.join(nas, "Archives", "Ordo", "c_renomme.pdf"), b"C")           # renomme
 pdf(os.path.join(maison, "d.pdf"), b"X")                                    # meme nom, contenu different
+os.utime(os.path.join(maison, "d.pdf"), (time.time() - 86400, time.time() - 86400))   # ... et une autre date
 pdf(os.path.join(nas, "Pharma", "Clients", "Durand", "f.pdf"), b"F")        # arborescence copiee sur le NAS
 pdf(os.path.join(nas, "Pharma", "Clients", "Martin", "g.pdf"), b"G")
 shutil.rmtree(pharma)

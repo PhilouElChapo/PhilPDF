@@ -261,6 +261,21 @@ def reprendre_secrets_drive(params, phrase, ecraser=False):
     return n
 
 
+def copie_avant_reprise(params):
+    """Filet de securite : copie des preferences de ce poste juste avant d'y reprendre celles d'un autre poste
+    (comptes e-mail, carnet...). Gardee dans « donnees/copies_avant_reprise », les 10 dernieres."""
+    try:
+        import shutil
+        from .config import dossier_donnees
+        d = os.path.join(dossier_donnees(), "copies_avant_reprise")
+        os.makedirs(d, exist_ok=True)
+        shutil.copy2(params.chemin, os.path.join(d, "preferences-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + ".json"))
+        for vieux in sorted(os.listdir(d))[:-10]:
+            os.remove(os.path.join(d, vieux))
+    except Exception:                                # noqa: BLE001
+        pass
+
+
 def reprendre_communs_drive(params):
     """Au demarrage : si un autre poste a change des reglages communs plus recemment (favoris, outils, barres,
     comptes, langue...), on les reprend ici. Renvoie le nom de ce poste, ou None."""
@@ -271,6 +286,7 @@ def reprendre_communs_drive(params):
     maj, par = c.get("maj") or "", c.get("par") or ""
     if not maj or maj <= (params.get("communs_maj") or "") or par == params.get("machine"):
         return None
+    copie_avant_reprise(params)
     comptes_ici = {x["id"] for x in params.get("comptes", [])}
     a_renvoyer = False
     for k, v in c.items():
@@ -482,6 +498,7 @@ def appliquer_disposition(params, dispo, cles):
 
 def appliquer_communs(params, changements, cles):
     """Reprend seulement les reglages choisis ; les autres restent ceux de ce poste. On ne redemande pas ensuite."""
+    copie_avant_reprise(params)
     garde_ici = False
     for it in changements["items"]:
         if it["cle"] in cles or it.get("cache"):
