@@ -272,7 +272,7 @@ jobs:
   flatpak:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
       options: --privileged
     steps:
       - uses: actions/checkout@v5
@@ -301,7 +301,7 @@ jobs:
       - name: Auto-controle dans le Flatpak
         run: |
           flatpak-builder --run build-flatpak linux/io.github.PhilouElChapo.PhilPDF.yml sh -c '
-            export QT_QPA_PLATFORM=offscreen PYTHONPATH=/app/lib/python3.12/site-packages
+            export QT_QPA_PLATFORM=offscreen; for d in /app/lib/python3*/site-packages; do export PYTHONPATH=$d; done
             python3 /app/philpdf/philpdf.py --verifier /tmp/verif.txt; r=$?
             cat /tmp/verif.txt
             echo "--- bibliotheques manquantes pour Qt (X11 / Wayland) :"

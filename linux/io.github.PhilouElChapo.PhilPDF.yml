@@ -3,7 +3,7 @@
 # est telecharge par Flatpak a l'installation, comme pour toute application Flathub.
 app-id: io.github.PhilouElChapo.PhilPDF
 runtime: org.freedesktop.Platform
-runtime-version: '24.08'
+runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
 command: philpdf
 finish-args:
@@ -21,18 +21,6 @@ finish-args:
   - --talk-name=org.gtk.vfs.*
   - --env=QT_QPA_PLATFORM=wayland;xcb
 modules:
-  # Qt (X11) a besoin de xcb-cursor : fabrique seulement s'il manque au socle
-  - name: xcb-util-cursor
-    buildsystem: simple
-    build-commands:
-      - |
-        if pkg-config --exists xcb-cursor; then echo "xcb-cursor deja present"; exit 0; fi
-        ./autogen.sh --prefix=/app && make -j"$FLATPAK_BUILDER_N_JOBS" && make install
-    sources:
-      - type: git
-        url: https://gitlab.freedesktop.org/xorg/lib/libxcb-cursor.git
-        tag: xcb-util-cursor-0.1.5
-
   - name: leptonica
     buildsystem: cmake-ninja
     config-opts:
