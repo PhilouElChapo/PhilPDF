@@ -302,7 +302,8 @@ jobs:
         shell: bash
         run: |
           set +e
-          flatpak-builder --run build-flatpak linux/io.github.PhilouElChapo.PhilPDF.yml sh -c '
+          [ -s /etc/machine-id ] || (dbus-uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid | tr -d -) > /etc/machine-id
+          flatpak-builder --run --disable-rofiles-fuse build-flatpak linux/io.github.PhilouElChapo.PhilPDF.yml sh -c '
             export QT_QPA_PLATFORM=offscreen; for d in /app/lib/python3*/site-packages; do export PYTHONPATH=$d; done
             python3 /app/philpdf/philpdf.py --verifier /tmp/verif.txt; r=$?
             cat /tmp/verif.txt
