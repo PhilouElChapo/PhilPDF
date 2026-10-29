@@ -22,6 +22,39 @@ la fois suivante, c'est immediat.
 import datetime, hashlib, json, os, subprocess, sys, time
 from .langue import _
 
+_HOTES = {}                        # \\NAS-xxx : joignable ? (verifie une fois, garde 5 minutes)
+
+
+def joignable(chemin):
+    """Faux tout de suite si le chemin est sur un NAS / PC du reseau qui ne repond pas (sinon Windows attend
+    de longues secondes par fichier) ; vrai pour un chemin local."""
+    c = (chemin or "").replace("/", "\\")
+    if not c.startswith("\\\\"):
+        return True
+    hote = c[2:].split("\\", 1)[0].lower()
+    if not hote:
+        return True
+    connu = _HOTES.get(hote)
+    if connu and time.time() - connu[1] < 300:
+        return connu[0]
+    import socket
+    ok = False
+    try:
+        with socket.create_connection((hote, 445), timeout=0.6):
+            ok = True
+    except OSError:
+        ok = False
+    _HOTES[hote] = (ok, time.time())
+    return ok
+
+
+def existe(chemin, fichier=False):
+    """os.path.exists / isfile, sans attendre un NAS injoignable."""
+    if not chemin or not joignable(chemin):
+        return False
+    return os.path.isfile(chemin) if fichier else os.path.exists(chemin)
+
+
 LIMITE_FICHIERS = 30_000           # recherche rapide et silencieuse : quelques secondes au plus
 DELAI_SILENCIEUX = 8               # secondes, verification au demarrage
 IGNORES = {"AppData", "node_modules", "Windows", "Program Files", "Program Files (x86)", "ProgramData",
@@ -179,7 +212,7 @@ class Session:
         for ligne in ouverts:
             chemin, page, zoom = ligne[:3]
             dist = ligne[3] if len(ligne) > 3 else None
-            if not chemin or not os.path.exists(chemin):
+            if not chemin or not existe(chemin):
                 continue
             e = self._decrire(chemin, maison, connus)
             e.update(page=page, zoom=zoom)
@@ -193,7 +226,7 @@ class Session:
         limite = (datetime.datetime.now() - datetime.timedelta(days=JOURS_RECENTS)).isoformat(timespec="minutes")
         for p in self.params.get("recents", []):
             q = dates.get(p, "")
-            if len(recents) >= NB_RECENTS or (q and q < limite) or not os.path.isfile(p):
+            if len(recents) >= NB_RECENTS or (q and q < limite) or not existe(p, fichier=True):
                 continue
             e = self._decrire(p, maison, connus)
             e["date"] = q
@@ -243,10 +276,11 @@ class Session:
             k = _norm(p)
             if k in par_chemin:                           # meme fichier ecrit deux fois (C:/ et C:\)
                 continue
-            l = {"chemin": p if os.path.exists(p) else None, "chemin_origine": p, "nom": os.path.basename(p),
+            ici_ok = existe(p)
+            l = {"chemin": p if ici_ok else None, "chemin_origine": p, "nom": os.path.basename(p),
                  "dossier": os.path.normpath(os.path.dirname(p)), "date": q or "", "rang": i, "poste": moi,
                  "ouvert_sur": [], "aussi_sur": [], "chemins_autres": {}, "autre_poste": False, "machine": moi, "e": None,
-                 "introuvable_ici": not os.path.exists(p)}
+                 "introuvable_ici": not ici_ok}
             par_chemin[k] = l
             ici_l.append(l)
             if len(ici_l) >= n:
@@ -362,7 +396,7 @@ class Session:
 
     # ------------------------------------------------------------ recherche
     def _confirme(self, chemin, e):
-        if not os.path.isfile(chemin):
+        if not existe(chemin, fichier=True):
             return False
         if e.get("taille") is not None and os.path.getsize(chemin) != e["taille"]:
             return False
