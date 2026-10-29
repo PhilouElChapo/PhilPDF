@@ -1,0 +1,90 @@
+# PhilPDF pour Linux (Zorin OS, Ubuntu, Fedora...) : un seul paquet Flatpak, fabrique par GitHub.
+# Tout est dedans (Python, Qt, PyMuPDF, Tesseract) ; seul le socle « org.freedesktop.Platform »
+# est telecharge par Flatpak a l'installation, comme pour toute application Flathub.
+app-id: io.github.PhilouElChapo.PhilPDF
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: philpdf
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=home
+  - --filesystem=/media
+  - --filesystem=/run/media
+  - --filesystem=/mnt
+  - --filesystem=xdg-run/gvfs
+  - --talk-name=org.freedesktop.secrets
+  - --talk-name=org.gtk.vfs.*
+  - --env=QT_QPA_PLATFORM=wayland;xcb
+modules:
+  # Qt (X11) a besoin de xcb-cursor : fabrique seulement s'il manque au socle
+  - name: xcb-util-cursor
+    buildsystem: simple
+    build-commands:
+      - |
+        if pkg-config --exists xcb-cursor; then echo "xcb-cursor deja present"; exit 0; fi
+        ./autogen.sh --prefix=/app && make -j"$FLATPAK_BUILDER_N_JOBS" && make install
+    sources:
+      - type: git
+        url: https://gitlab.freedesktop.org/xorg/lib/libxcb-cursor.git
+        tag: xcb-util-cursor-0.1.5
+
+  - name: leptonica
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_SHARED_LIBS=ON
+      - -DBUILD_PROG=OFF
+      - -DSW_BUILD=OFF
+    sources:
+      - type: git
+        url: https://github.com/DanBloomberg/leptonica.git
+        tag: 1.85.0
+
+  - name: tesseract
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_SHARED_LIBS=ON
+      - -DBUILD_TRAINING_TOOLS=OFF
+      - -DBUILD_TESTS=OFF
+      - -DDISABLE_CURL=ON
+      - -DDISABLE_ARCHIVE=ON
+      - -DGRAPHICS_DISABLED=ON
+      - -DSW_BUILD=OFF
+      - -DOPENMP_BUILD=OFF
+    sources:
+      - type: git
+        url: https://github.com/tesseract-ocr/tesseract.git
+        tag: 5.5.1
+
+  - name: philpdf
+    buildsystem: simple
+    build-options:
+      build-args:
+        - --share=network          # pip telecharge les bibliotheques Python (fabrication locale, pas Flathub)
+    build-commands:
+      - pip3 install --prefix=/app --no-cache-dir --upgrade pip setuptools
+      - pip3 install --prefix=/app --no-cache-dir -r requirements.txt
+      - python3 outils_dev/compiler_jbig2.py
+      - mkdir -p /app/philpdf
+      - cp -r app moteur langues fonts tessdata philpdf.py moteurs.json LISEZMOI.txt philpdf.ico /app/philpdf/
+      - find /app/philpdf -name __pycache__ -prune -exec rm -rf {} +
+      - install -Dm755 linux/philpdf.sh /app/bin/philpdf
+      - install -Dm644 linux/io.github.PhilouElChapo.PhilPDF.desktop /app/share/applications/io.github.PhilouElChapo.PhilPDF.desktop
+      - install -Dm644 linux/io.github.PhilouElChapo.PhilPDF.metainfo.xml /app/share/metainfo/io.github.PhilouElChapo.PhilPDF.metainfo.xml
+      - install -Dm644 linux/philpdf-256.png /app/share/icons/hicolor/256x256/apps/io.github.PhilouElChapo.PhilPDF.png
+    sources:
+      - type: dir
+        path: ..
+        skip:
+          - .git
+          - .flatpak-builder
+          - build-flatpak
+          - repo
+          - dist
+          - build

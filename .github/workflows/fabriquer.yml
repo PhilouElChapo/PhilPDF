@@ -193,6 +193,143 @@ jobs:
             PhilPDF ${{ env.VERSION }} pour Windows, tout en un (rien a installer a cote).
             - PhilPDF_portable.zip : a decompresser, aucune trace sur le PC.
             - PhilPDF_Setup.exe : installation sans droits administrateur.
+
+            PhilPDF pour Linux (Zorin OS, Ubuntu, Fedora, Linux Mint...) :
+            - PhilPDF.flatpak : double-clic (ou `flatpak install --user PhilPDF.flatpak`), tout est dedans, OCR compris.
+            - PhilPDF_linux_x86_64.tar.gz : version a decompresser, sans installation (OCR : paquet tesseract-ocr du systeme).
           files: |
             PhilPDF_portable.zip
             PhilPDF_Setup.exe
+
+  # ---------------------------------------------------------------- Linux
+  linux:
+    runs-on: ubuntu-22.04            # glibc 2.35 : l'archive marche sur Ubuntu 22.04+, Zorin 17+, Fedora 36+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Bibliotheques du systeme (Qt, OCR)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-keysyms1 \
+            libxcb-shape0 libxcb-xinerama0 libxcb-randr0 libxcb-image0 libxcb-render-util0 libegl1 libgl1 libdbus-1-3 \
+            fontconfig tesseract-ocr
+      - name: Dependances
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller pyftpdlib wsgidav cheroot
+      - name: Compression JBIG2
+        run: python outils_dev/compiler_jbig2.py
+      - name: Tous les tests sous Linux
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -e
+          for t in tests/test_*.py; do echo "::group::$t"; python "$t"; echo "::endgroup::"; done
+      - name: Version et identifiants
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID || vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET || vars.GOOGLE_CLIENT_SECRET }}
+          ONEDRIVE_CLIENT_ID: ${{ secrets.ONEDRIVE_CLIENT_ID || vars.ONEDRIVE_CLIENT_ID }}
+          DROPBOX_CLIENT_ID: ${{ secrets.DROPBOX_CLIENT_ID || vars.DROPBOX_CLIENT_ID }}
+          BOX_CLIENT_ID: ${{ secrets.BOX_CLIENT_ID || vars.BOX_CLIENT_ID }}
+          BOX_CLIENT_SECRET: ${{ secrets.BOX_CLIENT_SECRET || vars.BOX_CLIENT_SECRET }}
+        run: |
+          python outils_dev/identifiants_ci.py
+          echo "VERSION=$(grep -oP 'VERSION = "\K[^"]+' app/config.py)" >> "$GITHUB_ENV"
+      - name: PhilPDF (archive Linux)
+        run: >
+          pyinstaller --noconfirm --clean --windowed --name PhilPDF
+          --add-data "fonts:fonts" --add-data "langues:langues" --add-data "tessdata:tessdata"
+          --add-binary "moteur/jbig2/libphilpdf_jbig2.so:moteur/jbig2"
+          --collect-submodules app --collect-submodules moteur
+          --collect-submodules truststore --collect-submodules openpyxl --collect-submodules fontTools
+          --collect-submodules pyhanko --collect-submodules pyhanko_certvalidator --collect-data pyhanko
+          --collect-submodules asn1crypto --collect-submodules oscrypto --collect-submodules tzlocal
+          --collect-submodules keyring --collect-submodules pdf2docx --collect-data spellchecker
+          --hidden-import PySide6.QtNetwork --hidden-import sqlite3 --hidden-import smtplib --hidden-import imaplib
+          --exclude-module scipy --exclude-module onnxruntime --exclude-module pymupdf_layout
+          --exclude-module pymupdf4llm --exclude-module matplotlib --exclude-module pandas --exclude-module tkinter
+          philpdf.py
+      - name: Auto-controle du paquet
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          dist/PhilPDF/PhilPDF --verifier "$PWD/verif.txt"; r=$?
+          cat verif.txt
+          grep -E "^(ocr|moteur|langues|RESULTAT)" verif.txt | sed 's/^/::notice title=Linux::/'
+          exit $r
+      - name: Archive
+        run: |
+          cp LISEZMOI.txt linux/philpdf-256.png dist/PhilPDF/
+          tar czf PhilPDF_linux_x86_64.tar.gz -C dist PhilPDF
+      - uses: actions/upload-artifact@v5
+        with:
+          name: linux-archive
+          path: PhilPDF_linux_x86_64.tar.gz
+
+  flatpak:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v5
+      - name: Version et identifiants
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID || vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET || vars.GOOGLE_CLIENT_SECRET }}
+          ONEDRIVE_CLIENT_ID: ${{ secrets.ONEDRIVE_CLIENT_ID || vars.ONEDRIVE_CLIENT_ID }}
+          DROPBOX_CLIENT_ID: ${{ secrets.DROPBOX_CLIENT_ID || vars.DROPBOX_CLIENT_ID }}
+          BOX_CLIENT_ID: ${{ secrets.BOX_CLIENT_ID || vars.BOX_CLIENT_ID }}
+          BOX_CLIENT_SECRET: ${{ secrets.BOX_CLIENT_SECRET || vars.BOX_CLIENT_SECRET }}
+        run: |
+          command -v python3 || dnf install -y python3
+          python3 outils_dev/identifiants_ci.py
+      - name: Fabrication du Flatpak
+        run: |
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak-builder --user --install-deps-from=flathub --force-clean --repo=repo --disable-rofiles-fuse \
+            build-flatpak linux/io.github.PhilouElChapo.PhilPDF.yml
+      - name: Auto-controle dans le Flatpak
+        run: |
+          flatpak-builder --run build-flatpak linux/io.github.PhilouElChapo.PhilPDF.yml sh -c '
+            export QT_QPA_PLATFORM=offscreen PYTHONPATH=/app/lib/python3.12/site-packages
+            python3 /app/philpdf/philpdf.py --verifier /tmp/verif.txt; r=$?
+            cat /tmp/verif.txt
+            echo "--- bibliotheques manquantes pour Qt (X11 / Wayland) :"
+            for f in $(find /app/lib -path "*PySide6/Qt/plugins/platforms/*.so"); do ldd "$f" | grep "not found" && echo "  dans $f"; done
+            echo "--- fin"
+            exit $r'
+      - name: Paquet .flatpak
+        run: |
+          flatpak build-bundle repo PhilPDF.flatpak io.github.PhilouElChapo.PhilPDF \
+            --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo
+          ls -la PhilPDF.flatpak
+      - uses: actions/upload-artifact@v5
+        with:
+          name: linux-flatpak
+          path: PhilPDF.flatpak
+
+  publier-linux:
+    needs: [windows, linux, flatpak]
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Version
+        run: |
+          v=$(grep -oP 'VERSION = "\K[^"]+' app/config.py)
+          case "$GITHUB_REF" in refs/tags/v*) v="${GITHUB_REF_NAME#v}";; esac
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: linux-*
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          files: |
+            PhilPDF.flatpak
+            PhilPDF_linux_x86_64.tar.gz

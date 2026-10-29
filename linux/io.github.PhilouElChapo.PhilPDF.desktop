@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=PhilPDF
+GenericName=Éditeur PDF
+Comment=Lire, modifier, signer, remplir et convertir vos PDF
+Exec=philpdf %F
+Icon=io.github.PhilouElChapo.PhilPDF
+Terminal=false
+Categories=Office;Viewer;Graphics;
+MimeType=application/pdf;
+Keywords=PDF;Acrobat;signer;formulaire;OCR;
+StartupWMClass=PhilPDF

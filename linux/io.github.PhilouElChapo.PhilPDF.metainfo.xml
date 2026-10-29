@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.PhilouElChapo.PhilPDF</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <name>PhilPDF</name>
+  <summary>Lire, modifier, signer et convertir vos PDF</summary>
+  <description>
+    <p>PhilPDF remplace Acrobat : lecture, modification du texte, formulaires, signatures numériques,
+    OCR, allègement, conversion vers Word et Excel, synchronisation entre vos postes.</p>
+  </description>
+  <launchable type="desktop-id">io.github.PhilouElChapo.PhilPDF.desktop</launchable>
+  <url type="homepage">https://github.com/PhilouElChapo/PhilPDF</url>
+  <developer id="io.github.PhilouElChapo"><name>Phil</name></developer>
+  <content_rating type="oars-1.1"/>
+</component>
