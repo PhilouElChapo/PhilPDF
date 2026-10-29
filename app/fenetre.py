@@ -5,7 +5,7 @@ from PySide6.QtCore import Qt, QThread, Signal, QSize, QTimer
 from PySide6.QtGui import QAction, QKeySequence, QImage, QPainter
 from PySide6.QtWidgets import (QProgressBar, QToolButton, QMainWindow, QTabWidget, QFileDialog, QMessageBox, QDialog, QFormLayout,
                                QLineEdit, QCheckBox, QComboBox, QDialogButtonBox, QListWidget, QVBoxLayout,
-                               QHBoxLayout, QPushButton, QLabel, QProgressDialog, QApplication, QInputDialog,
+                               QHBoxLayout, QPushButton, QLabel, QProgressDialog, QApplication, QInputDialog, QMenu,
                                QListWidgetItem, QWidget, QFrame, QGroupBox)
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from .config import Parametres, VERSION, est_portable, associer_pdf, dossier_donnees
@@ -20,6 +20,7 @@ from .session import session_de, date_fr, nb_fichiers, dossiers_connus, DELAI_SI
 from .dialogues import (boutons_fr, oeil, demander_secret, DialogueFiligrane, DialogueEntete, DialogueNumeriser, DialogueExporter,
                         DialogueBibliotheque, DialogueSynchro, DialogueFond)
 from .langue import _
+from .cote_a_cote import MixinCoteACote
 
 FILTRE = _('Documents PDF (*.pdf *.PDF)')
 
@@ -334,7 +335,7 @@ class Notification(QFrame):
         self.move(p.width() - self.width() - 24, p.height() - self.height() - 40)
 
 
-class Fenetre(QMainWindow):
+class Fenetre(MixinCoteACote, QMainWindow):
     def __init__(self, fichiers=()):
         super().__init__()
         self.params = Parametres()
@@ -377,7 +378,10 @@ class Fenetre(QMainWindow):
         for i in (0, 1):
             self.onglets.tabBar().setTabButton(i, self.onglets.tabBar().ButtonPosition.RightSide, None)
         self._onglets_fixes()
-        self.setCentralWidget(self.onglets)
+        self.setCentralWidget(self._construire_cote_a_cote())
+        self.onglets.tabBar().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.onglets.tabBar().customContextMenuRequested.connect(self._menu_onglet)
+        self._liste_fichiers()
         try:                                         # ancien chemin reste dans les reglages : on le remet sur la copie du compte
             c_ = miroir.compte_drive(self.params)
             if c_ and self.params.get("drive") != miroir.dossier_miroir(c_):
@@ -471,7 +475,7 @@ class Fenetre(QMainWindow):
         act(m, _("Protéger à l'aide d'un mot de passe..."), lambda: self.lancer_outil("motdepasse"), None, "motdepasse")
         act(m, _('Propriétés du document...'), self.proprietes, "Ctrl+D", "info")
         m.addSeparator()
-        act(m, _('Fermer le fichier'), lambda: self.fermer_onglet(self.onglets.currentIndex()), "Ctrl+W", "fermer_doc")
+        act(m, _('Fermer le fichier'), self.fermer_document, "Ctrl+W", "fermer_doc")
         act(m, _('Quitter'), self.close, "Ctrl+Q", "quitter")
 
         m = mb.addMenu(_('&Edition'))
@@ -516,10 +520,12 @@ class Fenetre(QMainWindow):
         a = act(m, _("Barre d'actions rapides sur sélection"), self._basculer_barre, None, "barre")
         a.setCheckable(True)
         a.setChecked(self.params.get("barre_rapide", True))
+        act(m, _('Côte à côte...'), self.menu_cote_a_cote, "Ctrl+Alt+C", "comparer")
         act(m, _('Plein écran'), lambda: self.showNormal() if self.isFullScreen() else self.showFullScreen(), "F11", "plein_ecran")
 
         m = mb.addMenu(_('Fe&nêtre'))
         act(m, _('Onglet suivant'), lambda: self.onglets.setCurrentIndex((self.onglets.currentIndex() + 1) % self.onglets.count()), "Ctrl+Tab", "onglet")
+        act(m, _('Onglet précédent'), self.onglet_precedent, "Ctrl+Shift+Tab", "onglet")
         act(m, _('Fermer tous les onglets'), self.fermer_tout, None, "fermer")
         self.menu_fen = m.addMenu(_('Fichiers ouverts'))
         self.menu_fen.aboutToShow.connect(self._remplir_fenetres)
@@ -678,15 +684,72 @@ class Fenetre(QMainWindow):
             a.setEnabled(os.path.exists(p))
             a.triggered.connect(lambda _x=False, x=p: self.ouvrir(x))
 
-    def _remplir_fenetres(self):
-        self.menu_fen.clear()
-        for i in range(2, self.onglets.count()):
-            a = self.menu_fen.addAction(self.onglets.tabText(i))
-            a.triggered.connect(lambda _x=False, k=i: self.onglets.setCurrentIndex(k))
+    def _remplir_fenetres(self, menu=None):
+        menu = menu or self.menu_fen
+        menu.clear()
+        courant = self.doc_courant()
+        for o in self.documents():
+            a = menu.addAction(icone("creer", "#c9252d"), o.nom + (" *" if o.modifie else "") +
+                               ("   " + _("(à droite)") if o is self.doc_droite else ""))
+            a.setToolTip(o.chemin or _('Non enregistré'))
+            a.setCheckable(True)
+            a.setChecked(o is courant)
+            a.triggered.connect(lambda _x=False, o=o: self.montrer_document(o))
+        if not self.documents():
+            a = menu.addAction(_("Aucun fichier ouvert"))
+            a.setEnabled(False)
+
+    def montrer_document(self, o):
+        if o is self.doc_droite:
+            o.setFocus()
+            self._focus_droite = True
+        else:
+            self.onglets.setCurrentWidget(o)
+
+    def _liste_fichiers(self):
+        """Bouton a droite des onglets : la liste de tous les fichiers ouverts (utile quand ils sont nombreux)."""
+        b = QToolButton()
+        b.setIcon(icone("liste_fichiers", "#444444"))
+        b.setToolTip(_("Fichiers ouverts"))
+        b.setAutoRaise(True)
+        b.setPopupMode(QToolButton.InstantPopup)
+        m = QMenu(b)
+        m.aboutToShow.connect(lambda: self._remplir_fenetres(m))
+        b.setMenu(m)
+        self.onglets.setCornerWidget(b, Qt.TopRightCorner)
+
+    def _menu_onglet(self, pos):
+        tb = self.onglets.tabBar()
+        i = tb.tabAt(pos)
+        o = self.onglets.widget(i) if i >= 0 else None
+        if not isinstance(o, OngletDocument):
+            return
+        m = QMenu(self)
+        if len(self.documents()) > 1:
+            m.addAction(_("Afficher à côté"), lambda: self.afficher_a_cote(o))
+        m.addAction(_("Fermer"), lambda: self.fermer_onglet(self.onglets.indexOf(o)))
+        m.addAction(_("Fermer les autres"), lambda: [self.fermer_onglet(self.onglets.indexOf(x)) for x in
+                                                    self.documents() if x is not o and self.onglets.indexOf(x) >= 0])
+        if o.chemin:
+            m.addSeparator()
+            m.addAction(_("Copier le chemin"), lambda: QApplication.clipboard().setText(o.chemin))
+        m.exec(tb.mapToGlobal(pos))
+
+    def fermer_document(self, o=None):
+        o = o or self.doc_courant()
+        if o is None:
+            return
+        if o is self.doc_droite:
+            self.fermer_cote_a_cote()
+        i = self.onglets.indexOf(o)
+        if i >= 0:
+            self.fermer_onglet(i)
 
     # ------------------------------------------------------------ onglets
     def doc_courant(self):
         """Document affiche, ou le dernier consulte si l'on est sur Accueil / Outils."""
+        if getattr(self, "doc_droite", None) is not None and self._focus_droite:
+            return self.doc_droite
         w = self.onglets.currentWidget()
         if isinstance(w, OngletDocument):
             return w
@@ -695,7 +758,10 @@ class Fenetre(QMainWindow):
         return None
 
     def documents(self):
-        return [self.onglets.widget(i) for i in range(self.onglets.count()) if isinstance(self.onglets.widget(i), OngletDocument)]
+        docs = [self.onglets.widget(i) for i in range(self.onglets.count()) if isinstance(self.onglets.widget(i), OngletDocument)]
+        if getattr(self, "doc_droite", None) is not None:
+            docs.append(self.doc_droite)
+        return docs
 
     def ajouter_onglet(self, o):
         o.titre_change.connect(lambda: self._maj_titre(o))
@@ -708,6 +774,9 @@ class Fenetre(QMainWindow):
         return o
 
     def _maj_titre(self, o):
+        if o is getattr(self, "doc_droite", None):
+            self.l_droite.setText(o.nom + (" *" if o.modifie else ""))
+            self.l_droite.setToolTip(o.chemin or _('Non enregistré'))
         i = self.onglets.indexOf(o)
         if i >= 0:
             self.onglets.setTabText(i, o.nom + (" *" if o.modifie else ""))
@@ -1374,7 +1443,7 @@ class Fenetre(QMainWindow):
             o = self.doc_courant()
             if not o:
                 return
-        if self.onglets.currentWidget() is not o:      # depuis la page Outils : retour au document
+        if self.onglets.currentWidget() is not o and self.onglets.indexOf(o) >= 0:   # depuis Outils : retour au document
             self.onglets.setCurrentWidget(o)
         if oid == "ia_resume":
             from .dialogues_ia import resumer
@@ -1397,6 +1466,21 @@ class Fenetre(QMainWindow):
             d.show()
         elif oid == "organiser":
             o.organiser(True)
+        elif oid == "fractionner":
+            from .dialogues_organiser import DialogueFractionner
+            d = DialogueFractionner(o)
+            if d.exec():
+                self.statusBar().showMessage(_("{n} fichier(s) créés dans {d}", n=len(d.faits), d=d.dossier_fait), 8000)
+        elif oid == "paraphe":
+            o.parapher()
+        elif oid == "ia_reformuler":
+            o.reformuler_ia()
+        elif oid == "ia_mise_en_page":
+            from .ia_texte import remettre_en_page
+            remettre_en_page(self, o)
+        elif oid == "ia_donnees":
+            from .ia_texte import extraire_donnees
+            extraire_donnees(self, o)
         elif oid == "tampons":
             o.ouvrir_bibliotheque("tampons")
         elif oid in ("filigrane", "entete", "fond"):

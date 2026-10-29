@@ -382,7 +382,11 @@ class PageAccueil(QWidget):
     def eventFilter(self, obj, ev):
         """Apercu seulement quand la souris est sur l'icone, le nom ou le chemin : pas dans le blanc de la ligne."""
         from PySide6.QtCore import QEvent
-        if obj is self.liste.viewport():
+        try:
+            vp = self.liste.viewport()
+        except RuntimeError:                       # liste deja detruite (fermeture)
+            return False
+        if obj is vp:
             if ev.type() == QEvent.MouseMove:
                 pos = ev.position().toPoint()
                 it = self.liste.itemAt(pos)

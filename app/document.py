@@ -17,6 +17,7 @@ from moteur.modifier import Editeur, CANDIDATS
 from moteur import objets
 from .signature_doc import MixinSignature
 from .commentaires_doc import MixinCommentaires
+from .signets_doc import MixinSignets
 from .mesure_doc import MixinMesure
 from .formulaire_doc import MixinFormulaire, types_a_tracer
 from .langue import _
@@ -856,8 +857,34 @@ class EditeurParagraphe(QFrame):
         b_dlg.setToolTip(_("Ouvrir la boîte de dialogue (texte, police, taille, couleur)"))
         b_dlg.clicked.connect(self._boite_dialogue)
         h.addWidget(b_dlg)
+        b_ia = QPushButton(_("✦ IA"))
+        b_ia.setObjectName("b_ia_paragraphe")
+        b_ia.setToolTip(_("Corriger ou reformuler ce texte avec l'IA : le résultat remplace le texte dans la zone, "
+                          "vous le relisez avant de valider (Ctrl+Z dans la zone revient au texte d'avant)"))
+        b_ia.setStyleSheet("QPushButton{color:#4338ca;font-weight:700;padding:2px 8px}")
+        m_ia = QMenu(b_ia)
+        from .ia_texte import ACTIONS
+        for cle, lib in ACTIONS:
+            m_ia.addAction(lib, lambda c=cle: self._ia(c))
+        b_ia.setMenu(m_ia)
+        h.addWidget(b_ia)
         self._maj_couleur()
         self.fmt.show()
+
+    def _ia(self, action):
+        """Texte de la zone envoye a l'IA (correction, reformulation...) ; la reponse remplace le texte, annulable."""
+        from .ia_texte import transformer
+        t = self.zone.textCursor().selectedText().replace("\u2029", "\n") or self.zone.toPlainText()
+        r = transformer(self.window(), self.pw.o.params, t, action)
+        if r is None:
+            return
+        c = self.zone.textCursor()
+        if not c.hasSelection():
+            c.select(c.SelectionType.Document)
+        c.beginEditBlock()
+        c.insertText(r)
+        c.endEditBlock()
+        self.zone.setFocus()
 
     def _boite_dialogue(self):
         """La boite d'avant : texte sur plusieurs lignes, police, taille et couleur, puis valider."""
@@ -1608,7 +1635,7 @@ def _signe(doc):
     return False
 
 
-class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommentaires, QWidget):
+class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommentaires, MixinSignets, QWidget):
     titre_change = Signal()
     outil_demande = Signal(str)
     statut = Signal(str)
@@ -1723,7 +1750,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         self.sp.setChildrenCollapsible(True)
         self.vignettes = GrillePages()
         self.vignettes.setMinimumWidth(110)
-        self.vignettes.setStyleSheet("QListWidget{background:#fafafa;border:none;border-right:1px solid #e2e2e2}")
+        self.vignettes.setStyleSheet("QListWidget{background:#fafafa;border:none}")
         self.vignettes.itemClicked.connect(lambda it: self.aller_a(it.data(Qt.UserRole)))
         self.vignettes.setContextMenuPolicy(Qt.CustomContextMenu)
         self.vignettes.customContextMenuRequested.connect(lambda p: self._menu_pages(self.vignettes, p))
@@ -1735,7 +1762,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         self._minut_vign.timeout.connect(self._rafraichir_icones_vignettes)
         self.vignettes.vignettes_agrandies.connect(lambda l: (setattr(self, "_taille_vign", max(120, int(l * 1.45))),
                                                                self._minut_vign.start(250)))
-        self.sp.addWidget(self.vignettes)
+        self.sp.addWidget(self._volet_gauche())
         self.centre = QStackedWidget()
         self.zone = QScrollArea()
         self.zone.setWidgetResizable(True)
@@ -1766,7 +1793,8 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         self.liste_outils.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.liste_outils.setTextElideMode(Qt.ElideRight)
         if not self.params.get("vignettes", True):
-            self.vignettes.hide()
+            self.gauche.hide()
+        self.maj_onglet_signets()
         QTimer.singleShot(0, lambda: self.mode_volet(self.params.get("volet", "complet"), memoriser=False))
 
     def _bouton(self, ic, txt, f, coul="#333333", aide=None):
@@ -2189,7 +2217,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
     def _memo_largeurs(self):
         t = self.sp.sizes()
         changes = False
-        if self.vignettes.isVisible() and t[0] >= 60 and t[0] != self.params.get("vignettes_largeur"):
+        if self.gauche.isVisible() and t[0] >= 60 and t[0] != self.params.get("vignettes_largeur"):
             self.params["vignettes_largeur"] = t[0]
             changes = True
         if getattr(self, "_mode_volet", "complet") == "complet" and self.volet.isVisible() and t[2] >= 200 \
@@ -2246,8 +2274,8 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         self.mode_volet(suivant.get(getattr(self, "_mode_volet", "complet"), "complet"))
 
     def basculer_vignettes(self, *_x):
-        visible = not self.vignettes.isVisible()
-        self.vignettes.setVisible(visible)
+        visible = not self.gauche.isVisible()
+        self.gauche.setVisible(visible)
         self.b_vignettes.setChecked(visible)
         self.params["vignettes"] = visible
         self.params.enregistrer()
@@ -3906,6 +3934,41 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             except Exception:                             # noqa: BLE001
                 pass
 
+    # ---- IA sur un paragraphe
+    def reformuler_ia(self):
+        """Paragraphe selectionne ouvert en edition, menu IA deja deroule ; sinon, explique comment faire."""
+        sel = self.selection
+        if self.mode != "modifier":
+            self.changer_mode("modifier")
+        if sel and sel.get("debut") is not None and self.mots(sel["page"]):
+            n = sel["page"]
+            w = self.mots(n)[sel["debut"]]
+            pw = self.page_widgets[n]
+            if pw.ouvrir_paragraphe(fitz.Point((w[0] + w[2]) / 2, (w[1] + w[3]) / 2)) and pw.editeur:
+                b = pw.editeur.fmt.findChild(QPushButton, "b_ia_paragraphe")
+                if b is not None:
+                    QTimer.singleShot(150, b.showMenu)
+                return
+        self.message(_("Cliquez sur le paragraphe à corriger ou reformuler, puis sur « ✦ IA » au-dessus du texte."))
+
+    # ---- paraphe
+    def parapher(self):
+        from .dialogues_organiser import DialogueParaphe
+        from moteur import paraphe as PA
+        d = DialogueParaphe(self)
+        if not d.exec():
+            return
+        pdf, pages, position, hauteur, marge = d.resultat
+        self.memoriser(_("Paraphe sur {n} page(s)", n=len(pages)))
+        avant = {n: {a.xref for a in self.doc[n].annots()} for n in pages}
+        PA.parapher(self.doc, pdf, pages, position, hauteur, marge, self.params.get("auteur", ""), _("Paraphe"))
+        for n in pages:
+            for a in self.doc[n].annots():
+                if a.xref not in avant[n]:
+                    self.objets_pdf[a.xref] = (pdf, _("Paraphe"), "paraphe")
+        self.apres_modif([_("{n} page(s) paraphée(s). Chaque paraphe se déplace ou se supprime comme un tampon ; "
+                            "Ctrl+Z annule tout.", n=len(pages))])
+
     # ---- poser tampon / signature
     def poser_objet(self, n, pt):
         if not self.a_poser:
@@ -4149,6 +4212,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         self.construire_pages()
         self.titre_change.emit()
         self.maj_historique()
+        self.maj_onglet_signets()
 
     def annuler(self, fois=1):
         if not self.annulations:
@@ -4208,6 +4272,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         self.titre_change.emit()
         if hasattr(self, "liste_comm"):
             self.remplir_volet_commentaires()
+        self.maj_onglet_signets()
         if journal:
             self.message(journal[-1])
 

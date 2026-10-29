@@ -24,6 +24,9 @@ OUTILS = [
      _("Assembler plusieurs fichiers en un seul PDF, dans l'ordre de votre choix."), True),
     ("organiser", "creer", "organiser", _('Organiser les pages'), _('Réordonner, pivoter, extraire, supprimer'),
      _('Clic droit sur une vignette : pivoter, supprimer, extraire. Glissez les vignettes pour réordonner.'), True),
+    ("fractionner", "creer", "fractionner", _('Fractionner'), _('Par pages, signets ou taille'),
+     _("Découper le PDF en plusieurs fichiers : toutes les N pages, à chaque signet, sous une taille maximale "
+       "(pour un envoi par e-mail) ou selon vos plages. La liste des fichiers s'affiche avant de les créer."), True),
     ("exporter", "creer", "exporter", _('Exporter'), _('Vers Word, JPG, PNG ou texte'),
      _('Convertir le PDF en document Word (.docx), en images JPG ou PNG, ou en texte.'), True),
     ("excel", "creer", "excel", _('Tableaux vers Excel'), _('Relevés, factures, bordereaux'),
@@ -45,6 +48,9 @@ OUTILS = [
     ("commentaires", "annoter", "commentaire", _('Commentaires'), _('Formes, flèches, dessin, notes, liste'),
      _("Rectangle (aussi arrondi), ellipse, ligne, flèche, dessin à main levée, note, texte libre ; couleur, épaisseur "
        "et type de stylo. Liste des commentaires à droite : un clic va dessus. Pour surligner : sélectionnez du texte."), True),
+    ("paraphe", "annoter", "paraphe", _('Parapher'), _('Initiales sur toutes les pages'),
+     _("Vos initiales (dans la police de votre choix) ou votre tampon « paraphe », posées en un clic au même "
+       "endroit de chaque page ; toutes sauf la dernière si elle est signée. Aperçu avant de valider."), True),
     ("tampons", "annoter", "tampon", _('Tampons'), _('"Reçu le", "Payé", vos tampons'),
      _("Tampons prêts à l'emploi (Reçu, Validé, Payé...) avec la date, ou les vôtres importés d'une image ou d'un PDF. Sauvegardés sur votre Drive."), True),
     ("remplir_signer", "annoter", "signer", _('Remplir et signer'), _('Signature manuscrite, coches, dates'),
@@ -78,6 +84,15 @@ OUTILS = [
     ("ia_traduire", "ia", "langue", _('Traduire le document'), _('Mise en page conservée'),
      _("Traduit le texte de chaque page et le remet à sa place, dans un nouveau fichier (ex. « Contrat (EN).pdf »). "
        "Si la traduction est plus longue, sa taille est réduite pour tenir."), True),
+    ("ia_reformuler", "ia", "modifier", _('Corriger ou reformuler'), _('Un paragraphe, mise en page gardée'),
+     _("Mode Modifier : cliquez sur un paragraphe puis « ✦ IA » : corriger les fautes, reformuler, plus formel, plus "
+       "court ou votre consigne. Le résultat s'affiche dans la zone ; vous le relisez avant de valider."), True),
+    ("ia_mise_en_page", "ia", "nettoyer", _('Remettre en page un scan'), _('Document propre, texte net'),
+     _("L'IA relit chaque page scannée et la recompose proprement (titres, paragraphes, listes, tableaux) dans un "
+       "nouveau document A4 ; le scan d'origine reste intact."), True),
+    ("ia_donnees", "ia", "excel", _('Extraire les données'), _('Facture, relevé, courrier → tableau'),
+     _("Montants, dates, numéros, lignes d'une facture ou d'un relevé : l'IA les range dans un tableau que vous "
+       "vérifiez, puis copiez ou enregistrez en Excel. Vos propres champs possibles."), True),
     ("ocr_ia", "ia", "ocr", _('OCR IA comparé'), _("Deux lectures, vous validez, PhilPDF apprend"),
      _("Compare la lecture de Tesseract et celle de l'IA ; vos corrections validées améliorent les lectures suivantes, sur tous vos postes."), True),
     ("ia_recherche", "ia", "rechercher", _('Rechercher dans tous mes PDF'), _('NAS, Drive, dossiers'),
