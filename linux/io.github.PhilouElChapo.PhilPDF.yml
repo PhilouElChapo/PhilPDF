@@ -58,7 +58,6 @@ modules:
       build-args:
         - --share=network          # pip telecharge les bibliotheques Python (fabrication locale, pas Flathub)
     build-commands:
-      - pip3 install --prefix=/app --no-cache-dir --upgrade pip setuptools
       - pip3 install --prefix=/app --no-cache-dir -r requirements.txt
       - python3 outils_dev/compiler_jbig2.py
       - mkdir -p /app/philpdf
