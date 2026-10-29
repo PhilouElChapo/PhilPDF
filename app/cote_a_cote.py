@@ -174,7 +174,7 @@ class MixinCoteACote:
         autres = self.autres_documents(sauf=courant if isinstance(courant, OngletDocument) else None)
         m = QMenu(self)
         for o in autres:
-            m.addAction(_("À côté : {nom}", nom=o.nom), lambda o=o: self.afficher_a_cote(o))
+            m.addAction(_("A côté : {nom}", nom=o.nom), lambda o=o: self.afficher_a_cote(o))
         if autres:
             m.addSeparator()
         m.addAction(_("Ouvrir un fichier à côté..."), self._ouvrir_a_cote)

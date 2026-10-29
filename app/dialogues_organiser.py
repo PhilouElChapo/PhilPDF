@@ -55,7 +55,7 @@ class DialogueFractionner(QDialog):
         self.niveau = QComboBox()
         for i in range(1, 4):
             self.niveau.addItem(_("signets de niveau {n}", n=i) if i > 1 else _("signets principaux"), i)
-        ligne("signets", _("À chaque signet"), self.niveau)
+        ligne("signets", _("A chaque signet"), self.niveau)
         self.taille = QDoubleSpinBox()
         self.taille.setRange(0.1, 500)
         self.taille.setDecimals(1)

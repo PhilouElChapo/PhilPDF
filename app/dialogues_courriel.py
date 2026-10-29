@@ -298,7 +298,7 @@ class PanneauCarnet(QWidget):
         v.addWidget(self.liste, 1)
         fl = FluxBoutons()
         if choix:
-            for k, t in (("a", _("À")), ("cc", _("Cc")), ("cci", _("Cci"))):
+            for k, t in (("a", _("A")), ("cc", _("Cc")), ("cci", _("Cci"))):
                 b = QPushButton(_("Ajouter en {x}", x=t))
                 b.clicked.connect(lambda _c=False, k=k: [self.choisi.emit(k, it.data(Qt.UserRole))
                                                          for it in self.liste.selectedItems()])
@@ -416,7 +416,7 @@ class DialogueCarnet(QDialog):
 VERSIONS = [("tel_quel", _("Tel quel"), _("Le document comme il est à l'écran, modifications comprises")),
             ("allege", _("Allégé pour l'envoi"), _("Images recompressées : même lecture à l'écran, poids réduit")),
             ("fige", _("Figé"), _("Formulaires et commentaires incrustés : le destinataire ne peut plus les modifier")),
-            ("protege", _("Protégé par mot de passe"), _("À donner au destinataire par un autre moyen (SMS, téléphone)"))]
+            ("protege", _("Protégé par mot de passe"), _("A donner au destinataire par un autre moyen (SMS, téléphone)"))]
 TITRE_STYLE = "font-size:12px;font-weight:600;color:#555;letter-spacing:1px;margin-top:6px"
 
 
@@ -576,7 +576,7 @@ class PanneauEnvoyer(QWidget):
         t.setStyleSheet(TITRE_STYLE)
         v.addWidget(t)
         self.a, self.cc, self.cci = QLineEdit(), QLineEdit(), QLineEdit()
-        for champ, aide in ((self.a, _("À : adresse@exemple.fr")), (self.cc, _("Cc (facultatif)")),
+        for champ, aide in ((self.a, _("A : adresse@exemple.fr")), (self.cc, _("Cc (facultatif)")),
                             (self.cci, _("Cci, copie cachée (facultatif)"))):
             champ.setPlaceholderText(aide)
             champ.setCompleter(self._completeur())

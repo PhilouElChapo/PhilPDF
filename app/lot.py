@@ -288,7 +288,7 @@ class DialogueLot(QDialog):
         self.sortie = QComboBox()
         self.sortie.setObjectName("lot_sortie")
         self.sortie.addItem(_("Dans un sous-dossier « Traités » (conseillé)"), "sous_dossier")
-        self.sortie.addItem(_("À côté des originaux, avec un suffixe"), "cote")
+        self.sortie.addItem(_("A côté des originaux, avec un suffixe"), "cote")
         self.sortie.addItem(_("Dans un autre dossier..."), "dossier")
         self.sortie.addItem(_("Remplacer les originaux (copie gardée dans « Originaux »)"), "remplacer")
         self.sortie.currentIndexChanged.connect(self._sortie_change)

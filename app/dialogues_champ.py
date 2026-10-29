@@ -951,7 +951,7 @@ class DialogueJavaScript(QDialog):
         codes = C.js_du_champ(doc, w)
         noms = {"K": _("Frappe"), "F": _("Mise en forme"), "V": _("Validation"), "C": _("Calcul"),
                 "Fo": _("Entrée dans le champ"), "Bl": _("Sortie du champ"), "U": _("Clic")}
-        aides = {"K": _("À chaque touche tapée (event.change, event.willCommit)."),
+        aides = {"K": _("A chaque touche tapée (event.change, event.willCommit)."),
                  "F": _("Pour afficher la valeur (event.value), sans la changer."),
                  "V": _("Quand la valeur est validée ; event.rc = false la refuse."),
                  "C": _("Pour calculer la valeur à partir d'autres champs (this.getField(\"Nom\").value)."),
