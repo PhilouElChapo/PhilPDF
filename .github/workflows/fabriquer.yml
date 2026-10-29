@@ -290,8 +290,14 @@ jobs:
       - name: Fabrication du Flatpak
         run: |
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak-builder --user --install-deps-from=flathub --force-clean --repo=repo --disable-rofiles-fuse \
-            build-flatpak linux/io.github.PhilouElChapo.PhilPDF.yml
+          if ! flatpak-builder --user --install-deps-from=flathub --force-clean --repo=repo --disable-rofiles-fuse \
+              build-flatpak linux/io.github.PhilouElChapo.PhilPDF.yml > fb.log 2>&1; then
+            tail -n 150 fb.log
+            msg=$(tail -n 40 fb.log | cut -c1-300 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=Flatpak::$msg"
+            exit 1
+          fi
+          tail -n 20 fb.log
       - name: Auto-controle dans le Flatpak
         run: |
           flatpak-builder --run build-flatpak linux/io.github.PhilouElChapo.PhilPDF.yml sh -c '
@@ -301,7 +307,11 @@ jobs:
             echo "--- bibliotheques manquantes pour Qt (X11 / Wayland) :"
             for f in $(find /app/lib -path "*PySide6/Qt/plugins/platforms/*.so"); do ldd "$f" | grep "not found" && echo "  dans $f"; done
             echo "--- fin"
-            exit $r'
+            exit $r' > verif.log 2>&1; r=$?
+          cat verif.log
+          msg=$(cut -c1-300 verif.log | grep -v "^\[INFO\]" | tail -n 40 | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')
+          if [ $r -ne 0 ]; then echo "::error title=Flatpak auto-controle::$msg"; exit 1; fi
+          echo "::notice title=Flatpak auto-controle::$msg"
       - name: Paquet .flatpak
         run: |
           flatpak build-bundle repo PhilPDF.flatpak io.github.PhilouElChapo.PhilPDF \
