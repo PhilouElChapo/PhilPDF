@@ -2630,5 +2630,8 @@
  "Enregistrer...": "Save...",
  "Recherche de vos fichiers récents...": "Looking for your recent files...",
  "Adresses d'envoi retirées": "Removed sending addresses",
- "Contacts retirés du carnet": "Contacts removed from the address book"
+ "Contacts retirés du carnet": "Contacts removed from the address book",
+ "Retirer cette consigne de la liste des consignes déjà utilisées": "Remove this instruction from the list of instructions already used",
+ "L'IA choisie dans les Préférences est proposée ; vous pouvez en prendre une autre pour cette demande seulement": "The AI chosen in Preferences is offered; you can pick another one for this request only",
+ "Envoyer à :": "Send to:"
 }

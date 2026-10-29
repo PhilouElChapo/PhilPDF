@@ -346,7 +346,26 @@ def demander_consigne(parent, params, titre, cle, consigne_philpdf):
     for h in historique:
         cb.addItem(h if len(h) < 90 else h[:87] + "...", h)
     cb.setEnabled(bool(historique))
-    v.addWidget(cb)
+    hc = QHBoxLayout()
+    hc.addWidget(cb, 1)
+    b_sup = QPushButton(_("Supprimer"))
+    b_sup.setToolTip(_("Retirer cette consigne de la liste des consignes déjà utilisées"))
+    hc.addWidget(b_sup)
+    v.addLayout(hc)
+
+    def supprimer():
+        x = cb.currentData()
+        if not x:
+            return
+        params[cle] = [h for h in (params.get(cle) or []) if h != x]
+        params.enregistrer()
+        cb.removeItem(cb.currentIndex())
+        cb.setCurrentIndex(0)
+        zone.clear()
+        b_sup.setEnabled(cb.count() > 1)
+        cb.setEnabled(cb.count() > 1)
+    b_sup.clicked.connect(supprimer)
+    b_sup.setEnabled(bool(historique))
     zone = QPlainTextEdit()
     zone.setPlaceholderText(_("Votre consigne (laisser vide pour la consigne habituelle)"))
     v.addWidget(zone, 1)
@@ -359,6 +378,17 @@ def demander_consigne(parent, params, titre, cle, consigne_philpdf):
     voir.toggled.connect(texte_ph.setVisible)
     v.addWidget(voir, 0, Qt.AlignLeft)
     v.addWidget(texte_ph, 1)
+    hm = QHBoxLayout()
+    hm.addWidget(QLabel(_("Envoyer à :")))
+    cb_ia = QComboBox()
+    for m, _clef in ia.moteurs(params):
+        cb_ia.addItem({"claude": "Claude (Anthropic)", "gemini": "Gemini (Google)"}[m], m)
+    cb_ia.setToolTip(_("L'IA choisie dans les Préférences est proposée ; vous pouvez en prendre une autre pour cette "
+                       "demande seulement"))
+    hm.addWidget(cb_ia)
+    hm.addStretch(1)
+    if cb_ia.count() > 1:
+        v.addLayout(hm)
     bb = QDialogButtonBox()
     bb.addButton(_("Lancer l'analyse"), QDialogButtonBox.AcceptRole)
     bb.addButton(_("Annuler"), QDialogButtonBox.RejectRole)
@@ -368,6 +398,7 @@ def demander_consigne(parent, params, titre, cle, consigne_philpdf):
     zone.setFocus()
     if d.exec() != QDialog.Accepted:
         return None
+    ia.MOTEUR_FORCE = cb_ia.currentData() if cb_ia.count() > 1 else None   # pour cette demande
     perso = zone.toPlainText().strip()
     if perso:
         params[cle] = [perso] + [h for h in historique if h != perso][:9]
@@ -392,15 +423,18 @@ def resumer(fenetre, onglet):
     perso = demander_consigne(fenetre, params, _("Résumer avec l'IA"), "ia_consignes_resume", consignes_resume())
     if perso is None:
         return
-    if not preparer_envoi(fenetre, params, texte):
-        return
-    consignes = ajouter_consigne(consignes_resume() + f"\nDate du jour : {datetime.date.today().isoformat()}.", perso)
     try:
-        r = executer(fenetre, _("L'IA lit le document..."),
-                     lambda: ia.demander(params, consignes, texte, json_attendu=True))
-    except Exception as e:
-        montrer_erreur(fenetre, e)
-        return
+        if not preparer_envoi(fenetre, params, texte):
+            return
+        consignes = ajouter_consigne(consignes_resume() + f"\nDate du jour : {datetime.date.today().isoformat()}.", perso)
+        try:
+            r = executer(fenetre, _("L'IA lit le document..."),
+                         lambda: ia.demander(params, consignes, texte, json_attendu=True))
+        except Exception as e:
+            montrer_erreur(fenetre, e)
+            return
+    finally:
+        ia.MOTEUR_FORCE = None                   # la fois suivante : l'IA des Preferences
     if isinstance(r, dict):
         DialogueResume(fenetre, params, onglet, r).exec()
 

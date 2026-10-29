@@ -137,9 +137,12 @@ def nettoyer_clef(c):
     return re.sub(r"[\s\"'«»]+", "", c or "")
 
 
+MOTEUR_FORCE = None        # IA choisie pour une demande (fenetre de consigne) ; sinon celle des Preferences
+
+
 def moteurs(params):
     """Moteurs utilisables dans l'ordre de preference : [("claude", clef), ("gemini", clef)]."""
-    choix = params.get("ia_moteur", "claude")
+    choix = MOTEUR_FORCE or params.get("ia_moteur", "claude")
     ordre = ["gemini", "claude"] if choix == "gemini" else ["claude", "gemini"]
     return [(m, nettoyer_clef(params.get("clef_" + m, ""))) for m in ordre if nettoyer_clef(params.get("clef_" + m, ""))]
 
