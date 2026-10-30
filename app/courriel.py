@@ -424,7 +424,8 @@ def ajouter_contacts(params, contacts):
                 params["carnet_retires"] = [x for x in params.get("carnet_retires") or [] if x.lower() != m.lower()]
                 retires.discard(m.lower())
             import time as _t
-            l.append({"nom": (c.get("nom") or "").strip(), "email": m, "maj": _t.strftime("%Y-%m-%dT%H:%M:%S")})
+            l.append({k: v for k, v in c.items() if k in ("prenom", "nom_famille")}
+                     | {"nom": (c.get("nom") or "").strip(), "email": m, "maj": _t.strftime("%Y-%m-%dT%H:%M:%S")})
             vus.add(m.lower())
             n += 1
     if n:

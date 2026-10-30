@@ -291,7 +291,16 @@ class PanneauCarnet(QWidget):
         self.cherche.setPlaceholderText(_("Rechercher un nom ou une adresse"))
         self.cherche.setClearButtonEnabled(True)
         self.cherche.textChanged.connect(self._remplir)
-        v.addWidget(self.cherche)
+        from PySide6.QtWidgets import QComboBox as _Cb, QHBoxLayout as _H
+        ligne = _H()
+        ligne.addWidget(self.cherche, 1)
+        self.tri = _Cb()
+        for k, t in (("nom", _("Trier par nom")), ("prenom", _("Trier par prénom")), ("adresse", _("Trier par adresse"))):
+            self.tri.addItem(t, k)
+        self.tri.setCurrentIndex(max(0, self.tri.findData(params.get("carnet_tri") or "nom")))
+        self.tri.currentIndexChanged.connect(self._changer_tri)
+        ligne.addWidget(self.tri)
+        v.addLayout(ligne)
         self.liste = QListWidget()
         self.liste.setObjectName("carnet")
         self.liste.setMinimumHeight(120)
@@ -307,21 +316,34 @@ class PanneauCarnet(QWidget):
                                                          for it in self.liste.selectedItems()])
                 fl.ajouter(b)
         for t, f in ((_("Nouveau..."), self.nouveau), (_("Modifier..."), self.modifier), (_("Supprimer"), self.supprimer),
-                     (_("Importer (Google, Outlook, vCard)..."), self.importer)):
+                     (_("Importer (Google, Outlook, vCard)..."), self.importer),
+                     (_("Nettoyer (doublons, noms)..."), self.nettoyer)):
             b = QPushButton(t)
             b.clicked.connect(f)
             fl.ajouter(b)
         v.addWidget(fl)
         self._remplir()
 
+    def _changer_tri(self, *_a):
+        self.params["carnet_tri"] = self.tri.currentData()
+        self.params.enregistrer()
+        self._remplir()
+
     def _remplir(self, *_a):
+        from .carnet_nettoyage import cle_tri, nom_affiche
         q = self.cherche.text().strip().lower()
         self.liste.clear()
-        for c in C.carnet(self.params):
-            lib = C.formater(c)
-            if q and q not in lib.lower():
+        tri = self.params.get("carnet_tri") or "nom"
+        ordre = self.params.get("carnet_ordre") or "prenom"
+        for c in sorted(C.carnet(self.params), key=lambda c: cle_tri(c, tri)):
+            lib = C.formater(c)                   # ce qui part dans l'e-mail : « Prénom Nom <adresse> »
+            vu = C.formater(dict(c, nom=nom_affiche(c.get("prenom"), c.get("nom_famille"), ordre))) \
+                if (c.get("prenom") or c.get("nom_famille")) else lib
+            if tri == "adresse":
+                vu = c["email"] + (f"   ({vu.split(' <')[0]})" if c.get("nom") else "")
+            if q and q not in (lib + " " + vu).lower():
                 continue
-            it = QListWidgetItem(lib)
+            it = QListWidgetItem(vu)
             it.setData(Qt.UserRole, lib)
             it.setData(Qt.UserRole + 1, c["email"])
             self.liste.addItem(it)
@@ -331,8 +353,16 @@ class PanneauCarnet(QWidget):
         d = QDialog(self)
         d.setWindowTitle(_("Contact"))
         f = _F(d)
-        nom, mail = QLineEdit((c or {}).get("nom", "")), QLineEdit((c or {}).get("email", ""))
+        from .carnet_nettoyage import analyser_nom, nom_affiche
+        c = c or {}
+        pr, nf = c.get("prenom", ""), c.get("nom_famille", "")
+        if not (pr or nf) and c.get("nom"):
+            a = analyser_nom(c["nom"], c.get("email", ""))
+            pr, nf = (a["prenom"], a["nom_famille"]) if a else ("", c["nom"])
+        prenom, nom, mail = QLineEdit(pr), QLineEdit(nf), QLineEdit(c.get("email", ""))
+        nom.setPlaceholderText(_("nom de famille, ou nom d'un cabinet, d'une société..."))
         mail.setPlaceholderText("prenom.nom@exemple.fr")
+        f.addRow(_("Prénom"), prenom)
         f.addRow(_("Nom"), nom)
         f.addRow(_("Adresse e-mail"), mail)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -343,7 +373,10 @@ class PanneauCarnet(QWidget):
         f.addRow(bb)
         if d.exec() and "@" in mail.text():
             import time as _t
-            return {"nom": nom.text().strip(), "email": mail.text().strip(), "maj": _t.strftime("%Y-%m-%dT%H:%M:%S")}
+            p_, n_ = prenom.text().strip(), nom.text().strip()
+            return {"nom": nom_affiche(p_, n_, self.params.get("carnet_ordre") or "prenom") if p_ else n_,
+                    "prenom": p_, "nom_famille": n_ if p_ else "",
+                    "email": mail.text().strip(), "maj": _t.strftime("%Y-%m-%dT%H:%M:%S")}
         return None
 
     def nouveau(self):
@@ -395,6 +428,128 @@ class PanneauCarnet(QWidget):
         QMessageBox.information(self, _("Carnet d'adresses"),
                                 _("{f} contact(s) dans le fichier : {n} ajouté(s) au carnet, {d} déjà présent(s), {s} sans "
                                   "adresse e-mail (ignoré(s)).", f=fiches, n=n, d=len(contacts) - n, s=sans))
+
+
+    def nettoyer(self):
+        d = DialogueNettoyerCarnet(self.params, self)
+        if d.exec():
+            self._remplir()
+
+
+class DialogueNettoyerCarnet(QDialog):
+    """Propositions de nettoyage du carnet, cochees ou non ; rien n'est change avant « Appliquer ».
+    Prenom et nom se corrigent directement dans la liste (double-clic)."""
+    GROUPES = (("fusion", "Même adresse en double : une seule fiche gardée"),
+               ("nom", "Noms remis en forme (prénom et nom reconnus)"),
+               ("a_verifier", "Prénom et nom devinés : à vérifier"),
+               ("inchange", "Prénom et nom reconnus, nom affiché inchangé"),
+               ("meme_nom", "Même nom, plusieurs adresses (cocher celles à retirer)"),
+               ("invalide", "Adresses invalides (cocher pour retirer)"))
+
+    def __init__(self, params, parent=None):
+        super().__init__(parent)
+        from PySide6.QtWidgets import QTreeWidget, QComboBox, QHBoxLayout
+        self.params = params
+        self.setWindowTitle(_("Nettoyer le carnet d'adresses"))
+        self.resize(820, 560)
+        v = QVBoxLayout(self)
+        intro = QLabel(_("PhilPDF propose ; vous choisissez. Décochez ce que vous voulez garder tel quel. Prénom et nom "
+                         "se corrigent d'un double-clic. Les changements partent aussi vers vos autres postes."))
+        intro.setWordWrap(True)
+        v.addWidget(intro)
+        h = QHBoxLayout()
+        h.addWidget(QLabel(_("Écrire les noms :")))
+        self.ordre = QComboBox()
+        self.ordre.addItem(_("Prénom Nom (Théodore Yakite)"), "prenom")
+        self.ordre.addItem(_("NOM Prénom (YAKITE Théodore)"), "nom")
+        self.ordre.setCurrentIndex(max(0, self.ordre.findData(params.get("carnet_ordre") or "prenom")))
+        self.ordre.currentIndexChanged.connect(self._calculer)
+        h.addWidget(self.ordre)
+        h.addStretch(1)
+        v.addLayout(h)
+        self.arbre = QTreeWidget()
+        self.arbre.setHeaderLabels([_("Contact"), _("Prénom"), _("Nom"), _("Détail")])
+        self.arbre.setColumnWidth(0, 230)
+        self.arbre.setColumnWidth(1, 120)
+        self.arbre.setColumnWidth(2, 130)
+        self.arbre.setWordWrap(True)                  # detail long : sur deux lignes plutot que coupe
+        self.arbre.setUniformRowHeights(False)
+        self.arbre.header().setStretchLastSection(True)
+        self.arbre.itemChanged.connect(self._modifie)
+        v.addWidget(self.arbre, 1)
+        self.resume = QLabel()
+        self.resume.setWordWrap(True)
+        v.addWidget(self.resume)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.button(QDialogButtonBox.Ok).setText(_("Appliquer"))
+        bb.button(QDialogButtonBox.Cancel).setText(_("Annuler"))
+        bb.accepted.connect(self._appliquer)
+        bb.rejected.connect(self.reject)
+        v.addWidget(bb)
+        self._calculer()
+
+    def _calculer(self, *_a):
+        from PySide6.QtWidgets import QTreeWidgetItem
+        from .carnet_nettoyage import nettoyer
+        self._ordre = self.ordre.currentData()
+        self.props = nettoyer(self.params.get("carnet") or [], self._ordre)
+        self.arbre.blockSignals(True)
+        self.arbre.clear()
+        nb = {}
+        for cle, titre in self.GROUPES:
+            membres = [p for p in self.props if self._groupe(p) == cle]
+            if not membres:
+                continue
+            nb[cle] = len(membres)
+            g = QTreeWidgetItem([_(titre) + f"  ({len(membres)})"])
+            g.setFlags(g.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsAutoTristate)
+            f = g.font(0)
+            f.setBold(True)
+            g.setFont(0, f)
+            self.arbre.addTopLevelItem(g)
+            g.setFirstColumnSpanned(True)             # titre du groupe sur toute la largeur : jamais tronque
+            for p in membres:
+                it = QTreeWidgetItem([p["titre"], p.get("prenom", "") if p["type"] == "nom" else "",
+                                      p.get("nom_famille", "") if p["type"] == "nom" else "", p["detail"]])
+                fl = it.flags() | Qt.ItemIsUserCheckable
+                if p["type"] == "nom":
+                    fl |= Qt.ItemIsEditable
+                it.setFlags(fl)
+                it.setCheckState(0, Qt.Checked if p["coche"] else Qt.Unchecked)
+                it.setData(0, Qt.UserRole, self.props.index(p))
+                it.setToolTip(3, p["detail"])
+                g.addChild(it)
+            g.setExpanded(cle not in ("inchange",))
+        self.arbre.blockSignals(False)
+        self.resume.setText(_("Rien à nettoyer : le carnet est propre.") if not self.props else
+                            _("{n} proposition(s). Les fiches retirées le seront aussi sur vos autres postes.",
+                              n=len(self.props)))
+
+    @staticmethod
+    def _groupe(p):
+        if p["type"] == "nom":
+            return "inchange" if p.get("inchange") else ("nom" if p.get("sur") else "a_verifier")
+        return p["type"]
+
+    def _modifie(self, it, col):
+        i = it.data(0, Qt.UserRole)
+        if i is None:
+            return
+        p = self.props[i]
+        p["coche"] = it.checkState(0) == Qt.Checked
+        if col in (1, 2) and p["type"] == "nom":
+            p["prenom"], p["nom_famille"] = it.text(1).strip(), it.text(2).strip()
+            p["edite"], p["ordre"] = True, self._ordre
+            if not p["coche"]:
+                it.setCheckState(0, Qt.Checked)
+
+    def _appliquer(self):
+        from .carnet_nettoyage import appliquer
+        self.params["carnet_ordre"] = self._ordre
+        retirees, modifiees = appliquer(self.params, self.props)
+        QMessageBox.information(self, _("Carnet d'adresses"),
+                                _("{r} fiche(s) retirée(s), {m} fiche(s) mise(s) à jour.", r=retirees, m=modifiees))
+        self.accept()
 
 
 class FluxBoutons(QWidget):

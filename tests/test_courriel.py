@@ -67,5 +67,32 @@ o.sp.setSizes([140, 900, 300]); app.processEvents()
 tronques = [w.text() for w in p.findChildren(__import__("PySide6.QtWidgets", fromlist=["QAbstractButton"]).QAbstractButton)
             if w.isVisible() and w.text() and w.width() < w.sizeHint().width() - 2]
 verif(not tronques, f"volet E-mail à 300 px : aucun bouton tronqué {tronques}")
+# nettoyage du carnet : doublons, prenom / nom, rien sans accord
+from app import carnet_nettoyage as CN
+from PySide6.QtCore import Qt
+f.params["carnet"] = [{"nom": "Valentin Perat", "email": "peratvalentin@gmail.com"},
+                      {"nom": "", "email": "PeratValentin@gmail.com"},
+                      {"nom": "YAKITE Théodore", "email": "theodore.yakite@orange.fr"},
+                      {"nom": "Weller Fiscaliste", "email": "lionel.weller@lamartine-avocats.com"},
+                      {"nom": "", "email": "jean.dupont@ex.fr"}]
+props = CN.nettoyer(f.params["carnet"])
+verif(any(x["type"] == "fusion" for x in props), "carnet : même adresse en double repérée")
+verif(any(x["type"] == "nom" and x["prenom"] == "Théodore" and x["nom_famille"] == "Yakite" for x in props),
+      "carnet : « YAKITE Théodore » -> prénom Théodore, nom Yakite")
+verif(not any(x.get("titre") == "Weller Fiscaliste" and x["type"] == "nom" for x in props),
+      "carnet : nom non reconnu (cabinet) laissé tel quel")
+dn = DC.DialogueNettoyerCarnet(f.params)
+dn._appliquer = lambda: None
+app.processEvents()
+verif(dn.arbre.topLevelItemCount() >= 2, "fenêtre de nettoyage : propositions groupées")
+r, m = CN.appliquer(f.params, props)
+verif(r == 1 and len(f.params["carnet"]) == 4 and "PeratValentin@gmail.com" in f.params.get("carnet_retires", []),
+      "carnet nettoyé : doublon retiré (et retiré sur les autres postes)")
+verif(any(c.get("nom") == "Théodore Yakite" and c.get("maj") for c in f.params["carnet"]), "nom remis en forme, daté")
+pc = DC.PanneauCarnet(f.params)
+pc.tri.setCurrentIndex(pc.tri.findData("nom")); app.processEvents()
+ordre = [pc.liste.item(i).data(Qt.UserRole + 1) for i in range(pc.liste.count())]
+verif(ordre.index("jean.dupont@ex.fr") < ordre.index("peratvalentin@gmail.com") < ordre.index("theodore.yakite@orange.fr"),
+      f"carnet trié par nom de famille (Dupont, Perat, ... Yakite) {ordre}")
 if len(sys.argv) > 1: f.grab().save(sys.argv[1] + "/mail.png")
 print(); print(f"{sum(R)}/{len(R)} vérifications d'envoi par e-mail réussies"); sys.exit(0 if all(R) else 1)
