@@ -22,8 +22,8 @@ COMMUNS = ["auteur", "langue", "outils_epingles", "barre_rapide", "volet", "vign
            "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "agenda", "messagerie", "ia_styles_perso",
            "identites", "certificats_approuves", "signature_reglages", "identites_supprimees", "certificats_retires",
            "formulaire_detection", "formulaire_types_auto", "comptes_mail", "courriel", "courriel_recents", "ordre_outils",
-           "carnet", "comptes_mail_retires", "carnet_retires"]
-POSTE = ["secrets_refuses", "disposition_vue", "volet_largeur", "vignettes_largeur", "biblio_replies", "sessions_vues", "synchro_etat", "machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
+           "carnet", "comptes_mail_retires", "carnet_retires", "imprimante", "imprimante_nom"]
+POSTE = ["imprimante_installee", "secrets_refuses", "disposition_vue", "volet_largeur", "vignettes_largeur", "biblio_replies", "sessions_vues", "synchro_etat", "machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
 CLEFS_IA = ["clef_claude", "clef_gemini"]
 FICHIER_DRIVE = "preferences.json"
 
@@ -335,7 +335,9 @@ def libelle_commun(k):
             "courriel_recents": _("Destinataires récents"), "ordre_outils": _("Ordre des outils (page Outils)"),
             "carnet": _("Carnet d'adresses"), "comptes_mail_retires": _("Adresses d'envoi retirées"),
             "carnet_retires": _("Contacts retirés du carnet"),
-            "formulaire_types_auto": _("Type des champs deviné d'après le libellé")}.get(k, k)
+            "formulaire_types_auto": _("Type des champs deviné d'après le libellé"),
+            "imprimante": _("Imprimante PhilPDF : paramètres de conversion"),
+            "imprimante_nom": _("Imprimante PhilPDF : nom dans Windows")}.get(k, k)
 
 
 # valeur utilisee quand le reglage n'a jamais ete touche sur un poste (absent = cette valeur)

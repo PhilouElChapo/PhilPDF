@@ -1986,5 +1986,7 @@
  "Tous les documents ({x})": "Tutti i documenti ({x})",
  "Photos et images ({x})": "Foto e immagini ({x})",
  "Word, Excel, PowerPoint, texte ({x})": "Word, Excel, PowerPoint, testo ({x})",
- "Tous les fichiers (*)": "Tutti i file (*)"
+ "Tous les fichiers (*)": "Tutti i file (*)",
+ "Imprimante PhilPDF : paramètres de conversion": "Stampante PhilPDF: impostazioni di conversione",
+ "Imprimante PhilPDF : nom dans Windows": "Stampante PhilPDF: nome in Windows"
 }

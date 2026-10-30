@@ -2944,19 +2944,66 @@ class Fenetre(MixinCoteACote, QMainWindow):
                     [(_("Reprendre"), QMessageBox.AcceptRole), (_("Non merci"), QMessageBox.RejectRole)]) != 0:
             return False
         donnees = {"philpdf": 1, "date": d["communs"].get("maj", ""), "communs": d["communs"], "poste": {}}
+        reinstallation = False
         if postes:
             libs = [_("Nouveau poste (garder le nom « {nom} »)", nom=self.params["machine"])] + \
                    [_("Réinstallation du poste « {poste} »", poste=p) for p, _v in postes]
             choix, ok = QInputDialog.getItem(self, _("Bienvenue dans PhilPDF"), _("Ce poste est :"), libs, 0, False)
             if ok and libs.index(choix) > 0:
                 donnees["poste"] = postes[libs.index(choix) - 1][1]
+                reinstallation = True
+            else:
+                # nouveau poste : meme disposition (largeur des volets, vignettes, zoom) que le dernier poste utilise
+                dernier = postes[0][1]
+                donnees["poste"] = {k: dernier[k] for k in ("volet_largeur", "vignettes_largeur", "biblio_replies", "zoom")
+                                    if k in dernier}
+        compte_ici = miroir.compte_drive(self.params)        # compte de synchro qu'on vient d'autoriser ici
+        garder = {k: self.params.get(k) for k in ("machine", "drive", "drive_compte") if self.params.get(k)}
         reglages.appliquer(self.params, donnees, True, bool(donnees["poste"]), False)
+        if not reinstallation:
+            self.params.update(garder)
+        self._garder_compte_synchro(compte_ici)
         if not self.params.get("drive") or not os.path.isdir(self.params.get("drive", "")):
             self.params["drive"] = racine
         self.params["bienvenue_vue"] = True
+        self.params["communs_drive_vu"] = d["communs"].get("maj", "")
+        self.params["imprimante_proposee"] = False           # imprimante : reproposee sur ce poste (a installer ici)
         self.params.enregistrer()
+        # mots de passe et autorisations des autres postes : demandes tout de suite, pas apres un redemarrage
+        if reglages.chemin_secrets(self.params) and os.path.exists(reglages.chemin_secrets(self.params)) \
+                and not coffre.lire(reglages.PHRASE):
+            self.choisir_phrase()
         self.redemarrer()
         return True
+
+    def _garder_compte_synchro(self, compte_ici):
+        """Apres reprise des reglages d'un autre poste : le compte qui synchronise CE poste reste branche.
+        Meme compte deja dans la liste reprise (meme Drive, meme utilisateur) -> on s'y rattache, autorisation
+        comprise ; sinon il est ajoute a la liste. Plus besoin de refaire la synchro apres le redemarrage."""
+        if not compte_ici:
+            return
+        comptes = list(self.params.get("comptes") or [])
+        meme = next((x for x in comptes if x["id"] == compte_ici["id"]), None) or \
+            next((x for x in comptes if distant.cle_compte(x) == distant.cle_compte(compte_ici)), None)
+        if meme is None:
+            comptes.append(compte_ici)
+            self.params["comptes"] = comptes
+            self.params["drive_compte"] = compte_ici["id"]
+            return
+        if meme["id"] != compte_ici["id"]:
+            for suffixe in ("", ".jeton", ".appareil"):       # l'autorisation donnee ici suit le compte
+                v = coffre.lire(compte_ici["id"] + suffixe)
+                if v and not coffre.lire(meme["id"] + suffixe):
+                    coffre.enregistrer(meme["id"] + suffixe, v)
+            ancien, nouveau = miroir.dossier_miroir(compte_ici), os.path.join(os.path.dirname(miroir.dossier_miroir(compte_ici)), meme["id"])
+            try:
+                if not os.path.exists(nouveau):
+                    import shutil
+                    shutil.move(ancien, nouveau)
+            except OSError:
+                pass
+        self.params["drive_compte"] = meme["id"]
+        self.params["drive"] = miroir.dossier_miroir(meme)
 
     def _chemin_drive(self, donnee):
         """Dossier « Drive » utilise par PhilPDF : dossier de l'application de bureau, ou miroir local d'un Drive en direct."""

@@ -1170,5 +1170,18 @@ w.dropEvent(_Depot([_jpg, _jpg2])); app.processEvents()
 _od = w.doc_courant()
 verif(len(w.documents()) == _n0 + 1 and _od is not None and len(_od.doc) == 2 and _od.chemin is None
       and getattr(_od, "dossier_propose", "") == TRAVAIL, "deux images déposées : un PDF de deux pages, dossier des images proposé")
+# nouveau poste : reglages repris d'un autre poste -> le compte de synchro autorise ici reste branche
+from app import coffre as _cof, miroir as _mir
+class _P(dict):
+    def enregistrer(s_): pass
+_fp = type("F", (), {})(); _fp.params = _P(comptes=[{"id": "y9", "type": "gdrive", "adresse": "", "utilisateur": "phil@ex.fr"}])
+_ici = {"id": "x1", "type": "gdrive", "adresse": "", "utilisateur": "Phil@ex.fr"}
+_cof.enregistrer("x1.jeton", "jeton-de-ce-poste")
+F.Fenetre._garder_compte_synchro(_fp, _ici)
+verif(_fp.params["drive_compte"] == "y9" and _cof.lire("y9.jeton") == "jeton-de-ce-poste"
+      and _fp.params["drive"].endswith("y9"), "nouveau poste : synchro rattachée au même compte repris, autorisation gardée")
+_fp.params = _P(comptes=[{"id": "z", "type": "onedrive", "adresse": "", "utilisateur": "autre"}])
+F.Fenetre._garder_compte_synchro(_fp, _ici)
+verif(_fp.params["drive_compte"] == "x1" and len(_fp.params["comptes"]) == 2, "nouveau poste : compte absent de la liste reprise -> ajouté")
 print(f"\n{sum(c for c, _ in ok)}/{len(ok)} vérifications réussies")
 sys.exit(0 if all(c for c, _ in ok) else 1)

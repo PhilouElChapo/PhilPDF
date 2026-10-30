@@ -2679,5 +2679,7 @@
  "Tous les documents ({x})": "All documents ({x})",
  "Photos et images ({x})": "Photos and images ({x})",
  "Word, Excel, PowerPoint, texte ({x})": "Word, Excel, PowerPoint, text ({x})",
- "Tous les fichiers (*)": "All files (*)"
+ "Tous les fichiers (*)": "All files (*)",
+ "Imprimante PhilPDF : paramètres de conversion": "PhilPDF printer: conversion settings",
+ "Imprimante PhilPDF : nom dans Windows": "PhilPDF printer: name in Windows"
 }

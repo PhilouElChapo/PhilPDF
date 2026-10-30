@@ -472,6 +472,9 @@ class PageAccueil(QWidget):
                                  "QListWidget::item{padding:10px;border-bottom:1px solid #f0f0f0}"
                                  "QListWidget::item:hover{background:#f4f7fb}")
         self.liste.setItemDelegate(DelegueRecent(self.liste))
+        self.liste.setResizeMode(QListWidget.Adjust)        # largeur changee : hauteur des lignes recalculee
+        self.liste.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.liste.setWordWrap(True)
         self.liste.setContextMenuPolicy(Qt.CustomContextMenu)
         self.liste.customContextMenuRequested.connect(self._menu_fichier)
         self.liste.itemClicked.connect(self._clic_recent)
@@ -802,6 +805,16 @@ class PageAccueil(QWidget):
     def resizeEvent(self, e):
         super().resizeEvent(e)
         self._adapter_tete()
+        # fenetre etroite (petit ecran) : la fiche de droite laisse toute la largeur a la liste des recents
+        if hasattr(self, "fiche"):
+            large = self.width() >= 900
+            if getattr(self.fiche, "autorisee", True) != large:
+                self.fiche.autorisee = large
+                sp = self.fiche.sizePolicy()
+                sp.setRetainSizeWhenHidden(large)
+                self.fiche.setSizePolicy(sp)
+                if not large:
+                    self.fiche.hide()
 
     def _adapter_tete(self):
         if not hasattr(self, "_boutons_tete"):
@@ -1146,14 +1159,40 @@ from PySide6.QtWidgets import QStyledItemDelegate as _Delegue
 
 
 class DelegueRecent(_Delegue):
-    """Ligne des Recents dessinee en texte riche (« aussi sur Cannes » en gras), sinon comme d'habitude."""
+    """Ligne des Recents dessinee en texte riche (« aussi sur Cannes » en gras), sinon comme d'habitude.
+    Le texte passe a la ligne quand la fenetre est etroite (petit ecran) : rien n'est coupe, la ligne grandit."""
+
+    @staticmethod
+    def _doc(html, police, largeur):
+        from PySide6.QtGui import QTextDocument, QTextOption
+        doc = QTextDocument()
+        doc.setDefaultFont(police)
+        doc.setDocumentMargin(0)
+        o = QTextOption()
+        o.setWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)   # chemins longs sans espace compris
+        doc.setDefaultTextOption(o)
+        doc.setHtml(html)
+        doc.setTextWidth(max(80, largeur))
+        return doc
+
+    def sizeHint(self, option, index):
+        base = super().sizeHint(option, index)
+        html = index.data(Qt.UserRole + 2)
+        w = option.widget
+        if not html or w is None:
+            return base
+        icone = (option.decorationSize.width() if option.decorationSize.isValid() else 40) + 28
+        larg = w.viewport().width() - icone - 12
+        h = self._doc(html, option.font, larg).size().height()
+        from PySide6.QtCore import QSize
+        return QSize(max(100, w.viewport().width() - 4), max(base.height(), int(h) + 14))
 
     def paint(self, painter, option, index):
         html = index.data(Qt.UserRole + 2)
         if not html:
             return super().paint(painter, option, index)
         from PySide6.QtWidgets import QStyleOptionViewItem, QStyle, QApplication as _A
-        from PySide6.QtGui import QTextDocument, QAbstractTextDocumentLayout, QPalette
+        from PySide6.QtGui import QAbstractTextDocumentLayout, QPalette
         opt = QStyleOptionViewItem(option)
         self.initStyleOption(opt, index)
         w = opt.widget
@@ -1163,10 +1202,7 @@ class DelegueRecent(_Delegue):
         st.drawControl(QStyle.CE_ItemViewItem, opt, painter, w)
         opt.text = texte
         zone = st.subElementRect(QStyle.SE_ItemViewItemText, opt, w)
-        doc = QTextDocument()
-        doc.setDefaultFont(opt.font)
-        doc.setDocumentMargin(0)
-        doc.setHtml(html)
+        doc = self._doc(html, opt.font, zone.width() - 8)
         painter.save()
         painter.translate(zone.left() + 4, zone.top() + max(0, (zone.height() - doc.size().height()) / 2))
         ctx = QAbstractTextDocumentLayout.PaintContext()
@@ -1221,7 +1257,7 @@ class FicheFichier(QFrame):
     def montrer(self, l):
         from PySide6.QtGui import QPixmap
         import html
-        if not l:                                   # rien sous la souris : la fiche disparait
+        if not l or not getattr(self, "autorisee", True):   # rien sous la souris, ou fenetre trop etroite
             self.hide()
             return
         self.show()
