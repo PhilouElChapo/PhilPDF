@@ -225,6 +225,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
+          set +e
           echec=0
           for t in tests/test_*.py; do
             echo "::group::$t"
