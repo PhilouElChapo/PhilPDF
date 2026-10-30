@@ -22,8 +22,8 @@ android {
         versionCode = versionCodePhilpdf
         versionName = versionPhilpdf
         // meme identifiant Google que PhilPDF Windows : il voit le dossier PhilPDF que Windows a cree (drive.file)
-        buildConfigField("String", "GOOGLE_ID", "\"${System.getenv("GOOGLE_CLIENT_ID") ?: ""}\"")
-        buildConfigField("String", "GOOGLE_SECRET", "\"${System.getenv("GOOGLE_CLIENT_SECRET") ?: ""}\"")
+        buildConfigField("String", "GOOGLE_ID", "\"${(System.getenv("GOOGLE_CLIENT_ID") ?: "").trim()}\"")
+        buildConfigField("String", "GOOGLE_SECRET", "\"${(System.getenv("GOOGLE_CLIENT_SECRET") ?: "").trim()}\"")
     }
 
     // un APK par type de processeur (moins de 30 Mo chacun, demande par IzzyOnDroid) + un APK universel

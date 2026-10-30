@@ -36,6 +36,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -316,7 +317,7 @@ private fun DispositionTelephone(etat: EtatLecteur, tailles: List<Pair<Float, Fl
                     Volet.SIGNER to "signer", Volet.PLUS to "plus").forEach { (v, icone) ->
                     NavigationBarItem(selected = tiroir == v, onClick = { tiroir = v },
                         icon = { Icon(Icones.get(icone, if (tiroir == v) ROUGE else Color(0xFF444444)), null) },
-                        label = { Text(libelleVolet(v), fontSize = 11.sp, maxLines = 1) })
+                        label = { TexteAjuste(libelleVolet(v), 11.sp) })
                 }
             }
         }
@@ -696,4 +697,18 @@ suspend fun imprimer(ctx: Context, doc: DocumentPdf) {
             }
         }
     }, null)
+}
+
+
+/** Libelle sur une ligne qui rapetisse au lieu d'etre coupe (« Commenter » et non « Comment »),
+ *  meme quand le telephone est regle en grands caracteres. */
+@Composable
+fun TexteAjuste(texte: String, taille: androidx.compose.ui.unit.TextUnit, minimum: Float = 7f) {
+    var t by remember(texte, taille) { mutableStateOf(taille) }
+    var pret by remember(texte, taille) { mutableStateOf(false) }
+    Text(texte, fontSize = t, maxLines = 1, softWrap = false,
+        modifier = Modifier.drawWithContent { if (pret) drawContent() },
+        onTextLayout = { r ->
+            if (r.hasVisualOverflow && t.value > minimum) t = (t.value * 0.9f).sp else pret = true
+        })
 }
