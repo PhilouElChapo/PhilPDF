@@ -37,7 +37,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        Google.activite = java.lang.ref.WeakReference(this)   // Android y montre « Autoriser » si besoin
+        Nuage.activite = java.lang.ref.WeakReference(this)   // Android y montre « Autoriser » si besoin
     }
 
     override fun onNewIntent(intent: Intent) {

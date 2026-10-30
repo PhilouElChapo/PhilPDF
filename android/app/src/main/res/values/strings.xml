@@ -109,10 +109,10 @@
     <string name="h_date_heure">Date et heure</string>
     <string name="compte">Compte</string>
     <string name="compte_google">Compte Google</string>
-    <string name="compte_explication">Reliez PhilPDF au Google Drive où PhilPDF Windows range son dossier « PhilPDF » : vous retrouvez ici vos postes (Cannes, Pharma…), vos signatures et vos tampons.\n\nChoisissez simplement l\'un des comptes Google déjà présents sur ce téléphone : aucun mot de passe à taper. Comme sous Windows, PhilPDF ne voit que les fichiers qu\'il a créés lui-même, jamais le reste de votre Drive.</string>
+    <string name="compte_explication">Reliez PhilPDF au stockage où PhilPDF Windows synchronise son dossier « PhilPDF » (Préférences, Synchronisation) : vous retrouvez ici vos postes (Cannes, Pharma…), vos signatures et vos tampons.\n\nGoogle Drive : choisissez simplement l\'un des comptes Google déjà présents sur ce téléphone, sans mot de passe. Comme sous Windows, PhilPDF ne lit que son propre dossier, jamais le reste de votre stockage.</string>
     <string name="choisir_compte">Choisir un compte Google du téléphone</string>
     <string name="autres_comptes">Pour ouvrir ou enregistrer un document, tous vos comptes (Drive, OneDrive, Dropbox, NAS…) sont déjà proposés par « Ouvrir un fichier » et « Autre nom… ».</string>
-    <string name="philpdf_introuvable">Aucun dossier PhilPDF créé par PhilPDF Windows sur ce Drive. Vérifiez le compte choisi (celui réglé dans PhilPDF Windows, Préférences, Synchronisation), ou déconnectez-vous pour en choisir un autre.</string>
+    <string name="philpdf_introuvable">Aucun dossier PhilPDF de PhilPDF Windows sur ce compte. Vérifiez lequel est réglé dans PhilPDF Windows (Préférences, Synchronisation), puis « Déconnecter » pour en choisir un autre.</string>
     <string name="vos_postes">Vos postes PhilPDF</string>
     <string name="poste_activite">Dernière activité : %1$s</string>
     <string name="poste_fichiers">%1$d fichier(s) ouvert(s)</string>
@@ -137,7 +137,7 @@
     <string name="mode_navigateur">Relié par le navigateur</string>
     <string name="nouveautes_postes">Vos postes PhilPDF ont %1$d signature(s) ou tampon(s) à récupérer.</string>
     <string name="voir">Voir</string>
-    <string name="biblio_vide">Vos signatures et tampons de PhilPDF Windows : reliez votre compte Google (Accueil, rond en haut à droite).</string>
+    <string name="biblio_vide">Vos signatures et tampons de PhilPDF Windows : reliez votre compte de synchronisation (Accueil, rond en haut à droite).</string>
     <string name="biblio_vide_connecte">Vos signatures et tampons de PhilPDF Windows : Accueil, rond en haut à droite, « Récupérer sur ce téléphone ».</string>
     <string name="de_vos_postes">%1$s de vos postes</string>
     <string name="h_heure">Heure</string>
@@ -146,4 +146,8 @@
     <string name="code_date_heure">+ date et heure</string>
     <string name="poser_ici">Poser ici</string>
     <string name="aide_poser_apercu">Faites glisser l\'aperçu à l\'endroit voulu (ou touchez la page), puis « Poser ici ».</string>
+    <string name="compte_titre">Compte de synchronisation</string>
+    <string name="autres_emplacements">Votre PhilPDF Windows se synchronise ailleurs ? Choisissez le même emplacement (la page du service s\'ouvre dans le navigateur, puis « Revenir à PhilPDF ») :</string>
+    <string name="non_disponible">pas encore disponible</string>
+    <string name="nas_bientot">NAS, FTP, WebDAV : prochaine étape.</string>
 </resources>

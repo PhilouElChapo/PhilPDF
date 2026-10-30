@@ -48,7 +48,7 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit) {
     var nouveautes by remember { mutableIntStateOf(0) }
     // compte relie : on regarde (sans rien recuperer) si vos postes ont de nouvelles signatures ou de nouveaux tampons
     LaunchedEffect(versionCompte) {
-        nouveautes = if (!Google.connecte(ctx)) 0 else try {
+        nouveautes = if (!Nuage.connecte(ctx)) 0 else try {
             Bibliotheque.lireDrive(ctx).let { e -> e.nouveaux + Bibliotheque.locaux(ctx).count { l -> e.distants.none { it.id == l.id } } }
         } catch (_: Exception) { 0 }
     }

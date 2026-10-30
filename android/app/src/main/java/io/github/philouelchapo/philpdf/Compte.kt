@@ -42,9 +42,9 @@ import java.util.Locale
 @Composable
 fun PastilleCompte(version: Int, taille: Dp = 40.dp, onClick: () -> Unit) {
     val ctx = LocalContext.current
-    val email = remember(version) { Google.email(ctx) }
+    val email = remember(version) { if (Nuage.connecte(ctx)) Nuage.email(ctx) ?: Nuage.fournisseur(ctx).nom else null }
     val photo = remember(version) {
-        Google.photo(ctx).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.absolutePath)?.asImageBitmap() }
+        Nuage.photo(ctx).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.absolutePath)?.asImageBitmap() }
     }
     Box(Modifier.size(taille).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         when {
@@ -52,7 +52,7 @@ fun PastilleCompte(version: Int, taille: Dp = 40.dp, onClick: () -> Unit) {
             photo != null -> Image(photo, email, Modifier.fillMaxSize().border(2.dp, Color(0xFF1A73E8), CircleShape).clip(CircleShape),
                 contentScale = ContentScale.Crop)
             else -> Box(Modifier.fillMaxSize().background(ROUGE, CircleShape), contentAlignment = Alignment.Center) {
-                Text((Google.nom(ctx)?.takeIf { it.isNotBlank() } ?: email).take(1).uppercase(), color = Color.White,
+                Text((Nuage.nom(ctx)?.takeIf { it.isNotBlank() } ?: email).take(1).uppercase(), color = Color.White,
                     fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
         }
@@ -70,8 +70,8 @@ fun dateIso(t: String): String = try {
 fun EcranCompte(fermer: () -> Unit, change: () -> Unit) {
     val ctx = LocalContext.current
     val portee = rememberCoroutineScope()
-    var email by remember { mutableStateOf(Google.email(ctx)) }
-    var connecte by remember { mutableStateOf(Google.connecte(ctx)) }
+    var email by remember { mutableStateOf(Nuage.email(ctx)) }
+    var connecte by remember { mutableStateOf(Nuage.connecte(ctx)) }
     var occupe by remember { mutableStateOf<String?>(null) }
     var erreur by remember { mutableStateOf<String?>(null) }
     var proposerNavigateur by remember { mutableStateOf<String?>(null) }
@@ -86,7 +86,7 @@ fun EcranCompte(fermer: () -> Unit, change: () -> Unit) {
         portee.launch {
             occupe = txtLecture; erreur = null
             try {
-                Google.profil(ctx); version++; change()
+                Nuage.profil(ctx); email = Nuage.email(ctx); version++; change()
                 etat = Bibliotheque.lireDrive(ctx)
             } catch (e: Exception) {
                 erreur = e.message ?: e.javaClass.simpleName
@@ -99,7 +99,7 @@ fun EcranCompte(fermer: () -> Unit, change: () -> Unit) {
         portee.launch {
             occupe = txtConnexion; erreur = null
             try {
-                if (Google.connecterTelephone(ctx, adresse)) {
+                if (Nuage.connecterTelephone(ctx, adresse)) {
                     email = adresse; connecte = true; change(); occupe = null; lireDrive()
                 } else {
                     occupe = null; proposerNavigateur = adresse
@@ -125,14 +125,14 @@ fun EcranCompte(fermer: () -> Unit, change: () -> Unit) {
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         if (connecte) {
-                            Google.nom(ctx)?.takeIf { it.isNotBlank() }?.let {
+                            Nuage.nom(ctx)?.takeIf { it.isNotBlank() }?.let {
                                 Text(it, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             Text(email ?: "", fontSize = 13.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(stringResource(if (Google.mode(ctx) == "telephone") R.string.mode_telephone else R.string.mode_navigateur),
-                                fontSize = 11.sp, color = Color.Gray)
+                            Text(Nuage.fournisseur(ctx).nom + " · " + stringResource(if (Nuage.mode(ctx) == "telephone") R.string.mode_telephone else R.string.mode_navigateur),
+                                fontSize = 11.sp, color = Color.Gray, maxLines = 2)
                         } else {
-                            Text(stringResource(R.string.compte_google), fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.compte_titre), fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -141,10 +141,30 @@ fun EcranCompte(fermer: () -> Unit, change: () -> Unit) {
                     if (!connecte) {
                         Text(stringResource(R.string.compte_explication), fontSize = 14.sp)
                         Spacer(Modifier.height(16.dp))
-                        Button(onClick = { erreur = null; choix.launch(Google.intentChoisir()) }, enabled = occupe == null,
-                            colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) {
+                        Button(onClick = { erreur = null; choix.launch(Nuage.intentChoisirGoogle()) }, enabled = occupe == null,
+                            modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) {
                             Text(stringResource(R.string.choisir_compte))
                         }
+                        Spacer(Modifier.height(14.dp))
+                        Text(stringResource(R.string.autres_emplacements), fontSize = 13.sp)
+                        Spacer(Modifier.height(6.dp))
+                        // OneDrive, Dropbox, Box : page du fournisseur dans le navigateur (comme sous Windows)
+                        FOURNISSEURS.drop(1).forEach { f ->
+                            OutlinedButton(onClick = {
+                                portee.launch {
+                                    occupe = txtNavigateur; erreur = null
+                                    try {
+                                        Nuage.connecterNavigateur(ctx, f, null)
+                                        email = Nuage.email(ctx); connecte = true; change(); occupe = null; lireDrive()
+                                    } catch (ex: Exception) { erreur = ex.message; occupe = null }
+                                }
+                            }, enabled = occupe == null && Nuage.disponible(f), modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                                Text(if (Nuage.disponible(f)) f.nom else f.nom + " — " + stringResource(R.string.non_disponible),
+                                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(stringResource(R.string.nas_bientot), fontSize = 12.sp, color = Color.Gray)
                         Spacer(Modifier.height(10.dp))
                         Text(stringResource(R.string.autres_comptes), fontSize = 12.sp, color = Color.Gray)
                     } else {
@@ -221,7 +241,7 @@ fun EcranCompte(fermer: () -> Unit, change: () -> Unit) {
                     if (connecte) {
                         TextButton(onClick = { lireDrive() }, enabled = occupe == null) { Text(stringResource(R.string.actualiser)) }
                         TextButton(onClick = {
-                            Google.deconnecter(ctx); connecte = false; email = null; etat = null; locaux = emptyList()
+                            Nuage.deconnecter(ctx); connecte = false; email = null; etat = null; locaux = emptyList()
                             version++; change()
                         }, enabled = occupe == null) { Text(stringResource(R.string.deconnecter)) }
                     }
@@ -241,7 +261,7 @@ fun EcranCompte(fermer: () -> Unit, change: () -> Unit) {
                     portee.launch {
                         occupe = txtNavigateur; erreur = null
                         try {
-                            Google.connecterNavigateur(ctx, adresse)
+                            Nuage.connecterNavigateur(ctx, FOURNISSEURS[0], adresse)
                             email = adresse; connecte = true; change(); occupe = null; lireDrive()
                         } catch (ex: Exception) { erreur = ex.message; occupe = null }
                     }
