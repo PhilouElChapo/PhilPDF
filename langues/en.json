@@ -2655,5 +2655,15 @@
  "Prénom et nom devinés : à vérifier": "First and last name guessed: please check",
  "Prénom et nom reconnus, nom affiché inchangé": "First and last name recognised, display name unchanged",
  "Même nom, plusieurs adresses (cocher celles à retirer)": "Same name, several addresses (tick the ones to remove)",
- "Adresses invalides (cocher pour retirer)": "Invalid addresses (tick to remove)"
+ "Adresses invalides (cocher pour retirer)": "Invalid addresses (tick to remove)",
+ "Ce PC n'a pas cette police en {s} : choisissez une autre police dans la liste, ou installez la version {s} de la police.": "This PC does not have this font in {s}: choose another font from the list, or install the {s} version of the font.",
+ "Gras": "Bold",
+ "Italique": "Italic",
+ "Souligné (s'enlève aussi s'il a été mis par clic droit)": "Underline (also removes one added with right-click)",
+ "Barré (s'enlève aussi s'il a été mis par clic droit)": "Strikethrough (also removes one added with right-click)",
+ "gras italique": "bold italic",
+ "Souligné / barré": "Underline / strikethrough",
+ "gras": "bold",
+ "italique": "italic",
+ "normal": "regular"
 }

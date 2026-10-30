@@ -593,6 +593,29 @@ pol_ = {sp["font"] for b in op.doc[0].get_text("dict")["blocks"] for l in b.get(
         if "prestations" in sp["text"]}
 verif(pol_ and all("Liberation" in x for x in pol_), f"polices : police appliquée au paragraphe ({fp_.itemText(i_)} → {pol_})")
 fp_.setCurrentIndex(0)
+# souligne / barre mis par clic droit : visibles et modifiables dans Modifier ; gras applique
+pg_ = op.doc[0]
+r_ = [q for q in pg_.search_for("prestations")][:1]
+pg_.add_underline_annot(r_[0]).update(); pg_.add_strikeout_annot(r_[0]).update()
+op.changer_mode("modifier")
+verif(pw_.ouvrir_paragraphe(fitz.Point(80, 110)), "styles : paragraphe rouvert")
+ed_ = pw_.editeur
+verif(ed_.b_styles["souligne"].isChecked() and ed_.b_styles["barre"].isChecked(),
+      "styles : souligné et barré mis par clic droit reconnus dans Modifier")
+ed_.b_styles["souligne"].setChecked(False)
+ed_.valider()
+types_ = [a.type[0] for a in op.doc[0].annots()]
+verif(fitz.PDF_ANNOT_UNDERLINE not in types_ and fitz.PDF_ANNOT_STRIKE_OUT in types_,
+      f"styles : souligné enlevé depuis Modifier, barré gardé ({types_})")
+verif(pw_.ouvrir_paragraphe(fitz.Point(80, 110)), "styles : paragraphe rouvert (2)")
+ed_ = pw_.editeur
+ed_.b_styles["barre"].setChecked(False)
+ed_.b_styles["gras"].setChecked(True)
+ed_.valider()
+pol_ = {sp["font"] for b in op.doc[0].get_text("dict")["blocks"] for l in b.get("lines", []) for sp in l["spans"]
+        if "prestations" in sp["text"]}
+verif(not list(op.doc[0].annots()) and pol_ and all("Bold" in x for x in pol_),
+      f"styles : barré enlevé, paragraphe passé en gras ({pol_})")
 op.changer_mode("ajout_texte")
 pw_.editeur = D.EditeurParagraphe(pw_, None, fitz.Point(72, 300))
 from app import orthographe as ORT

@@ -1957,5 +1957,15 @@
  "Prénom et nom devinés : à vérifier": "Vor- und Nachname geraten: bitte prüfen",
  "Prénom et nom reconnus, nom affiché inchangé": "Vor- und Nachname erkannt, angezeigter Name unverändert",
  "Même nom, plusieurs adresses (cocher celles à retirer)": "Gleicher Name, mehrere Adressen (zu entfernende ankreuzen)",
- "Adresses invalides (cocher pour retirer)": "Ungültige Adressen (zum Entfernen ankreuzen)"
+ "Adresses invalides (cocher pour retirer)": "Ungültige Adressen (zum Entfernen ankreuzen)",
+ "Ce PC n'a pas cette police en {s} : choisissez une autre police dans la liste, ou installez la version {s} de la police.": "Dieser PC hat diese Schrift nicht in {s}: Wählen Sie eine andere Schrift oder installieren Sie die Version {s}.",
+ "Gras": "Fett",
+ "Italique": "Kursiv",
+ "Souligné (s'enlève aussi s'il a été mis par clic droit)": "Unterstrichen (entfernt auch per Rechtsklick gesetzte)",
+ "Barré (s'enlève aussi s'il a été mis par clic droit)": "Durchgestrichen (entfernt auch per Rechtsklick gesetzte)",
+ "gras italique": "fett kursiv",
+ "Souligné / barré": "Unterstrichen / durchgestrichen",
+ "gras": "fett",
+ "italique": "kursiv",
+ "normal": "normal"
 }

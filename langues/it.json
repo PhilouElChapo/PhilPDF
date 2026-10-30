@@ -1957,5 +1957,15 @@
  "Prénom et nom devinés : à vérifier": "Nome e cognome dedotti: da verificare",
  "Prénom et nom reconnus, nom affiché inchangé": "Nome e cognome riconosciuti, nome visualizzato invariato",
  "Même nom, plusieurs adresses (cocher celles à retirer)": "Stesso nome, più indirizzi (spunti quelli da rimuovere)",
- "Adresses invalides (cocher pour retirer)": "Indirizzi non validi (spunti per rimuovere)"
+ "Adresses invalides (cocher pour retirer)": "Indirizzi non validi (spunti per rimuovere)",
+ "Ce PC n'a pas cette police en {s} : choisissez une autre police dans la liste, ou installez la version {s} de la police.": "Questo PC non ha questo carattere in {s}: scelga un altro carattere o installi la versione {s}.",
+ "Gras": "Grassetto",
+ "Italique": "Corsivo",
+ "Souligné (s'enlève aussi s'il a été mis par clic droit)": "Sottolineato (toglie anche quello messo col clic destro)",
+ "Barré (s'enlève aussi s'il a été mis par clic droit)": "Barrato (toglie anche quello messo col clic destro)",
+ "gras italique": "grassetto corsivo",
+ "Souligné / barré": "Sottolineato / barrato",
+ "gras": "grassetto",
+ "italique": "corsivo",
+ "normal": "normale"
 }

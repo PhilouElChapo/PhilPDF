@@ -851,6 +851,7 @@ class EditeurParagraphe(QFrame):
         self.b_coul.setToolTip(_("Couleur du texte"))
         self.b_coul.clicked.connect(self._choisir_couleur)
         h.addWidget(self.b_coul)
+        self._styles(o, para, h)
         b_dlg = QPushButton("...")
         b_dlg.setStyleSheet("QPushButton{padding:2px 6px;font-weight:700}")
         b_dlg.setFixedWidth(36)
@@ -870,6 +871,118 @@ class EditeurParagraphe(QFrame):
         h.addWidget(b_ia)
         self._maj_couleur()
         self.fmt.show()
+
+    # ---- gras, italique, souligne, barre : ce qui a ete mis par clic droit s'enleve aussi ici
+    def _styles(self, o, para, h):
+        sp = None
+        if para:
+            try:
+                sp = next(sp for c, sp in para["lignes"][0]["chars"] if c["c"].strip())
+            except Exception:
+                sp = None
+        self._span0 = sp
+        nom = (sp or {}).get("font", "").lower()
+        fl = (sp or {}).get("flags", 0)
+        self.gras_depart = bool(fl & 16) or any(x in nom for x in ("bold", "black", "heavy", "semibold"))
+        self.italique_depart = bool(fl & 2) or any(x in nom for x in ("italic", "oblique"))
+        self.annots_souligne, self.annots_barre = [], []
+        if para:
+            zone = fitz.Rect(para["x0"], para["rect"].y0, para["x1"], para["rect"].y1)
+            page = o.doc[self.pw.num]
+            for a in page.annots(types=(fitz.PDF_ANNOT_UNDERLINE, fitz.PDF_ANNOT_SQUIGGLY, fitz.PDF_ANNOT_STRIKE_OUT)):
+                inter = fitz.Rect(a.rect) & zone
+                if inter.is_empty or inter.get_area() < 0.3 * max(1.0, fitz.Rect(a.rect).get_area()):
+                    continue
+                (self.annots_barre if a.type[0] == fitz.PDF_ANNOT_STRIKE_OUT else self.annots_souligne).append(a.xref)
+        self.b_styles = {}
+        for cle, lib, css, aide, actif in (
+                ("gras", "G", "font-weight:800", _("Gras"), self.gras_depart),
+                ("italique", "I", "font-style:italic;font-family:serif", _("Italique"), self.italique_depart),
+                ("souligne", "S", "text-decoration:underline", _("Souligné (s'enlève aussi s'il a été mis par clic droit)"),
+                 bool(self.annots_souligne)),
+                ("barre", "B", "text-decoration:line-through", _("Barré (s'enlève aussi s'il a été mis par clic droit)"),
+                 bool(self.annots_barre))):
+            b = QPushButton(lib)
+            b.setCheckable(True)
+            b.setChecked(actif)
+            b.setFixedWidth(30)
+            b.setToolTip(aide)
+            b.setStyleSheet("QPushButton{padding:2px 4px;%s} QPushButton:checked{background:#dbe8fb;border:1px solid #1462c2}" % css)
+            b.toggled.connect(self._style_change)
+            h.addWidget(b)
+            self.b_styles[cle] = b
+
+    def _style_change(self, *_a):
+        f = self.zone.font()
+        f.setBold(self.b_styles["gras"].isChecked())
+        f.setItalic(self.b_styles["italique"].isChecked())
+        f.setUnderline(self.b_styles["souligne"].isChecked())
+        f.setStrikeOut(self.b_styles["barre"].isChecked())
+        self.zone.setFont(f)
+        self._ajuster()
+
+    def _variante(self, gras, italique):
+        """Fichier de la meme police en gras / italique (polices du PC), ou None si ce PC ne l'a pas."""
+        from . import polices
+        if self.police_choisie:
+            d = next((p for p in polices.liste() if p["fichier"] == self.police_choisie), None)
+            fam = polices._norme(d["famille"]) if d else ""
+        else:
+            fam = polices._famille_pdf((self._span0 or {}).get("font", ""))
+        familles = [fam] + polices.EQUIVALENTS.get(fam, [])
+        for f in familles:
+            for p in polices.liste():
+                if polices._norme(p["famille"]) == f and p["gras"] == gras and p["italique"] == italique:
+                    return p["fichier"]
+        return None
+
+    def _appliquer_styles(self, o, police):
+        """Avant la reecriture : police en gras / italique si demande. Renvoie (police, message ou None)."""
+        g, i = self.b_styles["gras"].isChecked(), self.b_styles["italique"].isChecked()
+        if (g, i) == (self.gras_depart, self.italique_depart):
+            return police, None
+        v = self._variante(g, i)
+        if v:
+            return v, None
+        return police, _("Ce PC n'a pas cette police en {s} : choisissez une autre police dans la liste, "
+                         "ou installez la version {s} de la police.",
+                         s=(_("gras italique") if g and i else _("gras") if g else _("italique") if i else _("normal")))
+
+    def _souligner_apres(self, o, num):
+        """Apres la reecriture : souligne / barre retires, ou remis sur les nouvelles lignes (meme couleur)."""
+        page = o.doc[num]
+        for cle, xrefs, ajout in (("souligne", self.annots_souligne, page.add_underline_annot),
+                                  ("barre", self.annots_barre, page.add_strikeout_annot)):
+            voulu = self.b_styles[cle].isChecked()
+            if not voulu and not xrefs:
+                continue
+            couleur, ondule = None, False
+            for x in xrefs:
+                a = page.load_annot(x)
+                if a is None:
+                    continue
+                couleur = couleur or (a.colors or {}).get("stroke")
+                ondule = ondule or a.type[0] == fitz.PDF_ANNOT_SQUIGGLY
+                page.delete_annot(a)
+            if not voulu:
+                continue
+            try:
+                from moteur.modifier import Editeur as _Ed
+                para = _Ed(o.doc).paragraphe_a(num, fitz.Point(self.para["x0"] + 2, self.para["lignes"][0]["base"] - 1)) \
+                    if self.para else None
+            except Exception:
+                para = None
+            rects = [fitz.Rect(l["x0"], l["base"] - l.get("taille", self.taille) * 0.85, l["x1"], l["base"] + l.get("taille", self.taille) * 0.25)
+                     for l in (para or {}).get("lignes", [])] or ([fitz.Rect(self.para["x0"], self.para["rect"].y0,
+                                                                          self.para["x1"], self.para["rect"].y1)] if self.para else [])
+            if not rects:
+                continue
+            if cle == "souligne" and (ondule or (not xrefs and o.params.get("style_souligne") == "ondule")):
+                ajout = page.add_squiggly_annot
+            a = ajout(rects)
+            a.set_info(title=o.params.get("auteur") or o.params["machine"])
+            a.set_colors(stroke=couleur or _rgb(o.couleurs_annot()["souligner" if cle == "souligne" else "barrer"]))
+            a.update()
 
     def _ia(self, action):
         """Texte de la zone envoye a l'IA (correction, reformulation...) ; la reponse remplace le texte, annulable."""
@@ -1090,15 +1203,27 @@ class EditeurParagraphe(QFrame):
         largeur_pt = (self.largeur - 6) / self.e
         taille = self.sp_taille.value() if abs(self.sp_taille.value() - self.taille_depart) > 0.05 else None
         couleur = self.couleur.getRgbF()[:3] if self.couleur_modifiee else None
+        police, avis = self._appliquer_styles(o, self.police_choisie)
+        souligne_change = (self.b_styles["souligne"].isChecked() != bool(self.annots_souligne)
+                           or self.b_styles["barre"].isChecked() != bool(self.annots_barre))
         if self.para:
             elargi = abs(largeur_pt - (self.para["x1"] - self.para["x0"])) > 2
-            if texte != self.initial or elargi or self.police_choisie or taille or couleur:
+            if texte != self.initial or elargi or police or taille or couleur:
                 if elargi:
                     self.para["x1"] = self.para["x0"] + largeur_pt
-                o.modifier_paragraphe(self.pw.num, self.para, texte, taille=taille, couleur=couleur, police=self.police_choisie)
+                o.modifier_paragraphe(self.pw.num, self.para, texte, taille=taille, couleur=couleur, police=police)
+                if self.annots_souligne or self.annots_barre or souligne_change:
+                    self._souligner_apres(o, self.pw.num)      # suit le nouveau texte, ou s'enleve
+                    o.apres_modif()
+            elif souligne_change:
+                o.memoriser(_("Souligné / barré"))
+                self._souligner_apres(o, self.pw.num)
+                o.apres_modif()
+            if avis:
+                o.message(avis)
         elif texte.strip():
             o.ajouter_paragraphe(self.pw.num, self.coin, texte, largeur_pt, taille=self.sp_taille.value(),
-                                 couleur=self.couleur.getRgbF()[:3], police=self.police_choisie)
+                                 couleur=self.couleur.getRgbF()[:3], police=police)
         self.pw.update()
 
 

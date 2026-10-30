@@ -140,20 +140,57 @@ def baguette(img, x, y, tolerance=32, masque=None):
     return sel if masque is None else (masque | sel)
 
 
+def _anneau(masque, largeur=6):
+    """Pixels qui entourent la zone (a quelques pixels du bord) : ce qu'on voit « autour » de ce qu'on efface."""
+    import cv2
+    m = masque.astype(np.uint8)
+    pres = cv2.dilate(m, np.ones((3, 3), np.uint8), iterations=2)
+    loin = cv2.dilate(m, np.ones((3, 3), np.uint8), iterations=2 + largeur)
+    return (loin > 0) & ~(pres > 0)
+
+
 def effacer(img, masque, mode="fond"):
-    """Efface la zone choisie : « fond » = remplie a partir de ce qui l'entoure, « transparent », « blanc »."""
+    """Efface la zone choisie : « fond » = remplie avec ce qui l'entoure, « transparent », « blanc ».
+    « fond » regarde d'abord l'anneau de pixels autour de la zone :
+    - surtout transparent (logo sur fond transparent) -> la zone devient transparente ;
+    - d'une seule couleur (fond blanc, aplat de couleur) -> remplie de cette couleur, net, sans bavure ;
+    - varie (photo, degrade) -> reconstruite a partir des bords (inpainting), transparence comprise.
+    Les pixels transparents ne servent jamais de couleur : leur couleur cachee (souvent noire) faisait
+    des trainees grises a cote des lettres gardees."""
     import cv2
     out = img.copy()
     if masque is None or not masque.any():
         return out
     if mode == "transparent":
         out[:, :, 3][masque] = 0
-    elif mode == "blanc":
+        return out
+    if mode == "blanc":
         out[:, :, :3][masque] = 255
-    else:
-        m = cv2.dilate(masque.astype(np.uint8) * 255, np.ones((3, 3), np.uint8), iterations=2)
-        rayon = 5 if m.sum() / 255 < 4000 else 9
-        out[:, :, :3] = cv2.inpaint(np.ascontiguousarray(img[:, :, :3]), m, rayon, cv2.INPAINT_TELEA)
+        out[:, :, 3][masque] = 255
+        return out
+    zone = cv2.dilate(masque.astype(np.uint8), np.ones((3, 3), np.uint8), iterations=1) > 0   # bords anti-crenelage
+    anneau = _anneau(zone)
+    if not anneau.any():
+        anneau = ~zone
+    alpha = img[:, :, 3]
+    vus = alpha[anneau]
+    if (vus < 128).mean() > 0.5:                          # autour : transparent
+        out[:, :, 3][zone] = 0
+        return out
+    opaques = img[:, :, :3][anneau & (alpha >= 128)].astype(np.int32)
+    med = np.median(opaques, axis=0)
+    proches = (np.abs(opaques - med).max(axis=1) <= 24).mean() if len(opaques) else 0
+    if proches >= 0.85:                                   # autour : une seule couleur
+        out[:, :, :3][zone] = med.astype(np.uint8)
+        out[:, :, 3][zone] = 255
+        return out
+    # autour : varie -> inpainting ; la couleur cachee des pixels transparents est neutralisee avant
+    rgb = np.ascontiguousarray(img[:, :, :3]).copy()
+    rgb[alpha < 128] = med.astype(np.uint8)
+    m = zone.astype(np.uint8) * 255
+    rayon = 5 if zone.sum() < 4000 else 9
+    out[:, :, :3] = cv2.inpaint(rgb, m, rayon, cv2.INPAINT_TELEA)
+    out[:, :, 3] = np.where(zone, cv2.inpaint(np.ascontiguousarray(alpha), m, rayon, cv2.INPAINT_TELEA), alpha)
     return out
 
 

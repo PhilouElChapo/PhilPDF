@@ -1957,5 +1957,15 @@
  "Prénom et nom devinés : à vérifier": "Nombre y apellido deducidos: a comprobar",
  "Prénom et nom reconnus, nom affiché inchangé": "Nombre y apellido reconocidos, nombre mostrado sin cambios",
  "Même nom, plusieurs adresses (cocher celles à retirer)": "Mismo nombre, varias direcciones (marque las que quiera quitar)",
- "Adresses invalides (cocher pour retirer)": "Direcciones no válidas (marque para quitar)"
+ "Adresses invalides (cocher pour retirer)": "Direcciones no válidas (marque para quitar)",
+ "Ce PC n'a pas cette police en {s} : choisissez une autre police dans la liste, ou installez la version {s} de la police.": "Este PC no tiene esta fuente en {s}: elija otra fuente de la lista o instale la versión {s} de la fuente.",
+ "Gras": "Negrita",
+ "Italique": "Cursiva",
+ "Souligné (s'enlève aussi s'il a été mis par clic droit)": "Subrayado (también quita el puesto con clic derecho)",
+ "Barré (s'enlève aussi s'il a été mis par clic droit)": "Tachado (también quita el puesto con clic derecho)",
+ "gras italique": "negrita cursiva",
+ "Souligné / barré": "Subrayado / tachado",
+ "gras": "negrita",
+ "italique": "cursiva",
+ "normal": "normal"
 }
