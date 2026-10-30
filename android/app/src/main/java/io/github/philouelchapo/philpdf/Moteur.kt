@@ -8,6 +8,8 @@ import android.provider.OpenableColumns
 import com.artifex.mupdf.fitz.Cookie
 import com.artifex.mupdf.fitz.Document
 import com.artifex.mupdf.fitz.Matrix
+import com.artifex.mupdf.fitz.Outline
+import com.artifex.mupdf.fitz.PDFPage
 import com.artifex.mupdf.fitz.android.AndroidDrawDevice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -87,6 +89,72 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         }
     }
 
+    /** Sommaire du document (signets) : titre, profondeur, page (0 = premiere). */
+    suspend fun signets(): List<Signet> = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val out = ArrayList<Signet>()
+            fun parcourir(l: Array<Outline>?, profondeur: Int) {
+                l ?: return
+                for (o in l) {
+                    if (out.size >= 2000) return
+                    if (o.title != null) {
+                        val p = try { doc.pageNumberFromLocation(doc.resolveLink(o)) } catch (_: Exception) { -1 }
+                        out.add(Signet(o.title, profondeur, p))
+                    }
+                    if (profondeur < 8) parcourir(o.down, profondeur + 1)
+                }
+            }
+            try { parcourir(doc.loadOutline(), 0) } catch (_: Exception) { }
+            out
+        }
+    }
+
+    /** Recherche dans tout le document : zones trouvees (en points) par page. */
+    suspend fun rechercher(texte: String): List<Trouve> = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val out = ArrayList<Trouve>()
+            if (texte.isBlank()) return@withContext out
+            for (n in 0 until doc.countPages()) {
+                val p = doc.loadPage(n)
+                try {
+                    val q = p.search(texte) ?: emptyArray()
+                    if (q.isNotEmpty()) {
+                        out.add(Trouve(n, q.map { morceaux ->
+                            val xs = morceaux.flatMap { listOf(it.ul_x, it.ur_x, it.ll_x, it.lr_x) }
+                            val ys = morceaux.flatMap { listOf(it.ul_y, it.ur_y, it.ll_y, it.lr_y) }
+                            floatArrayOf(xs.min(), ys.min(), xs.max(), ys.max())
+                        }))
+                    }
+                } finally {
+                    p.destroy()
+                }
+            }
+            out
+        }
+    }
+
+    /** Commentaires (notes, surlignages...) de chaque page : page, genre, texte. */
+    suspend fun commentaires(): List<Commentaire> = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val out = ArrayList<Commentaire>()
+            for (n in 0 until doc.countPages()) {
+                val p = doc.loadPage(n)
+                try {
+                    (p as? PDFPage)?.annotations?.forEach { a ->
+                        val genre = try { a.type } catch (_: Exception) { -1 }
+                        if (genre == com.artifex.mupdf.fitz.PDFAnnotation.TYPE_LINK || genre == com.artifex.mupdf.fitz.PDFAnnotation.TYPE_WIDGET) return@forEach
+                        val texte = try { a.contents ?: "" } catch (_: Exception) { "" }
+                        val auteur = try { a.author ?: "" } catch (_: Exception) { "" }
+                        out.add(Commentaire(n, genre, texte, auteur))
+                    }
+                } finally {
+                    p.destroy()
+                }
+            }
+            out
+        }
+    }
+
     fun fermer() {
         try {
             doc.destroy()
@@ -132,3 +200,7 @@ object Miniatures {
         }
     }
 }
+
+data class Signet(val titre: String, val profondeur: Int, val page: Int)
+data class Trouve(val page: Int, val zones: List<FloatArray>)
+data class Commentaire(val page: Int, val genre: Int, val texte: String, val auteur: String)

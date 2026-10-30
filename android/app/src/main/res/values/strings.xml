@@ -25,4 +25,25 @@
     <string name="aujourdhui">aujourd\'hui à %1$s</string>
     <string name="hier">hier à %1$s</string>
     <string name="pages">%1$d page(s)</string>
+    <string name="plus_court">Plus</string>
+    <string name="rechercher">Rechercher</string>
+    <string name="rechercher_texte">Mot ou phrase à chercher</string>
+    <string name="recherche_en_cours">Recherche…</string>
+    <string name="rien_trouve">Rien trouvé dans ce document.</string>
+    <string name="trouve_n">%1$d résultat(s) sur %2$d page(s)</string>
+    <string name="zoom_moins">Zoom arrière</string>
+    <string name="zoom_plus">Zoom avant</string>
+    <string name="ajuster">Ajuster à la largeur</string>
+    <string name="aller_page">Aller à la page</string>
+    <string name="pages_volet">Pages</string>
+    <string name="signets">Signets</string>
+    <string name="aucun_signet">Ce document n\'a pas de signets.</string>
+    <string name="commentaires">Commentaires</string>
+    <string name="aucun_commentaire">Aucun commentaire dans ce document.</string>
+    <string name="annoter">Annoter</string>
+    <string name="signer">Signer</string>
+    <string name="bientot_annoter">Surligner, souligner, barrer, notes, dessin : prochaine étape, avec l\'enregistrement (même fichier ou autre nom).</string>
+    <string name="bientot_signer">Signature dessinée, paraphe, tampons et formulaires : étape suivante, avec vos tampons et signatures de PhilPDF Windows.</string>
+    <string name="page_n">Page %1$d</string>
+    <string name="infos_doc">%1$s · %2$d page(s)</string>
 </resources>
