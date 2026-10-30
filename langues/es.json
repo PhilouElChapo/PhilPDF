@@ -60,7 +60,7 @@
  "<b>Organiser les pages</b> — glissez pour réordonner, clic droit pour plus d'actions ; survolez une page pour la loupe, molette pour zoomer": "<b>Organizar las páginas</b> — arrastre para reordenar, clic derecho para más acciones; pase sobre una página para la lupa, rueda para ampliar",
  "<b>Ouverts sur {machine}</b> (le {date}) : {nb}, {n} retrouvé(s) sur ce poste (les autres sont grisés).": "<b>Abiertos en {machine}</b> (el {date}): {nb}, {n} encontrado(s) en este equipo (los demás en gris).",
  "<b>PhilPDF range vos réglages avant de se fermer</b><br>Vos autres postes retrouveront ainsi vos préférences et vos fichiers ouverts.": "<b>PhilPDF guarda sus ajustes antes de cerrarse</b><br>Así sus otros equipos encontrarán sus preferencias y archivos abiertos.",
- "<b>PhilPDF {version}</b> – Editeur PDF<br>Usage personnel et familial.<br><br>Moteur PDF : PyMuPDF (AGPL). Interface : Qt / PySide6 (LGPL). OCR : Tesseract (Apache 2.0).<br>Police de remplacement fournie : Nunito (SIL Open Font License).": "<b>PhilPDF {version}</b> – Editor PDF<br>Uso personal y familiar.<br><br>Motor PDF: PyMuPDF (AGPL). Interfaz: Qt / PySide6 (LGPL). OCR: Tesseract (Apache 2.0).<br>Fuente de sustitución incluida: Nunito (SIL Open Font License).",
+ "<b>PhilPDF {version}</b> – Editeur PDF<br>Logiciel libre sous licence GNU AGPL v3, sans aucune garantie. Code et propositions : <a href='https://github.com/PhilouElChapo/PhilPDF'>github.com/PhilouElChapo/PhilPDF</a><br><br>Moteur PDF : PyMuPDF (AGPL). Interface : Qt / PySide6 (LGPL). OCR : Tesseract (Apache 2.0).<br>Police de remplacement fournie : Nunito (SIL Open Font License).": "<b>PhilPDF {version}</b> – Editor PDF<br>Software libre bajo licencia GNU AGPL v3, sin ninguna garantía. Código y propuestas: <a href='https://github.com/PhilouElChapo/PhilPDF'>github.com/PhilouElChapo/PhilPDF</a><br><br>Motor PDF: PyMuPDF (AGPL). Interfaz: Qt / PySide6 (LGPL). OCR: Tesseract (Apache 2.0).<br>Fuente de sustitución incluida: Nunito (SIL Open Font License).",
  "<b>Session plus récente sur {machine}</b> (le {date}) : {nb}, {n} retrouvé{x} sur ce poste.": "<b>Sesión más reciente en {machine}</b> (el {date}): {nb}, {n} encontrado(s) en este equipo.",
  "<b>Style</b> (remplit la consigne)": "<b>Estilo</b> (rellena la instrucción)",
  "<b>Synchronisation avec {lieu}</b>": "<b>Sincronización con {lieu}</b>",
@@ -1935,5 +1935,6 @@
  "Bouton qui fait une action : réinitialiser, imprimer, envoyer par e-mail, aller à une page.": "Botón que realiza una acción: restablecer, imprimir, enviar por correo, ir a una página.",
  "Liste ouverte (plusieurs choix)": "Lista abierta (varias opciones)",
  "Champ « {nom} » déplacé ou redimensionné": "Campo «{nom}» movido o redimensionado",
- "Cliquez pour aller à une partie des propriétés": "Haga clic para ir a una parte de las propiedades"
+ "Cliquez pour aller à une partie des propriétés": "Haga clic para ir a una parte de las propiedades",
+ "PhilPDF s'est ouvert tout seul parce qu'une impression vers l'imprimante PhilPDF est arrivée.": "PhilPDF se ha abierto solo porque ha llegado una impresión a la impresora PhilPDF."
 }

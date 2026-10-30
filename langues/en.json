@@ -60,7 +60,7 @@
  "<b>Organiser les pages</b> — glissez pour réordonner, clic droit pour plus d'actions ; survolez une page pour la loupe, molette pour zoomer": "<b>Organize pages</b> — drag to reorder, right-click for more actions; hover a page for the magnifier, wheel to zoom",
  "<b>Ouverts sur {machine}</b> (le {date}) : {nb}, {n} retrouvé(s) sur ce poste (les autres sont grisés).": "<b>Open on {machine}</b> ({date}): {nb}, {n} found on this computer (the others are greyed).",
  "<b>PhilPDF range vos réglages avant de se fermer</b><br>Vos autres postes retrouveront ainsi vos préférences et vos fichiers ouverts.": "<b>PhilPDF is saving your settings before closing</b><br>Your other computers will find your preferences and open files.",
- "<b>PhilPDF {version}</b> – Editeur PDF<br>Usage personnel et familial.<br><br>Moteur PDF : PyMuPDF (AGPL). Interface : Qt / PySide6 (LGPL). OCR : Tesseract (Apache 2.0).<br>Police de remplacement fournie : Nunito (SIL Open Font License).": "<b>PhilPDF {version}</b> – PDF Editor<br>Personal and family use.<br><br>PDF engine: PyMuPDF (AGPL). Interface: Qt / PySide6 (LGPL). OCR: Tesseract (Apache 2.0).<br>Bundled fallback font: Nunito (SIL Open Font License).",
+ "<b>PhilPDF {version}</b> – Editeur PDF<br>Logiciel libre sous licence GNU AGPL v3, sans aucune garantie. Code et propositions : <a href='https://github.com/PhilouElChapo/PhilPDF'>github.com/PhilouElChapo/PhilPDF</a><br><br>Moteur PDF : PyMuPDF (AGPL). Interface : Qt / PySide6 (LGPL). OCR : Tesseract (Apache 2.0).<br>Police de remplacement fournie : Nunito (SIL Open Font License).": "<b>PhilPDF {version}</b> – PDF Editor<br>Free software under the GNU AGPL v3 licence, with no warranty. Code and contributions: <a href='https://github.com/PhilouElChapo/PhilPDF'>github.com/PhilouElChapo/PhilPDF</a><br><br>PDF engine: PyMuPDF (AGPL). Interface: Qt / PySide6 (LGPL). OCR: Tesseract (Apache 2.0).<br>Bundled fallback font: Nunito (SIL Open Font License).",
  "<b>Session plus récente sur {machine}</b> (le {date}) : {nb}, {n} retrouvé{x} sur ce poste.": "<b>More recent session on {machine}</b> ({date}): {nb}, {n} found on this computer.",
  "<b>Style</b> (remplit la consigne)": "<b>Style</b> (fills in the instruction)",
  "<b>Synchronisation avec {lieu}</b>": "<b>Syncing with {lieu}</b>",
@@ -2633,5 +2633,6 @@
  "Contacts retirés du carnet": "Contacts removed from the address book",
  "Retirer cette consigne de la liste des consignes déjà utilisées": "Remove this instruction from the list of instructions already used",
  "L'IA choisie dans les Préférences est proposée ; vous pouvez en prendre une autre pour cette demande seulement": "The AI chosen in Preferences is offered; you can pick another one for this request only",
- "Envoyer à :": "Send to:"
+ "Envoyer à :": "Send to:",
+ "PhilPDF s'est ouvert tout seul parce qu'une impression vers l'imprimante PhilPDF est arrivée.": "PhilPDF opened by itself because a print job to the PhilPDF printer arrived."
 }

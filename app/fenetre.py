@@ -407,7 +407,13 @@ class Fenetre(MixinCoteACote, QMainWindow):
             self.ouvrir(f)
         import datetime
         aujourd_hui = datetime.date.today().isoformat()
-        if self.params.get("maj_auto", True):
+        from . import config as _cfg
+        if getattr(_cfg, "LANCE_PAR_IMPRIMANTE", False):
+            # ouvert tout seul par l'imprimante : on montre l'impression, sans autre question (la mise a jour sera
+            # proposee a la prochaine ouverture faite par vous)
+            __import__("PySide6.QtCore", fromlist=["QTimer"]).QTimer.singleShot(1500, lambda: self.statusBar().showMessage(
+                _("PhilPDF s'est ouvert tout seul parce qu'une impression vers l'imprimante PhilPDF est arrivée."), 15000))
+        elif self.params.get("maj_auto", True):
             self.params["maj_derniere"] = aujourd_hui
             self.params.enregistrer()
             self.verifier_maj(silencieux=True)
@@ -3050,7 +3056,8 @@ class Fenetre(MixinCoteACote, QMainWindow):
         v = versions_moteurs()
         moteurs = "<br>".join(f"{k} : <b>{x}</b>" for k, x in v.items())
         QMessageBox.about(self, _('A propos de PhilPDF'),
-                          _("<b>PhilPDF {version}</b> – Editeur PDF<br>Usage personnel et familial.<br><br>"
+                          _("<b>PhilPDF {version}</b> – Editeur PDF<br>Logiciel libre sous licence GNU AGPL v3, sans aucune garantie. "
+                            "Code et propositions : <a href='https://github.com/PhilouElChapo/PhilPDF'>github.com/PhilouElChapo/PhilPDF</a><br><br>"
                             "Moteur PDF : PyMuPDF (AGPL). Interface : Qt / PySide6 (LGPL). OCR : Tesseract (Apache 2.0).<br>"
                             "Police de remplacement fournie : Nunito (SIL Open Font License).", version=VERSION)
                           + "<br><br>" + _("<b>Moteurs embarqués</b> (mis à jour automatiquement à chaque nouvelle version) :")

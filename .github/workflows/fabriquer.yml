@@ -162,7 +162,7 @@ jobs:
       - name: Version portable
         shell: pwsh
         run: |
-          Copy-Item LISEZMOI.txt dist\PhilPDF\
+          Copy-Item LISEZMOI.txt, LICENSE dist\PhilPDF\
           Set-Content dist\PhilPDF\portable.txt "PhilPDF portable : parametres et session ranges dans le dossier donnees"
           Compress-Archive -Force -Path dist\PhilPDF\* -DestinationPath PhilPDF_portable.zip
           Remove-Item dist\PhilPDF\portable.txt
@@ -273,7 +273,7 @@ jobs:
           exit $r
       - name: Archive
         run: |
-          cp LISEZMOI.txt linux/philpdf-256.png dist/PhilPDF/
+          cp LISEZMOI.txt LICENSE linux/philpdf-256.png dist/PhilPDF/
           tar czf PhilPDF_linux_x86_64.tar.gz -C dist PhilPDF
       - uses: actions/upload-artifact@v5
         with:

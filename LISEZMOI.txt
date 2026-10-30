@@ -1,7 +1,30 @@
 PhilPDF - Editeur PDF
 =====================
 
-Usage personnel et familial. Windows d'abord, Linux (Zorin OS) ensuite.
+Logiciel libre (licence GNU AGPL v3, voir le fichier LICENSE).
+Windows et Linux (Zorin OS, Ubuntu, Fedora...), Android en preparation.
+
+Projet libre : chacun peut l'utiliser, le lire, le modifier et le
+redistribuer, a condition que les versions modifiees restent libres sous
+la meme licence. Les propositions sont bienvenues (voir 0. PARTICIPER).
+
+
+0. PARTICIPER
+-------------
+
+Code et versions : https://github.com/PhilouElChapo/PhilPDF
+
+  - Un probleme, une idee : ouvrez un ticket ("Issues") sur GitHub.
+  - Une correction ou une amelioration : proposez-la ("Pull request").
+    Les propositions sont relues et acceptees par le mainteneur ; seule
+    la version publiee sur ce depot est distribuee par la mise a jour
+    automatique de PhilPDF.
+  - Projet maintenu librement, sans engagement de delai de reponse.
+
+PhilPDF est fourni sans aucune garantie (licence AGPL, articles 15 et 16).
+Il utilise PyMuPDF / MuPDF (AGPL, Artifex), Qt / PySide6 (LGPL),
+Tesseract (Apache 2.0), pyHanko (MIT), pdf2docx (MIT) et la police
+Nunito (SIL Open Font License).
 
 
 1. TOUT EN UN

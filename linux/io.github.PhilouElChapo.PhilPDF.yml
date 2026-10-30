@@ -61,7 +61,7 @@ modules:
       - pip3 install --prefix=/app --no-cache-dir -r requirements.txt
       - python3 outils_dev/compiler_jbig2.py
       - mkdir -p /app/philpdf
-      - cp -r app moteur langues fonts tessdata philpdf.py moteurs.json LISEZMOI.txt philpdf.ico /app/philpdf/
+      - cp -r app moteur langues fonts tessdata philpdf.py moteurs.json LISEZMOI.txt LICENSE philpdf.ico /app/philpdf/
       - find /app/philpdf -name __pycache__ -prune -exec rm -rf {} +
       - install -Dm755 linux/philpdf.sh /app/bin/philpdf
       - install -Dm644 linux/io.github.PhilouElChapo.PhilPDF.desktop /app/share/applications/io.github.PhilouElChapo.PhilPDF.desktop

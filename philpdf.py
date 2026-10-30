@@ -213,6 +213,8 @@ def main():
     impressions = [os.path.abspath(sys.argv[i + 1]) for i, a in enumerate(sys.argv[:-1]) if a == "--impression"]
     fichiers = [os.path.abspath(a) for a in sys.argv[1:] if a.lower().endswith(".pdf") and os.path.exists(a)
                 and os.path.abspath(a) not in impressions]
+    import app.config as _cfg                         # lance seulement pour une impression (PhilPDF etait ferme)
+    _cfg.LANCE_PAR_IMPRIMANTE = bool(impressions) and not fichiers
     # un seul PhilPDF a la fois : verrou du systeme (meme si deux lancements arrivent ensemble), puis les fichiers
     # sont confies a celui qui est deja ouvert ; apres une mise a jour, le nouveau attend que l'ancien soit ferme
     global _VERROU
@@ -267,6 +269,10 @@ def main():
         from app.journal import ecrire
         ecrire("démarrage", f"fenêtre prête en {_tm.monotonic() - _t0:.1f} s (Qt {_t1 - _t0:.1f} s, moteur PDF "
                             f"{_t2 - _t1:.1f} s, interface {_t3 - _t2:.1f} s, fenêtre {_t5 - _t4:.1f} s)")
+        if impressions:
+            ecrire("démarrage", "ouvert par l'imprimante PhilPDF : " + ", ".join(os.path.basename(x) for x in impressions))
+        elif fichiers:
+            ecrire("démarrage", "ouvert avec : " + ", ".join(os.path.basename(x) for x in fichiers))
     except Exception:
         pass
     from PySide6.QtCore import QTimer

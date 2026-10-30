@@ -128,6 +128,7 @@ def _script_surveillance():
     args = " ".join(f'"`"{a}`""' for a in avant)
     return f"""$port = {_ps_chaine(fichier_port())}
 $dossier = {_ps_chaine(dossier())}
+$debut = Get-Date
 while ($true) {{
   if (Test-Path -LiteralPath $port) {{
     try {{
@@ -135,6 +136,9 @@ while ($true) {{
       Start-Sleep -Milliseconds 400
       $nom = Join-Path $dossier ('Impression ' + (Get-Date -Format 'yyyy-MM-dd HH-mm-ss') + '.pdf')
       Move-Item -LiteralPath $port -Destination $nom -Force
+      # au demarrage de Windows (2 premieres minutes) : une impression restee en attente est gardee pour la
+      # prochaine ouverture de PhilPDF, sans l'ouvrir tout seul
+      if (((Get-Date) - $debut).TotalSeconds -lt 120) {{ continue }}
       Start-Process -FilePath {_ps_chaine(exe)} -ArgumentList @({args + ", " if args else ""}'--impression', "`"$nom`"")
     }} catch {{ }}
   }}
