@@ -832,10 +832,14 @@ class PageAccueil(QWidget):
         quand = h[:5] if j == __import__("datetime").date.today().isoformat() else f"{j[8:10]}/{j[5:7]} {h[:5]}"
         if e.get("ok"):
             autres = []
-            try:
+            try:                                     # memes sources que « Mes postes » : reglages ET session
                 from .session import session_de
+                from . import reglages as _rg
                 moi = self.params.get("machine", "")
                 autres = [m for m, v in session_de(self.params).lire().items() if m != moi and isinstance(v, dict)]
+                if not autres:
+                    pd = _rg.chemin_drive(self.params)
+                    autres = [m for m in ((_rg.lire_drive(pd).get("postes") if pd else None) or {}) if m != moi]
             except Exception:                        # noqa: BLE001
                 autres = None
             seul = "" if autres or autres is None else (

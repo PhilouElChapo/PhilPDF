@@ -315,6 +315,20 @@ def surveiller_plantages():
         except Exception:
             pass
     sys.excepthook = crochet
+    # Windows : faulthandler note aussi des alertes internes sans gravite (ex. 0x80040155 dans la fenetre de choix
+    # de dossier) alors que PhilPDF continue. Fermeture normale = pas de plantage : le fichier est vide a la sortie.
+    import atexit
+
+    def sortie_normale():
+        try:
+            faulthandler.disable()
+            if _FICHIER_PLANTAGE:
+                _FICHIER_PLANTAGE.seek(0)
+                _FICHIER_PLANTAGE.truncate()
+                _FICHIER_PLANTAGE.close()
+        except Exception:
+            pass
+    atexit.register(sortie_normale)
     import threading
     threading.excepthook = lambda a: crochet(a.exc_type, a.exc_value, a.exc_traceback)
 
