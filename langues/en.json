@@ -2675,5 +2675,9 @@
  "Numérotation Bates trouvée dans le document : {a} à {b} ({n} page(s)). Elle est reprise ci-dessous.": "Bates numbering found in the document: {a} to {b} ({n} page(s)). It is shown below.",
  "En haut au centre": "Top centre",
  "Marge gauche (verticale)": "Left margin (vertical)",
- "Marge droite (verticale)": "Right margin (vertical)"
+ "Marge droite (verticale)": "Right margin (vertical)",
+ "Tous les documents ({x})": "All documents ({x})",
+ "Photos et images ({x})": "Photos and images ({x})",
+ "Word, Excel, PowerPoint, texte ({x})": "Word, Excel, PowerPoint, text ({x})",
+ "Tous les fichiers (*)": "All files (*)"
 }

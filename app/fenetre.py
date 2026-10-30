@@ -151,7 +151,7 @@ class TacheSynchro(QThread):
             pass
 
 
-EXTENSIONS_OUVRABLES = (".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp")
+EXTENSIONS_OUVRABLES = (".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif", ".webp", ".jxr", ".pnm")
 from moteur.office import EXTENSIONS as EXTENSIONS_OFFICE
 
 
@@ -915,25 +915,24 @@ class Fenetre(MixinCoteACote, QMainWindow):
         self.dragEnterEvent(e)
 
     def dropEvent(self, e):
+        """Fichiers deposes : PDF ouverts ; Word, Excel, PowerPoint convertis ; une image ouverte comme PDF ;
+        plusieurs images assemblees en un seul PDF (pas encore enregistre, dossier des images propose)."""
         fichiers = [u.toLocalFile() for u in e.mimeData().urls() if u.isLocalFile()]
-        pdfs = [f for f in fichiers if f.lower().endswith(".pdf")]
         images = [f for f in fichiers if f.lower().endswith(EXTENSIONS_OUVRABLES[1:])]
-        for f in pdfs:
-            self.ouvrir(f)
-        for f in fichiers:                            # Word, Excel, PowerPoint : convertis, polices integrees
-            if f.lower().endswith(EXTENSIONS_OFFICE):
-                self.ouvrir_office(f)
-        if images:                                    # images deposees : un PDF est cree a partir d'elles
+        for f in fichiers:
+            if f.lower().endswith(".pdf") or f.lower().endswith(EXTENSIONS_OFFICE) or (len(images) == 1 and f in images):
+                self.ouvrir(f)
+        if len(images) > 1:
             try:
                 import pymupdf as _f
                 d = _f.open()
                 for im in images:
                     i = _f.open(im)
-                    d.insert_pdf(_f.open("pdf", i.convert_to_pdf()))
-                from .config import dossier_donnees
-                sortie = os.path.join(dossier_donnees(), os.path.splitext(os.path.basename(images[0]))[0] + ".pdf")
-                d.save(sortie)
-                self.ouvrir(sortie)
+                    d.insert_pdf(i if i.is_pdf else _f.open("pdf", i.convert_to_pdf()))
+                o = OngletDocument(self.params, biblio=self.biblio, doc=d,
+                                   nom=os.path.splitext(os.path.basename(images[0]))[0] + ".pdf")
+                o.dossier_propose = os.path.dirname(images[0])
+                self.ajouter_onglet(o)
             except Exception as ex:
                 QMessageBox.warning(self, "PhilPDF", _("Impossible d'ouvrir ce fichier :\n{e}", e=ex))
         e.acceptProposedAction()
@@ -947,6 +946,8 @@ class Fenetre(MixinCoteACote, QMainWindow):
         if not os.path.exists(chemin):
             QMessageBox.warning(self, "PhilPDF", _('Fichier introuvable sur ce PC :\n{chemin}', chemin=chemin))
             return None
+        if chemin.lower().endswith(EXTENSIONS_OFFICE):     # Word, Excel, PowerPoint : converti, l'original reste
+            return self.ouvrir_office(chemin)
         try:
             o = OngletDocument(self.params, chemin, biblio=self.biblio)
         except Exception as e:
@@ -964,8 +965,20 @@ class Fenetre(MixinCoteACote, QMainWindow):
         self._session_touchee = True
         return self.ajouter_onglet(o)
 
+    def filtre_ouvrir(self):
+        """Tout ce que PhilPDF sait ouvrir : PDF, photos et images (converties en PDF), Word / Excel / PowerPoint
+        (convertis par Office ou LibreOffice)."""
+        etoiles = lambda exts: " ".join("*" + x for x in exts)
+        images = EXTENSIONS_OUVRABLES[1:]
+        return ";;".join([
+            _("Tous les documents ({x})", x=etoiles(EXTENSIONS_OUVRABLES + EXTENSIONS_OFFICE)),
+            _("Documents PDF (*.pdf *.PDF)"),
+            _("Photos et images ({x})", x=etoiles(images)),
+            _("Word, Excel, PowerPoint, texte ({x})", x=etoiles(EXTENSIONS_OFFICE)),
+            _("Tous les fichiers (*)")])
+
     def dialogue_ouvrir(self):
-        for f in QFileDialog.getOpenFileNames(self, _('Ouvrir'), self.dossier_depart(), FILTRE)[0]:
+        for f in QFileDialog.getOpenFileNames(self, _('Ouvrir'), self.dossier_depart(), self.filtre_ouvrir())[0]:
             self.ouvrir(f)
 
     def action_fichier(self, chemin, action):

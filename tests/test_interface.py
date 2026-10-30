@@ -1155,5 +1155,20 @@ _oi.changer_mode("modifier"); app.processEvents()
 _oi.page_widgets[0].repaint(); app.processEvents()
 verif(_oi.doc.is_pdf and _oi.nom == "Photo.pdf" and _oi.chemin is None and _oi.paragraphes_page(0) == [],
       "image JPG : ouverte comme PDF, mode Modifier sans plantage, l'image d'origine n'est pas écrasée")
+# Ouvrir : photos, images, Word... proposes ; deux images deposees -> un PDF de deux pages, pas encore enregistre
+_flt = w.filtre_ouvrir()
+verif("*.jpg" in _flt and "*.docx" in _flt and "*.xlsx" in _flt and "*.pdf" in _flt, "Ouvrir : PDF, photos, Word, Excel proposés")
+_jpg2 = os.path.join(TRAVAIL, "Photo2.png"); _pm.save(_jpg2)
+from PySide6.QtCore import QMimeData, QUrl
+class _Depot:
+    def __init__(s_, fs):
+        s_.m = QMimeData(); s_.m.setUrls([QUrl.fromLocalFile(f) for f in fs])
+    def mimeData(s_): return s_.m
+    def acceptProposedAction(s_): pass
+_n0 = len(w.documents())
+w.dropEvent(_Depot([_jpg, _jpg2])); app.processEvents()
+_od = w.doc_courant()
+verif(len(w.documents()) == _n0 + 1 and _od is not None and len(_od.doc) == 2 and _od.chemin is None
+      and getattr(_od, "dossier_propose", "") == TRAVAIL, "deux images déposées : un PDF de deux pages, dossier des images proposé")
 print(f"\n{sum(c for c, _ in ok)}/{len(ok)} vérifications réussies")
 sys.exit(0 if all(c for c, _ in ok) else 1)

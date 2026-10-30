@@ -1982,5 +1982,9 @@
  "En haut au centre": "Arriba al centro",
  "En haut à gauche": "Arriba a la izquierda",
  "Marge gauche (verticale)": "Margen izquierdo (vertical)",
- "Marge droite (verticale)": "Margen derecho (vertical)"
+ "Marge droite (verticale)": "Margen derecho (vertical)",
+ "Tous les documents ({x})": "Todos los documentos ({x})",
+ "Photos et images ({x})": "Fotos e imágenes ({x})",
+ "Word, Excel, PowerPoint, texte ({x})": "Word, Excel, PowerPoint, texto ({x})",
+ "Tous les fichiers (*)": "Todos los archivos (*)"
 }

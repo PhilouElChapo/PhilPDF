@@ -1982,5 +1982,9 @@
  "En haut au centre": "Oben mittig",
  "En haut à gauche": "Oben links",
  "Marge gauche (verticale)": "Linker Rand (senkrecht)",
- "Marge droite (verticale)": "Rechter Rand (senkrecht)"
+ "Marge droite (verticale)": "Rechter Rand (senkrecht)",
+ "Tous les documents ({x})": "Alle Dokumente ({x})",
+ "Photos et images ({x})": "Fotos und Bilder ({x})",
+ "Word, Excel, PowerPoint, texte ({x})": "Word, Excel, PowerPoint, Text ({x})",
+ "Tous les fichiers (*)": "Alle Dateien (*)"
 }
