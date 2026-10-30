@@ -81,7 +81,7 @@
     <string name="reglages">Réglages</string>
     <string name="termine">Terminé</string>
     <string name="outil_poser">Poser</string>
-    <string name="aide_poser">Touchez la page à l\'endroit voulu : la signature, le paraphe ou le tampon y est posé. Appui long dessus ensuite pour changer sa couleur ou le supprimer.</string>
+    <string name="aide_poser">Un aperçu apparaît sur la page : faites-le glisser à l\'endroit voulu (ou touchez la page), puis « Poser ici ». Appui long dessus ensuite pour le modifier ou le supprimer.</string>
     <string name="remplir_aide">Formulaire : touchez un champ de la page pour le remplir (texte, case à cocher, liste). Signature, paraphe ou tampon : choisissez-le ci-dessous, puis touchez la page.</string>
     <string name="mes_signatures">Mes signatures</string>
     <string name="mes_paraphes">Mes paraphes</string>
@@ -90,7 +90,7 @@
     <string name="toutes_pages">Toutes les pages</string>
     <string name="taille_signature">Largeur à la pose : %1$d pt</string>
     <string name="tampons">Tampons</string>
-    <string name="tampon_perso">Votre texte (la date choisie s\'ajoute ; {date} et {heure} possibles)</string>
+    <string name="tampon_perso">Votre texte de tampon</string>
     <string name="poser">Poser</string>
     <string name="dessinez_signature">Signez au doigt dans le cadre</string>
     <string name="dessinez_paraphe">Dessinez vos initiales dans le cadre</string>
@@ -140,4 +140,10 @@
     <string name="biblio_vide">Vos signatures et tampons de PhilPDF Windows : reliez votre compte Google (Accueil, rond en haut à droite).</string>
     <string name="biblio_vide_connecte">Vos signatures et tampons de PhilPDF Windows : Accueil, rond en haut à droite, « Récupérer sur ce téléphone ».</string>
     <string name="de_vos_postes">%1$s de vos postes</string>
+    <string name="h_heure">Heure</string>
+    <string name="code_date">+ date</string>
+    <string name="code_heure">+ heure</string>
+    <string name="code_date_heure">+ date et heure</string>
+    <string name="poser_ici">Poser ici</string>
+    <string name="aide_poser_apercu">Faites glisser l\'aperçu à l\'endroit voulu (ou touchez la page), puis « Poser ici ».</string>
 </resources>

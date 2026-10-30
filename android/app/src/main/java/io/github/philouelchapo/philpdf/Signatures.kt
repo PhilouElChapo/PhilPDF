@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package io.github.philouelchapo.philpdf
 
 import android.content.Context
@@ -47,6 +49,13 @@ sealed class APoser {
     data class Image(val png: java.io.File, val ratio: Float, val largeur: Float) : APoser()
 }
 
+/** Largeur et hauteur (en points) de ce qui sera pose : sert a l'apercu sur la page. */
+fun APoser.taillePt(): Pair<Float, Float> = when (this) {
+    is APoser.Traits -> largeur to largeur / t.ratio.coerceAtLeast(0.05f)
+    is APoser.Image -> largeur to largeur / ratio.coerceAtLeast(0.05f)
+    is APoser.Tampon -> texte.split("\n").let { l -> (l.maxOf { it.length } * taille * 0.62f + 16f) to (l.size * taille * 1.25f + 12f) }
+}
+
 /** Signatures et paraphes gardes sur l'appareil (repris de PhilPDF Windows a l'etape suivante). */
 object Signatures {
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("philpdf", Context.MODE_PRIVATE)
@@ -84,12 +93,13 @@ val ENCRE = Color(0xFF0F3C8C)
 val TAMPONS = listOf("REÇU LE", "PAYÉ LE", "VALIDÉ LE", "TRAITÉ LE", "COPIE CONFORME", "ANNULÉ", "BON POUR ACCORD", "URGENT")
 
 /** Date ajoutee au tampon (comme sous Windows) : aucune, date du jour, ou date et heure. */
-enum class Horodatage(val texte: Int) { AUCUN(R.string.h_aucun), DATE(R.string.h_date), DATE_HEURE(R.string.h_date_heure) }
+enum class Horodatage(val texte: Int) { AUCUN(R.string.h_aucun), DATE(R.string.h_date), DATE_HEURE(R.string.h_date_heure), HEURE(R.string.h_heure) }
 
 fun maintenant(h: Horodatage): String = when (h) {
     Horodatage.AUCUN -> ""
     Horodatage.DATE -> SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE).format(Date())
     Horodatage.DATE_HEURE -> SimpleDateFormat("dd/MM/yyyy 'à' HH:mm", Locale.FRANCE).format(Date())
+    Horodatage.HEURE -> SimpleDateFormat("HH:mm", Locale.FRANCE).format(Date())
 }
 
 /** Texte final du tampon : « REÇU LE 30/10/2026 » ; « VALIDÉ » + date sur une 2e ligne ; codes {date} et {heure}. */
@@ -99,6 +109,11 @@ fun texteTampon(t: String, h: Horodatage): String {
         return t.replace("{date}", SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE).format(Date()))
             .replace("{heure}", SimpleDateFormat("HH:mm", Locale.FRANCE).format(Date()))
     if (d.isEmpty()) return t.removeSuffix(" LE").removeSuffix(" le")
+    if (h == Horodatage.HEURE) return when {                // « REÇU A 14:32 » (majuscule sans accent)
+        t.endsWith(" LE") -> t.removeSuffix(" LE") + " A $d"
+        t.endsWith(" le") -> t.removeSuffix(" le") + " à $d"
+        else -> "$t\n$d"
+    }
     return if (t.endsWith(" LE") || t.endsWith(" le")) "$t $d" else "$t\n$d"
 }
 
@@ -117,7 +132,14 @@ fun PanneauSigner(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choisi: 
         Text(stringResource(R.string.non_modifiable), Modifier.padding(16.dp), color = Color.Gray)
         return
     }
-    fun poser(a: APoser) { etat.aPoser = a; etat.annot.outil = Outil.POSER; choisi() }
+    fun poser(a: APoser) {
+        etat.aPoser = a
+        etat.annot.outil = Outil.POSER
+        // apercu tout de suite au milieu de la page affichee : on le fait glisser, puis « Poser ici »
+        val n = etat.page.coerceIn(0, (tailles.size - 1).coerceAtLeast(0))
+        etat.fantome = tailles.getOrNull(n)?.let { (w, h) -> n to Offset(w / 2, h / 2) }
+        choisi()
+    }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(12.dp)) {
         Text(stringResource(R.string.remplir_aide), fontSize = 12.sp, color = Color.Gray)
         // signatures et tampons de PhilPDF Windows, recuperes par le compte Google (Accueil, en haut a droite)
@@ -172,7 +194,8 @@ fun PanneauSigner(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choisi: 
         Text(stringResource(R.string.tampons), fontWeight = FontWeight.SemiBold)
         Palette(couleurTampon) { couleurTampon = it }
         Spacer(Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Horodatage.entries.forEach { h ->
                 FilterChip(selected = horo == h, onClick = { horo = h }, label = { Text(stringResource(h.texte), fontSize = 12.sp) })
             }
@@ -186,13 +209,22 @@ fun PanneauSigner(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choisi: 
                 .clickable { poser(APoser.Tampon(texteTampon(t, horo), couleurTampon, 14f)) }.padding(8.dp),
                 color = couleurTampon, fontWeight = FontWeight.Bold)
         }
+        Spacer(Modifier.height(6.dp))
         OutlinedTextField(perso, { perso = it }, Modifier.fillMaxWidth(), singleLine = true,
-            label = { Text(stringResource(R.string.tampon_perso)) },
-            trailingIcon = {
-                TextButton(onClick = { if (perso.isNotBlank()) poser(APoser.Tampon(texteTampon(perso, horo), couleurTampon, 14f)) }) {
-                    Text(stringResource(R.string.poser))
-                }
-            })
+            label = { Text(stringResource(R.string.tampon_perso)) })
+        // codes a inserer : remplaces au moment de poser par la date ou l'heure du jour
+
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            AssistChip(onClick = { perso = (perso.trimEnd() + " {date}").trimStart() }, label = { Text(stringResource(R.string.code_date), fontSize = 12.sp) })
+            AssistChip(onClick = { perso = (perso.trimEnd() + " {heure}").trimStart() }, label = { Text(stringResource(R.string.code_heure), fontSize = 12.sp) })
+            AssistChip(onClick = { perso = (perso.trimEnd() + " {date} à {heure}").trimStart() }, label = { Text(stringResource(R.string.code_date_heure), fontSize = 12.sp) })
+        }
+        if (perso.isNotBlank()) {
+            Text(texteTampon(perso, horo), Modifier.fillMaxWidth().padding(vertical = 3.dp)
+                .border(2.dp, couleurTampon, RoundedCornerShape(4.dp))
+                .clickable { poser(APoser.Tampon(texteTampon(perso, horo), couleurTampon, 14f)) }.padding(8.dp),
+                color = couleurTampon, fontWeight = FontWeight.Bold)
+        }
     }
     dessiner?.let { g ->
         PadSignature(g, { dessiner = null }) { t -> Signatures.ajouter(ctx, t); traces = Signatures.liste(ctx); dessiner = null }

@@ -19,6 +19,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
@@ -77,6 +80,7 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var demandeEnregistrer by mutableStateOf(false)
     var aPoser by mutableStateOf<APoser?>(null)            // signature, paraphe ou tampon choisi
     var champ by mutableStateOf<InfoChamp?>(null)           // champ de formulaire en cours de saisie
+    var fantome by mutableStateOf<Pair<Int, Offset>?>(null) // apercu de ce qui va etre pose : page, centre en points
     val page: Int get() = liste.firstVisibleItemIndex
 }
 
@@ -307,7 +311,7 @@ private fun DispositionTelephone(etat: EtatLecteur, tailles: List<Pair<Float, Fl
                 Spacer(Modifier.width(6.dp))
                 Text(stringResource(etat.annot.outil.texte), color = Color.White, fontSize = 13.sp)
                 TextButton(onClick = { tiroir = Volet.ANNOTER }) { Text(stringResource(R.string.reglages), color = Color(0xFF9CC3FF)) }
-                TextButton(onClick = { etat.annot.outil = Outil.MAIN }) { Text(stringResource(R.string.termine), color = Color.White) }
+                TextButton(onClick = { etat.annot.outil = Outil.MAIN; etat.fantome = null; etat.aPoser = null }) { Text(stringResource(R.string.termine), color = Color.White) }
             }
         }
         IndicateurPage(etat, tailles.size, Modifier.align(Alignment.BottomEnd).padding(bottom = if (barres) 72.dp else 0.dp))
@@ -542,20 +546,19 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                     onDoubleTap = { etat.echelle = if (etat.echelle > 1.01f) 1f else 2f; if (etat.echelle == 1f) etat.decalage = Offset.Zero },
                     onLongPress = { o -> portee.launch { etat.selection = d.annotationA(n, k(o)) } })
                 Outil.NOTE -> detectTapGestures(onTap = { o -> etat.noteA = n to k(o) })
-                Outil.POSER -> detectTapGestures(onTap = { o ->
-                    val a = etat.aPoser
-                    etat.aPoser = null
-                    r.outil = Outil.MAIN
-                    portee.launch {
-                        when (a) {
-                            is APoser.Traits -> d.poserTraits(n, k(o), a.largeur, a.t.ratio, a.t.traits, ENCRE.versPdf(),
-                                if (a.t.genre == "paraphe") 1.6f else 2f)
-                            is APoser.Tampon -> d.tampon(n, k(o), a.texte, a.couleur.versPdf(), a.taille)
-                            is APoser.Image -> d.image(n, k(o), a.largeur, a.ratio, a.png.readBytes())
-                            null -> false
-                        }
+                // l'apercu suit le doigt (toucher ou glisser) ; rien n'est pose avant « Poser ici »
+                Outil.POSER -> awaitEachGesture {
+                    val bas = awaitFirstDown()
+                    val p = { o: Offset -> Offset(o.x * w / size.width, o.y * w / size.width) }
+                    etat.fantome = n to p(bas.position)
+                    while (true) {
+                        val ev = awaitPointerEvent()
+                        val c = ev.changes.firstOrNull() ?: break
+                        if (!c.pressed) break
+                        etat.fantome = n to p(c.position)
+                        c.consume()
                     }
-                })
+                }
                 Outil.GOMME -> detectTapGestures(onTap = { o ->
                     portee.launch { d.annotationA(n, k(o))?.let { d.supprimerAnnotation(it) } }
                 })
@@ -610,6 +613,84 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                         Size(kotlin.math.abs(b.x - a.x).coerceAtLeast(4f), kotlin.math.abs(b.y - a.y).coerceAtLeast(24f)))
                 }
             }
+        }
+        val f = etat.fantome
+        val a = etat.aPoser
+        if (marques && r.outil == Outil.POSER && a != null && f != null && f.first == n) Apercu(etat, a, f.second, w)
+    }
+}
+
+/** Apercu de la signature ou du tampon a poser, avec « Poser ici » / « Annuler » juste en dessous (ou au-dessus). */
+@Composable
+private fun Apercu(etat: EtatLecteur, a: APoser, centre: Offset, w: Float) {
+    val ctx = LocalContext.current
+    val portee = rememberCoroutineScope()
+    val image = remember(a) { (a as? APoser.Image)?.let { android.graphics.BitmapFactory.decodeFile(it.png.absolutePath)?.asImageBitmap() } }
+    val (lw, lh) = a.taillePt()
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val dens = LocalDensity.current
+        val s = with(dens) { maxWidth.toPx() } / w
+        val x0 = (centre.x - lw / 2) * s
+        val y0 = (centre.y - lh / 2) * s
+        Canvas(Modifier.fillMaxSize()) {
+            val tl = Offset(x0, y0)
+            val sz = Size(lw * s, lh * s)
+            drawRect(Color(0x221A73E8), tl, sz)
+            when (a) {
+                is APoser.Traits -> a.t.traits.forEach { t ->
+                    for (i in 1 until t.size) drawLine(ENCRE, Offset(x0 + t[i - 1].first * sz.width, y0 + t[i - 1].second * sz.height),
+                        Offset(x0 + t[i].first * sz.width, y0 + t[i].second * sz.height), (2f * s).coerceAtLeast(2f),
+                        androidx.compose.ui.graphics.StrokeCap.Round)
+                }
+                is APoser.Image -> image?.let {
+                    drawImage(it, dstOffset = androidx.compose.ui.unit.IntOffset(x0.toInt(), y0.toInt()),
+                        dstSize = androidx.compose.ui.unit.IntSize(sz.width.toInt().coerceAtLeast(1), sz.height.toInt().coerceAtLeast(1)))
+                }
+                is APoser.Tampon -> {
+                    drawRect(a.couleur, tl, sz, style = androidx.compose.ui.graphics.drawscope.Stroke(2f * s))
+                    val peint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                        color = android.graphics.Color.argb(255, (a.couleur.red * 255).toInt(), (a.couleur.green * 255).toInt(), (a.couleur.blue * 255).toInt())
+                        textSize = a.taille * s
+                        isFakeBoldText = true
+                        textAlign = android.graphics.Paint.Align.CENTER
+                    }
+                    val lignes = a.texte.split("\n")
+                    val pas = a.taille * 1.25f * s
+                    val haut = y0 + (sz.height - lignes.size * pas) / 2
+                    lignes.forEachIndexed { i, l ->
+                        drawContext.canvas.nativeCanvas.drawText(l, x0 + sz.width / 2, haut + (i + 0.8f) * pas, peint)
+                    }
+                }
+            }
+            // cadre pointille : c'est un apercu, pas encore pose
+            drawRect(Color(0xFF1A73E8), tl, sz, style = androidx.compose.ui.graphics.drawscope.Stroke(3f,
+                pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(14f, 10f))))
+        }
+        val hautBoutons = with(dens) { 48.dp.toPx() }
+        val enDessous = y0 + lh * s + hautBoutons + 8 < with(dens) { maxHeight.toPx() }
+        val yb = if (enDessous) y0 + lh * s + 8 else (y0 - hautBoutons - 8).coerceAtLeast(0f)
+        Row(Modifier.fillMaxWidth().offset { androidx.compose.ui.unit.IntOffset(0, yb.toInt()) },
+            horizontalArrangement = Arrangement.Center) {
+            Button(onClick = {
+                val f = etat.fantome ?: return@Button
+                etat.fantome = null
+                etat.aPoser = null
+                etat.annot.outil = Outil.MAIN
+                val pt = com.artifex.mupdf.fitz.Point(f.second.x, f.second.y)
+                val d = etat.doc
+                val n = f.first
+                portee.launch {
+                    when (a) {
+                        is APoser.Traits -> d.poserTraits(n, pt, a.largeur, a.t.ratio, a.t.traits, ENCRE.versPdf(),
+                            if (a.t.genre == "paraphe") 1.6f else 2f)
+                        is APoser.Tampon -> d.tampon(n, pt, a.texte, a.couleur.versPdf(), a.taille)
+                        is APoser.Image -> d.image(n, pt, a.largeur, a.ratio, a.png.readBytes())
+                    }
+                }
+            }, colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) { Text(stringResource(R.string.poser_ici)) }
+            Spacer(Modifier.width(8.dp))
+            OutlinedButton(onClick = { etat.fantome = null; etat.aPoser = null; etat.annot.outil = Outil.MAIN },
+                colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White)) { Text(stringResource(R.string.annuler)) }
         }
     }
 }
