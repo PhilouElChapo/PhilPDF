@@ -18,6 +18,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
@@ -69,6 +70,10 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var recherche by mutableStateOf("")
     var trouves by mutableStateOf<List<Trouve>>(emptyList())
     var cherche by mutableStateOf(false)
+    val annot = ReglagesAnnot()
+    var selection by mutableStateOf<InfoAnnot?>(null)       // annotation en cours de modification (appui long)
+    var noteA by mutableStateOf<Pair<Int, com.artifex.mupdf.fitz.Point>?>(null)
+    var demandeEnregistrer by mutableStateOf(false)
     val page: Int get() = liste.firstVisibleItemIndex
 }
 
@@ -76,10 +81,32 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
 @Composable
 fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
     val ctx = LocalContext.current
-    BackHandler(onBack = fermer)
+    val etat = remember(doc) { EtatLecteur(doc, LazyListState()) }
+    var quitter by remember { mutableStateOf(false) }
+    var fermerApres by remember { mutableStateOf(false) }
+    val portee = rememberCoroutineScope()
+    val erreurEcriture = stringResource(R.string.enregistrement_impossible)
+    val enregistre = stringResource(R.string.enregistre)
+    fun ecrireVers(u: android.net.Uri, puisFermer: Boolean) {
+        portee.launch {
+            try {
+                doc.enregistrer(ctx, u)
+                android.widget.Toast.makeText(ctx, enregistre, android.widget.Toast.LENGTH_SHORT).show()
+                if (puisFermer) fermer()
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(ctx, erreurEcriture, android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    val autreNom = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/pdf")) { u ->
+        if (u != null) ecrireVers(u, fermerApres)
+    }
+    // retour : si le document est modifie, on demande (rien ne se perd en silence)
+    BackHandler { if (doc.modifie) quitter = true else fermer() }
+    val fermerDemande = { if (doc.modifie) quitter = true else fermer() }
     var deverrouille by remember(doc) { mutableStateOf(!doc.besoinMotDePasse()) }
     var tailles by remember(doc) { mutableStateOf<List<Pair<Float, Float>>?>(null) }
-    val etat = remember(doc) { EtatLecteur(doc, LazyListState()) }
     LaunchedEffect(doc, deverrouille) {
         if (deverrouille) {
             val t = doc.tailles()
@@ -98,8 +125,60 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
         t == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.ouverture)) }
         else -> BoxWithConstraints(Modifier.fillMaxSize()) {
             // grand ecran (tablette, telephone a l'horizontale) : disposition Windows ; sinon : telephone
-            if (maxWidth >= 720.dp) DispositionTablette(etat, t, fermer) else DispositionTelephone(etat, t, fermer)
+            if (maxWidth >= 720.dp) DispositionTablette(etat, t, fermerDemande) else DispositionTelephone(etat, t, fermerDemande)
         }
+    }
+    etat.selection?.let { FeuilleAnnotation(etat, it) { etat.selection = null } }
+    etat.noteA?.let { (n, pt) -> DemandeNote({ etat.noteA = null }) { texte ->
+        etat.noteA = null
+        portee.launch { doc.note(n, pt, texte, etat.annot.couleur(Outil.NOTE).versPdf()) }
+    } }
+    // « Enregistrer » : toujours la question, meme fichier ou autre nom
+    if (etat.demandeEnregistrer || quitter) {
+        val q = quitter
+        AlertDialog(onDismissRequest = { etat.demandeEnregistrer = false; quitter = false },
+            title = { Text(stringResource(if (q) R.string.enregistrer_modifs else R.string.enregistrer)) },
+            text = { Text(stringResource(R.string.ou_enregistrer, doc.nom)) },
+            confirmButton = {
+                Column(horizontalAlignment = Alignment.End) {
+                    TextButton(onClick = { etat.demandeEnregistrer = false; quitter = false; ecrireVers(doc.uri, q) }) {
+                        Text(stringResource(R.string.meme_fichier))
+                    }
+                    TextButton(onClick = {
+                        etat.demandeEnregistrer = false; quitter = false; fermerApres = q
+                        autreNom.launch(doc.nom.removeSuffix(".pdf").removeSuffix(".PDF") + " (modifié).pdf")
+                    }) { Text(stringResource(R.string.autre_nom)) }
+                    if (q) TextButton(onClick = { quitter = false; fermer() }) {
+                        Text(stringResource(R.string.ne_pas_enregistrer), color = Color(0xFFC62828))
+                    }
+                }
+            },
+            dismissButton = { TextButton(onClick = { etat.demandeEnregistrer = false; quitter = false }) { Text(stringResource(R.string.annuler)) } })
+    }
+}
+
+@Composable
+private fun DemandeNote(fermer: () -> Unit, valider: (String) -> Unit) {
+    var t by remember { mutableStateOf("") }
+    AlertDialog(onDismissRequest = fermer, title = { Text(stringResource(R.string.outil_note)) },
+        text = { OutlinedTextField(t, { t = it }, Modifier.fillMaxWidth(), minLines = 3) },
+        confirmButton = { TextButton(onClick = { if (t.isNotBlank()) valider(t) else fermer() }) { Text(stringResource(R.string.ok)) } },
+        dismissButton = { TextButton(onClick = fermer) { Text(stringResource(R.string.annuler)) } })
+}
+
+/** Annuler, retablir, enregistrer : dans la barre du haut (tablette et telephone). */
+@Composable
+private fun BoutonsEdition(etat: EtatLecteur) {
+    val portee = rememberCoroutineScope()
+    val d = etat.doc
+    IconButton(onClick = { portee.launch { d.annuler() } }, enabled = d.peutAnnuler) {
+        Icon(Icones.get("annuler", if (d.peutAnnuler) Color(0xFF333333) else Color(0xFFBBBBBB)), stringResource(R.string.annuler_action))
+    }
+    IconButton(onClick = { portee.launch { d.retablir() } }, enabled = d.peutRetablir) {
+        Icon(Icones.get("retablir", if (d.peutRetablir) Color(0xFF333333) else Color(0xFFBBBBBB)), stringResource(R.string.retablir))
+    }
+    IconButton(onClick = { etat.demandeEnregistrer = true }, enabled = d.modifie) {
+        Icon(Icones.get("enregistrer", if (d.modifie) ROUGE else Color(0xFFBBBBBB)), stringResource(R.string.enregistrer))
     }
 }
 
@@ -119,13 +198,14 @@ private fun DispositionTablette(etat: EtatLecteur, tailles: List<Pair<Float, Flo
             IconButton(onClick = fermer) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.retour)) }
             Text(etat.doc.nom, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
             FlowRow(horizontalArrangement = Arrangement.End) {
+                BoutonsEdition(etat)
                 Bouton("rechercher", stringResource(R.string.rechercher)) { droite = if (droite == Volet.RECHERCHE) null else Volet.RECHERCHE }
                 Bouton("zoom_moins", stringResource(R.string.zoom_moins)) { etat.echelle = (etat.echelle / 1.25f).coerceAtLeast(1f); if (etat.echelle == 1f) etat.decalage = Offset.Zero }
                 Bouton("zoom_plus", stringResource(R.string.zoom_plus)) { etat.echelle = (etat.echelle * 1.25f).coerceAtMost(5f) }
                 Bouton("largeur", stringResource(R.string.ajuster)) { etat.echelle = 1f; etat.decalage = Offset.Zero }
                 Bouton("suivante", stringResource(R.string.aller_page)) { allerA = true }
-                Bouton("courriel", stringResource(R.string.partager)) { partager(ctx, etat.doc) }
-                Bouton("imprimer", stringResource(R.string.imprimer)) { imprimer(ctx, etat.doc) }
+                Bouton("courriel", stringResource(R.string.partager)) { portee.launch { partager(ctx, etat.doc) } }
+                Bouton("imprimer", stringResource(R.string.imprimer)) { portee.launch { imprimer(ctx, etat.doc) } }
             }
         }
         HorizontalDivider(color = Color(0xFFE2E2E2))
@@ -211,6 +291,19 @@ private fun DispositionTelephone(etat: EtatLecteur, tailles: List<Pair<Float, Fl
                 verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = fermer) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.retour)) }
                 Text(etat.doc.nom, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
+                BoutonsEdition(etat)
+            }
+        }
+        // outil en cours (dessin, surlignage...) : petite barre en haut, toujours visible, pour finir
+        if (etat.annot.outil != Outil.MAIN) {
+            Row(Modifier.align(Alignment.TopCenter).padding(top = if (barres) 56.dp else 8.dp)
+                .background(Color(0xEE2B2B2B), RoundedCornerShape(20.dp)).padding(horizontal = 10.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icones.get(etat.annot.outil.icone, Color.White), null)
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(etat.annot.outil.texte), color = Color.White, fontSize = 13.sp)
+                TextButton(onClick = { tiroir = Volet.ANNOTER }) { Text(stringResource(R.string.reglages), color = Color(0xFF9CC3FF)) }
+                TextButton(onClick = { etat.annot.outil = Outil.MAIN }) { Text(stringResource(R.string.termine), color = Color.White) }
             }
         }
         IndicateurPage(etat, tailles.size, Modifier.align(Alignment.BottomEnd).padding(bottom = if (barres) 72.dp else 0.dp))
@@ -228,7 +321,8 @@ private fun DispositionTelephone(etat: EtatLecteur, tailles: List<Pair<Float, Fl
     tiroir?.let { v ->
         ModalBottomSheet(onDismissRequest = { tiroir = null }, containerColor = Color(0xFFF7F7F7)) {
             Box(Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 560.dp)) {
-                ContenuVolet(v, etat, tailles) { n ->
+                if (v == Volet.ANNOTER) PanneauAnnoter(etat) { if (etat.annot.outil != Outil.MAIN) tiroir = null }
+                else ContenuVolet(v, etat, tailles) { n ->
                     portee.launch { etat.liste.scrollToItem(n) }
                     if (v != Volet.RECHERCHE) tiroir = null
                 }
@@ -241,13 +335,13 @@ private fun DispositionTelephone(etat: EtatLecteur, tailles: List<Pair<Float, Fl
 @Composable
 private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, Float>>, aller: (Int) -> Unit) {
     val ctx = LocalContext.current
+    val portee = rememberCoroutineScope()
     when (v) {
         Volet.VIGNETTES -> Vignettes(etat, tailles, aller)
         Volet.SIGNETS -> Signets(etat.doc, aller)
         Volet.COMMENTAIRES -> Commentaires(etat.doc, aller)
         Volet.RECHERCHE -> Recherche(etat, aller)
-        Volet.ANNOTER -> Bientot(stringResource(R.string.annoter), stringResource(R.string.bientot_annoter),
-            listOf("surligner", "souligner", "barrer", "commentaire", "modifier"))
+        Volet.ANNOTER -> PanneauAnnoter(etat)
         Volet.SIGNER -> Bientot(stringResource(R.string.signer), stringResource(R.string.bientot_signer),
             listOf("signer", "paraphe", "tampon", "formulaire"))
         Volet.PLUS -> {
@@ -261,8 +355,9 @@ private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, 
                     LigneAction("suivante", stringResource(R.string.aller_page)) { allerA = true }
                     LigneAction("liste_fichiers", stringResource(R.string.signets)) { signets = true }
                     LigneAction("commentaire", stringResource(R.string.commentaires)) { comms = true }
-                    LigneAction("courriel", stringResource(R.string.partager)) { partager(ctx, etat.doc) }
-                    LigneAction("imprimer", stringResource(R.string.imprimer)) { imprimer(ctx, etat.doc) }
+                    LigneAction("enregistrer", stringResource(R.string.enregistrer)) { etat.demandeEnregistrer = true }
+                    LigneAction("courriel", stringResource(R.string.partager)) { portee.launch { partager(ctx, etat.doc) } }
+                    LigneAction("imprimer", stringResource(R.string.imprimer)) { portee.launch { imprimer(ctx, etat.doc) } }
                     LigneAction("largeur", stringResource(R.string.ajuster)) { etat.echelle = 1f; etat.decalage = Offset.Zero }
                     Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.infos_doc, etat.doc.nom, tailles.size), Modifier.padding(8.dp),
@@ -390,36 +485,74 @@ private fun Recherche(etat: EtatLecteur, aller: (Int) -> Unit) {
 // ================================================================ pages
 @Composable
 private fun Pages(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, modifier: Modifier, auToucher: (() -> Unit)? = null) {
+    val lire = etat.annot.outil == Outil.MAIN
     BoxWithConstraints(modifier
-        .pointerInput(Unit) {
-            // deux doigts : zoom de 1x a 5x, et deplacement quand on est zoome
-            detectTransformGestures { _, pan, zoom, _ ->
+        .pointerInput(lire) {
+            // deux doigts : zoom de 1x a 5x, et deplacement quand on est zoome (en lecture seulement :
+            // avec un outil, le doigt dessine)
+            if (lire) detectTransformGestures { _, pan, zoom, _ ->
                 etat.echelle = (etat.echelle * zoom).coerceIn(1f, 5f)
                 etat.decalage = if (etat.echelle == 1f) Offset.Zero else etat.decalage + pan
             }
-        }
-        .pointerInput(auToucher) {
-            detectTapGestures(
-                onTap = { auToucher?.invoke() },
-                onDoubleTap = { etat.echelle = if (etat.echelle > 1.01f) 1f else 2f; if (etat.echelle == 1f) etat.decalage = Offset.Zero })
         }) {
         val largeurPx = with(LocalDensity.current) { (maxWidth - 16.dp).toPx().toInt() }
-        LazyColumn(state = etat.liste, modifier = Modifier.fillMaxSize().graphicsLayer(
+        LazyColumn(state = etat.liste, userScrollEnabled = lire, modifier = Modifier.fillMaxSize().graphicsLayer(
             scaleX = etat.echelle, scaleY = etat.echelle, translationX = etat.decalage.x, translationY = etat.decalage.y),
             contentPadding = PaddingValues(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(tailles) { n, (w, h) ->
-                ImagePage(etat, n, largeurPx, w, h, Modifier.fillMaxWidth())
+                ImagePage(etat, n, largeurPx, w, h, Modifier.fillMaxWidth(), auToucher = auToucher)
             }
         }
     }
 }
 
 @Composable
-private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Float, modifier: Modifier, marques: Boolean = true) {
-    val image by produceState<Bitmap?>(null, etat.doc, n, largeurPx) {
-        value = try { etat.doc.rendre(n, largeurPx) } catch (_: Exception) { null }
+private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Float, modifier: Modifier, marques: Boolean = true,
+                      auToucher: (() -> Unit)? = null) {
+    val d = etat.doc
+    val portee = rememberCoroutineScope()
+    val image by produceState<Bitmap?>(null, d, n, largeurPx, d.version) {
+        value = try { d.rendre(n, largeurPx) } catch (_: Exception) { value }
     }
-    Box(modifier.aspectRatio((w / h).coerceIn(0.1f, 10f)).background(Color.White)) {
+    // trace en cours (doigt pose) : points en pixels de la page affichee
+    var trace by remember { mutableStateOf<List<Offset>>(emptyList()) }
+    val r = etat.annot
+    Box(modifier.aspectRatio((w / h).coerceIn(0.1f, 10f)).background(Color.White)
+        .then(if (!marques) Modifier else Modifier.pointerInput(r.outil, n) {
+            val k = { o: Offset -> com.artifex.mupdf.fitz.Point(o.x * w / size.width, o.y * w / size.width) }
+            when (r.outil) {
+                Outil.MAIN -> detectTapGestures(
+                    onTap = { auToucher?.invoke() },
+                    onDoubleTap = { etat.echelle = if (etat.echelle > 1.01f) 1f else 2f; if (etat.echelle == 1f) etat.decalage = Offset.Zero },
+                    onLongPress = { o -> portee.launch { etat.selection = d.annotationA(n, k(o)) } })
+                Outil.NOTE -> detectTapGestures(onTap = { o -> etat.noteA = n to k(o) })
+                Outil.GOMME -> detectTapGestures(onTap = { o ->
+                    portee.launch { d.annotationA(n, k(o))?.let { d.supprimerAnnotation(it) } }
+                })
+                else -> detectDragGestures(
+                    onDragStart = { o -> trace = listOf(o) },
+                    onDrag = { ch, _ -> trace = trace + ch.position },
+                    onDragCancel = { trace = emptyList() },
+                    onDragEnd = {
+                        val pts = trace.map(k)
+                        trace = emptyList()
+                        val c = r.couleur().versPdf()
+                        val op = r.opacite()
+                        portee.launch {
+                            when (r.outil) {
+                                Outil.SURLIGNER -> d.annoterTexte(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_HIGHLIGHT, pts.first(), pts.last(), c, op)
+                                Outil.SOULIGNER -> d.annoterTexte(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_UNDERLINE, pts.first(), pts.last(), c, op)
+                                Outil.BARRER -> d.annoterTexte(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_STRIKE_OUT, pts.first(), pts.last(), c, op)
+                                Outil.DESSIN -> d.dessiner(n, pts, c, r.epaisseur, 1f)
+                                Outil.RECTANGLE -> d.forme(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_SQUARE, pts.first(), pts.last(), c, r.epaisseur, 1f)
+                                Outil.ELLIPSE -> d.forme(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_CIRCLE, pts.first(), pts.last(), c, r.epaisseur, 1f)
+                                Outil.FLECHE -> d.forme(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_LINE, pts.first(), pts.last(), c, r.epaisseur, 1f)
+                                else -> false
+                            }
+                        }
+                    })
+            }
+        })) {
         image?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize()) }
         val zones = if (marques) etat.trouves.firstOrNull { it.page == n }?.zones else null
         if (!zones.isNullOrEmpty()) {
@@ -427,6 +560,24 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                 val k = size.width / w
                 zones.forEach { z ->
                     drawRect(Color(0x66FFD200), Offset(z[0] * k, z[1] * k), Size((z[2] - z[0]) * k, (z[3] - z[1]) * k))
+                }
+            }
+        }
+        if (trace.size > 1) {
+            Canvas(Modifier.fillMaxSize()) {           // apercu du trait pendant que le doigt bouge
+                val c = r.couleur()
+                val a = trace.first()
+                val b = trace.last()
+                val ep = (r.epaisseur * size.width / w).coerceAtLeast(2f)
+                when (r.outil) {
+                    Outil.DESSIN -> for (i in 1 until trace.size) drawLine(c, trace[i - 1], trace[i], ep)
+                    Outil.RECTANGLE -> drawRect(c, Offset(minOf(a.x, b.x), minOf(a.y, b.y)), Size(kotlin.math.abs(b.x - a.x), kotlin.math.abs(b.y - a.y)),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(ep))
+                    Outil.ELLIPSE -> drawOval(c, Offset(minOf(a.x, b.x), minOf(a.y, b.y)), Size(kotlin.math.abs(b.x - a.x), kotlin.math.abs(b.y - a.y)),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(ep))
+                    Outil.FLECHE -> drawLine(c, a, b, ep)
+                    else -> drawRect(c.copy(alpha = 0.35f), Offset(minOf(a.x, b.x), minOf(a.y, b.y)),   // zone de texte choisie
+                        Size(kotlin.math.abs(b.x - a.x).coerceAtLeast(4f), kotlin.math.abs(b.y - a.y).coerceAtLeast(24f)))
                 }
             }
         }
@@ -484,15 +635,17 @@ object PagesLues {
 }
 
 /** Partager : l'application e-mail d'Android, un Drive, une messagerie... (choix d'Android). */
-fun partager(ctx: Context, doc: DocumentPdf) {
-    val u = FileProvider.getUriForFile(ctx, ctx.packageName + ".fichiers", doc.fichier)
+suspend fun partager(ctx: Context, doc: DocumentPdf) {
+    val f = doc.copieAJour(ctx)                     // avec les annotations, meme pas encore enregistrees
+    val u = FileProvider.getUriForFile(ctx, ctx.packageName + ".fichiers", f)
     val i = Intent(Intent.ACTION_SEND).setType("application/pdf").putExtra(Intent.EXTRA_STREAM, u)
         .putExtra(Intent.EXTRA_SUBJECT, doc.nom).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     ctx.startActivity(Intent.createChooser(i, ctx.getString(R.string.partager)))
 }
 
 /** Imprimer : service d'impression d'Android (imprimantes du reseau, « Enregistrer au format PDF »...). */
-fun imprimer(ctx: Context, doc: DocumentPdf) {
+suspend fun imprimer(ctx: Context, doc: DocumentPdf) {
+    val f = doc.copieAJour(ctx)
     val pm = ctx.getSystemService(Context.PRINT_SERVICE) as PrintManager
     pm.print(doc.nom, object : PrintDocumentAdapter() {
         override fun onLayout(ancien: PrintAttributes?, nouveau: PrintAttributes?, annul: CancellationSignal?,
@@ -505,7 +658,7 @@ fun imprimer(ctx: Context, doc: DocumentPdf) {
         override fun onWrite(pages: Array<out PageRange>?, destination: ParcelFileDescriptor, annul: CancellationSignal?,
                              rappel: WriteResultCallback) {
             try {
-                doc.fichier.inputStream().use { e ->
+                f.inputStream().use { e ->
                     ParcelFileDescriptor.AutoCloseOutputStream(destination).use { s -> e.copyTo(s) }
                 }
                 rappel.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
