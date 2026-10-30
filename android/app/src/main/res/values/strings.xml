@@ -40,7 +40,7 @@
     <string name="aucun_signet">Ce document n\'a pas de signets.</string>
     <string name="commentaires">Commentaires</string>
     <string name="aucun_commentaire">Aucun commentaire dans ce document.</string>
-    <string name="annoter">Annoter</string>
+    <string name="annoter">Commenter</string>
     <string name="signer">Signer</string>
     <string name="bientot_annoter">Surligner, souligner, barrer, notes, dessin : prochaine étape, avec l\'enregistrement (même fichier ou autre nom).</string>
     <string name="bientot_signer">Signature dessinée, paraphe, tampons et formulaires : étape suivante, avec vos tampons et signatures de PhilPDF Windows.</string>
@@ -65,8 +65,7 @@
     <string name="aide_note">Touchez la page à l\'endroit de la note, puis tapez son texte.</string>
     <string name="aide_gomme">Touchez une annotation pour l\'effacer (Annuler la remet).</string>
     <string name="aide_dessin">Glissez le doigt sur la page. Pendant qu\'un outil est choisi, la page ne défile plus : « Terminé » pour revenir à la lecture.</string>
-    <string name="annotation_titre">Annotation</string>
-    <string name="texte_note">Texte (note, commentaire)</string>
+        <string name="texte_note">Texte (note, commentaire)</string>
     <string name="supprimer">Supprimer</string>
     <string name="appliquer">Appliquer</string>
     <string name="enregistrement_impossible">Impossible d\'écrire à cet endroit : choisissez « Autre nom ».</string>
@@ -91,10 +90,21 @@
     <string name="toutes_pages">Toutes les pages</string>
     <string name="taille_signature">Largeur de la signature : %1$d pt</string>
     <string name="tampons">Tampons</string>
-    <string name="tampon_perso">Votre texte ({date} = date du jour)</string>
+    <string name="tampon_perso">Votre texte (la date choisie s\'ajoute ; {date} et {heure} possibles)</string>
     <string name="poser">Poser</string>
     <string name="dessinez_signature">Signez au doigt dans le cadre</string>
     <string name="dessinez_paraphe">Dessinez vos initiales dans le cadre</string>
     <string name="effacer">Effacer</string>
     <string name="champ">Champ du formulaire</string>
+    <string name="g_surlignage">Surlignage</string>
+    <string name="g_soulignement">Soulignement</string>
+    <string name="g_barre">Texte barré</string>
+    <string name="g_note">Note</string>
+    <string name="g_trace">Dessin ou signature</string>
+    <string name="g_tampon">Tampon</string>
+    <string name="g_autre">Élément ajouté</string>
+    <string name="changer_en">Changer en</string>
+    <string name="h_aucun">Sans date</string>
+    <string name="h_date">Date</string>
+    <string name="h_date_heure">Date et heure</string>
 </resources>

@@ -135,7 +135,21 @@ fun Palette(actuelle: Color, choisir: (Color) -> Unit) {
     }
 }
 
-/** Appui long sur une annotation : couleur, epaisseur, opacite, texte de la note, ou suppression. */
+/** Nom de ce qui est sous le doigt (titre de la feuille d'appui long). */
+fun nomGenre(g: Int): Int = when (g) {
+    PDFAnnotation.TYPE_HIGHLIGHT -> R.string.g_surlignage
+    PDFAnnotation.TYPE_UNDERLINE, PDFAnnotation.TYPE_SQUIGGLY -> R.string.g_soulignement
+    PDFAnnotation.TYPE_STRIKE_OUT -> R.string.g_barre
+    PDFAnnotation.TYPE_TEXT -> R.string.g_note
+    PDFAnnotation.TYPE_INK -> R.string.g_trace
+    PDFAnnotation.TYPE_SQUARE -> R.string.outil_rectangle
+    PDFAnnotation.TYPE_CIRCLE -> R.string.outil_ellipse
+    PDFAnnotation.TYPE_LINE -> R.string.outil_fleche
+    PDFAnnotation.TYPE_FREE_TEXT -> R.string.g_tampon
+    else -> R.string.g_autre
+}
+
+/** Appui long sur un marquage, un dessin, une note, un tampon : le changer ou le supprimer. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeuilleAnnotation(etat: EtatLecteur, info: InfoAnnot, fermer: () -> Unit) {
@@ -144,11 +158,38 @@ fun FeuilleAnnotation(etat: EtatLecteur, info: InfoAnnot, fermer: () -> Unit) {
     var epaisseur by remember(info) { mutableFloatStateOf(info.epaisseur.coerceIn(1f, 12f)) }
     var opacite by remember(info) { mutableFloatStateOf(info.opacite.coerceIn(0.15f, 1f)) }
     var texte by remember(info) { mutableStateOf(info.texte) }
+    var genre by remember(info) { mutableIntStateOf(info.genre) }
+    val marquage = info.genre in listOf(PDFAnnotation.TYPE_HIGHLIGHT, PDFAnnotation.TYPE_UNDERLINE,
+        PDFAnnotation.TYPE_SQUIGGLY, PDFAnnotation.TYPE_STRIKE_OUT)
     val trait = info.genre == PDFAnnotation.TYPE_INK || info.genre == PDFAnnotation.TYPE_SQUARE ||
-        info.genre == PDFAnnotation.TYPE_CIRCLE || info.genre == PDFAnnotation.TYPE_LINE
-    ModalBottomSheet(onDismissRequest = fermer, containerColor = Color(0xFFF7F7F7)) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
-            Text(stringResource(R.string.annotation_titre), fontWeight = FontWeight.SemiBold)
+        info.genre == PDFAnnotation.TYPE_CIRCLE || info.genre == PDFAnnotation.TYPE_LINE || info.genre == PDFAnnotation.TYPE_FREE_TEXT
+    val avecTexte = info.genre == PDFAnnotation.TYPE_TEXT || info.genre == PDFAnnotation.TYPE_FREE_TEXT
+    ModalBottomSheet(onDismissRequest = fermer, containerColor = Color(0xFFF7F7F7),
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp)) {
+            // en tete : ce que c'est, et le supprimer tout de suite
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(nomGenre(info.genre)), Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
+                OutlinedButton(onClick = { portee.launch { etat.doc.supprimerAnnotation(info); fermer() } }) {
+                    Icon(Icones.get("supprimer", Color(0xFFC62828)), null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.supprimer), color = Color(0xFFC62828))
+                }
+            }
+            if (marquage) {
+                Spacer(Modifier.height(10.dp))
+                Text(stringResource(R.string.changer_en), fontSize = 13.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for ((g, o) in listOf(PDFAnnotation.TYPE_HIGHLIGHT to Outil.SURLIGNER, PDFAnnotation.TYPE_UNDERLINE to Outil.SOULIGNER,
+                        PDFAnnotation.TYPE_STRIKE_OUT to Outil.BARRER)) {
+                        FilterChip(selected = genre == g || (g == PDFAnnotation.TYPE_UNDERLINE && genre == PDFAnnotation.TYPE_SQUIGGLY),
+                            onClick = { genre = g; if (g == PDFAnnotation.TYPE_HIGHLIGHT && opacite > 0.9f) opacite = 0.45f
+                                else if (g != PDFAnnotation.TYPE_HIGHLIGHT) opacite = 1f },
+                            label = { Text(stringResource(o.texte)) },
+                            leadingIcon = { Icon(Icones.get(o.icone), null, Modifier.size(18.dp)) })
+                    }
+                }
+            }
             Spacer(Modifier.height(10.dp))
             Text(stringResource(R.string.couleur), fontSize = 13.sp)
             Palette(couleur) { couleur = it }
@@ -160,25 +201,24 @@ fun FeuilleAnnotation(etat: EtatLecteur, info: InfoAnnot, fermer: () -> Unit) {
             Spacer(Modifier.height(10.dp))
             Text(stringResource(R.string.opacite, (opacite * 100).toInt()), fontSize = 13.sp)
             Slider(opacite, { opacite = it }, valueRange = 0.15f..1f)
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(texte, { texte = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.texte_note)) },
-                minLines = 2)
-            Spacer(Modifier.height(14.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = {
-                    portee.launch { etat.doc.supprimerAnnotation(info); fermer() }
-                }) { Text(stringResource(R.string.supprimer), color = Color(0xFFC62828)) }
-                Row {
-                    TextButton(onClick = fermer) { Text(stringResource(R.string.annuler)) }
-                    Button(onClick = {
-                        portee.launch {
-                            etat.doc.modifierAnnotation(info, couleur.versPdf(), opacite, if (trait) epaisseur else null,
-                                if (texte != info.texte) texte else null)
-                            fermer()
-                        }
-                    }, colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) { Text(stringResource(R.string.appliquer)) }
-                }
+            if (avecTexte) {
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(texte, { texte = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.texte_note)) },
+                    minLines = 2)
             }
+            Spacer(Modifier.height(14.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = fermer) { Text(stringResource(R.string.annuler)) }
+                Button(onClick = {
+                    portee.launch {
+                        if (marquage && genre != info.genre) etat.doc.changerGenre(info, genre, couleur.versPdf(), opacite)
+                        else etat.doc.modifierAnnotation(info, couleur.versPdf(), opacite, if (trait) epaisseur else null,
+                            if (avecTexte && texte != info.texte) texte else null)
+                        fermer()
+                    }
+                }, colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) { Text(stringResource(R.string.appliquer)) }
+            }
+            Spacer(Modifier.height(16.dp))
         }
     }
 }

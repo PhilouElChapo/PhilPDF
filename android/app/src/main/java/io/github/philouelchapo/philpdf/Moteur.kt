@@ -187,7 +187,10 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                     if (t == PDFAnnotation.TYPE_LINK || t == PDFAnnotation.TYPE_WIDGET || t == PDFAnnotation.TYPE_POPUP) continue
                     val r = an.bounds
                     if (a.x >= r.x0 - 8 && a.x <= r.x1 + 8 && a.y >= r.y0 - 8 && a.y <= r.y1 + 8) {
-                        trouve = InfoAnnot(n, i, t, an.color ?: floatArrayOf(0f, 0f, 0f),
+                        val coul = if (t == PDFAnnotation.TYPE_FREE_TEXT)
+                            (try { an.defaultAppearance?.color } catch (_: Exception) { null } ?: an.color)
+                        else an.color
+                        trouve = InfoAnnot(n, i, t, if (coul == null || coul.isEmpty()) floatArrayOf(0f, 0f, 0f) else coul,
                             try { an.opacity } catch (_: Exception) { 1f },
                             try { an.borderWidth } catch (_: Exception) { 1f },
                             try { an.contents ?: "" } catch (_: Exception) { "" })
@@ -207,11 +210,34 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
             surPage(p, info.page) { page ->
                 val an = page.annotations?.getOrNull(info.index)
                 if (an == null) false else {
-                    couleur?.let { an.setColor(it) }
+                    if (couleur != null) {
+                        if (info.genre == PDFAnnotation.TYPE_FREE_TEXT) {
+                            val taille = try { an.defaultAppearance?.size ?: 14f } catch (_: Exception) { 14f }
+                            an.setDefaultAppearance("Helv", taille, couleur)
+                        } else an.setColor(couleur)
+                    }
                     opacite?.let { an.setOpacity(it) }
                     epaisseur?.let { an.setBorderWidth(it) }
                     texte?.let { an.setContents(it) }
                     an.update()
+                    true
+                }
+            }
+        }
+
+    /** Surlignage -> soulignement -> barre (meme texte, meme couleur). */
+    suspend fun changerGenre(info: InfoAnnot, genre: Int, couleur: FloatArray, opacite: Float): Boolean =
+        operation("Changer le marquage") { p ->
+            surPage(p, info.page) { page ->
+                val an = page.annotations?.getOrNull(info.index)
+                val q = try { an?.quadPoints } catch (_: Exception) { null }
+                if (an == null || q.isNullOrEmpty()) false else {
+                    page.deleteAnnotation(an)
+                    val nv = page.createAnnotation(genre)
+                    nv.setQuadPoints(q)
+                    nv.setColor(couleur)
+                    nv.setOpacity(opacite)
+                    nv.update()
                     true
                 }
             }
@@ -316,9 +342,9 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                 val an = page.createAnnotation(PDFAnnotation.TYPE_FREE_TEXT)
                 an.setRect(Rect(centre.x - l / 2, centre.y - h / 2, centre.x + l / 2, centre.y + h / 2))
                 an.setContents(texte)
-                an.setDefaultAppearance("Helv", taille, couleur)
-                an.setColor(couleur)
-                an.setBorderWidth(2f)
+                an.setDefaultAppearance("Helv", taille, couleur)   // texte de la couleur choisie
+                an.setColor(floatArrayOf())                        // fond transparent (pas de cadre plein)
+                an.setBorderWidth(2f)                              // cadre fin, de la couleur du texte
                 an.update()
                 true
             }

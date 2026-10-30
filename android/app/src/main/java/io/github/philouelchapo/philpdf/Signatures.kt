@@ -75,9 +75,26 @@ object Signatures {
 val ENCRE = Color(0xFF0F3C8C)
 
 /** Tampons prets a l'emploi (comme sous Windows) ; {date} = date du jour. */
-val TAMPONS = listOf("REÇU LE {date}", "PAYÉ LE {date}", "VALIDÉ", "COPIE CONFORME", "ANNULÉ", "BON POUR ACCORD")
+val TAMPONS = listOf("REÇU LE", "PAYÉ LE", "VALIDÉ LE", "TRAITÉ LE", "COPIE CONFORME", "ANNULÉ", "BON POUR ACCORD", "URGENT")
 
-fun avecDate(t: String): String = t.replace("{date}", SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE).format(Date()))
+/** Date ajoutee au tampon (comme sous Windows) : aucune, date du jour, ou date et heure. */
+enum class Horodatage(val texte: Int) { AUCUN(R.string.h_aucun), DATE(R.string.h_date), DATE_HEURE(R.string.h_date_heure) }
+
+fun maintenant(h: Horodatage): String = when (h) {
+    Horodatage.AUCUN -> ""
+    Horodatage.DATE -> SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE).format(Date())
+    Horodatage.DATE_HEURE -> SimpleDateFormat("dd/MM/yyyy 'à' HH:mm", Locale.FRANCE).format(Date())
+}
+
+/** Texte final du tampon : « REÇU LE 30/10/2026 » ; « VALIDÉ » + date sur une 2e ligne ; codes {date} et {heure}. */
+fun texteTampon(t: String, h: Horodatage): String {
+    val d = maintenant(h)
+    if ("{date}" in t || "{heure}" in t)
+        return t.replace("{date}", SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE).format(Date()))
+            .replace("{heure}", SimpleDateFormat("HH:mm", Locale.FRANCE).format(Date()))
+    if (d.isEmpty()) return t.removeSuffix(" LE").removeSuffix(" le")
+    return if (t.endsWith(" LE") || t.endsWith(" le")) "$t $d" else "$t\n$d"
+}
 
 /** Volet / tiroir « Signer » : formulaires (toucher un champ), signatures, paraphes, tampons. */
 @Composable
@@ -89,6 +106,7 @@ fun PanneauSigner(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choisi: 
     var tailleSig by remember { mutableFloatStateOf(150f) }
     var perso by remember { mutableStateOf("") }
     var couleurTampon by remember { mutableStateOf(PALETTE[2]) }
+    var horo by remember { mutableStateOf(Horodatage.DATE) }
     if (!etat.doc.modifiable) {
         Text(stringResource(R.string.non_modifiable), Modifier.padding(16.dp), color = Color.Gray)
         return
@@ -125,16 +143,24 @@ fun PanneauSigner(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choisi: 
         Text(stringResource(R.string.tampons), fontWeight = FontWeight.SemiBold)
         Palette(couleurTampon) { couleurTampon = it }
         Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Horodatage.entries.forEach { h ->
+                FilterChip(selected = horo == h, onClick = { horo = h }, label = { Text(stringResource(h.texte), fontSize = 12.sp) })
+            }
+        }
+        Spacer(Modifier.height(6.dp))
         TAMPONS.forEach { t ->
-            Text(avecDate(t), Modifier.fillMaxWidth().padding(vertical = 3.dp)
+            val final = texteTampon(t, horo)
+            // apercu tel qu'il sera pose : texte et cadre de la couleur, fond transparent
+            Text(final, Modifier.fillMaxWidth().padding(vertical = 3.dp)
                 .border(2.dp, couleurTampon, RoundedCornerShape(4.dp))
-                .clickable { poser(APoser.Tampon(avecDate(t), couleurTampon, 14f)) }.padding(8.dp),
+                .clickable { poser(APoser.Tampon(texteTampon(t, horo), couleurTampon, 14f)) }.padding(8.dp),
                 color = couleurTampon, fontWeight = FontWeight.Bold)
         }
         OutlinedTextField(perso, { perso = it }, Modifier.fillMaxWidth(), singleLine = true,
             label = { Text(stringResource(R.string.tampon_perso)) },
             trailingIcon = {
-                TextButton(onClick = { if (perso.isNotBlank()) poser(APoser.Tampon(avecDate(perso), couleurTampon, 14f)) }) {
+                TextButton(onClick = { if (perso.isNotBlank()) poser(APoser.Tampon(texteTampon(perso, horo), couleurTampon, 14f)) }) {
                     Text(stringResource(R.string.poser))
                 }
             })
