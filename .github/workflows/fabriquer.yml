@@ -197,6 +197,9 @@ jobs:
             PhilPDF pour Linux (Zorin OS, Ubuntu, Fedora, Linux Mint...) :
             - PhilPDF.flatpak : double-clic (ou `flatpak install --user PhilPDF.flatpak`), tout est dedans, OCR compris.
             - PhilPDF_linux_x86_64.tar.gz : version a decompresser, sans installation (OCR : paquet tesseract-ocr du systeme).
+
+            PhilPDF pour Android (8 et plus) :
+            - PhilPDF.apk : a ouvrir sur le telephone ou la tablette (autoriser l'installation depuis cette source).
           files: |
             PhilPDF_portable.zip
             PhilPDF_Setup.exe
@@ -362,3 +365,68 @@ jobs:
           files: |
             PhilPDF.flatpak
             PhilPDF_linux_x86_64.tar.gz
+
+  # ---------------------------------------------------------------- Android
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Clef de signature (secrets du depot)
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_B64" ]; then
+            echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/philpdf-android.jks"
+            echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/philpdf-android.jks" >> "$GITHUB_ENV"
+            echo "::notice title=Android::APK signee avec la clef PhilPDF"
+          else
+            echo "::warning title=Android::secret ANDROID_KEYSTORE_B64 absent : APK signee avec une clef de test"
+          fi
+      - name: APK
+        working-directory: android
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set +e
+          gradle --no-daemon assembleRelease > fabrication.log 2>&1; r=$?
+          tail -n 60 fabrication.log
+          if [ $r -ne 0 ]; then
+            grep -E "^e: |error:|What went wrong|Could not|> " fabrication.log | head -n 12 | cut -c1-300 | while IFS= read -r l; do echo "::error title=Android::$l"; done
+            exit 1
+          fi
+          cp app/build/outputs/apk/release/app-release.apk ../PhilPDF.apk
+          ls -la ../PhilPDF.apk
+          echo "::notice title=Android::APK $(du -h ../PhilPDF.apk | cut -f1)"
+      - uses: actions/upload-artifact@v5
+        with:
+          name: android-apk
+          path: PhilPDF.apk
+
+  publier-android:
+    needs: [windows, android]
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Version
+        run: |
+          v=$(grep -oP 'VERSION = "\K[^"]+' app/config.py)
+          case "$GITHUB_REF" in refs/tags/v*) v="${GITHUB_REF_NAME#v}";; esac
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v5
+        with:
+          name: android-apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          files: PhilPDF.apk

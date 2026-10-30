@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PhilPDF</string>
+    <string name="ouvrir_fichier">Ouvrir un fichier…</string>
+    <string name="recents">Récents</string>
+    <string name="aucun_recent">Aucun fichier récent. Ouvrez un PDF ici, ou depuis une autre application avec « Ouvrir avec » ou « Partager » vers PhilPDF.</string>
+    <string name="retirer_liste">Retirer de la liste</string>
+    <string name="retour">Retour</string>
+    <string name="partager">Partager</string>
+    <string name="imprimer">Imprimer</string>
+    <string name="plus">Plus d\'actions</string>
+    <string name="page_sur">%1$d / %2$d</string>
+    <string name="ouverture">Ouverture…</string>
+    <string name="mot_de_passe">Mot de passe</string>
+    <string name="protege">« %1$s » est protégé par un mot de passe.</string>
+    <string name="mdp_faux">Mot de passe incorrect.</string>
+    <string name="ok">OK</string>
+    <string name="annuler">Annuler</string>
+    <string name="inaccessible">Ce fichier n\'est plus accessible (déplacé, supprimé, ou autorisation retirée). Rouvrez-le avec « Ouvrir un fichier ».</string>
+    <string name="illisible">Impossible d\'ouvrir ce fichier : %1$s</string>
+    <string name="maj_dispo">PhilPDF %1$s est disponible (vous avez %2$s).</string>
+    <string name="telecharger">Télécharger</string>
+    <string name="plus_tard">Plus tard</string>
+    <string name="version">PhilPDF %1$s · logiciel libre (AGPL v3)</string>
+    <string name="aujourdhui">aujourd\'hui à %1$s</string>
+    <string name="hier">hier à %1$s</string>
+    <string name="pages">%1$d page(s)</string>
+</resources>

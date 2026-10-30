@@ -13,3 +13,8 @@ moteur/jbig2/*.dylib
 .flatpak-builder/
 build-flatpak/
 repo/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/fabrication.log
