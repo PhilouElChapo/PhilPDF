@@ -31,7 +31,8 @@ enum class Outil(val icone: String, val texte: Int) {
     RECTANGLE("tout", R.string.outil_rectangle),
     ELLIPSE("aucun", R.string.outil_ellipse),
     FLECHE("suivante", R.string.outil_fleche),
-    GOMME("supprimer", R.string.outil_gomme);
+    GOMME("supprimer", R.string.outil_gomme),
+    POSER("signer", R.string.outil_poser);          // signature, paraphe ou tampon a poser d'un toucher
 
     val texteSurligne: Boolean get() = this == SURLIGNER || this == SOULIGNER || this == BARRER
     val forme: Boolean get() = this == RECTANGLE || this == ELLIPSE || this == FLECHE
@@ -80,7 +81,7 @@ fun PanneauAnnoter(etat: EtatLecteur, choisi: () -> Unit = {}) {
         Text(stringResource(R.string.annoter), fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Outil.entries.forEach { o ->
+            Outil.entries.filter { it != Outil.POSER }.forEach { o ->
                 val actif = r.outil == o
                 Column(Modifier.width(76.dp).background(if (actif) Color(0xFFFCEBEC) else Color.White, RoundedCornerShape(8.dp))
                     .border(1.dp, if (actif) ROUGE else Color(0xFFE2E2E2), RoundedCornerShape(8.dp))
@@ -91,7 +92,7 @@ fun PanneauAnnoter(etat: EtatLecteur, choisi: () -> Unit = {}) {
                 }
             }
         }
-        if (r.outil != Outil.MAIN && r.outil != Outil.GOMME) {
+        if (r.outil != Outil.MAIN && r.outil != Outil.GOMME && r.outil != Outil.POSER) {
             Spacer(Modifier.height(14.dp))
             Text(stringResource(R.string.couleur), fontSize = 13.sp)
             Palette(r.couleur()) { r.choisirCouleur(it) }
@@ -116,6 +117,7 @@ fun aideOutil(o: Outil): Int = when {
     o.texteSurligne -> R.string.aide_texte
     o == Outil.NOTE -> R.string.aide_note
     o == Outil.GOMME -> R.string.aide_gomme
+    o == Outil.POSER -> R.string.aide_poser
     else -> R.string.aide_dessin
 }
 

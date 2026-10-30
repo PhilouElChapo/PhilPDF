@@ -74,6 +74,8 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var selection by mutableStateOf<InfoAnnot?>(null)       // annotation en cours de modification (appui long)
     var noteA by mutableStateOf<Pair<Int, com.artifex.mupdf.fitz.Point>?>(null)
     var demandeEnregistrer by mutableStateOf(false)
+    var aPoser by mutableStateOf<APoser?>(null)            // signature, paraphe ou tampon choisi
+    var champ by mutableStateOf<InfoChamp?>(null)           // champ de formulaire en cours de saisie
     val page: Int get() = liste.firstVisibleItemIndex
 }
 
@@ -129,6 +131,7 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
         }
     }
     etat.selection?.let { FeuilleAnnotation(etat, it) { etat.selection = null } }
+    etat.champ?.let { SaisieChamp(etat, it) { etat.champ = null } }
     etat.noteA?.let { (n, pt) -> DemandeNote({ etat.noteA = null }) { texte ->
         etat.noteA = null
         portee.launch { doc.note(n, pt, texte, etat.annot.couleur(Outil.NOTE).versPdf()) }
@@ -322,6 +325,7 @@ private fun DispositionTelephone(etat: EtatLecteur, tailles: List<Pair<Float, Fl
         ModalBottomSheet(onDismissRequest = { tiroir = null }, containerColor = Color(0xFFF7F7F7)) {
             Box(Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 560.dp)) {
                 if (v == Volet.ANNOTER) PanneauAnnoter(etat) { if (etat.annot.outil != Outil.MAIN) tiroir = null }
+                else if (v == Volet.SIGNER) PanneauSigner(etat, tailles) { tiroir = null }
                 else ContenuVolet(v, etat, tailles) { n ->
                     portee.launch { etat.liste.scrollToItem(n) }
                     if (v != Volet.RECHERCHE) tiroir = null
@@ -342,8 +346,7 @@ private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, 
         Volet.COMMENTAIRES -> Commentaires(etat.doc, aller)
         Volet.RECHERCHE -> Recherche(etat, aller)
         Volet.ANNOTER -> PanneauAnnoter(etat)
-        Volet.SIGNER -> Bientot(stringResource(R.string.signer), stringResource(R.string.bientot_signer),
-            listOf("signer", "paraphe", "tampon", "formulaire"))
+        Volet.SIGNER -> PanneauSigner(etat, tailles)
         Volet.PLUS -> {
             var allerA by remember { mutableStateOf(false) }
             var signets by remember { mutableStateOf(false) }
@@ -522,10 +525,35 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
             val k = { o: Offset -> com.artifex.mupdf.fitz.Point(o.x * w / size.width, o.y * w / size.width) }
             when (r.outil) {
                 Outil.MAIN -> detectTapGestures(
-                    onTap = { auToucher?.invoke() },
+                    onTap = { o ->
+                        // champ de formulaire touche : on le remplit ; sinon, toucher normal (barres)
+                        portee.launch {
+                            val c = d.champA(n, k(o))
+                            when {
+                                c == null || c.lectureSeule -> auToucher?.invoke()
+                                c.genre == com.artifex.mupdf.fitz.PDFWidget.TYPE_CHECKBOX ||
+                                    c.genre == com.artifex.mupdf.fitz.PDFWidget.TYPE_RADIOBUTTON -> d.remplir(c, null)
+                                c.genre == com.artifex.mupdf.fitz.PDFWidget.TYPE_TEXT || c.options.isNotEmpty() -> etat.champ = c
+                                else -> auToucher?.invoke()
+                            }
+                        }
+                    },
                     onDoubleTap = { etat.echelle = if (etat.echelle > 1.01f) 1f else 2f; if (etat.echelle == 1f) etat.decalage = Offset.Zero },
                     onLongPress = { o -> portee.launch { etat.selection = d.annotationA(n, k(o)) } })
                 Outil.NOTE -> detectTapGestures(onTap = { o -> etat.noteA = n to k(o) })
+                Outil.POSER -> detectTapGestures(onTap = { o ->
+                    val a = etat.aPoser
+                    etat.aPoser = null
+                    r.outil = Outil.MAIN
+                    portee.launch {
+                        when (a) {
+                            is APoser.Traits -> d.poserTraits(n, k(o), a.largeur, a.t.ratio, a.t.traits, ENCRE.versPdf(),
+                                if (a.t.genre == "paraphe") 1.6f else 2f)
+                            is APoser.Tampon -> d.tampon(n, k(o), a.texte, a.couleur.versPdf(), a.taille)
+                            null -> false
+                        }
+                    }
+                })
                 Outil.GOMME -> detectTapGestures(onTap = { o ->
                     portee.launch { d.annotationA(n, k(o))?.let { d.supprimerAnnotation(it) } }
                 })

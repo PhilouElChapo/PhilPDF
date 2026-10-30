@@ -12,6 +12,7 @@ import com.artifex.mupdf.fitz.Outline
 import com.artifex.mupdf.fitz.PDFAnnotation
 import com.artifex.mupdf.fitz.PDFDocument
 import com.artifex.mupdf.fitz.PDFPage
+import com.artifex.mupdf.fitz.PDFWidget
 import com.artifex.mupdf.fitz.Point
 import com.artifex.mupdf.fitz.Quad
 import com.artifex.mupdf.fitz.Rect
@@ -224,6 +225,105 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
             }
         }
 
+    // ---------------------------------------------------------------- formulaires
+    /** Champ de formulaire sous le doigt, ou null. */
+    suspend fun champA(n: Int, a: Point): InfoChamp? = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val page = doc.loadPage(n) as? PDFPage ?: return@withContext null
+            try {
+                val l = page.widgets ?: emptyArray()
+                var trouve: InfoChamp? = null
+                for (i in l.indices) {
+                    val w = l[i]
+                    val r = w.bounds
+                    if (a.x in r.x0..r.x1 && a.y in r.y0..r.y1) {
+                        trouve = InfoChamp(n, i, w.fieldType, try { w.value ?: "" } catch (_: Exception) { "" },
+                            try { w.options?.toList() ?: emptyList() } catch (_: Exception) { emptyList() },
+                            try { w.isReadOnly } catch (_: Exception) { false })
+                        break
+                    }
+                }
+                trouve
+            } finally {
+                page.destroy()
+            }
+        }
+    }
+
+    /** Remplit un champ : texte, choix dans une liste ; case a cocher / bouton radio : bascule. */
+    suspend fun remplir(c: InfoChamp, valeur: String?): Boolean = operation("Remplir") { p ->
+        surPage(p, c.page) { page ->
+            val w = page.widgets?.getOrNull(c.index)
+            if (w == null) false else {
+                val ok = when (c.genre) {
+                    PDFWidget.TYPE_TEXT -> w.setTextValue(valeur ?: "")
+                    PDFWidget.TYPE_COMBOBOX, PDFWidget.TYPE_LISTBOX -> w.setChoiceValue(valeur ?: "")
+                    PDFWidget.TYPE_CHECKBOX, PDFWidget.TYPE_RADIOBUTTON -> w.toggle()
+                    else -> false
+                }
+                w.update()
+                ok
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- signatures, paraphes, tampons
+    /** Signature ou paraphe dessines (traits en coordonnees 0..1 d'un cadre largeur x hauteur), poses centres
+     *  sur le point, a la largeur voulue (en points). Restent des traits : couleur et epaisseur modifiables. */
+    suspend fun poserTraits(n: Int, centre: Point, largeur: Float, ratio: Float, traits: List<List<Pair<Float, Float>>>,
+                            couleur: FloatArray, epaisseur: Float): Boolean =
+        if (traits.isEmpty()) false else operation("Signature") { p ->
+            surPage(p, n) { page ->
+                val h = largeur / ratio
+                val x0 = centre.x - largeur / 2
+                val y0 = centre.y - h / 2
+                val an = page.createAnnotation(PDFAnnotation.TYPE_INK)
+                an.setInkList(traits.map { t -> t.map { (x, y) -> Point(x0 + x * largeur, y0 + y * h) }.toTypedArray() }.toTypedArray())
+                an.setColor(couleur)
+                an.setBorderWidth(epaisseur)
+                an.update()
+                true
+            }
+        }
+
+    /** Meme paraphe en bas a droite de chaque page. */
+    suspend fun parapherTout(largeur: Float, ratio: Float, traits: List<List<Pair<Float, Float>>>, couleur: FloatArray,
+                             epaisseur: Float, tailles: List<Pair<Float, Float>>): Boolean =
+        operation("Parapher") { p ->
+            for (n in tailles.indices) {
+                val (w, h) = tailles[n]
+                val hh = largeur / ratio
+                surPage(p, n) { page ->
+                    val x0 = w - 30f - largeur
+                    val y0 = h - 30f - hh
+                    val an = page.createAnnotation(PDFAnnotation.TYPE_INK)
+                    an.setInkList(traits.map { t -> t.map { (x, y) -> Point(x0 + x * largeur, y0 + y * hh) }.toTypedArray() }.toTypedArray())
+                    an.setColor(couleur)
+                    an.setBorderWidth(epaisseur)
+                    an.update()
+                }
+            }
+            tailles.isNotEmpty()
+        }
+
+    /** Tampon (texte encadre : « RECU LE 30/10/2026 », « PAYE »...) centre sur le point. */
+    suspend fun tampon(n: Int, centre: Point, texte: String, couleur: FloatArray, taille: Float): Boolean =
+        operation("Tampon") { p ->
+            surPage(p, n) { page ->
+                val lignes = texte.split("\n")
+                val l = (lignes.maxOf { it.length } * taille * 0.62f) + 16f
+                val h = lignes.size * taille * 1.25f + 12f
+                val an = page.createAnnotation(PDFAnnotation.TYPE_FREE_TEXT)
+                an.setRect(Rect(centre.x - l / 2, centre.y - h / 2, centre.x + l / 2, centre.y + h / 2))
+                an.setContents(texte)
+                an.setDefaultAppearance("Helv", taille, couleur)
+                an.setColor(couleur)
+                an.setBorderWidth(2f)
+                an.update()
+                true
+            }
+        }
+
     /** Etat actuel du document ecrit dans un fichier (pour enregistrer, partager, imprimer). */
     suspend fun ecrire(dest: File): File = verrou.withLock {
         withContext(Dispatchers.IO) {
@@ -410,3 +510,5 @@ data class Trouve(val page: Int, val zones: List<FloatArray>)
 data class Commentaire(val page: Int, val genre: Int, val texte: String, val auteur: String)
 data class InfoAnnot(val page: Int, val index: Int, val genre: Int, val couleur: FloatArray, val opacite: Float,
                      val epaisseur: Float, val texte: String)
+data class InfoChamp(val page: Int, val index: Int, val genre: Int, val valeur: String, val options: List<String>,
+                     val lectureSeule: Boolean)

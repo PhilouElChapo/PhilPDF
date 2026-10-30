@@ -81,4 +81,20 @@
     <string name="retablir">Rétablir</string>
     <string name="reglages">Réglages</string>
     <string name="termine">Terminé</string>
+    <string name="outil_poser">Poser</string>
+    <string name="aide_poser">Touchez la page à l\'endroit voulu : la signature, le paraphe ou le tampon y est posé. Appui long dessus ensuite pour changer sa couleur ou le supprimer.</string>
+    <string name="remplir_aide">Formulaire : touchez un champ de la page pour le remplir (texte, case à cocher, liste). Signature, paraphe ou tampon : choisissez-le ci-dessous, puis touchez la page.</string>
+    <string name="mes_signatures">Mes signatures</string>
+    <string name="mes_paraphes">Mes paraphes</string>
+    <string name="ajouter_signature">+ Dessiner une signature</string>
+    <string name="ajouter_paraphe">+ Dessiner un paraphe</string>
+    <string name="toutes_pages">Toutes les pages</string>
+    <string name="taille_signature">Largeur de la signature : %1$d pt</string>
+    <string name="tampons">Tampons</string>
+    <string name="tampon_perso">Votre texte ({date} = date du jour)</string>
+    <string name="poser">Poser</string>
+    <string name="dessinez_signature">Signez au doigt dans le cadre</string>
+    <string name="dessinez_paraphe">Dessinez vos initiales dans le cadre</string>
+    <string name="effacer">Effacer</string>
+    <string name="champ">Champ du formulaire</string>
 </resources>
