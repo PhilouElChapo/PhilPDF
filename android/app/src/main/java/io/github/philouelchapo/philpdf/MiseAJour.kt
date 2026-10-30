@@ -38,7 +38,7 @@ object MiseAJour {
             var lien = "https://github.com/$DEPOT/releases/latest"
             for (i in 0 until assets.length()) {
                 val a = assets.getJSONObject(i)
-                if (a.getString("name").endsWith(".apk")) lien = a.getString("browser_download_url")
+                if (a.getString("name") == "PhilPDF.apk") lien = a.getString("browser_download_url")   // universel
             }
             NouvelleVersion(v, lien)
         } catch (_: Exception) {

@@ -200,6 +200,7 @@ jobs:
 
             PhilPDF pour Android (8 et plus) :
             - PhilPDF.apk : a ouvrir sur le telephone ou la tablette (autoriser l'installation depuis cette source).
+            - PhilPDF-arm64-v8a.apk (telephones recents), PhilPDF-armeabi-v7a.apk (anciens), PhilPDF-x86_64.apk (emulateurs) : plus legers.
           files: |
             PhilPDF_portable.zip
             PhilPDF_Setup.exe
@@ -404,13 +405,15 @@ jobs:
             grep -E "^e: |error:|What went wrong|Could not|> " fabrication.log | head -n 12 | cut -c1-300 | while IFS= read -r l; do echo "::error title=Android::$l"; done
             exit 1
           fi
-          cp app/build/outputs/apk/release/app-release.apk ../PhilPDF.apk
-          ls -la ../PhilPDF.apk
-          echo "::notice title=Android::APK $(du -h ../PhilPDF.apk | cut -f1)"
+          ls app/build/outputs/apk/release/
+          cp app/build/outputs/apk/release/app-universal-release.apk ../PhilPDF.apk
+          for a in arm64-v8a armeabi-v7a x86_64; do cp "app/build/outputs/apk/release/app-$a-release.apk" "../PhilPDF-$a.apk"; done
+          ls -la ../PhilPDF*.apk
+          echo "::notice title=Android::APK $(ls -s --block-size=M ../PhilPDF*.apk | tr '\n' ' ')"
       - uses: actions/upload-artifact@v5
         with:
           name: android-apk
-          path: PhilPDF.apk
+          path: PhilPDF*.apk
 
   publier-android:
     needs: [windows, android]
@@ -429,4 +432,4 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
-          files: PhilPDF.apk
+          files: PhilPDF*.apk

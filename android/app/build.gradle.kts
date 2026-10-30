@@ -21,7 +21,16 @@ android {
         targetSdk = 35
         versionCode = versionCodePhilpdf
         versionName = versionPhilpdf
-        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
+    }
+
+    // un APK par type de processeur (moins de 30 Mo chacun, demande par IzzyOnDroid) + un APK universel
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = true
+        }
     }
 
     signingConfigs {
@@ -50,6 +59,17 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+}
+
+// numero de version different par processeur (exige par les depots F-Droid / IzzyOnDroid)
+val codesAbi = mapOf("armeabi-v7a" to 1, "arm64-v8a" to 2, "x86_64" to 3)
+androidComponents {
+    onVariants { v ->
+        v.outputs.forEach { o ->
+            val abi = o.filters.find { it.filterType == com.android.build.api.variant.FilterConfiguration.FilterType.ABI }?.identifier
+            o.versionCode.set(versionCodePhilpdf * 10 + (codesAbi[abi] ?: 0))
+        }
     }
 }
 

@@ -1,0 +1,18 @@
+PhilPDF is a free and open-source PDF reader and editor (AGPL v3), the Android version of PhilPDF for Windows and Linux. Same engine (MuPDF): same rendering, same annotations.
+
+<b>What this version does</b>
+<ul>
+<li>Home screen with your recent files and thumbnails, shown instantly</li>
+<li>Open a PDF from the device, Google Drive, OneDrive, Dropbox… (Android file picker), or with "Open with" and "Share"</li>
+<li>Continuous scrolling, pinch to zoom, thumbnails on the left on tablets</li>
+<li>Password-protected PDFs</li>
+<li>Share (e-mail, messaging…) and print through Android's print service</li>
+</ul>
+
+<b>Your data stays yours</b>
+No account, no ads, no trackers. Your documents stay on your device. The only connection checks GitHub for a new version.
+
+<b>Coming next</b>
+Annotations, fill and sign, text editing with the original font, stamps and signatures from PhilPDF for Windows, reading mode for small screens.
+
+Source code and releases: https://github.com/PhilouElChapo/PhilPDF
