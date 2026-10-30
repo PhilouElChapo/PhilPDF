@@ -550,6 +550,7 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                             is APoser.Traits -> d.poserTraits(n, k(o), a.largeur, a.t.ratio, a.t.traits, ENCRE.versPdf(),
                                 if (a.t.genre == "paraphe") 1.6f else 2f)
                             is APoser.Tampon -> d.tampon(n, k(o), a.texte, a.couleur.versPdf(), a.taille)
+                            is APoser.Image -> d.image(n, k(o), a.largeur, a.ratio, a.png.readBytes())
                             null -> false
                         }
                     }

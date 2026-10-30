@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- seulement pour verifier les mises a jour sur GitHub -->
+    <!-- mises a jour sur GitHub, et Google Drive (dossier PhilPDF de vos postes) -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
@@ -28,6 +28,13 @@
                 <data android:scheme="content" />
                 <data android:scheme="file" />
                 <data android:mimeType="application/pdf" />
+            </intent-filter>
+            <!-- retour du navigateur apres « Autoriser » chez Google -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="philpdf" android:host="connecte" />
             </intent-filter>
             <!-- « Partager vers PhilPDF » -->
             <intent-filter>

@@ -43,6 +43,16 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit) {
     var recents by remember { mutableStateOf(Recents.liste(ctx)) }
     var maj by remember { mutableStateOf<NouvelleVersion?>(null) }
     LaunchedEffect(Unit) { maj = MiseAJour.chercher(BuildConfig.VERSION_NAME) }
+    var versionCompte by remember { mutableIntStateOf(0) }
+    var ecranCompte by remember { mutableStateOf(false) }
+    var nouveautes by remember { mutableIntStateOf(0) }
+    // compte relie : on regarde (sans rien recuperer) si vos postes ont de nouvelles signatures ou de nouveaux tampons
+    LaunchedEffect(versionCompte) {
+        nouveautes = if (!Google.connecte(ctx)) 0 else try {
+            Bibliotheque.lireDrive(ctx).let { e -> e.nouveaux + Bibliotheque.locaux(ctx).count { l -> e.distants.none { it.id == l.id } } }
+        } catch (_: Exception) { 0 }
+    }
+    val pastille: @Composable () -> Unit = { PastilleCompte(versionCompte) { ecranCompte = true } }
 
     Column(Modifier.fillMaxSize().background(Color(0xFFF3F3F3)).padding(16.dp)) {
         // en-tete : logo, nom, bouton principal (passe sous le titre si l'ecran est etroit : rien de coupe)
@@ -64,10 +74,15 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit) {
                 }
             }
             if (etroit) {
-                Column { titre(); Spacer(Modifier.height(10.dp)); bouton() }
+                Column {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        titre(); Spacer(Modifier.weight(1f)); pastille()
+                    }
+                    Spacer(Modifier.height(10.dp)); bouton()
+                }
             } else {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    titre(); Spacer(Modifier.weight(1f)); bouton()
+                    titre(); Spacer(Modifier.weight(1f)); bouton(); Spacer(Modifier.width(12.dp)); pastille()
                 }
             }
         }
@@ -82,6 +97,15 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit) {
                         }
                         TextButton(onClick = { maj = null }) { Text(stringResource(R.string.plus_tard)) }
                     }
+                }
+            }
+        }
+        if (nouveautes > 0) {
+            Spacer(Modifier.height(12.dp))
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F0FE))) {
+                Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.nouveautes_postes, nouveautes), Modifier.weight(1f), fontSize = 14.sp)
+                    TextButton(onClick = { ecranCompte = true }) { Text(stringResource(R.string.voir)) }
                 }
             }
         }
@@ -107,6 +131,7 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit) {
         Spacer(Modifier.height(6.dp))
         Text(stringResource(R.string.version, BuildConfig.VERSION_NAME), fontSize = 12.sp, color = Color.Gray)
     }
+    if (ecranCompte) EcranCompte(fermer = { ecranCompte = false; versionCompte++ }, change = { })
 }
 
 @Composable

@@ -35,13 +35,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        Google.activite = java.lang.ref.WeakReference(this)   // Android y montre « Autoriser » si besoin
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         uriDe(intent)?.let { recu.value = it }
     }
 
     private fun uriDe(i: Intent?): Uri? = when (i?.action) {
-        Intent.ACTION_VIEW -> i.data
+        Intent.ACTION_VIEW -> i.data?.takeIf { it.scheme != "philpdf" }   // philpdf://connecte = retour du navigateur
         Intent.ACTION_SEND -> IntentCompat.getParcelableExtra(i, Intent.EXTRA_STREAM, Uri::class.java)
         else -> null
     }

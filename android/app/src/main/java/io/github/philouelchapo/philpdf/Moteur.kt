@@ -350,6 +350,19 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
             }
         }
 
+    /** Signature ou tampon de PhilPDF Windows (image transparente) centre sur le point, a la largeur voulue. */
+    suspend fun image(n: Int, centre: Point, largeur: Float, ratio: Float, png: ByteArray): Boolean =
+        operation("Signature") { p ->
+            surPage(p, n) { page ->
+                val h = largeur / ratio.coerceAtLeast(0.05f)
+                val an = page.createAnnotation(PDFAnnotation.TYPE_STAMP)
+                an.setRect(Rect(centre.x - largeur / 2, centre.y - h / 2, centre.x + largeur / 2, centre.y + h / 2))
+                an.setStampImage(com.artifex.mupdf.fitz.Image(png))
+                an.update()
+                true
+            }
+        }
+
     /** Etat actuel du document ecrit dans un fichier (pour enregistrer, partager, imprimer). */
     suspend fun ecrire(dest: File): File = verrou.withLock {
         withContext(Dispatchers.IO) {

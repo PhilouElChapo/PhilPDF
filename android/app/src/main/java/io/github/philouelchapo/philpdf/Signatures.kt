@@ -2,6 +2,10 @@ package io.github.philouelchapo.philpdf
 
 import android.content.Context
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,6 +43,8 @@ data class Trace(val id: String, val genre: String, val ratio: Float, val traits
 sealed class APoser {
     data class Traits(val t: Trace, val largeur: Float) : APoser()
     data class Tampon(val texte: String, val couleur: Color, val taille: Float) : APoser()
+    /** Signature ou tampon repris de PhilPDF Windows (image PNG transparente). */
+    data class Image(val png: java.io.File, val ratio: Float, val largeur: Float) : APoser()
 }
 
 /** Signatures et paraphes gardes sur l'appareil (repris de PhilPDF Windows a l'etape suivante). */
@@ -114,6 +120,29 @@ fun PanneauSigner(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choisi: 
     fun poser(a: APoser) { etat.aPoser = a; etat.annot.outil = Outil.POSER; choisi() }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(12.dp)) {
         Text(stringResource(R.string.remplir_aide), fontSize = 12.sp, color = Color.Gray)
+        // signatures et tampons de PhilPDF Windows, recuperes par le compte Google (Accueil, en haut a droite)
+        val biblio = remember { Bibliotheque.locaux(ctx).filter { it.genre != "filigranes" } }
+        if (biblio.isEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text(stringResource(if (Google.connecte(ctx)) R.string.biblio_vide_connecte else R.string.biblio_vide),
+                fontSize = 12.sp, color = Color.Gray)
+        }
+        biblio.groupBy { it.genre }.forEach { (genre, liste) ->
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(R.string.de_vos_postes, Bibliotheque.nomGenre(genre)), fontWeight = FontWeight.SemiBold)
+            liste.forEach { e ->
+                val img = remember(e.id) { Bibliotheque.image(ctx, e)?.asImageBitmap() }
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).background(Color.White, RoundedCornerShape(6.dp))
+                    .border(1.dp, Color(0xFFE2E2E2), RoundedCornerShape(6.dp))
+                    .clickable { poser(APoser.Image(Bibliotheque.apercu(ctx, e), e.ratio, if (genre == "paraphes") tailleSig / 3 else tailleSig)) }
+                    .padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (img != null) Image(img, null, Modifier.weight(1f).height(56.dp), contentScale = ContentScale.Fit)
+                    else Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.width(8.dp))
+                    Text(e.nom, Modifier.weight(1f), fontSize = 12.sp, color = Color.DarkGray, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
         for (genre in listOf("signature", "paraphe")) {
             Spacer(Modifier.height(12.dp))
             Text(stringResource(if (genre == "signature") R.string.mes_signatures else R.string.mes_paraphes), fontWeight = FontWeight.SemiBold)
