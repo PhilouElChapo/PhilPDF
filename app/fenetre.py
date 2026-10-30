@@ -786,11 +786,16 @@ class Fenetre(MixinCoteACote, QMainWindow):
     # ------------------------------------------------------------ onglets
     def doc_courant(self):
         """Document affiche, ou le dernier consulte si l'on est sur Accueil / Outils."""
+        from shiboken6 import isValid
+        if getattr(self, "doc_droite", None) is not None and not isValid(self.doc_droite):
+            self.doc_droite = None                    # ferme entre-temps
         if getattr(self, "doc_droite", None) is not None and self._focus_droite:
             return self.doc_droite
         w = self.onglets.currentWidget()
         if isinstance(w, OngletDocument):
             return w
+        if self.dernier_doc is not None and not isValid(self.dernier_doc):
+            self.dernier_doc = None                   # document ferme : plus de « dernier consulte »
         if self.dernier_doc is not None and self.onglets.indexOf(self.dernier_doc) >= 0:
             return self.dernier_doc
         return None
@@ -994,6 +999,8 @@ class Fenetre(MixinCoteACote, QMainWindow):
             r = self._demander_enregistrer(w)
             if r == 2 or (r == 0 and not self.enregistrer(w)):
                 return
+        if self.dernier_doc is w:
+            self.dernier_doc = None
         self.onglets.removeTab(i)
         self._maj_onglets_fixes()
         w.deleteLater()

@@ -1134,5 +1134,18 @@ verif(ff_.lignes[0].startswith("✓") and ff_.lignes[1].startswith("✕"), "ferm
 ff_.close()
 w.onglets.setCurrentWidget(w.outils); app.processEvents()
 capture(w, "44_outils.png")
+# document ferme puis outil lance depuis l'Accueil / Outils : pas de « already deleted »
+_df = fitz.open(); _df.new_page(); _pf = os.path.join(TRAVAIL, "Ferme.pdf"); _df.save(_pf)
+_of = w.ouvrir(_pf)
+w.onglets.setCurrentWidget(w.outils); app.processEvents()
+w.dernier_doc = _of
+_of.modifie = False
+w.fermer_onglet(w.onglets.indexOf(_of)); app.processEvents()
+__import__("PySide6.QtCore", fromlist=["QCoreApplication"]).QCoreApplication.sendPostedEvents(None, 0); app.processEvents()
+try:
+    _r = w.doc_courant()
+    verif(_r is None or _r is not _of, "document fermé : plus repris comme « dernier consulté », pas d'erreur")
+except RuntimeError as _e:
+    verif(False, f"document fermé : erreur {_e}")
 print(f"\n{sum(c for c, _ in ok)}/{len(ok)} vérifications réussies")
 sys.exit(0 if all(c for c, _ in ok) else 1)
