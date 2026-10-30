@@ -1967,5 +1967,20 @@
  "Souligné / barré": "Subrayado / tachado",
  "gras": "negrita",
  "italique": "cursiva",
- "normal": "normal"
+ "normal": "normal",
+ "Numéroter chaque page": "Numerar cada página",
+ "Inclinaison du numéro, en degrés (positif : vers le haut). Les marges gauche et droite sont déjà à la verticale.": "Inclinación del número, en grados (positivo: hacia arriba). Los márgenes izquierdo y derecho ya son verticales.",
+ "Inclinaison": "Inclinación",
+ "Remplacer ce qui y est déjà (sinon, ajouté par-dessus)": "Reemplazar lo que ya hay (si no, se añade encima)",
+ "Pas de numérotation (le code {bates} reste utilisable dans les champs).": "Sin numeración (el código {bates} sigue disponible en los campos).",
+ "Ce document a déjà un en-tête, un pied de page ou une numérotation posés par PhilPDF : les réglages d'alors sont repris ci-dessous.": "Este documento ya tiene un encabezado, pie o numeración puestos por PhilPDF: los ajustes de entonces se muestran abajo.",
+ "Numérotation Bates trouvée dans le document : {a} à {b} ({n} page(s)). Elle est reprise ci-dessous.": "Numeración Bates encontrada en el documento: {a} a {b} ({n} página(s)). Se recoge abajo.",
+ "En bas à droite": "Abajo a la derecha",
+ "En bas au centre": "Abajo al centro",
+ "En bas à gauche": "Abajo a la izquierda",
+ "En haut à droite": "Arriba a la derecha",
+ "En haut au centre": "Arriba al centro",
+ "En haut à gauche": "Arriba a la izquierda",
+ "Marge gauche (verticale)": "Margen izquierdo (vertical)",
+ "Marge droite (verticale)": "Margen derecho (vertical)"
 }

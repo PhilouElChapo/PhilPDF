@@ -277,6 +277,37 @@ reponse_question[0] = 0
 d = G.DialogueEntete(None)
 d.appliquer(o.doc)
 verif("Page 2 / 3" in o.doc[1].get_text(), "pied de page numéroté")
+# rouvert : reglages repris, Bates en marge gauche (vertical), remplace sans doublon
+d = G.DialogueEntete(None, o.doc, 0)
+verif(d.champs["bc"].text() == "Page {page} / {pages}" and d.remplacer is not None and d.remplacer.isChecked(),
+      "en-tête : réglages de la fois d'avant repris, « remplacer » proposé")
+d.b_actif.setChecked(True); d.b_prefixe.setText("PIECE-"); d.b_debut.setValue(12)
+d.b_position.setCurrentIndex(d.b_position.findData("marge_gauche"))
+d.appliquer(o.doc)
+t1_ = o.doc[1].get_text()
+verif(t1_.count("Page 2 / 3") == 1 and "PIECE-000013" in t1_, "en-tête : remplacé (pas de doublon), Bates page 2 = PIECE-000013")
+dirs_ = [l["dir"] for b in o.doc[1].get_text("dict")["blocks"] for l in b.get("lines", [])
+         for sp in l["spans"] if "PIECE" in sp["text"]]
+verif(dirs_ and abs(dirs_[0][1] + 1) < 0.01, f"Bates en marge gauche, à la verticale ({dirs_})")
+d = G.DialogueEntete(None, o.doc, 0)
+verif(d.b_actif.isChecked() and d.b_prefixe.text() == "PIECE-" and d.b_debut.value() == 12
+      and d.b_position.currentData() == "marge_gauche", "Bates : réglages repris (préfixe, numéro, position)")
+d.b_position.setCurrentIndex(d.b_position.findData("bas_droite")); d.b_angle.setValue(30)
+d.appliquer(o.doc)
+dirs_ = [l["dir"] for b in o.doc[1].get_text("dict")["blocks"] for l in b.get("lines", [])
+         for sp in l["spans"] if "PIECE" in sp["text"]]
+verif(len(dirs_) == 1 and abs(dirs_[0][0] - 0.866) < 0.01, f"Bates incliné de 30°, l'ancien retiré ({dirs_})")
+# numerotation d'un autre logiciel : reconnue et remplacee
+db_ = fitz.open()
+for i_ in range(3):
+    pb_ = db_.new_page(); pb_.insert_text((72, 100), f"Contenu {i_}"); pb_.insert_text((480, 820), f"EXT{41 + i_:05d}", fontsize=8)
+d = G.DialogueEntete(None, db_, 0)
+verif(d.bates_trouve and d.b_prefixe.text() == "EXT" and d.b_debut.value() == 41 and d.b_chiffres.value() == 5
+      and d.b_position.currentData() == "bas_droite", "Bates d'un autre logiciel reconnu (préfixe, numéro, chiffres, position)")
+d.b_prefixe.setText("DOS-")
+d.appliquer(db_)
+verif("EXT00042" not in db_[1].get_text() and "DOS-00042" in db_[1].get_text() and "Contenu 1" in db_[1].get_text(),
+      "Bates d'un autre logiciel remplacé, le reste de la page intact")
 
 # --- organiser : reordonner (glisser-deposer)
 o.organiser(True)

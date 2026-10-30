@@ -1967,5 +1967,20 @@
  "Souligné / barré": "Unterstrichen / durchgestrichen",
  "gras": "fett",
  "italique": "kursiv",
- "normal": "normal"
+ "normal": "normal",
+ "Numéroter chaque page": "Jede Seite nummerieren",
+ "Inclinaison du numéro, en degrés (positif : vers le haut). Les marges gauche et droite sont déjà à la verticale.": "Neigung der Nummer in Grad (positiv: nach oben). Linker und rechter Rand sind bereits senkrecht.",
+ "Inclinaison": "Neigung",
+ "Remplacer ce qui y est déjà (sinon, ajouté par-dessus)": "Vorhandenes ersetzen (sonst darübergelegt)",
+ "Pas de numérotation (le code {bates} reste utilisable dans les champs).": "Keine Nummerierung (der Code {bates} bleibt in den Feldern nutzbar).",
+ "Ce document a déjà un en-tête, un pied de page ou une numérotation posés par PhilPDF : les réglages d'alors sont repris ci-dessous.": "Dieses Dokument hat bereits eine von PhilPDF gesetzte Kopf-/Fußzeile oder Nummerierung: die damaligen Einstellungen stehen unten.",
+ "Numérotation Bates trouvée dans le document : {a} à {b} ({n} page(s)). Elle est reprise ci-dessous.": "Bates-Nummerierung im Dokument gefunden: {a} bis {b} ({n} Seite(n)). Sie wird unten übernommen.",
+ "En bas à droite": "Unten rechts",
+ "En bas au centre": "Unten mittig",
+ "En bas à gauche": "Unten links",
+ "En haut à droite": "Oben rechts",
+ "En haut au centre": "Oben mittig",
+ "En haut à gauche": "Oben links",
+ "Marge gauche (verticale)": "Linker Rand (senkrecht)",
+ "Marge droite (verticale)": "Rechter Rand (senkrecht)"
 }

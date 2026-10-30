@@ -916,107 +916,193 @@ class DialogueFiligrane(QDialog):
 
 # ------------------------------------------------------------------ en-tete et pied de page
 class DialogueEntete(QDialog):
+    """En-tete, pied de page et numerotation Bates. Reprend ce qui est deja dans le document : reglages poses
+    par PhilPDF la fois d'avant, ou numerotation Bates d'un autre logiciel (reconnue, et remplacable)."""
+    POSITIONS = (("bas_droite", "En bas à droite"), ("bas_centre", "En bas au centre"), ("bas_gauche", "En bas à gauche"),
+                 ("haut_droite", "En haut à droite"), ("haut_centre", "En haut au centre"), ("haut_gauche", "En haut à gauche"),
+                 ("marge_gauche", "Marge gauche (verticale)"), ("marge_droite", "Marge droite (verticale)"))
+
     def __init__(self, parent, doc=None, page_courante=0):
         super().__init__(parent)
+        from moteur import entete as EN
         self.setWindowTitle(_('En-tête et pied de page'))
+        self.doc = doc
+        avant = (EN.reglages(doc) if doc is not None else None) or {}
+        self.pose_philpdf = bool(doc is not None and EN.deja_pose(doc))
+        self.bates_trouve = None if (doc is None or self.pose_philpdf) else EN.chercher_bates(doc)
         corps = QWidget()
         f = QFormLayout(corps)
         f.setContentsMargins(0, 0, 0, 0)
+        f.setRowWrapPolicy(QFormLayout.WrapLongRows)
+        # ce qui est deja dans le document
+        self.remplacer = None
+        if self.pose_philpdf or self.bates_trouve:
+            bt = self.bates_trouve
+            info = QLabel(_("Ce document a déjà un en-tête, un pied de page ou une numérotation posés par PhilPDF : "
+                            "les réglages d'alors sont repris ci-dessous.") if self.pose_philpdf else
+                          _("Numérotation Bates trouvée dans le document : {a} à {b} ({n} page(s)). Elle est reprise "
+                            "ci-dessous.", a=f"{bt['prefixe']}{bt['premier']:0{bt['chiffres']}d}{bt['suffixe']}",
+                            b=f"{bt['prefixe']}{bt['dernier']:0{bt['chiffres']}d}{bt['suffixe']}", n=bt["pages"]))
+            info.setWordWrap(True)
+            info.setStyleSheet("background:#e6f0fc;border-radius:4px;padding:6px")
+            f.addRow(info)
+            self.remplacer = QCheckBox(_("Remplacer ce qui y est déjà (sinon, ajouté par-dessus)"))
+            self.remplacer.setChecked(True)
+            f.addRow(self.remplacer)
         aide = QLabel(_('Codes : {page} numéro de page, {pages} nombre de pages, {date} date du jour, '
                         '{bates} numéro Bates (réglé plus bas).'))
         aide.setWordWrap(True)
         aide.setStyleSheet("color:#616161")
         f.addRow(aide)
         self.champs = {}
+        champs_avant = avant.get("champs") or {}
         for cle, lib, defaut in [("hg", _('En-tête gauche'), ""), ("hc", _('En-tête centre'), ""), ("hd", _('En-tête droite'), ""),
                                  ("bg", _('Pied gauche'), ""), ("bc", _('Pied centre'), _('Page {page} / {pages}')), ("bd", _('Pied droite'), "")]:
-            e = QLineEdit(defaut)
+            e = QLineEdit(champs_avant.get(cle, defaut if not (avant or self.bates_trouve) else ""))
             self.champs[cle] = e
             f.addRow(lib, e)
         self.taille = QSpinBox()
         self.taille.setRange(6, 24)
-        self.taille.setValue(9)
+        self.taille.setValue(int(avant.get("taille", 9)))
         f.addRow(_('Taille (pt)'), self.taille)
         self.marge = QSpinBox()
         self.marge.setRange(10, 80)
-        self.marge.setValue(36)
+        self.marge.setValue(int(avant.get("marge", 36)))
         self.marge.setSuffix(" pt")
         f.addRow(_('Marge'), self.marge)
         # numerotation Bates : un numero unique et continu sur chaque page (pieces d'un dossier, avocats, expertises)
         tb = QLabel("<b>" + _("Numérotation Bates") + "</b>")
         f.addRow(tb)
-        self.b_prefixe = QLineEdit()
+        bv = avant.get("bates") or {}
+        bt = self.bates_trouve or {}
+        self.b_actif = QCheckBox(_("Numéroter chaque page"))
+        self.b_actif.setObjectName("bates_actif")
+        self.b_actif.setChecked(bool(bv.get("position")) or bool(bt))
+        f.addRow(self.b_actif)
+        self.b_prefixe = QLineEdit(bv.get("prefixe", bt.get("prefixe", "")))
         self.b_prefixe.setObjectName("bates_prefixe")
         self.b_prefixe.setPlaceholderText(_("ex. DOSSIER-"))
         f.addRow(_("Préfixe"), self.b_prefixe)
         self.b_debut = QSpinBox()
         self.b_debut.setObjectName("bates_debut")
         self.b_debut.setRange(0, 99999999)
-        self.b_debut.setValue(1)
+        self.b_debut.setValue(int(bv.get("debut", bt.get("premier", 1))))
         f.addRow(_("Premier numéro"), self.b_debut)
         self.b_chiffres = QSpinBox()
         self.b_chiffres.setObjectName("bates_chiffres")
         self.b_chiffres.setRange(1, 12)
-        self.b_chiffres.setValue(6)
+        self.b_chiffres.setValue(int(bv.get("chiffres", bt.get("chiffres", 6))))
         f.addRow(_("Nombre de chiffres"), self.b_chiffres)
-        self.b_suffixe = QLineEdit()
+        self.b_suffixe = QLineEdit(bv.get("suffixe", bt.get("suffixe", "")))
         self.b_suffixe.setPlaceholderText(_("ex. -A"))
         f.addRow(_("Suffixe"), self.b_suffixe)
+        self.b_position = QComboBox()
+        self.b_position.setObjectName("bates_position")
+        for k, lib in self.POSITIONS:
+            self.b_position.addItem(_(lib), k)
+        pos = bv.get("position") or self._position_trouvee() or "bas_droite"
+        self.b_position.setCurrentIndex(max(0, self.b_position.findData(pos)))
+        f.addRow(_("Position"), self.b_position)
+        self.b_angle = QSpinBox()
+        self.b_angle.setObjectName("bates_angle")
+        self.b_angle.setRange(-180, 180)
+        self.b_angle.setSuffix(" °")
+        self.b_angle.setValue(int(bv.get("angle", 0)))
+        self.b_angle.setToolTip(_("Inclinaison du numéro, en degrés (positif : vers le haut). Les marges gauche et "
+                                  "droite sont déjà à la verticale."))
+        f.addRow(_("Inclinaison"), self.b_angle)
         self.b_exemple = QLabel()
         self.b_exemple.setStyleSheet("color:#1462c2")
-        b_mettre = QPushButton(_("Mettre le numéro Bates en bas à droite"))
-        b_mettre.setObjectName("bates_poser")
-        b_mettre.clicked.connect(lambda: self.champs["bd"].setText("{bates}"))
-        f.addRow(self.b_exemple, b_mettre)
+        self.b_exemple.setWordWrap(True)
+        f.addRow(self.b_exemple)
         bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         f.addRow(bb)
         self.total = len(doc) if doc is not None else 1
-        self.apercu = Apercu(doc, page_courante, lambda d: self.appliquer(d, premier=page_courante + 1, total=self.total))
+        self.page_courante = page_courante
+        self.apercu = Apercu(doc, page_courante, lambda d: self.appliquer(d, premier=page_courante + 1, total=self.total,
+                                                                          apercu=True))
         _avec_apercu(self, corps, self.apercu)
         for e in self.champs.values():
             e.textChanged.connect(self.apercu.maj)
-        self.taille.valueChanged.connect(self.apercu.maj)
-        self.marge.valueChanged.connect(self.apercu.maj)
+        for w in (self.taille, self.marge, self.b_angle):
+            w.valueChanged.connect(self.apercu.maj)
         for w in (self.b_prefixe, self.b_suffixe):
             w.textChanged.connect(self._maj_bates)
         for w in (self.b_debut, self.b_chiffres):
             w.valueChanged.connect(self._maj_bates)
+        self.b_position.currentIndexChanged.connect(self._maj_bates)
+        self.b_actif.toggled.connect(self._maj_bates)
+        if self.remplacer is not None:
+            self.remplacer.toggled.connect(self.apercu.maj)
         self._maj_bates()
         self.apercu.maj()
+
+    def _position_trouvee(self):
+        """Position de la numerotation trouvee : bas / haut, gauche / centre / droite, ou marge verticale."""
+        bt = self.bates_trouve
+        if not bt or self.doc is None:
+            return None
+        n, rs = next(iter(bt["rects"].items()))
+        r, R = fitz.Rect(rs[0]), self.doc[int(n)].rect
+        if r.height > r.width * 1.5:
+            return "marge_gauche" if r.x0 < R.width / 2 else "marge_droite"
+        cote = "haut" if r.y1 < R.height / 2 else "bas"
+        cx = (r.x0 + r.x1) / 2
+        return cote + "_" + ("gauche" if cx < R.width / 3 else "droite" if cx > R.width * 2 / 3 else "centre")
 
     def bates(self, n):
         """Numero Bates de la n-ieme page numerotee (0 = la premiere)."""
         return f"{self.b_prefixe.text()}{self.b_debut.value() + n:0{self.b_chiffres.value()}d}{self.b_suffixe.text()}"
 
     def _maj_bates(self, *_a):
-        self.b_exemple.setText(_("Pages : {a} à {b}", a=self.bates(0), b=self.bates(max(0, self.total - 1))))
+        actif = self.b_actif.isChecked()
+        for w in (self.b_prefixe, self.b_debut, self.b_chiffres, self.b_suffixe, self.b_position, self.b_angle):
+            w.setEnabled(actif)
+        self.b_exemple.setText(_("Pages : {a} à {b}", a=self.bates(0), b=self.bates(max(0, self.total - 1)))
+                               if actif else _("Pas de numérotation (le code {bates} reste utilisable dans les champs)."))
         self.apercu.maj()
 
     def dernier_bates(self):
         """Prochain numero libre apres ce document (pour continuer sur le document suivant)."""
         return self.b_debut.value() + self.total
 
-    def appliquer(self, doc, premier=1, total=None):
+    def reglages(self):
+        return {"champs": {k: e.text() for k, e in self.champs.items()}, "taille": self.taille.value(),
+                "marge": self.marge.value(),
+                "bates": {"prefixe": self.b_prefixe.text(), "debut": self.b_debut.value(),
+                          "chiffres": self.b_chiffres.value(), "suffixe": self.b_suffixe.text(),
+                          "position": self.b_position.currentData() if self.b_actif.isChecked() else "",
+                          "angle": self.b_angle.value()}}
+
+    def appliquer(self, doc, premier=1, total=None, apercu=False):
+        from moteur import entete as EN
         date = datetime.date.today().strftime("%d/%m/%Y")
         t, m = self.taille.value(), self.marge.value()
         total = total or len(doc)
-        font = fitz.Font("helv")
+        if self.remplacer is not None and self.remplacer.isChecked():
+            if self.pose_philpdf:
+                EN.retirer(doc)
+            elif self.bates_trouve:
+                EN.effacer_bates(doc, self.bates_trouve, decalage=premier - 1)
         for n, page in enumerate(doc):
-            R = page.rect
+            avant = page.get_contents()
             for cle, e in self.champs.items():
                 try:
                     txt = e.text().format(page=premier + n, pages=total, date=date,
                                           bates=self.bates(premier - 1 + n)) if e.text() else ""
                 except (KeyError, IndexError, ValueError):
                     txt = e.text()
-                if not txt:
-                    continue
-                L = font.text_length(txt, fontsize=t)
-                x = {"g": m, "c": (R.width - L) / 2, "d": R.width - m - L}[cle[1]]
-                y = m * 0.66 + t if cle[0] == "h" else R.height - m * 0.55
-                page.insert_text((x, y), txt, fontname="helv", fontsize=t, color=(0.2, 0.2, 0.2))
+                if txt:
+                    EN.poser(page, txt, ("haut_" if cle[0] == "h" else "bas_") +
+                             {"g": "gauche", "c": "centre", "d": "droite"}[cle[1]], t, m)
+            if self.b_actif.isChecked():
+                EN.poser(page, self.bates(premier - 1 + n), self.b_position.currentData(), t, m,
+                         angle=self.b_angle.value(), couleur=(0.15, 0.15, 0.15))
+            EN.marquer(page, avant)
+        if not apercu:
+            EN.enregistrer_reglages(doc, self.reglages())
 
 
 # ------------------------------------------------------------------ arriere-plan

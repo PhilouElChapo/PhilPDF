@@ -2336,7 +2336,7 @@
  "Fin du côte à côte": "End side by side",
  "Ouvrez un deuxième fichier pour le côte à côte.": "Open a second file for side by side.",
  "En bas à droite": "Bottom right",
- "En bas au centre": "Bottom center",
+ "En bas au centre": "Bottom centre",
  "En bas à gauche": "Bottom left",
  "En haut à droite": "Top right",
  "En haut à gauche": "Top left",
@@ -2665,5 +2665,15 @@
  "Souligné / barré": "Underline / strikethrough",
  "gras": "bold",
  "italique": "italic",
- "normal": "regular"
+ "normal": "regular",
+ "Numéroter chaque page": "Number every page",
+ "Inclinaison du numéro, en degrés (positif : vers le haut). Les marges gauche et droite sont déjà à la verticale.": "Tilt of the number, in degrees (positive: upwards). Left and right margins are already vertical.",
+ "Inclinaison": "Tilt",
+ "Remplacer ce qui y est déjà (sinon, ajouté par-dessus)": "Replace what is already there (otherwise added on top)",
+ "Pas de numérotation (le code {bates} reste utilisable dans les champs).": "No numbering (the {bates} code can still be used in the fields).",
+ "Ce document a déjà un en-tête, un pied de page ou une numérotation posés par PhilPDF : les réglages d'alors sont repris ci-dessous.": "This document already has a header, footer or numbering added by PhilPDF: the settings used then are shown below.",
+ "Numérotation Bates trouvée dans le document : {a} à {b} ({n} page(s)). Elle est reprise ci-dessous.": "Bates numbering found in the document: {a} to {b} ({n} page(s)). It is shown below.",
+ "En haut au centre": "Top centre",
+ "Marge gauche (verticale)": "Left margin (vertical)",
+ "Marge droite (verticale)": "Right margin (vertical)"
 }
