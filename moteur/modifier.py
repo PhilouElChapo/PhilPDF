@@ -470,7 +470,10 @@ class Editeur:
     def _paragraphes_retenus(self, page, lignes):
         """[(lignes, texte exact, rect)] des paragraphes ecrits par PhilPDF encore intacts sur la page."""
         out = []
-        for e in self._registre().get(str(page.xref), []):
+        reg = self._registre()
+        if not reg:                                     # rien d'ecrit par PhilPDF dans ce document
+            return out
+        for e in reg.get(str(page.xref), []):
             r = fitz.Rect(e["r"]) + (-2, -2, 2, 2)
             dedans = sorted([l for l in lignes if r.contains(fitz.Point((l["rect"].x0 + l["rect"].x1) / 2,
                                                                        (l["rect"].y0 + l["rect"].y1) / 2))],

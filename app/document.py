@@ -1771,15 +1771,28 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         self.chemin = chemin
         self.mdp_pdf = None
         self.octets_signes = None  # document signe : le fichier tel qu'enregistre ; on ne fait qu'y ajouter
+        converti = False
         if doc is None:
             with open(chemin, "rb") as f:
                 donnees = f.read()
-            doc = fitz.open(stream=donnees, filetype="pdf")
+            if donnees[:5] == b"%PDF-" or b"%PDF-" in donnees[:1024]:
+                doc = fitz.open(stream=donnees, filetype="pdf")
+            else:
+                # image (JPG, PNG, TIFF...) ou autre format lu par le moteur : converti en PDF des l'ouverture,
+                # sinon les outils PDF (Modifier, signer...) feraient planter le moteur
+                brut = fitz.open(stream=donnees, filetype=os.path.splitext(chemin)[1].lstrip(".").lower() or None)
+                doc = brut if brut.is_pdf else fitz.open("pdf", brut.convert_to_pdf())
+                converti = not brut.is_pdf
             self.poids_initial = len(donnees)
-            if _signe(doc):
+            if not converti and _signe(doc):
                 self.octets_signes = donnees
         else:
             self.poids_initial = 0
+        if converti:                                  # l'original n'est jamais ecrase : enregistre en .pdf
+            nom = nom or os.path.splitext(os.path.basename(chemin))[0] + ".pdf"
+            self.dossier_propose = os.path.dirname(chemin)     # « Enregistrer » propose le dossier de l'image
+            chemin = None
+            self.chemin = None
         self.doc = doc
         self.nom = nom or os.path.basename(chemin or _('Sans titre.pdf'))
         self.modifie = chemin is None

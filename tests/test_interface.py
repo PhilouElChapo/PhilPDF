@@ -1147,5 +1147,13 @@ try:
     verif(_r is None or _r is not _of, "document fermé : plus repris comme « dernier consulté », pas d'erreur")
 except RuntimeError as _e:
     verif(False, f"document fermé : erreur {_e}")
+# image JPG ouverte puis mode Modifier : convertie en PDF, plus de plantage du moteur
+_pm = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 200, 120), False); _pm.clear_with(230)
+_jpg = os.path.join(TRAVAIL, "Photo.jpg"); _pm.save(_jpg)
+_oi = w.ouvrir(_jpg)
+_oi.changer_mode("modifier"); app.processEvents()
+_oi.page_widgets[0].repaint(); app.processEvents()
+verif(_oi.doc.is_pdf and _oi.nom == "Photo.pdf" and _oi.chemin is None and _oi.paragraphes_page(0) == [],
+      "image JPG : ouverte comme PDF, mode Modifier sans plantage, l'image d'origine n'est pas écrasée")
 print(f"\n{sum(c for c, _ in ok)}/{len(ok)} vérifications réussies")
 sys.exit(0 if all(c for c, _ in ok) else 1)
