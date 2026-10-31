@@ -7,7 +7,7 @@ et rien n'est ecrit ailleurs sur le PC ni dans le registre.
 import json, os, platform, sys
 
 APP = "PhilPDF"
-VERSION = "0.9.48"
+VERSION = "0.9.49"
 LANCE_PAR_IMPRIMANTE = False      # PhilPDF ouvert tout seul pour une impression : pas de question de mise a jour
 
 

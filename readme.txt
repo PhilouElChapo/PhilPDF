@@ -88,6 +88,12 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.49
+- Fermeture (et fermeture pour mise a jour) : PhilPDF ne figure plus en « Fonctionnement arrete » (Qt6Core.dll)
+  dans le Moniteur de fiabilite de Windows. Une tache encore active a la fermeture (verification de mise a jour,
+  apercus, index, synchronisation) faisait arreter PhilPDF par Qt alors que tout etait deja enregistre.
+  Si Qt signale encore un probleme grave, il est note dans Aide > Journal (ligne « qt »).
+
 0.9.48
 - Modifier un paragraphe : polices sans table de caracteres classique (OCR-B des releves bancaires,
   polices decrites par noms de lettres) reconnues : le texte ne passe plus en gras (police de

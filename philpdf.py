@@ -279,8 +279,15 @@ def main():
     from PySide6.QtCore import QTimer
     QTimer.singleShot(800, lambda: w.impressions_en_attente(impressions))
     code = app.exec()
-    # une synchro qui attend encore le Drive (reseau lent) : Qt arreterait PhilPDF « brutalement » en detruisant sa
-    # tache (et le lancement suivant annoncerait un plantage). Fermeture normale : on note, puis on sort sans attendre.
+    sortir(w, code)
+
+
+def sortir(w, code):
+    """Fin de PhilPDF sans laisser Python detruire les objets Qt un par un.
+    Une tache Qt encore active a ce moment (verification de mise a jour, apercus, index, synchro qui attend le Drive)
+    fait arreter PhilPDF par Qt lui-meme (qFatal : « Fonctionnement arrete », Qt6Core.dll, c0000409, dans le Moniteur
+    de fiabilite de Windows), alors que tout est deja enregistre. Fermeture normale : verrou libere, journal note,
+    puis sortie directe."""
     try:
         restantes = w.taches_en_cours()
     except Exception:
@@ -291,10 +298,19 @@ def main():
             ecrire("fermeture", f"{len(restantes)} tâche(s) encore en cours (réseau lent) : arrêtée(s) proprement")
         except Exception:
             pass
-        _sortie_normale()
-        sys.stdout.flush()
-        os._exit(code)
-    sys.exit(code)
+    try:
+        if _VERROU is not None:
+            _VERROU.unlock()
+    except Exception:
+        pass
+    # pas atexit._run_exitfuncs() : PySide y detruit justement les objets Qt (et arreterait PhilPDF)
+    _sortie_normale()                                # pas de faux « plantage » annonce au lancement suivant
+    for f in (sys.stdout, sys.stderr):
+        try:
+            f.flush()
+        except Exception:
+            pass
+    os._exit(code)
 
 
 _VERROU = None
@@ -333,6 +349,19 @@ def surveiller_plantages():
         except Exception:
             pass
     sys.excepthook = crochet
+    try:
+        from PySide6.QtCore import qInstallMessageHandler, QtMsgType
+
+        def messages_qt(genre, contexte, message):
+            if genre in (QtMsgType.QtCriticalMsg, QtMsgType.QtFatalMsg) or "QThread" in message:
+                try:
+                    from app.journal import ecrire
+                    ecrire("qt", ("ARRET PAR QT : " if genre == QtMsgType.QtFatalMsg else "") + message)
+                except Exception:
+                    pass
+        qInstallMessageHandler(messages_qt)
+    except Exception:
+        pass
     # Windows : faulthandler note aussi des alertes internes sans gravite (ex. 0x80040155 dans la fenetre de choix
     # de dossier) alors que PhilPDF continue. Fermeture normale = pas de plantage : le fichier est vide a la sortie.
     import atexit
