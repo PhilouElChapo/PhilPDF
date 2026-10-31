@@ -287,7 +287,7 @@ fun PadSignature(genre: String, fermer: () -> Unit, valider: (Trace) -> Unit) {
     var traits by remember { mutableStateOf<List<List<Offset>>>(emptyList()) }
     var courant by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var taille by remember { mutableStateOf(androidx.compose.ui.unit.IntSize(1, 1)) }
-    Dialog(onDismissRequest = fermer, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Fenetre(fermer) {
         Column(Modifier.fillMaxWidth(0.95f).background(Color.White, RoundedCornerShape(12.dp)).padding(12.dp)) {
             Text(stringResource(if (genre == "signature") R.string.dessinez_signature else R.string.dessinez_paraphe), fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))

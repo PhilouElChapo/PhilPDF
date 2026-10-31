@@ -41,12 +41,14 @@ fun EditeurTexte(etat: EtatLecteur, par: Paragraphe, fermer: () -> Unit) {
     val nomOrigine = t?.nomBase?.substringAfter('+')?.ifEmpty { null }
         ?: if (l0.police.startsWith("Type3")) stringResource(R.string.police_integree) else l0.police
 
-    Dialog(onDismissRequest = { if (!occupe) fermer() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Fenetre({ if (!occupe) fermer() }) {
         Surface(Modifier.fillMaxWidth(0.96f).widthIn(max = 620.dp), shape = RoundedCornerShape(16.dp)) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+            Column(Modifier.padding(16.dp)) {
+              // tout defile, sauf les boutons « Annuler » / « Appliquer », toujours visibles en bas
+              Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
                 Text(stringResource(R.string.modifier_texte), fontWeight = FontWeight.SemiBold, fontSize = 19.sp)
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(texte, { texte = it }, Modifier.fillMaxWidth(), minLines = 2,
+                OutlinedTextField(texte, { texte = it }, Modifier.fillMaxWidth(), minLines = 2, maxLines = 9,
                     label = { Text(stringResource(R.string.texte_lignes)) })
                 Spacer(Modifier.height(8.dp))
                 // police : gardee, ou remplacee (et pourquoi), dit AVANT d'appliquer
@@ -74,6 +76,7 @@ fun EditeurTexte(etat: EtatLecteur, par: Paragraphe, fermer: () -> Unit) {
                 TextButton(onClick = { couleur = couleurOrigine }) { Text(stringResource(R.string.couleur_origine)) }
                 Spacer(Modifier.height(4.dp))
                 Text(stringResource(R.string.aide_texte_fenetre), fontSize = 12.sp, color = Color.Gray)
+              }
                 Spacer(Modifier.height(12.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = fermer, enabled = !occupe) { Text(stringResource(R.string.annuler)) }

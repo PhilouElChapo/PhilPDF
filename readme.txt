@@ -10,6 +10,11 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.3.1
+- Fenetres (modifier le texte, organiser les pages, comptes, aide, signature au doigt) : elles s'arretent
+  toujours au-dessus des boutons d'Android et du clavier ; « Appliquer » et les barres d'actions ne passent plus
+  dessous. Modifier le texte : le texte defile, les boutons restent fixes en bas.
+
 1.3.0
 - Partager : « Envoyer le fichier » (piece jointe, comme avant) ou « Envoyer un lien » : le PDF (avec vos
   modifications) est depose dans PhilPDF/Partages de votre compte de synchronisation (Google Drive, OneDrive,

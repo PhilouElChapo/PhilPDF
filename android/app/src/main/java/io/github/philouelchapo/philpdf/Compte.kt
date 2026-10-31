@@ -158,7 +158,7 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
 
     LaunchedEffect(Unit) { if (synchro != null) lireSynchro() }
 
-    Dialog(onDismissRequest = fermer, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Fenetre(fermer) {
         Surface(Modifier.fillMaxWidth(0.94f).widthIn(max = 560.dp).fillMaxHeight(0.92f), shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.fillMaxSize().padding(16.dp)) {
                 Text(stringResource(R.string.synchro_titre_ecran), fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
@@ -321,7 +321,7 @@ fun EcranFichiers(n: Nuage, fermer: () -> Unit, ouvrir: (Uri) -> Unit) {
     }
     fun remonter() { if (chemin.size > 1) chemin = chemin.dropLast(1) else fermer() }
 
-    Dialog(onDismissRequest = fermer, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Fenetre(fermer) {
         BackHandler { remonter() }
         Surface(Modifier.fillMaxWidth(0.96f).widthIn(max = 640.dp).fillMaxHeight(0.94f), shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.fillMaxSize().padding(vertical = 10.dp)) {

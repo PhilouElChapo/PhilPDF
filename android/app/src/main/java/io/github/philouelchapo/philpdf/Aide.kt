@@ -31,7 +31,7 @@ fun EcranAide(fermer: () -> Unit) {
     val nouveautes = remember {
         try { ctx.assets.open("readme.txt").bufferedReader().use { it.readText() } } catch (_: Exception) { "" }
     }
-    Dialog(onDismissRequest = fermer, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Fenetre(fermer) {
         Surface(Modifier.fillMaxWidth(0.96f).widthIn(max = 720.dp).fillMaxHeight(0.94f), shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.fillMaxSize().padding(vertical = 12.dp)) {
                 Text(stringResource(R.string.aide), Modifier.padding(horizontal = 16.dp), fontWeight = FontWeight.SemiBold, fontSize = 20.sp)

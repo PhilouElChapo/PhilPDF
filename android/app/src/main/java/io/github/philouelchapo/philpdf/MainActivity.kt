@@ -10,6 +10,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -30,7 +32,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(primary = ROUGE)) {
                 Surface(Modifier.fillMaxSize()) {
-                    Box(Modifier.safeDrawingPadding()) { Application(recu) }
+                    // marges des barres d'Android et du clavier, transmises aux fenetres (Fenetre) : rien ne passe dessous
+                    val marges = androidx.compose.foundation.layout.WindowInsets.safeDrawing.asPaddingValues()
+                    androidx.compose.runtime.CompositionLocalProvider(LocalMarges provides marges) {
+                        Box(Modifier.safeDrawingPadding()) { Application(recu) }
+                    }
                 }
             }
         }
