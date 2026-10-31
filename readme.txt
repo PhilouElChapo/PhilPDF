@@ -10,6 +10,10 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.2.3
+- Organiser les pages : la barre d'actions s'arrete au-dessus des boutons d'Android (retour, accueil) ;
+  « Alleger » et « Mot de passe » ne sont plus caches dessous.
+
 1.2.2
 - Apres un enregistrement ou « Alleger », les modifications suivantes (texte, surlignage, soulignement...)
   n'apparaissaient plus : l'ecriture du fichier reorganisait le document ouvert. Il n'est plus touche (une copie

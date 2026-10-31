@@ -104,9 +104,10 @@ fun OrganiserPages(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, fermer:
         }
     }
 
-    Dialog(onDismissRequest = fermer, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    Dialog(onDismissRequest = fermer, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = Color(0xFFF3F3F3)) {
-            Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+            // la fenetre s'arrete au-dessus des barres d'Android (retour, accueil) : la barre d'actions reste visible
+            Column(Modifier.fillMaxSize().systemBarsPadding()) {
                 // barre du haut : retour, titre, annuler / retablir / enregistrer
                 Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically) {
