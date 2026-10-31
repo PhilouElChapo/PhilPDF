@@ -10,6 +10,11 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.1.2
+- Modifier le texte : polices sans table de caracteres classique (OCR-B des releves bancaires, polices
+  decrites par noms de lettres) reconnues : la police d'origine est gardee au lieu d'une police de
+  remplacement ; une autre police de la page n'est plus jamais prise a sa place.
+
 1.1.1
 - Modifier le texte : la police d'origine est mieux reconnue (Helvetica et Helvetica-Bold ne sont plus
   confondues) ; polices standard sans table : seulement les lettres sures, sinon police de remplacement.
@@ -82,6 +87,11 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.48
+- Modifier un paragraphe : polices sans table de caracteres classique (OCR-B des releves bancaires,
+  polices decrites par noms de lettres) reconnues : le texte ne passe plus en gras (police de
+  remplacement) ; idem avec le bouton « ↻ ».
 
 0.9.47
 - Fermeture pendant une synchronisation lente (le Drive tarde a repondre) : PhilPDF ne se ferme plus

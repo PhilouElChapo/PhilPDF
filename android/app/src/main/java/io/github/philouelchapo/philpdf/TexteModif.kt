@@ -132,7 +132,8 @@ object TexteModif {
             val base = t.nomBase.substringAfter('+')
             val p = l.police
             if (p.isNotEmpty() && (base == p || (p.length >= 24 && base.startsWith(p)))) e -= 40f          // meme nom (tronque)
-            else if (p.isNotEmpty() && (base.startsWith(p) || p.startsWith(base))) e -= 15f              // meme famille seulement
+            else if (p.isNotEmpty() && base.isNotEmpty() && (base.startsWith(p) || p.startsWith(base))) e -= 15f   // meme famille
+            else if (p.isNotEmpty() && base.isNotEmpty()) continue                // une autre police de la page : jamais
             if (e < ecart) { ecart = e; meilleur = t }
         }
         return meilleur
@@ -198,7 +199,18 @@ object TexteModif {
             }
         } else if (octets == 1) {
             val enc = f.get("Encoding")
-            if (enc.isDictionary && enc.get("Differences").isArray) return null       // codes personnalises sans table
+            val diff = if (enc.isDictionary) enc.get("Differences").resolve() else null
+            if (diff != null && diff.isArray) {
+                // noms de glyphes (/A /eacute /zero...) : polices OCR-B des banques, Type3
+                var code = -1
+                for (k in 0 until diff.size()) {
+                    val x = diff.get(k)
+                    if (x.isNumber) code = x.asInteger()
+                    else if (x.isName && code >= 0) { NomsGlyphes.lettre(x.asName())?.let { codes.putIfAbsent(it, code) }; code++ }
+                }
+                return if (codes.isEmpty()) null else TablePolice(nom, f0, 1, codes, largeurs, dw,
+                    (try { f.get("BaseFont").asName() } catch (_: Exception) { null }) ?: "")
+            }
             if (enc.isName && enc.asName() == "WinAnsiEncoding") {
                 val cp = java.nio.charset.Charset.forName("windows-1252")
                 for (c in 32..255) {
@@ -307,4 +319,59 @@ object TexteModif {
     }
 
     private fun f(v: Float) = String.format(java.util.Locale.US, "%.3f", v)
+}
+
+/** Noms de glyphes Adobe (encodage « Differences » : /A /eacute /zero...) -> lettre (genere depuis moteur/noms_glyphes.py). */
+object NomsGlyphes {
+    private val TABLE: Map<String, String> = mapOf(
+        "space" to " ", "exclam" to "!", "quotedbl" to "\"", "numbersign" to "#", "dollar" to "\$", "percent" to "%",
+        "ampersand" to "&", "quotesingle" to "'", "quoteright" to "\u2019", "quoteleft" to "\u2018", "parenleft" to "(", "parenright" to ")",
+        "asterisk" to "*", "plus" to "+", "comma" to ",", "hyphen" to "-", "minus" to "\u2212", "period" to ".",
+        "slash" to "/", "colon" to ":", "semicolon" to ";", "less" to "<", "equal" to "=", "greater" to ">",
+        "question" to "?", "at" to "@", "bracketleft" to "[", "backslash" to "\\", "bracketright" to "]", "underscore" to "_",
+        "grave" to "`", "braceleft" to "{", "bar" to "|", "braceright" to "}", "asciitilde" to "~", "asciicircum" to "^",
+        "degree" to "\u00B0", "Euro" to "\u20ac", "euro" to "\u20ac", "sterling" to "\u00A3", "section" to "\u00A7", "paragraph" to "\u00B6",
+        "guillemotleft" to "\u00AB", "guillemotright" to "\u00BB", "endash" to "\u2013", "emdash" to "\u2014", "bullet" to "\u2022", "ellipsis" to "\u2026",
+        "quotedblleft" to "\u201c", "quotedblright" to "\u201d", "quotesinglbase" to "\u201a", "quotedblbase" to "\u201e", "ordmasculine" to "\u00BA", "ordfeminine" to "\u00AA",
+        "copyright" to "\u00A9", "registered" to "\u00AE", "trademark" to "\u2122", "multiply" to "\u00D7", "divide" to "\u00F7", "nbspace" to "\u00A0",
+        "uni00A0" to "\u00A0", "germandbls" to "\u00DF", "oe" to "\u0153", "OE" to "\u0152", "ae" to "\u00E6", "AE" to "\u00C6",
+        "oslash" to "\u00F8", "Oslash" to "\u00D8", "exclamdown" to "\u00A1", "questiondown" to "\u00BF", "periodcentered" to "\u00B7", "twosuperior" to "\u00B2",
+        "threesuperior" to "\u00B3", "onesuperior" to "\u00B9", "mu" to "\u00B5", "plusminus" to "\u00B1", "onehalf" to "\u00BD", "onequarter" to "\u00BC",
+        "threequarters" to "\u00BE", "fi" to "\ufb01", "fl" to "\ufb02", "zero" to "0", "one" to "1", "two" to "2",
+        "three" to "3", "four" to "4", "five" to "5", "six" to "6", "seven" to "7", "eight" to "8",
+        "nine" to "9", "A" to "A", "B" to "B", "C" to "C", "D" to "D", "E" to "E",
+        "F" to "F", "G" to "G", "H" to "H", "I" to "I", "J" to "J", "K" to "K",
+        "L" to "L", "M" to "M", "N" to "N", "O" to "O", "P" to "P", "Q" to "Q",
+        "R" to "R", "S" to "S", "T" to "T", "U" to "U", "V" to "V", "W" to "W",
+        "X" to "X", "Y" to "Y", "Z" to "Z", "a" to "a", "b" to "b", "c" to "c",
+        "d" to "d", "e" to "e", "f" to "f", "g" to "g", "h" to "h", "i" to "i",
+        "j" to "j", "k" to "k", "l" to "l", "m" to "m", "n" to "n", "o" to "o",
+        "p" to "p", "q" to "q", "r" to "r", "s" to "s", "t" to "t", "u" to "u",
+        "v" to "v", "w" to "w", "x" to "x", "y" to "y", "z" to "z", "Aacute" to "\u00C1",
+        "Agrave" to "\u00C0", "Acircumflex" to "\u00C2", "Adieresis" to "\u00C4", "Atilde" to "\u00C3", "Aring" to "\u00C5", "Acaron" to "\u01cd",
+        "Eacute" to "\u00C9", "Egrave" to "\u00C8", "Ecircumflex" to "\u00CA", "Edieresis" to "\u00CB", "Etilde" to "\u1ebc", "Ecedilla" to "\u0228",
+        "Ecaron" to "\u011a", "Iacute" to "\u00CD", "Igrave" to "\u00CC", "Icircumflex" to "\u00CE", "Idieresis" to "\u00CF", "Itilde" to "\u0128",
+        "Icaron" to "\u01cf", "Oacute" to "\u00D3", "Ograve" to "\u00D2", "Ocircumflex" to "\u00D4", "Odieresis" to "\u00D6", "Otilde" to "\u00D5",
+        "Ocaron" to "\u01d1", "Uacute" to "\u00DA", "Ugrave" to "\u00D9", "Ucircumflex" to "\u00DB", "Udieresis" to "\u00DC", "Utilde" to "\u0168",
+        "Uring" to "\u016e", "Ucaron" to "\u01d3", "Yacute" to "\u00DD", "Ygrave" to "\u1ef2", "Ycircumflex" to "\u0176", "Ydieresis" to "\u0178",
+        "Ytilde" to "\u1ef8", "Cacute" to "\u0106", "Ccircumflex" to "\u0108", "Ccedilla" to "\u00C7", "Ccaron" to "\u010c", "Nacute" to "\u0143",
+        "Ngrave" to "\u01f8", "Ntilde" to "\u00D1", "Ncedilla" to "\u0145", "Ncaron" to "\u0147", "Sacute" to "\u015a", "Scircumflex" to "\u015c",
+        "Scedilla" to "\u015e", "Scaron" to "\u0160", "Zacute" to "\u0179", "Zcircumflex" to "\u1e90", "Zcaron" to "\u017d", "aacute" to "\u00E1",
+        "agrave" to "\u00E0", "acircumflex" to "\u00E2", "adieresis" to "\u00E4", "atilde" to "\u00E3", "aring" to "\u00E5", "acaron" to "\u01ce",
+        "eacute" to "\u00E9", "egrave" to "\u00E8", "ecircumflex" to "\u00EA", "edieresis" to "\u00EB", "etilde" to "\u1ebd", "ecedilla" to "\u0229",
+        "ecaron" to "\u011b", "iacute" to "\u00ED", "igrave" to "\u00EC", "icircumflex" to "\u00EE", "idieresis" to "\u00EF", "itilde" to "\u0129",
+        "icaron" to "\u01d0", "oacute" to "\u00F3", "ograve" to "\u00F2", "ocircumflex" to "\u00F4", "odieresis" to "\u00F6", "otilde" to "\u00F5",
+        "ocaron" to "\u01d2", "uacute" to "\u00FA", "ugrave" to "\u00F9", "ucircumflex" to "\u00FB", "udieresis" to "\u00FC", "utilde" to "\u0169",
+        "uring" to "\u016f", "ucaron" to "\u01d4", "yacute" to "\u00FD", "ygrave" to "\u1ef3", "ycircumflex" to "\u0177", "ydieresis" to "\u00FF",
+        "ytilde" to "\u1ef9", "yring" to "\u1e99", "cacute" to "\u0107", "ccircumflex" to "\u0109", "ccedilla" to "\u00E7", "ccaron" to "\u010d",
+        "nacute" to "\u0144", "ngrave" to "\u01f9", "ntilde" to "\u00F1", "ncedilla" to "\u0146", "ncaron" to "\u0148", "sacute" to "\u015b",
+        "scircumflex" to "\u015d", "scedilla" to "\u015f", "scaron" to "\u0161", "zacute" to "\u017a", "zcircumflex" to "\u1e91", "zcaron" to "\u017e"
+    )
+
+    fun lettre(nom: String): Char? {
+        TABLE[nom]?.let { return it[0] }
+        for (p in listOf("uni", "u")) if (nom.startsWith(p) && nom.length in (p.length + 4)..(p.length + 5))
+            return nom.substring(p.length).toIntOrNull(16)?.toChar()
+        return null
+    }
 }

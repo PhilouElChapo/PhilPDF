@@ -112,7 +112,8 @@ class PolicePDF:
             ws = (_resolve(doc, xref, "Widths") or "").strip("[] ").split()
             for i, v in enumerate(ws):
                 self.width[first + i] = float(v) * fm[0]
-            fd = int(doc.xref_get_key(xref, "FontDescriptor")[1].split()[0])
+            t3 = doc.xref_get_key(xref, "FontDescriptor")
+            fd = int(t3[1].split()[0]) if t3[0] == "xref" else None      # facultatif pour une Type3
         else:  # Type1 / TrueType simples
             fd = None
             fc = doc.xref_get_key(xref, "FirstChar")
@@ -138,6 +139,16 @@ class PolicePDF:
                         self.width.setdefault(c, f.glyph_advance(ord(ch)))
             t = doc.xref_get_key(xref, "FontDescriptor")
             fd = int(t[1].split()[0]) if t[0] == "xref" else None
+        # pas de table ToUnicode : noms de glyphes de l'encodage (/Differences [ 65 /A /B /eacute ... ]) — polices
+        # OCR-B des banques, Type3...
+        if self.sub != "Type0":
+            enc = doc.xref_get_key(xref, "Encoding")
+            txt = doc.xref_object(int(enc[1].split()[0])) if enc[0] == "xref" else (enc[1] if enc[0] == "dict" else "")
+            m = re.search(r"/Differences\s*\[(.*?)\]", txt or "", re.S)
+            if m:
+                from .noms_glyphes import differences
+                for code, ch in differences(m.group(1)).items():
+                    cmap.setdefault(code, ch)
         for code, ch in cmap.items():
             if len(ch) == 1 and ch not in self.code_of and ch != "�":
                 self.code_of[ch] = code

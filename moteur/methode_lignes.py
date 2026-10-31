@@ -83,8 +83,13 @@ def table_police(doc, xref):
                             rev.setdefault(u, lo + k)
     elif n == 1:
         enc = doc.xref_get_key(xref, "Encoding")
-        if enc[0] == "xref" or "Differences" in (enc[1] or ""):
-            return None                                   # codes personnalises sans table : inutilisable
+        txt = doc.xref_object(int(enc[1].split()[0])) if enc[0] == "xref" else (enc[1] or "")
+        m = re.search(r"/Differences\s*\[(.*?)\]", txt, re.S)
+        if m:                                             # noms de glyphes (/A /eacute /zero...) : polices OCR-B, Type3
+            from .noms_glyphes import differences
+            for code, ch in differences(m.group(1)).items():
+                rev.setdefault(ch, code)
+            return {"n": n, "rev": rev, "w": w, "dw": dw} if rev else None
         if enc[1] == "/WinAnsiEncoding":
             for c in range(32, 256):
                 try:
@@ -129,8 +134,10 @@ def police_de_ligne(doc, page, ligne):
         f = sp["font"] or ""
         if f and (base == f or f == f"Type3 ({xref} 0 R)" or (len(f) >= 24 and base.startswith(f))):
             e -= 40                                       # meme nom (MuPDF tronque les noms longs)
-        elif f and (base.startswith(f) or f.startswith(base)):
+        elif f and base and (base.startswith(f) or f.startswith(base)):
             e -= 15                                       # meme famille (Helvetica / Helvetica-Bold : pas le meme)
+        elif f:
+            continue                                      # une autre police de la page : jamais (sinon secours)
         if e < ecart:
             meilleur, ecart = (xref, refname, T), e
     return meilleur
