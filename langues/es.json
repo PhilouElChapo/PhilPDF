@@ -2691,5 +2691,12 @@
  "✕ Pas de réponse après {s:.0f} s : {r}": "",
  "✕ Refusé (code {c}) après {s} s : {m}": "",
  "✕ {e}": "",
- "✦ IA": ""
+ "✦ IA": "",
+ "Le résultat ne convient pas ? Refaire cette modification autrement...": "",
+ "Une autre modification a été faite depuis : rien n'est refait.": "",
+ "Refaire autrement": "",
+ "Changer de méthode pour améliorer cette modification ?\n\n• Méthode actuelle : le paragraphe est réécrit et redistribué sur la largeur, lettre par lettre.\n• Autre méthode (celle de PhilPDF Android) : chaque ligne tapée est écrite à la place de l'ancienne ligne, avec la police d'origine du PDF ; seules les lettres sont retirées (fond, cadres et images restent), rien n'est décalé.\n\nCtrl+Z revient au texte d'origine dans les deux cas.": "",
+ "Autre méthode impossible : {e}": "",
+ "Autre méthode : police d'origine gardée ({p}).": "",
+ "Autre méthode : police de remplacement pour une partie du texte.": ""
 }

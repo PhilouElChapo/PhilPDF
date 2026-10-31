@@ -3759,6 +3759,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             return
         self.objet = None
         self.apres_modif(ed.journal)
+        self._proposer_autre_methode(n, para, texte, taille, couleur)
         if res["en_plus"] > 0:                     # le texte descend : touche-t-il ce qui est en dessous ?
             bas_avant = para["rect"].y1
             dessous = [l for l in ed._infos_lignes(self.doc[n]) if bas_avant + 1 < l["base"] <= res["bas"] + 2
@@ -3770,6 +3771,66 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
                     "Le paragraphe a maintenant {n} ligne(s) de plus et déborde sur le texte en dessous. "
                     "Elargissez la zone (poignée à droite), réduisez la taille ou raccourcissez le texte ; Ctrl+Z annule.",
                     n=res["en_plus"]))
+
+    # ---- « ↻ » : refaire la modification autrement (methode de PhilPDF Android), si le resultat ne convient pas
+    def _proposer_autre_methode(self, n, para, texte, taille, couleur):
+        from PySide6.QtWidgets import QToolButton
+        self._cacher_autre_methode()
+        try:
+            pw = self.page_widgets[n]
+        except (IndexError, AttributeError):
+            return
+        self._autre = (n, para, texte, taille, couleur, len(self.annulations))
+        b = QToolButton(pw)
+        b.setIcon(icone("synchro", "#ffffff"))
+        b.setIconSize(QSize(18, 18))
+        b.setFixedSize(30, 30)
+        b.setCursor(Qt.PointingHandCursor)
+        b.setToolTip(_("Le résultat ne convient pas ? Refaire cette modification autrement..."))
+        b.setStyleSheet("QToolButton{background:#0f6cbd;border:2px solid #ffffff;border-radius:15px}"
+                        "QToolButton:hover{background:#0b5394}")
+        r = pw.vers_ecran(para["rect"])
+        b.move(int(min(r.right() + 6, pw.width() - 34)), int(max(0, r.top() - 4)))
+        b.clicked.connect(self._autre_methode)
+        b.show()
+        b.raise_()
+        self._b_autre = b
+        QTimer.singleShot(45000, self._cacher_autre_methode)     # proposee le temps de regarder le resultat
+
+    def _cacher_autre_methode(self):
+        b = getattr(self, "_b_autre", None)
+        self._b_autre = None
+        try:
+            if b is not None:
+                b.deleteLater()
+        except RuntimeError:
+            pass
+
+    def _autre_methode(self):
+        n, para, texte, taille, couleur, nb = getattr(self, "_autre", (None,) * 6)
+        if n is None or nb != len(self.annulations) or not self.annulations:
+            self._cacher_autre_methode()
+            self.message(_("Une autre modification a été faite depuis : rien n'est refait."))
+            return
+        if QMessageBox.question(self, _("Refaire autrement"), _(
+                "Changer de méthode pour améliorer cette modification ?\n\n"
+                "• Méthode actuelle : le paragraphe est réécrit et redistribué sur la largeur, lettre par lettre.\n"
+                "• Autre méthode (celle de PhilPDF Android) : chaque ligne tapée est écrite à la place de l'ancienne "
+                "ligne, avec la police d'origine du PDF ; seules les lettres sont retirées (fond, cadres et images "
+                "restent), rien n'est décalé.\n\nCtrl+Z revient au texte d'origine dans les deux cas.")) != QMessageBox.Yes:
+            return
+        self._cacher_autre_methode()
+        from moteur import methode_lignes
+        avant = self.annulations[-1][1]                       # le document juste avant la modification
+        self._recharger(avant)
+        try:
+            res = methode_lignes.reecrire(self.doc, n, para, texte, taille=taille, couleur=couleur)
+        except Exception as e:
+            self.message(_("Autre méthode impossible : {e}", e=e))
+            return
+        self.objet = None
+        self.apres_modif([_("Autre méthode : police d'origine gardée ({p}).", p=res["police"]) if res["originale"]
+                          else _("Autre méthode : police de remplacement pour une partie du texte.")] + res["journal"])
 
     def ajouter_paragraphe(self, n, coin, texte, largeur, taille=None, couleur=None, police=None):
         self.memoriser(_("Ajout de texte"))
@@ -4372,6 +4433,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
 
     def memoriser(self, libelle=None):
         """Photographie le document avant une modification, avec son nom pour l'historique."""
+        self._cacher_autre_methode()
         if libelle is None:
             libelle = self.LIBELLES.get(sys._getframe(1).f_code.co_name, _('Modification'))
         self.annulations.append((libelle, self._octets()))

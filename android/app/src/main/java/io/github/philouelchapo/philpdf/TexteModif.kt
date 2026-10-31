@@ -130,7 +130,9 @@ object TexteModif {
             val lw = t.largeur(l.texte, l.taille)
             var e = if (lw != null) kotlin.math.abs(lw - (l.x1 - l.x0)) else 50f
             val base = t.nomBase.substringAfter('+')
-            if (l.police.isNotEmpty() && (base.startsWith(l.police) || l.police.startsWith(base))) e -= 30f   // meme nom
+            val p = l.police
+            if (p.isNotEmpty() && (base == p || (p.length >= 24 && base.startsWith(p)))) e -= 40f          // meme nom (tronque)
+            else if (p.isNotEmpty() && (base.startsWith(p) || p.startsWith(base))) e -= 15f              // meme famille seulement
             if (e < ecart) { ecart = e; meilleur = t }
         }
         return meilleur
@@ -197,10 +199,14 @@ object TexteModif {
         } else if (octets == 1) {
             val enc = f.get("Encoding")
             if (enc.isDictionary && enc.get("Differences").isArray) return null       // codes personnalises sans table
-            val cp = java.nio.charset.Charset.forName("windows-1252")
-            for (c in 32..255) {
-                val s = String(byteArrayOf(c.toByte()), cp)
-                if (s.length == 1 && s[0] != '�') codes.putIfAbsent(s[0], c)
+            if (enc.isName && enc.asName() == "WinAnsiEncoding") {
+                val cp = java.nio.charset.Charset.forName("windows-1252")
+                for (c in 32..255) {
+                    val s = String(byteArrayOf(c.toByte()), cp)
+                    if (s.length == 1 && s[0] != '\uFFFD') codes.putIfAbsent(s[0], c)
+                }
+            } else {                                          // StandardEncoding : seulement l'ASCII commun
+                for (c in 32..126) if (c != 0x27 && c != 0x60) codes.putIfAbsent(c.toChar(), c)
             }
         }
         if (codes.isEmpty()) return null

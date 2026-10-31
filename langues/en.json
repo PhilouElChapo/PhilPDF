@@ -2700,5 +2700,12 @@
  "La dernière utilisée dans PhilPDF": "The last one used in PhilPDF",
  "Remonter d'un dossier (touche Retour arrière)": "Go up one folder (Backspace key)",
  "Seuls les dossiers créés par PhilPDF sont visibles : l'autorisation enregistrée est l'autorisation limitée (donnée sur ce poste ou un autre sans « Voir tout mon Google Drive »). <a href='#'>Autoriser à nouveau tout le Drive</a>": "Only the folders created by PhilPDF are visible: the saved authorisation is the limited one (given on this or another computer without “See all my Google Drive”). <a href='#'>Authorise the whole Drive again</a>",
- "Voir les comptes...": "See the accounts..."
+ "Voir les comptes...": "See the accounts...",
+ "Le résultat ne convient pas ? Refaire cette modification autrement...": "Not happy with the result? Redo this change another way...",
+ "Une autre modification a été faite depuis : rien n'est refait.": "Another change was made since: nothing is redone.",
+ "Refaire autrement": "Redo another way",
+ "Changer de méthode pour améliorer cette modification ?\n\n• Méthode actuelle : le paragraphe est réécrit et redistribué sur la largeur, lettre par lettre.\n• Autre méthode (celle de PhilPDF Android) : chaque ligne tapée est écrite à la place de l'ancienne ligne, avec la police d'origine du PDF ; seules les lettres sont retirées (fond, cadres et images restent), rien n'est décalé.\n\nCtrl+Z revient au texte d'origine dans les deux cas.": "Change method to improve this change?\n\n• Current method: the paragraph is rewritten and spread over the width, letter by letter.\n• Other method (the PhilPDF Android one): each typed line is written in place of the old line, with the PDF's original font; only the letters are removed (background, frames and images stay), nothing is shifted.\n\nCtrl+Z goes back to the original text in both cases.",
+ "Autre méthode impossible : {e}": "Other method not possible: {e}",
+ "Autre méthode : police d'origine gardée ({p}).": "Other method: original font kept ({p}).",
+ "Autre méthode : police de remplacement pour une partie du texte.": "Other method: replacement font for part of the text."
 }

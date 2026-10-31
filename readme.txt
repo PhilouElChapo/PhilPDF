@@ -10,6 +10,10 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.1.1
+- Modifier le texte : la police d'origine est mieux reconnue (Helvetica et Helvetica-Bold ne sont plus
+  confondues) ; polices standard sans table : seulement les lettres sures, sinon police de remplacement.
+
 1.1.0
 - Modifier le texte de la page (Commenter > « Modifier le texte », puis toucher une ligne) :
   seules les lettres sont remplacees (fond, cadres, traits et images restent, aucun rectangle blanc),
@@ -78,6 +82,13 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.46
+- Modifier un paragraphe : apres la modification, un bouton rond « ↻ » apparait a cote du paragraphe
+  pendant 45 s. Si le resultat ne convient pas, il propose de refaire la modification autrement (methode
+  de PhilPDF Android : chaque ligne a sa place, police d'origine, seules les lettres retirees, fond et
+  cadres gardes). Ctrl+Z revient au texte d'origine dans les deux cas. La methode habituelle reste celle
+  par defaut.
 
 0.9.45
 - Ouvrir depuis NAS, FTP, Drive : dossiers d'abord (en gras), puis les PDF ; bouton « Dossier parent » bien
