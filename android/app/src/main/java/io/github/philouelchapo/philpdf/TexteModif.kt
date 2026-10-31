@@ -173,7 +173,7 @@ object TexteModif {
             val lw = t.largeur(l.texte, l.taille)
             var e = if (lw != null) kotlin.math.abs(lw - (l.x1 - l.x0)) else 50f
             val base = t.nomBase.substringAfter('+')
-            val p = l.police
+            val p = l.police.substringAfter('+')                                 // nom sans prefixe de sous-ensemble
             if (p.isNotEmpty() && (base == p || (p.length >= 24 && base.startsWith(p)))) e -= 40f          // meme nom (tronque)
             else if (p.isNotEmpty() && base.isNotEmpty() && (base.startsWith(p) || p.startsWith(base))) e -= 15f   // meme famille
             else if (p.isNotEmpty() && base.isNotEmpty()) continue                // une autre police de la page : jamais
@@ -272,7 +272,9 @@ object TexteModif {
     // ------------------------------------------------------------ ecriture
     /** Police standard la plus proche (secours) : famille et style de la police d'origine. */
     fun policeSecours(l: LigneTexte, gras: Boolean, italique: Boolean): String {
-        val fam = when { l.mono -> "Courier"; l.serif -> "Times"; else -> "Helvetica" }
+        val sans = l.police.contains("Sans", ignoreCase = true) || l.police.contains("Arial", ignoreCase = true) ||
+            l.police.contains("Helvetica", ignoreCase = true)
+        val fam = when { l.mono -> "Courier"; l.serif && !sans -> "Times"; else -> "Helvetica" }
         return when (fam) {
             "Times" -> when { gras && italique -> "Times-BoldItalic"; gras -> "Times-Bold"; italique -> "Times-Italic"; else -> "Times-Roman" }
             else -> fam + when { gras && italique -> "-BoldOblique"; gras -> "-Bold"; italique -> "-Oblique"; else -> "" }

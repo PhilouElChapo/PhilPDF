@@ -10,6 +10,14 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.2.2
+- Apres un enregistrement ou « Alleger », les modifications suivantes (texte, surlignage, soulignement...)
+  n'apparaissaient plus : l'ecriture du fichier reorganisait le document ouvert. Il n'est plus touche (une copie
+  est nettoyee, allegee et protegee a sa place). Un PDF protege par mot de passe le reste a l'enregistrement.
+- Modifier le texte : police d'origine retrouvee quand son nom porte un prefixe (« WWIXJF+SourceSansPro... ») ;
+  police de remplacement sans empattement pour les polices « Sans » (plus de Times a la place).
+- Journal : une page qui ne peut pas s'afficher entierement y est notee.
+
 1.2.1
 - Modifier le texte : polices « Type3 » decoupees en morceaux (factures faites depuis un navigateur ou un site) :
   la police d'origine est gardee, en reprenant chaque lettre dans le morceau qui la contient (plus de passage

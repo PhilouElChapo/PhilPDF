@@ -65,6 +65,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
     var pagesVersion by mutableIntStateOf(0)
     /** A l'enregistrement : null = mot de passe inchange, "" = retire, sinon nouveau mot de passe. */
     var motDePasseNouveau by mutableStateOf<String?>(null)
+    private val erreursRendu = HashSet<String>()
     /** A l'enregistrement : flux recompresses, objets en double retires. */
     var compresser by mutableStateOf(false)
 
@@ -195,9 +196,9 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
 
     private fun optionsEcriture(): String {
         var o = if (compresser) "garbage=deduplicate,compress=yes,compress-fonts=yes,compress-images=yes,clean=yes" else "garbage=compact"
-        val m = motDePasseNouveau
-        if (m == "") o += ",decrypt=yes"
-        else if (m != null) o += ",encrypt=aes-256,user-password=$m,owner-password=$m"
+        // copie dechiffree : on la protege avec le nouveau mot de passe, ou celui d'origine s'il n'a pas ete retire
+        val m = motDePasseNouveau ?: motDePasseOuverture?.takeIf { besoinMotDePasse() && !it.contains(',') }
+        if (!m.isNullOrEmpty()) o += ",encrypt=aes-256,user-password=$m,owner-password=$m"
         return o
     }
 
@@ -533,7 +534,14 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         withContext(Dispatchers.IO) {
             dest.parentFile?.mkdirs()
             val p = pdf
-            if (p != null && modifie) p.save(dest.absolutePath, optionsEcriture()) else fichier.copyTo(dest, overwrite = true)
+            if (p != null && modifie) {
+                // le document ouvert est ecrit tel quel (sans « garbage », qui renumerote ses objets en memoire et
+                // derangeait la suite : modifications invisibles), puis la copie est nettoyee, allegee, protegee
+                val brut = File(dest.parentFile, dest.name + ".brut")
+                p.save(brut.absolutePath, "decrypt=yes")
+                val copie = Document.openDocument(brut.absolutePath) as PDFDocument
+                try { copie.save(dest.absolutePath, optionsEcriture()) } finally { copie.destroy(); brut.delete() }
+            } else fichier.copyTo(dest, overwrite = true)
             dest
         }
     }
@@ -554,7 +562,9 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
     }
 
     fun besoinMotDePasse(): Boolean = doc.needsPassword()
-    fun motDePasse(m: String): Boolean = doc.authenticatePassword(m)
+    /** Mot de passe tape a l'ouverture (garde en memoire seulement) : le PDF reste protege a l'enregistrement. */
+    private var motDePasseOuverture: String? = null
+    fun motDePasse(m: String): Boolean = doc.authenticatePassword(m).also { if (it) motDePasseOuverture = m }
     fun nbPages(): Int = doc.countPages()
 
     /** Largeur et hauteur de chaque page, en points. */
@@ -589,6 +599,9 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
             try {
                 page.run(dev, Matrix(z, z), null as Cookie?)
                 dev.close()
+            } catch (e: Exception) {
+                // page en partie illisible : on garde ce qui a ete dessine, et on le note (une fois par page)
+                if (erreursRendu.add("$n-$version")) Journal.ecrire("affichage", "$nom, page ${n + 1} : $e")
             } finally {
                 dev.destroy()
             }
