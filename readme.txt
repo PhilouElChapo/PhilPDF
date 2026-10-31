@@ -10,6 +10,12 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.4.0
+- Creer un formulaire (volet Modifier) : « Detecter les champs du formulaire » repere les zones a remplir de tout
+  le document (pointilles, soulignes, traits, cases, cadres vides), comme PhilPDF Windows ; chaque champ prend le
+  nom du texte voisin ; vous decochez, renommez, puis « Creer ». Outils « Champ texte » et « Case a cocher » pour
+  dessiner un champ a la main. Appui long sur un champ : le renommer ou le supprimer. Tout s'annule avec « Annuler ».
+
 1.3.1
 - Fenetres (modifier le texte, organiser les pages, comptes, aide, signature au doigt) : elles s'arretent
   toujours au-dessus des boutons d'Android et du clavier ; « Appliquer » et les barres d'actions ne passent plus

@@ -241,4 +241,19 @@
     <string name="partage_sans_compte">Reliez d\'abord un compte de synchronisation (Accueil, rond en haut à droite).</string>
     <string name="partage_envoi">Dépôt et création du lien…</string>
     <string name="partage_message">Bonjour,\n\nVoici le document « %1$s » :\n%2$s\n\nBonne réception.</string>
+    <string name="outil_champ_texte">Champ texte</string>
+    <string name="outil_champ_case">Case à cocher</string>
+    <string name="aide_champ">Tracez du doigt la zone du champ (une case : touchez ou tracez un petit carré). Son nom est pris dans le texte voisin ; appui long sur un champ pour le renommer ou le supprimer.</string>
+    <string name="detecter_champs">Détecter les champs du formulaire</string>
+    <string name="detection_en_cours">Recherche des zones à remplir…</string>
+    <string name="detection_rien">Aucune zone à remplir trouvée (pointillés, traits, cases, cadres vides). Vous pouvez dessiner les champs avec « Champ texte » et « Case à cocher ».</string>
+    <string name="detection_aide">Décochez ce qui n\'est pas un champ ; corrigez les noms si besoin. Rien n\'est posé avant « Créer ».</string>
+    <string name="champ_case">Case à cocher</string>
+    <string name="champ_texte">Texte</string>
+    <string name="champ_texte_lignes">Texte sur plusieurs lignes</string>
+    <string name="creer_champs">Créer %1$d champ(s)</string>
+    <string name="champ_formulaire">Champ du formulaire</string>
+    <string name="nom_champ">Nom du champ</string>
+    <string name="supprimer_champ">Supprimer ce champ</string>
+    <string name="supprimer_champ_ok">Confirmer : supprimer le champ</string>
 </resources>

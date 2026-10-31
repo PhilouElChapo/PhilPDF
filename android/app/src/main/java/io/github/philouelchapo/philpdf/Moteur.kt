@@ -431,7 +431,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                     if (a.x in r.x0..r.x1 && a.y in r.y0..r.y1) {
                         trouve = InfoChamp(n, i, w.fieldType, try { w.value ?: "" } catch (_: Exception) { "" },
                             try { w.options?.toList() ?: emptyList() } catch (_: Exception) { emptyList() },
-                            try { w.isReadOnly } catch (_: Exception) { false })
+                            try { w.isReadOnly } catch (_: Exception) { false }, try { w.name ?: "" } catch (_: Exception) { "" })
                         break
                     }
                 }
@@ -457,6 +457,45 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                 ok
             }
         }
+    }
+
+    // ---------------------------------------------------------------- creer un formulaire
+    /** Zones a remplir reperees sur toutes les pages (rien n'est encore pose). */
+    suspend fun detecterChamps(): List<ChampDetecte> = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val p = pdf ?: return@withContext emptyList()
+            val out = ArrayList<ChampDetecte>()
+            for (n in 0 until p.countPages()) {
+                val page = p.loadPage(n) as PDFPage
+                try { out += Formulaire.detecter(page, n) } catch (e: Exception) { Journal.ecrire("formulaire", "page ${n + 1} : $e") }
+                finally { page.destroy() }
+            }
+            Formulaire.nomsUniques(p, out)
+            out
+        }
+    }
+
+    /** Pose les champs choisis (une seule etape d'annulation). */
+    suspend fun creerChamps(champs: List<ChampDetecte>): Boolean = if (champs.isEmpty()) false else operation("Creer des champs") { p ->
+        for ((n, l) in champs.groupBy { it.page }) surPage(p, n) { page ->     // champ dessine : nom du libelle voisin
+            l.filter { it.nom.isBlank() }.forEach { it.nom = Formulaire.nomAuto(page, it.rect, it.genre == "case") }
+        }
+        Formulaire.nomsUniques(p, champs)
+        for ((n, l) in champs.groupBy { it.page }) surPage(p, n) { page -> l.forEach { Formulaire.creer(p, page, it) } }
+        // apparence des nouveaux champs (la page relue les connait)
+        for (n in champs.map { it.page }.distinct()) surPage(p, n) { page ->
+            val noms = champs.filter { it.page == n }.map { it.nom }.toSet()
+            page.widgets?.forEach { w -> if (try { w.name } catch (_: Exception) { null } in noms) try { w.update() } catch (_: Exception) {} }
+        }
+        true
+    }
+
+    suspend fun supprimerChamp(c: InfoChamp): Boolean = operation("Supprimer un champ") { p ->
+        surPage(p, c.page) { page -> Formulaire.supprimer(p, page, c.index) }
+    }
+
+    suspend fun renommerChamp(c: InfoChamp, nom: String): Boolean = operation("Renommer un champ") { p ->
+        surPage(p, c.page) { page -> Formulaire.renommer(p, page, c.index, nom) }
     }
 
     // ---------------------------------------------------------------- signatures, paraphes, tampons
@@ -732,4 +771,4 @@ data class InfoAnnot(val page: Int, val index: Int, val genre: Int, val couleur:
     val objet: Boolean get() = genre == PDFAnnotation.TYPE_STAMP || genre == PDFAnnotation.TYPE_FREE_TEXT || genre == PDFAnnotation.TYPE_INK
 }
 data class InfoChamp(val page: Int, val index: Int, val genre: Int, val valeur: String, val options: List<String>,
-                     val lectureSeule: Boolean)
+                     val lectureSeule: Boolean, val nom: String = "")

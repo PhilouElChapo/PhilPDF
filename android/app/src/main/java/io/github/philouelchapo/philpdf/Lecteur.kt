@@ -92,6 +92,8 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var message by mutableStateOf<String?>(null)
     var organiser by mutableStateOf(false)                  // ecran « Organiser les pages »
     var choixPartage by mutableStateOf(false)               // envoyer le fichier ou un lien
+    var detecter by mutableStateOf(false)                   // creer un formulaire : champs reperes a choisir
+    var champOptions by mutableStateOf<InfoChamp?>(null)    // appui long sur un champ : renommer, supprimer
     /** Portee du lecteur : une pose lancee ici va au bout meme quand l'apercu disparait de l'ecran. */
     var portee: kotlinx.coroutines.CoroutineScope? = null
     val page: Int get() = liste.firstVisibleItemIndex
@@ -162,6 +164,8 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
     etat.champ?.let { SaisieChamp(etat, it) { etat.champ = null } }
     etat.paragraphe?.let { p -> EditeurTexte(etat, p) { etat.paragraphe = null } }
     if (etat.choixPartage) ChoixPartage(etat) { etat.choixPartage = false }
+    if (etat.detecter) DetectionChamps(etat) { etat.detecter = false }
+    etat.champOptions?.let { c -> OptionsChamp(etat, c) { etat.champOptions = null } }
     if (etat.organiser && t != null) OrganiserPages(etat, t) { etat.organiser = false }
     etat.message?.let { m ->
         val txt = if (m == "aucun_texte") stringResource(R.string.aucun_texte) else m
@@ -602,7 +606,11 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                         }
                     },
                     onDoubleTap = { etat.echelle = if (etat.echelle > 1.01f) 1f else 2f; if (etat.echelle == 1f) etat.decalage = Offset.Zero },
-                    onLongPress = { o -> portee.launch { etat.selection = d.annotationA(n, k(o)) } })
+                    onLongPress = { o -> portee.launch {
+                        // un champ de formulaire : le renommer ou le supprimer ; sinon l'annotation touchee
+                        val c = d.champA(n, k(o))
+                        if (c != null) etat.champOptions = c else etat.selection = d.annotationA(n, k(o))
+                    } })
                 Outil.NOTE -> detectTapGestures(onTap = { o -> etat.noteA = n to k(o) })
                 Outil.TEXTE -> detectTapGestures(onTap = { o ->
                     portee.launch {
@@ -644,6 +652,17 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                                 Outil.RECTANGLE -> d.forme(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_SQUARE, pts.first(), pts.last(), c, r.epaisseur, 1f)
                                 Outil.ELLIPSE -> d.forme(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_CIRCLE, pts.first(), pts.last(), c, r.epaisseur, 1f)
                                 Outil.FLECHE -> d.forme(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_LINE, pts.first(), pts.last(), c, r.epaisseur, 1f)
+                                Outil.CHAMP_TEXTE, Outil.CHAMP_CASE -> {
+                                    val a = pts.first(); val b = pts.last()
+                                    val case = r.outil == Outil.CHAMP_CASE
+                                    val rect = if (case) {             // case : carre de 12 pt (ou la taille dessinee)
+                                        val cote = maxOf(10f, minOf(kotlin.math.abs(b.x - a.x), kotlin.math.abs(b.y - a.y)).coerceAtMost(24f))
+                                        com.artifex.mupdf.fitz.Rect(minOf(a.x, b.x), minOf(a.y, b.y), minOf(a.x, b.x) + cote, minOf(a.y, b.y) + cote)
+                                    } else com.artifex.mupdf.fitz.Rect(minOf(a.x, b.x), minOf(a.y, b.y),
+                                        maxOf(a.x, b.x).coerceAtLeast(minOf(a.x, b.x) + 30f), maxOf(a.y, b.y).coerceAtLeast(minOf(a.y, b.y) + 14f))
+                                    d.creerChamps(listOf(ChampDetecte(n, if (case) "case" else "texte", rect, "",
+                                        lignes = !case && rect.y1 - rect.y0 > 30)))
+                                }
                                 else -> false
                             }
                         }
@@ -673,6 +692,8 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                     Outil.ELLIPSE -> drawOval(c, Offset(minOf(a.x, b.x), minOf(a.y, b.y)), Size(kotlin.math.abs(b.x - a.x), kotlin.math.abs(b.y - a.y)),
                         style = androidx.compose.ui.graphics.drawscope.Stroke(ep))
                     Outil.FLECHE -> drawLine(c, a, b, ep)
+                    Outil.CHAMP_TEXTE, Outil.CHAMP_CASE -> drawRect(Color(0xFF0F6CBD), Offset(minOf(a.x, b.x), minOf(a.y, b.y)),
+                        Size(kotlin.math.abs(b.x - a.x), kotlin.math.abs(b.y - a.y)), style = androidx.compose.ui.graphics.drawscope.Stroke(3f))
                     else -> drawRect(c.copy(alpha = 0.35f), Offset(minOf(a.x, b.x), minOf(a.y, b.y)),   // zone de texte choisie
                         Size(kotlin.math.abs(b.x - a.x).coerceAtLeast(4f), kotlin.math.abs(b.y - a.y).coerceAtLeast(24f)))
                 }

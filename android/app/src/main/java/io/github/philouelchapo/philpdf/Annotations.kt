@@ -35,10 +35,13 @@ enum class Outil(val icone: String, val texte: Int) {
     ELLIPSE("aucun", R.string.outil_ellipse),
     FLECHE("suivante", R.string.outil_fleche),
     GOMME("supprimer", R.string.outil_gomme),
+    CHAMP_TEXTE("formulaire", R.string.outil_champ_texte),   // creer un formulaire : zone de texte dessinee
+    CHAMP_CASE("valide", R.string.outil_champ_case),         // creer un formulaire : case a cocher
     POSER("signer", R.string.outil_poser);          // signature, paraphe ou tampon a poser d'un toucher
 
     val texteSurligne: Boolean get() = this == SURLIGNER || this == SOULIGNER || this == BARRER
     val forme: Boolean get() = this == RECTANGLE || this == ELLIPSE || this == FLECHE
+    val champ: Boolean get() = this == CHAMP_TEXTE || this == CHAMP_CASE
 }
 
 /** Couleurs proposees (memes teintes par defaut que PhilPDF Windows). */
@@ -95,7 +98,14 @@ fun PanneauAnnoter(etat: EtatLecteur, choisi: () -> Unit = {}) {
                 }
             }
         }
-        if (r.outil != Outil.MAIN && r.outil != Outil.GOMME && r.outil != Outil.POSER && r.outil != Outil.TEXTE) {
+        // creer un formulaire : reperer les zones a remplir de tout le document
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(onClick = { etat.detecter = true; choisi() }, Modifier.fillMaxWidth()) {
+            Icon(Icones.get("formulaire", ROUGE), null)
+            Spacer(Modifier.width(8.dp))
+            TexteAjuste(stringResource(R.string.detecter_champs), 14.sp)
+        }
+        if (r.outil != Outil.MAIN && r.outil != Outil.GOMME && r.outil != Outil.POSER && r.outil != Outil.TEXTE && !r.outil.champ) {
             Spacer(Modifier.height(14.dp))
             Text(stringResource(R.string.couleur), fontSize = 13.sp)
             Palette(r.couleur()) { r.choisirCouleur(it) }
@@ -122,6 +132,7 @@ fun aideOutil(o: Outil): Int = when {
     o == Outil.GOMME -> R.string.aide_gomme
     o == Outil.POSER -> R.string.aide_poser
     o == Outil.TEXTE -> R.string.aide_texte_modif
+    o.champ -> R.string.aide_champ
     else -> R.string.aide_dessin
 }
 
