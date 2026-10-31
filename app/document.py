@@ -2868,6 +2868,19 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         self.liste_biblio.itemCollapsed.connect(lambda it: self._memo_groupe(it, False))
         self.liste_biblio.setContextMenuPolicy(Qt.CustomContextMenu)
         self.liste_biblio.customContextMenuRequested.connect(self._menu_biblio)
+        # volet etroit (petit ecran) : apercus plus petits, pour laisser la place aux noms et aux categories
+        from PySide6.QtCore import QObject, QEvent
+
+        class _Adapter(QObject):
+            def eventFilter(s_, obj, ev):
+                if ev.type() == QEvent.Resize:
+                    lw = obj.width()
+                    iw = int(max(48, min(120, lw * 0.36)))
+                    if obj.iconSize().width() != iw:
+                        obj.setIconSize(QSize(iw, max(22, int(iw * 0.37))))
+                return False
+        self._adapter_biblio = _Adapter(self.liste_biblio)
+        self.liste_biblio.installEventFilter(self._adapter_biblio)
         l.addWidget(self.liste_biblio, 1)
         b = BoutonVolet(_('Gérer, importer, dessiner...'), _("Ajouter, renommer, classer vos tampons et signatures"))
         b.clicked.connect(self._gerer_biblio)
@@ -2890,6 +2903,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             f.setBold(True)
             g.setFont(0, f)
             g.setData(0, Qt.UserRole + 1, cle)
+            g.setToolTip(0, titre)                   # nom complet si le volet est etroit
             (parent.addChild(g) if parent else self.liste_biblio.addTopLevelItem(g))
             g.setExpanded(cle not in replies)
             return g
@@ -2898,7 +2912,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         favoris = self.biblio.favoris(genre)
         if favoris:                                  # en tete, ouverts : un clic pour poser, categories repliees ou non
             g_fav = groupe(None, "favoris", _("Favoris ({n})", n=len(favoris)))
-            g_fav.setIcon(0, QIcon(etoile_jaune(16)))
+            g_fav.setIcon(0, QIcon(etoile_jaune(12)))
             for e in favoris:
                 self._ajout_item_biblio(g_fav, e["nom"], None, e,
                                         _("Date ajoutée à la pose") if e.get("horodatage", "non") != "non" else None)
@@ -2914,7 +2928,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
                     nf = sum(1 for x in perso if x.get("categorie", "") == c and x.get("favori"))
                     cats[c] = groupe(g_perso, "cat:" + c, c)
                     if nf:                           # etoile sur la categorie : elle contient des favoris
-                        cats[c].setIcon(0, QIcon(etoile_jaune(14)))
+                        cats[c].setIcon(0, QIcon(etoile_jaune(11)))
                         cats[c].setToolTip(0, _("{n} favori(s) dans cette catégorie, aussi en tête du volet", n=nf))
                 parent = cats[c]
             self._ajout_item_biblio(parent, e["nom"], None, e,
@@ -2955,7 +2969,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         pm.loadFromData(objets.apercu(pdf, 60), "PNG")
         if e.get("favori") and e.get("id"):
             from .dialogues import avec_etoile
-            pm = avec_etoile(pm.scaledToHeight(44, Qt.SmoothTransformation), 16)
+            pm = avec_etoile(pm.scaledToHeight(44, Qt.SmoothTransformation), 11)   # petite etoile, l'apercu reste lisible
         it = QTreeWidgetItem([nom])
         it.setIcon(0, QIcon(pm))
         it.setToolTip(0, nom + (f" — {aide}" if aide else ""))

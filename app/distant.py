@@ -521,6 +521,16 @@ DOSSIER_MIME = "application/vnd.google-apps.folder"
 
 
 _JETONS = {}        # jetons d'acces gardes en memoire (1 h) : pas de renouvellement a chaque synchronisation
+_PORTEES = {}       # autorisation reellement accordee, par compte (renvoyee par le fournisseur)
+
+
+def drive_limite(compte):
+    """Google Drive : « tout mon Drive » demande, mais l'autorisation enregistree n'est que la limitee (drive.file) ;
+    par exemple autorisee sur un autre poste sans cette case. None = on ne sait pas encore."""
+    p = _PORTEES.get(compte.get("id"))
+    if compte.get("type") != "gdrive" or not compte.get("acces_complet") or p is None:
+        return None
+    return "https://www.googleapis.com/auth/drive " not in p + " "
 
 
 class _DriveOAuth(_Http):
@@ -551,6 +561,8 @@ class _DriveOAuth(_Http):
         if j.get("refresh_token") and j["refresh_token"] != rt:      # Box (et parfois Microsoft) renouvellent le jeton durable
             coffre.enregistrer(self.c["id"] + ".jeton", j["refresh_token"])
         self.jeton, self.expire = j["access_token"], j["expire"]
+        if j.get("scope"):                          # ce que le fournisseur a vraiment accorde (Drive complet ou limite)
+            _PORTEES[self.c["id"]] = j["scope"]
         _JETONS[self.c["id"]] = (self.jeton, self.expire, coffre.lire(self.c["id"] + ".jeton"))
         return self.jeton
 

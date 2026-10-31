@@ -155,6 +155,8 @@ def autoriser_compte(parent, compte):
     dlg.close()
     if res.get("j"):
         coffre.enregistrer(compte["id"] + ".jeton", res["j"]["refresh_token"])
+        distant._JETONS.pop(compte["id"], None)          # la nouvelle autorisation (et sa portee) sert tout de suite
+        distant._PORTEES.pop(compte["id"], None)
         if coffre.lire(compte["id"] + ".jeton") != res["j"]["refresh_token"]:
             QMessageBox.warning(parent, _("Autorisation"), _(
                 "L'autorisation a été accordée, mais le coffre des mots de passe de ce poste a refusé de la garder. "
@@ -611,15 +613,25 @@ class DialogueParcourir(QDialog):
         for c in params.get("comptes", []):
             self.comptes.addItem(avatars.icone_compte(c, params), distant.libelle(c), c["id"])
         h.addWidget(self.comptes, 1)
-        self.b_haut = QToolButton()
-        self.b_haut.setIcon(icone("precedente", "#444444"))
-        self.b_haut.setToolTip(_("Dossier parent"))
-        self.b_haut.clicked.connect(self.monter)
-        h.addWidget(self.b_haut)
         v.addLayout(h)
+        # chemin + bouton bien visible pour remonter (aussi : ligne « .. » en tete de liste, touche Retour arriere)
+        hc = QHBoxLayout()
+        self.b_haut = QPushButton(icone("precedente", "#0f6cbd"), _("Dossier parent"))
+        self.b_haut.setToolTip(_("Remonter d'un dossier (touche Retour arrière)"))
+        self.b_haut.clicked.connect(self.monter)
+        hc.addWidget(self.b_haut)
         self.lbl_chemin = QLabel()
-        self.lbl_chemin.setStyleSheet("color:#555")
-        v.addWidget(self.lbl_chemin)
+        self.lbl_chemin.setStyleSheet("color:#333; font-weight:600")
+        self.lbl_chemin.setWordWrap(True)
+        hc.addWidget(self.lbl_chemin, 1)
+        v.addLayout(hc)
+        self.bandeau = QLabel()
+        self.bandeau.setWordWrap(True)
+        self.bandeau.setStyleSheet("background:#fff4e5; color:#7a4b00; padding:6px; border-radius:4px")
+        self.bandeau.setTextFormat(Qt.RichText)
+        self.bandeau.linkActivated.connect(lambda _l: self._reautoriser())
+        self.bandeau.hide()
+        v.addWidget(self.bandeau)
         self.liste = QListWidget()
         self.liste.setIconSize(QSize(20, 20))
         self.liste.itemDoubleClicked.connect(self._double)
@@ -669,14 +681,48 @@ class DialogueParcourir(QDialog):
             return
         self.dossier = dossier
         self.lbl_chemin.setText(dossier)
+        racine = dossier in ("", "/")
+        self.b_haut.setEnabled(not racine)
         self.liste.clear()
-        for x in elems:
+        if not racine:
+            it = QListWidgetItem(icone("precedente", "#0f6cbd"), _("..  (dossier parent)"))
+            it.setData(Qt.UserRole, "..")
+            self.liste.addItem(it)
+        # dossiers d'abord (en gras), puis les PDF, chacun par ordre alphabetique
+        f_gras = self.liste.font()
+        f_gras.setBold(True)
+        for x in sorted(elems, key=lambda e: (not e.dossier, e.nom.lower())):
             if not x.dossier and not x.nom.lower().endswith(".pdf"):
                 continue
             it = QListWidgetItem(icone("ouvrir" if x.dossier else "creer", "#c8a000" if x.dossier else "#c9252d"),
                                  x.nom + ("" if x.dossier else _("   ({n} Ko)", n=max(1, x.taille // 1024))))
+            if x.dossier:
+                it.setFont(f_gras)
             it.setData(Qt.UserRole, x)
             self.liste.addItem(it)
+        lim = distant.drive_limite(self.compte() or {})
+        self.bandeau.setVisible(bool(lim))
+        if lim:
+            self.bandeau.setText(_("Seuls les dossiers créés par PhilPDF sont visibles : l'autorisation enregistrée est "
+                                   "l'autorisation limitée (donnée sur ce poste ou un autre sans « Voir tout mon Google "
+                                   "Drive »). <a href='#'>Autoriser à nouveau tout le Drive</a>"))
+
+    def _reautoriser(self):
+        c = self.compte()
+        if not c:
+            return
+        c["acces_complet"] = True
+        if autoriser_compte(self, c):
+            distant._JETONS.pop(c["id"], None)
+            distant._PORTEES.pop(c["id"], None)
+            self.params.enregistrer()
+            self._connecter()
+
+    def keyPressEvent(self, ev):
+        if ev.key() == Qt.Key_Backspace:
+            self.monter()
+            return
+        super().keyPressEvent(ev)
 
     def monter(self):
         if self.e and self.dossier not in ("", "/"):
@@ -684,6 +730,9 @@ class DialogueParcourir(QDialog):
 
     def _double(self, it):
         x = it.data(Qt.UserRole)
+        if x == "..":
+            self.monter()
+            return
         if x.dossier:
             self.aller(x.chemin)
         elif self.mode == "ouvrir":
@@ -692,6 +741,8 @@ class DialogueParcourir(QDialog):
 
     def _choix(self, it, _ancien=None):
         x = it.data(Qt.UserRole) if it else None
+        if x == "..":
+            return
         if x and not x.dossier and self.mode == "enregistrer":
             self.nom.setText(x.nom)
 
@@ -702,6 +753,9 @@ class DialogueParcourir(QDialog):
             it = self.liste.currentItem()
             x = it.data(Qt.UserRole) if it else None
             if not x:
+                return
+            if x == "..":
+                self.monter()
                 return
             if x.dossier:
                 self.aller(x.chemin)

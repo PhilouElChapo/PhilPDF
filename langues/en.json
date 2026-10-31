@@ -2688,5 +2688,17 @@
  "Fichier readme.txt introuvable.": "readme.txt file not found.",
  "Ce qu'ont échangé PhilPDF et vos Drives, NAS, FTP et IA, et le déroulé des mises à jour (les 800 dernières lignes ; mots de passe, codes et jetons masqués). Copiez-le pour signaler un problème.": "What PhilPDF exchanged with your Drives, NAS, FTP and AI, and how updates went (last 800 lines; passwords, codes and tokens hidden). Copy it to report a problem.",
  "Fond blanc transparent": "Transparent white background",
- "Impossible : {e}": "Not possible: {e}"
+ "Impossible : {e}": "Not possible: {e}",
+ "..  (dossier parent)": "..  (parent folder)",
+ "Celle de Windows par défaut ({nom})": "Windows default printer ({nom})",
+ "Compte(s) ajouté(s) depuis vos autres postes : {x}": "Account(s) added from your other computers: {x}",
+ "Compte(s) ajouté(s) depuis vos autres postes : {x}. Si un mot de passe ou une autorisation manque, PhilPDF vous le demandera à la première utilisation.": "Account(s) added from your other computers: {x}. If a password or an authorisation is missing, PhilPDF will ask for it the first time it is used.",
+ "Contacts regroupés par la première lettre de la colonne de gauche (glissez un en-tête pour changer l'ordre des colonnes)": "Contacts grouped by the first letter of the leftmost column (drag a header to change the column order)",
+ "Grouper par lettre": "Group by letter",
+ "Imprimante utilisée quand vous imprimez depuis PhilPDF, différente si besoin de celle de Windows (propre à ce poste). Vous pouvez toujours en choisir une autre au moment d'imprimer.": "Printer used when you print from PhilPDF, different from the Windows one if needed (specific to this computer). You can still choose another one when printing.",
+ "Imprimer depuis PhilPDF sur": "Print from PhilPDF on",
+ "La dernière utilisée dans PhilPDF": "The last one used in PhilPDF",
+ "Remonter d'un dossier (touche Retour arrière)": "Go up one folder (Backspace key)",
+ "Seuls les dossiers créés par PhilPDF sont visibles : l'autorisation enregistrée est l'autorisation limitée (donnée sur ce poste ou un autre sans « Voir tout mon Google Drive »). <a href='#'>Autoriser à nouveau tout le Drive</a>": "Only the folders created by PhilPDF are visible: the saved authorisation is the limited one (given on this or another computer without “See all my Google Drive”). <a href='#'>Authorise the whole Drive again</a>",
+ "Voir les comptes...": "See the accounts..."
 }

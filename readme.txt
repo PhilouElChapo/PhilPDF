@@ -72,6 +72,19 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.45
+- Ouvrir depuis NAS, FTP, Drive : dossiers d'abord (en gras), puis les PDF ; bouton « Dossier parent » bien
+  visible, ligne « .. » en tete, touche Retour arriere. Google Drive : si l'autorisation enregistree n'est que
+  la limitee alors que « Voir tout mon Google Drive » est coche, un bandeau le dit et propose de reautoriser.
+- Petit ecran : l'Accueil defile au lieu d'etre coupe en bas ; volet des tampons et signatures : apercus
+  et etoiles a la taille du volet, nom complet des categories en bulle.
+- Preferences > Imprimante : « Imprimer depuis PhilPDF sur » une autre imprimante que celle de Windows
+  (ex. la couleur alors que Windows a la laser noir et blanc), ou la derniere utilisee dans PhilPDF.
+- Carnet d'adresses en tableau : colonnes Nom, Prenom, Adresse deplacables (glisser l'en-tete) et triables
+  (clic sur l'en-tete), contacts groupes par la premiere lettre de la colonne de gauche.
+- Compte (NAS, FTP, Drive) ajoute sur un poste : repris automatiquement sur vos autres postes, et son
+  autorisation y est demandee tout de suite.
+
 0.9.44
 - Mes tampons, mes signatures (clic droit) : « Fond blanc transparent » retire le fond blanc d'un tampon
   ou d'une signature scannes, qui cachait le texte de la page ; vos autres postes et Android le recoivent.

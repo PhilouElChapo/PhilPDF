@@ -23,7 +23,7 @@ COMMUNS = ["auteur", "langue", "outils_epingles", "barre_rapide", "volet", "vign
            "identites", "certificats_approuves", "signature_reglages", "identites_supprimees", "certificats_retires",
            "formulaire_detection", "formulaire_types_auto", "comptes_mail", "courriel", "courriel_recents", "ordre_outils",
            "carnet", "comptes_mail_retires", "carnet_retires", "imprimante", "imprimante_nom"]
-POSTE = ["imprimante_installee", "secrets_refuses", "disposition_vue", "volet_largeur", "vignettes_largeur", "biblio_replies", "sessions_vues", "synchro_etat", "machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
+POSTE = ["imprimante_installee", "imprimante_philpdf", "imprimante_derniere", "secrets_refuses", "disposition_vue", "volet_largeur", "vignettes_largeur", "biblio_replies", "sessions_vues", "synchro_etat", "machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
 CLEFS_IA = ["clef_claude", "clef_gemini"]
 FICHIER_DRIVE = "preferences.json"
 

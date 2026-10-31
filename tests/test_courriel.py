@@ -90,9 +90,13 @@ verif(r == 1 and len(f.params["carnet"]) == 4 and "PeratValentin@gmail.com" in f
       "carnet nettoyé : doublon retiré (et retiré sur les autres postes)")
 verif(any(c.get("nom") == "Théodore Yakite" and c.get("maj") for c in f.params["carnet"]), "nom remis en forme, daté")
 pc = DC.PanneauCarnet(f.params)
-pc.tri.setCurrentIndex(pc.tri.findData("nom")); app.processEvents()
-ordre = [pc.liste.item(i).data(Qt.UserRole + 1) for i in range(pc.liste.count())]
+pc._tri = (1, Qt.AscendingOrder); pc._remplir(); app.processEvents()
+ordre = list(pc._lignes_contacts)
 verif(ordre.index("jean.dupont@ex.fr") < ordre.index("peratvalentin@gmail.com") < ordre.index("theodore.yakite@orange.fr"),
       f"carnet trié par nom de famille (Dupont, Perat, ... Yakite) {ordre}")
+verif(pc.liste.topLevelItem(0).data(0, Qt.UserRole) is None and pc.liste.topLevelItem(0).text(0) == "D",
+      "carnet groupé par lettre (D pour Dupont en tête)")
+pc.liste.header().moveSection(2, 0); app.processEvents()
+verif(pc.liste.topLevelItem(0).text(0) in ("J", "L", "P", "T"), "colonne Adresse déplacée à gauche : groupes par lettre de l'adresse")
 if len(sys.argv) > 1: f.grab().save(sys.argv[1] + "/mail.png")
 print(); print(f"{sum(R)}/{len(R)} vérifications d'envoi par e-mail réussies"); sys.exit(0 if all(R) else 1)

@@ -1928,11 +1928,25 @@ class Fenetre(MixinCoteACote, QMainWindow):
         if d.ocr.isChecked():
             self.statusBar().showMessage(_('Enregistrez la numérisation pour lancer la reconnaissance du texte.'), 10000)
 
+    def imprimante_preferee(self):
+        """Imprimante proposee par PhilPDF (Preferences > Imprimante), si elle existe encore sur ce poste ; sinon None
+        (Windows propose alors son imprimante par defaut)."""
+        from PySide6.QtPrintSupport import QPrinterInfo
+        choix = self.params.get("imprimante_philpdf", "")
+        nom = self.params.get("imprimante_derniere", "") if choix == "*derniere*" else choix
+        return nom if nom and nom in QPrinterInfo.availablePrinterNames() else None
+
     def imprimer(self, onglets_ou_docs):
         pr = QPrinter(QPrinter.HighResolution)
+        nom = self.imprimante_preferee()
+        if nom:
+            pr.setPrinterName(nom)
         dlg = QPrintDialog(pr, self)
         if dlg.exec() != QDialog.Accepted:
             return
+        if pr.printerName() and pr.printerName() != self.params.get("imprimante_derniere"):
+            self.params["imprimante_derniere"] = pr.printerName()
+            self.params.enregistrer()
         p = QPainter(pr)
         premier = True
         for d in onglets_ou_docs:
@@ -2463,6 +2477,19 @@ class Fenetre(MixinCoteACote, QMainWindow):
         b_impr.clicked.connect(lambda: __import__("app.creer", fromlist=["DialogueImprimante"]).DialogueImprimante(
             d, self.params).exec())
         f.addRow(b_impr)
+        # imprimante utilisee pour IMPRIMER depuis PhilPDF (Windows n'a qu'une imprimante par defaut pour tous
+        # les logiciels : ici, PhilPDF peut en avoir une autre, ex. la couleur alors que Windows a la laser N&B)
+        from PySide6.QtPrintSupport import QPrinterInfo
+        note(f, _("Imprimante utilisée quand vous imprimez depuis PhilPDF, différente si besoin de celle de Windows "
+                  "(propre à ce poste). Vous pouvez toujours en choisir une autre au moment d'imprimer."))
+        impr_choix = QComboBox()
+        impr_choix.addItem(_("Celle de Windows par défaut ({nom})", nom=QPrinterInfo.defaultPrinterName() or "?"), "")
+        impr_choix.addItem(_("La dernière utilisée dans PhilPDF"), "*derniere*")
+        for nom_i in QPrinterInfo.availablePrinterNames():
+            impr_choix.addItem(icone("imprimer", "#555555"), nom_i, nom_i)
+        i_ch = impr_choix.findData(self.params.get("imprimante_philpdf", ""))
+        impr_choix.setCurrentIndex(max(0, i_ch))
+        f.addRow(_("Imprimer depuis PhilPDF sur"), impr_choix)
         # ---------------- Recherche (emplacements)
         f = page(_("Recherche"))
         note(f, _("Où « Rechercher dans tous mes PDF » cherche vos documents : dossiers de ce PC (et leurs "
@@ -2506,7 +2533,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
                            ia_moteur=["claude", "gemini", "deux"][moteur.currentIndex()],
                            clef_claude=kc.text().strip(), clef_gemini=kg.text().strip(),
                            maj_source=["github", "dossier"][majs.currentIndex()], maj_auto=maja.isChecked(),
-                           synchro_secrets=sync_sec.isChecked())
+                           synchro_secrets=sync_sec.isChecked(), imprimante_philpdf=impr_choix.currentData())
         if assoc.isChecked() != self.params["association_pdf"]:
             if associer_pdf(assoc.isChecked()):
                 self.params["association_pdf"] = assoc.isChecked()
@@ -2615,7 +2642,36 @@ class Fenetre(MixinCoteACote, QMainWindow):
                 sec = reglages.secrets_nouveaux(self.params, phrase)
             except Exception:
                 sec = []
+        # comptes (NAS, FTP, Drives) ajoutes sur un autre poste : repris tout de suite ici (un ajout ne retire rien),
+        # puis leur autorisation ou mot de passe est propose aussitot dans la fenetre (plus seulement une bulle)
+        ajoutes = []
+        it_c = next((i for i in (ch["items"] if ch else []) if i["cle"] == "comptes"), None)
+        if it_c and isinstance(it_c.get("valeur"), list):
+            ici = {c.get("id") for c in self.params.get("comptes", [])}
+            ajoutes = [c for c in it_c["valeur"] if isinstance(c, dict) and c.get("id") not in ici]
+            if ajoutes:
+                self.params["comptes"] = list(self.params.get("comptes", [])) + ajoutes
+                self.params.enregistrer()
+                actuel = {c.get("id"): c for c in self.params["comptes"]}
+                if all(actuel.get(c.get("id")) == c for c in it_c["valeur"]) and len(actuel) == len(it_c["valeur"]):
+                    ch["items"] = [i for i in ch["items"] if i is not it_c]     # plus rien a choisir pour les comptes
+                from .journal import ecrire
+                ecrire("synchro", "compte(s) repris d'un autre poste : " + ", ".join(c.get("nom") or c.get("id") for c in ajoutes))
+                if phrase:
+                    try:
+                        sec = reglages.secrets_nouveaux(self.params, phrase)   # leurs autorisations, maintenant connues
+                    except Exception:
+                        pass
         visibles = [it for it in (ch["items"] if ch else []) if not it.get("cache")]
+        if ajoutes:
+            noms = ", ".join("« " + (c.get("nom") or c.get("id")) + " »" for c in ajoutes)
+            if visibles or sec:
+                self.statusBar().showMessage(_("Compte(s) ajouté(s) depuis vos autres postes : {x}", x=noms), 15000)
+                self.choisir_reglages_distants(ch, sec)
+                return
+            Notification(self, _("Compte(s) ajouté(s) depuis vos autres postes : {x}. Si un mot de passe ou une "
+                                 "autorisation manque, PhilPDF vous le demandera à la première utilisation.", x=noms),
+                         _("Voir les comptes..."), lambda: self.preferences(onglet=_("Comptes")))
         if ch and not visibles and not sec:          # rien de nouveau a choisir : on note la date (et on renvoie
             reglages.appliquer_communs(self.params, ch, [])   # au Drive les identites qu'il n'a plus)
             if any(it.get("renvoyer") for it in ch["items"]) and reglages.ecrire_drive(self.params):

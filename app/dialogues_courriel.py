@@ -278,9 +278,12 @@ class DialogueComptesMail(QDialog):
 
 # ================================================================ carnet d'adresses
 class PanneauCarnet(QWidget):
-    """Carnet d'adresses : recherche, ajout, modification, import d'un export Google / Outlook (CSV) ou vCard.
+    """Carnet d'adresses en tableau : colonnes Prenom, Nom, Adresse, deplacables (glisser l'en-tete) et triables
+    (clic sur l'en-tete) ; contacts regroupes par la premiere lettre de la colonne la plus a gauche.
+    Recherche, ajout, modification, import d'un export Google / Outlook (CSV) ou vCard.
     En mode choix (fenetre d'envoi), un double-clic ou « Ajouter à » met l'adresse dans A, Cc ou Cci."""
     choisi = Signal(str, str)                    # champ ("a", "cc", "cci"), adresse formatee
+    COLONNES = ("prenom", "nom", "adresse")
 
     def __init__(self, params, parent=None, choix=False):
         super().__init__(parent)
@@ -291,29 +294,56 @@ class PanneauCarnet(QWidget):
         self.cherche.setPlaceholderText(_("Rechercher un nom ou une adresse"))
         self.cherche.setClearButtonEnabled(True)
         self.cherche.textChanged.connect(self._remplir)
-        from PySide6.QtWidgets import QComboBox as _Cb, QHBoxLayout as _H
+        from PySide6.QtWidgets import QHBoxLayout as _H, QCheckBox as _Cc, QTreeWidget, QHeaderView
         ligne = _H()
         ligne.addWidget(self.cherche, 1)
-        self.tri = _Cb()
-        for k, t in (("nom", _("Trier par nom")), ("prenom", _("Trier par prénom")), ("adresse", _("Trier par adresse"))):
-            self.tri.addItem(t, k)
-        self.tri.setCurrentIndex(max(0, self.tri.findData(params.get("carnet_tri") or "nom")))
-        self.tri.currentIndexChanged.connect(self._changer_tri)
-        ligne.addWidget(self.tri)
+        self.grouper = _Cc(_("Grouper par lettre"))
+        self.grouper.setToolTip(_("Contacts regroupés par la première lettre de la colonne de gauche "
+                                  "(glissez un en-tête pour changer l'ordre des colonnes)"))
+        self.grouper.setChecked(params.get("carnet_grouper", True))
+        self.grouper.toggled.connect(self._changer_groupes)
+        ligne.addWidget(self.grouper)
         v.addLayout(ligne)
-        self.liste = QListWidget()
+        self.liste = QTreeWidget()
         self.liste.setObjectName("carnet")
         self.liste.setMinimumHeight(120)
-        self.liste.setSelectionMode(QListWidget.ExtendedSelection)
-        self.liste.itemDoubleClicked.connect(lambda it: self.choisi.emit("a", it.data(Qt.UserRole)) if choix
-                                             else self.modifier())
+        self.liste.setColumnCount(3)
+        self.liste.setHeaderLabels([_("Prénom"), _("Nom"), _("Adresse e-mail")])
+        self.liste.setRootIsDecorated(False)
+        self.liste.setUniformRowHeights(True)
+        self.liste.setAlternatingRowColors(True)
+        self.liste.setSelectionMode(QTreeWidget.ExtendedSelection)
+        h = self.liste.header()
+        h.setSectionsMovable(True)                   # glisser un en-tete : la colonne change de place
+        h.setSectionsClickable(True)
+        h.setSortIndicatorShown(True)
+        h.setStretchLastSection(True)
+        h.setSectionResizeMode(QHeaderView.Interactive)
+        h.setMinimumSectionSize(60)
+        etat = params.get("carnet_colonnes")
+        if not etat:
+            h.moveSection(1, 0)                      # par defaut : Nom, Prenom, Adresse (groupes par nom de famille)
+        if etat:
+            try:
+                from PySide6.QtCore import QByteArray
+                h.restoreState(QByteArray.fromBase64(etat.encode()))
+            except Exception:                        # noqa: BLE001
+                pass
+        tri = params.get("carnet_tri") or "nom"
+        self._tri = (self.COLONNES.index(tri) if tri in self.COLONNES else 1,
+                     Qt.DescendingOrder if params.get("carnet_sens") == "desc" else Qt.AscendingOrder)
+        h.setSortIndicator(*self._tri)
+        h.sectionClicked.connect(self._clic_entete)
+        h.sectionMoved.connect(lambda *_a: self._memoriser_colonnes(regrouper=True))
+        h.sectionResized.connect(lambda *_a: self._memoriser_colonnes())
+        self.liste.itemDoubleClicked.connect(self._double)
         v.addWidget(self.liste, 1)
         fl = FluxBoutons()
         if choix:
             for k, t in (("a", _("A")), ("cc", _("Cc")), ("cci", _("Cci"))):
                 b = QPushButton(_("Ajouter en {x}", x=t))
-                b.clicked.connect(lambda _c=False, k=k: [self.choisi.emit(k, it.data(Qt.UserRole))
-                                                         for it in self.liste.selectedItems()])
+                b.clicked.connect(lambda _c=False, k=k: [self.choisi.emit(k, it.data(0, Qt.UserRole))
+                                                         for it in self.liste.selectedItems() if it.data(0, Qt.UserRole)])
                 fl.ajouter(b)
         for t, f in ((_("Nouveau..."), self.nouveau), (_("Modifier..."), self.modifier), (_("Supprimer"), self.supprimer),
                      (_("Importer (Google, Outlook, vCard)..."), self.importer),
@@ -324,29 +354,94 @@ class PanneauCarnet(QWidget):
         v.addWidget(fl)
         self._remplir()
 
-    def _changer_tri(self, *_a):
-        self.params["carnet_tri"] = self.tri.currentData()
+    def _double(self, it, _col=0):
+        if not it.data(0, Qt.UserRole):              # ligne de lettre (groupe)
+            return
+        if self.choix:
+            self.choisi.emit("a", it.data(0, Qt.UserRole))
+        else:
+            self.modifier()
+
+    def _clic_entete(self, col):
+        sens = Qt.DescendingOrder if self._tri == (col, Qt.AscendingOrder) else Qt.AscendingOrder
+        self._tri = (col, sens)
+        self.liste.header().setSortIndicator(col, sens)
+        self.params["carnet_tri"] = self.COLONNES[col]
+        self.params["carnet_sens"] = "desc" if sens == Qt.DescendingOrder else "asc"
         self.params.enregistrer()
         self._remplir()
 
+    def _memoriser_colonnes(self, regrouper=False):
+        self.params["carnet_colonnes"] = bytes(self.liste.header().saveState().toBase64()).decode()
+        self.params.enregistrer()
+        if regrouper:
+            self._remplir()
+
+    def _changer_groupes(self, on):
+        self.params["carnet_grouper"] = on
+        self.params.enregistrer()
+        self._remplir()
+
+    @staticmethod
+    def _champs(c):
+        """(prenom, nom, adresse) d'un contact ; prenom et nom devines si l'import ne les separait pas."""
+        from .carnet_nettoyage import analyser_nom
+        p, n = c.get("prenom") or "", c.get("nom_famille") or ""
+        if not (p or n):
+            a = analyser_nom(c.get("nom") or "", c.get("email") or "")
+            p, n = (a["prenom"], a["nom_famille"]) if a else ("", c.get("nom") or "")
+        return p, n, c.get("email") or ""
+
     def _remplir(self, *_a):
-        from .carnet_nettoyage import cle_tri, nom_affiche
+        from PySide6.QtWidgets import QTreeWidgetItem
+        from .carnet_nettoyage import _sans_accents
         q = self.cherche.text().strip().lower()
         self.liste.clear()
-        tri = self.params.get("carnet_tri") or "nom"
-        ordre = self.params.get("carnet_ordre") or "prenom"
-        for c in sorted(C.carnet(self.params), key=lambda c: cle_tri(c, tri)):
-            lib = C.formater(c)                   # ce qui part dans l'e-mail : « Prénom Nom <adresse> »
-            vu = C.formater(dict(c, nom=nom_affiche(c.get("prenom"), c.get("nom_famille"), ordre))) \
-                if (c.get("prenom") or c.get("nom_famille")) else lib
-            if tri == "adresse":
-                vu = c["email"] + (f"   ({vu.split(' <')[0]})" if c.get("nom") else "")
-            if q and q not in (lib + " " + vu).lower():
+        col, sens = self._tri
+        gauche = self.liste.header().logicalIndex(0)  # colonne affichee la plus a gauche
+        lignes = []
+        for c in C.carnet(self.params):
+            ch = self._champs(c)
+            lib = C.formater(c)                       # ce qui part dans l'e-mail : « Prénom Nom <adresse> »
+            if q and q not in (lib + " " + " ".join(ch)).lower():
                 continue
-            it = QListWidgetItem(vu)
-            it.setData(Qt.UserRole, lib)
-            it.setData(Qt.UserRole + 1, c["email"])
-            self.liste.addItem(it)
+            lignes.append((ch, lib, c["email"]))
+
+        def cle(l, k):
+            ch = l[0]
+            autres = [ch[i] for i in (1, 0, 2) if i != k]
+            return [_sans_accents(ch[k] or "~")] + [_sans_accents(x) for x in autres]
+        lignes.sort(key=lambda l: cle(l, col), reverse=(sens == Qt.DescendingOrder))
+        grouper = self.grouper.isChecked()
+        if grouper:                                    # lettres dans l'ordre de la colonne de gauche
+            def lettre(l):
+                t = _sans_accents(l[0][gauche] or "").upper()
+                return t[:1] if t[:1].isalpha() else "#"
+            groupes = {}
+            for l in lignes:
+                groupes.setdefault(lettre(l), []).append(l)
+            ordre = sorted(groupes, key=lambda x: (x == "#", x), reverse=(col == gauche and sens == Qt.DescendingOrder))
+        else:
+            groupes, ordre = {"": lignes}, [""]
+        f_gras = self.liste.font()
+        f_gras.setBold(True)
+        for g in ordre:
+            if grouper:
+                gi = QTreeWidgetItem([g])
+                gi.setFirstColumnSpanned(True)
+                gi.setFlags(Qt.ItemIsEnabled)
+                gi.setFont(0, f_gras)
+                from PySide6.QtGui import QBrush, QColor
+                for k in range(3):
+                    gi.setBackground(k, QBrush(QColor("#eef3fb")))
+                self.liste.addTopLevelItem(gi)
+            for ch, lib, mail in groupes[g]:
+                it = QTreeWidgetItem(list(ch))
+                it.setData(0, Qt.UserRole, lib)
+                it.setData(0, Qt.UserRole + 1, mail)
+                it.setToolTip(2, lib)
+                self.liste.addTopLevelItem(it)
+        self._lignes_contacts = [mail for g in ordre for _ch, _l, mail in groupes[g]]
 
     def _editer(self, c=None):
         from PySide6.QtWidgets import QFormLayout as _F
@@ -387,7 +482,7 @@ class PanneauCarnet(QWidget):
 
     def _courant(self):
         it = self.liste.currentItem()
-        return next((c for c in C.carnet(self.params) if it and c["email"] == it.data(Qt.UserRole + 1)), None)
+        return next((c for c in C.carnet(self.params) if it and c["email"] == it.data(0, Qt.UserRole + 1)), None)
 
     def modifier(self):
         c = self._courant()
@@ -399,7 +494,7 @@ class PanneauCarnet(QWidget):
                 self._remplir()
 
     def supprimer(self):
-        mails = {it.data(Qt.UserRole + 1) for it in self.liste.selectedItems()}
+        mails = {it.data(0, Qt.UserRole + 1) for it in self.liste.selectedItems() if it.data(0, Qt.UserRole + 1)}
         if mails and QMessageBox.question(self, _("Carnet d'adresses"),
                                           _("Supprimer {n} contact(s) du carnet ?", n=len(mails))) == QMessageBox.Yes:
             self.params["carnet_retires"] = sorted(set(self.params.get("carnet_retires") or []) | mails)
