@@ -1,6 +1,6 @@
 # Une seule fois : paquets Google Play (.aab) des versions Android 1.1.0, 1.1.1 et 1.1.2, refaits a partir de leur
 # code d'origine, avec seulement ce que Google Play exige en plus (Android 16 vise, mises a jour par Google Play).
-# Ils sont ajoutes a leurs publications « android-v... » existantes, pour les deposer peu a peu sur la Play Console.
+# Ils sont publies ensemble (« android-play-1.1.0-1.1.2 »), pour les deposer peu a peu sur la Play Console.
 name: Paquets Google Play (anciennes versions)
 
 on:
@@ -69,8 +69,28 @@ jobs:
           gradle --no-daemon bundleRelease > bundle.log 2>&1 || { tail -n 60 bundle.log; exit 1; }
           cp app/build/outputs/bundle/release/app-release.aab "../PhilPDF-GooglePlay-${{ matrix.version }}.aab"
           bash ../.github/verifier-16ko.sh "../PhilPDF-GooglePlay-${{ matrix.version }}.aab"
+      - uses: actions/upload-artifact@v5
+        with:
+          name: aab-${{ matrix.version }}
+          path: PhilPDF-GooglePlay-${{ matrix.version }}.aab
+
+  # une publication a part (creer marche ; modifier les anciennes publications est refuse a ce programme)
+  publier:
+    needs: aab
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: aab-*
+          merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v${{ matrix.version }}
+          tag_name: android-play-1.1.0-1.1.2
+          name: PhilPDF Android 1.1.0 a 1.1.2 pour Google Play
+          target_commitish: ${{ github.sha }}
           make_latest: false
-          files: PhilPDF-GooglePlay-${{ matrix.version }}.aab
+          body: |
+            Paquets Google Play (.aab) des versions Android 1.1.0, 1.1.1 et 1.1.2, refaits depuis leur code d'origine
+            (Android 16 vise, mises a jour par Google Play). A deposer dans l'ordre sur la Play Console.
+            Pas a installer sur le telephone : les APK sont dans les publications android-v1.1.0, -v1.1.1, -v1.1.2.
+          files: PhilPDF-GooglePlay-*.aab
