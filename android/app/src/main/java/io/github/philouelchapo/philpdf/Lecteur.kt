@@ -90,6 +90,7 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     /** Modifier le texte : paragraphe touche (fenetre d'edition), et petit message a montrer. */
     var paragraphe by mutableStateOf<Paragraphe?>(null)
     var message by mutableStateOf<String?>(null)
+    var organiser by mutableStateOf(false)                  // ecran « Organiser les pages »
     /** Portee du lecteur : une pose lancee ici va au bout meme quand l'apercu disparait de l'ecran. */
     var portee: kotlinx.coroutines.CoroutineScope? = null
     val page: Int get() = liste.firstVisibleItemIndex
@@ -141,6 +142,10 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
             Miniatures.fabriquer(ctx, doc)
         }
     }
+    // pages ajoutees, retirees, deplacees ou pivotees (organiser, annuler) : leurs tailles sont relues
+    LaunchedEffect(doc.pagesVersion) {
+        if (deverrouille && doc.pagesVersion > 0) tailles = doc.tailles()
+    }
     LaunchedEffect(etat.liste.firstVisibleItemIndex) { PagesLues.ecrire(ctx, doc.uri.toString(), etat.page) }
 
     val t = tailles
@@ -155,6 +160,7 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
     etat.selection?.let { FeuilleAnnotation(etat, it) { etat.selection = null } }
     etat.champ?.let { SaisieChamp(etat, it) { etat.champ = null } }
     etat.paragraphe?.let { p -> EditeurTexte(etat, p) { etat.paragraphe = null } }
+    if (etat.organiser && t != null) OrganiserPages(etat, t) { etat.organiser = false }
     etat.message?.let { m ->
         val txt = if (m == "aucun_texte") stringResource(R.string.aucun_texte) else m
         LaunchedEffect(m) { android.widget.Toast.makeText(ctx, txt, android.widget.Toast.LENGTH_LONG).show(); etat.message = null }
@@ -198,7 +204,7 @@ private fun DemandeNote(fermer: () -> Unit, valider: (String) -> Unit) {
 
 /** Annuler, retablir, enregistrer : dans la barre du haut (tablette et telephone). */
 @Composable
-private fun BoutonsEdition(etat: EtatLecteur) {
+internal fun BoutonsEdition(etat: EtatLecteur) {
     val portee = rememberCoroutineScope()
     val d = etat.doc
     IconButton(onClick = { portee.launch { d.annuler() } }, enabled = d.peutAnnuler) {
@@ -387,6 +393,7 @@ private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, 
                     LigneAction("suivante", stringResource(R.string.aller_page)) { allerA = true }
                     LigneAction("liste_fichiers", stringResource(R.string.signets)) { signets = true }
                     LigneAction("commentaire", stringResource(R.string.commentaires)) { comms = true }
+                    if (etat.doc.modifiable) LigneAction("organiser", stringResource(R.string.organiser_pages)) { etat.organiser = true }
                     LigneAction("enregistrer", stringResource(R.string.enregistrer)) { etat.demandeEnregistrer = true }
                     LigneAction("courriel", stringResource(R.string.partager)) { portee.launch { partager(ctx, etat.doc) } }
                     LigneAction("imprimer", stringResource(R.string.imprimer)) { portee.launch { imprimer(ctx, etat.doc) } }
@@ -428,6 +435,13 @@ private fun Vignettes(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, alle
     val courante = etat.page
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
+        if (etat.doc.modifiable) item {
+            OutlinedButton(onClick = { etat.organiser = true }, Modifier.fillMaxWidth()) {
+                Icon(Icones.get("organiser", ROUGE), null)
+                Spacer(Modifier.width(8.dp))
+                TexteAjuste(stringResource(R.string.organiser_pages), 14.sp)
+            }
+        }
         itemsIndexed(tailles) { n, (w, h) ->
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 ImagePage(etat, n, largeurPx, w, h, Modifier.width(110.dp)

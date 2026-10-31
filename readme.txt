@@ -10,6 +10,12 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.2.0
+- Organiser les pages (volet Pages, ou Plus) : vignettes en grille ; toucher choisit une page, appui long puis
+  glisser la deplace (avec toutes les pages choisies). Pivoter a gauche ou a droite, supprimer (avec confirmation),
+  extraire dans un nouveau PDF, inserer une page blanche, ajouter les pages d'un autre PDF, compresser (sans perte,
+  taille avant et apres annoncee), proteger par un mot de passe (AES 256) ou le retirer. Tout s'annule avec « Annuler ».
+
 1.1.3
 - Prete pour Google Play : vise Android 16 ; la version installee depuis Google Play est mise a jour par
   Google Play (elle ne cherche plus de nouvelle version sur GitHub). L'APK de GitHub continue de le faire.

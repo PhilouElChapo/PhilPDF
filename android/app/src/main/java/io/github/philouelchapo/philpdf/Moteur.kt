@@ -61,6 +61,12 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
     var peutAnnuler by mutableStateOf(false)
     var peutRetablir by mutableStateOf(false)
     val modifiable: Boolean get() = pdf != null
+    /** Augmente quand des pages sont ajoutees, retirees, deplacees ou pivotees : le lecteur relit leurs tailles. */
+    var pagesVersion by mutableIntStateOf(0)
+    /** A l'enregistrement : null = mot de passe inchange, "" = retire, sinon nouveau mot de passe. */
+    var motDePasseNouveau by mutableStateOf<String?>(null)
+    /** A l'enregistrement : flux recompresses, objets en double retires. */
+    var compresser by mutableStateOf(false)
 
     init {
         try { pdf?.enableJournal() } catch (_: Exception) { }   // annuler / retablir
@@ -92,12 +98,100 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         val p = pdf ?: return
         verrou.withLock { withContext(Dispatchers.IO) { if (p.canUndo()) p.undo() } }
         apres(true)
+        pagesVersion++                       // l'etape annulee touchait peut-etre les pages
     }
 
     suspend fun retablir() {
         val p = pdf ?: return
         verrou.withLock { withContext(Dispatchers.IO) { if (p.canRedo()) p.redo() } }
         apres(true)
+        pagesVersion++
+    }
+
+    // ------------------------------------------------------------ organiser les pages
+    private suspend fun operationPages(nom: String, bloc: (PDFDocument) -> Boolean): Boolean =
+        operation(nom, bloc).also { if (it) pagesVersion++ }
+
+    /** Pivote les pages de 90 degres (sens = 90 a droite, -90 a gauche). */
+    suspend fun pivoter(pages: List<Int>, sens: Int): Boolean = operationPages("Pivoter") { p ->
+        for (n in pages) {
+            val o = p.findPage(n)
+            val r = o.getInheritable("Rotate")
+            val actuel = if (r == null || r.isNull) 0 else r.asInteger()
+            o.put("Rotate", ((actuel + sens) % 360 + 360) % 360)
+        }
+        pages.isNotEmpty()
+    }
+
+    suspend fun supprimerPages(pages: List<Int>): Boolean = operationPages("Supprimer des pages") { p ->
+        if (pages.isEmpty() || pages.size >= p.countPages()) return@operationPages false   // jamais un PDF vide
+        for (n in pages.distinct().sortedDescending()) p.deletePage(n)
+        true
+    }
+
+    /** Nouvel ordre : ordre[i] = ancienne place de la page qui sera en position i. */
+    suspend fun ordonner(ordre: List<Int>): Boolean = operationPages("Deplacer des pages") { p ->
+        if (ordre == ordre.indices.toList() || ordre.size != p.countPages()) return@operationPages false
+        p.rearrangePages(ordre.toIntArray())
+        true
+    }
+
+    /** Page blanche de la taille donnee (en points), inseree a la place « a ». */
+    suspend fun pageBlanche(a: Int, largeur: Float, hauteur: Float): Boolean = operationPages("Page blanche") { p ->
+        val o = p.addPage(Rect(0f, 0f, largeur, hauteur), 0, p.newDictionary(), "")
+        p.insertPage(a.coerceIn(0, p.countPages()), o)
+        true
+    }
+
+    /** Ajoute toutes les pages d'un autre PDF a la place « a ». Renvoie le nombre de pages ajoutees (0 : illisible). */
+    suspend fun inserer(autre: File, a: Int): Int {
+        var n = 0
+        operationPages("Combiner") { p ->
+            val src = Document.openDocument(autre.absolutePath) as? PDFDocument ?: return@operationPages false
+            try {
+                if (src.needsPassword()) return@operationPages false
+                val debut = a.coerceIn(0, p.countPages())
+                for (i in 0 until src.countPages()) p.graftPage(debut + i, src, i)
+                n = src.countPages()
+                n > 0
+            } finally { src.destroy() }
+        }
+        return n
+    }
+
+    /** Ecrit les pages choisies dans un nouveau PDF (le document ouvert n'est pas touche). */
+    suspend fun extraire(pages: List<Int>, dest: File): File = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val p = pdf ?: throw IllegalStateException("PDF non modifiable")
+            dest.parentFile?.mkdirs()
+            val nouveau = PDFDocument()
+            try {
+                pages.forEachIndexed { i, n -> nouveau.graftPage(i, p, n) }
+                nouveau.save(dest.absolutePath, "garbage=compact")
+            } finally { nouveau.destroy() }
+            dest
+        }
+    }
+
+    /** Taille du fichier tel qu'il serait enregistre maintenant (pour montrer le gain d'une compression). */
+    suspend fun tailleEnregistree(ctx: Context): Long =
+        ecrire(File(ctx.cacheDir, "ouverts/estimation/" + nom.replace('/', '_'))).length().also {
+            File(ctx.cacheDir, "ouverts/estimation").deleteRecursively()
+        }
+
+    fun tailleOrigine(): Long = fichier.length()
+
+    /** Mot de passe ou compression choisis : le document est a enregistrer. */
+    fun marquerModifie() {
+        modifie = true
+    }
+
+    private fun optionsEcriture(): String {
+        var o = if (compresser) "garbage=deduplicate,compress=yes,compress-fonts=yes,compress-images=yes,clean=yes" else "garbage=compact"
+        val m = motDePasseNouveau
+        if (m == "") o += ",decrypt=yes"
+        else if (m != null) o += ",encrypt=aes-256,user-password=$m,owner-password=$m"
+        return o
     }
 
     private fun <T> surPage(p: PDFDocument, n: Int, f: (PDFPage) -> T): T {
@@ -432,7 +526,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         withContext(Dispatchers.IO) {
             dest.parentFile?.mkdirs()
             val p = pdf
-            if (p != null && modifie) p.save(dest.absolutePath, "garbage=compact") else fichier.copyTo(dest, overwrite = true)
+            if (p != null && modifie) p.save(dest.absolutePath, optionsEcriture()) else fichier.copyTo(dest, overwrite = true)
             dest
         }
     }
