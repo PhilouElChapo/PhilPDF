@@ -10,6 +10,13 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.1.0
+- Modifier le texte de la page (Commenter > « Modifier le texte », puis toucher une ligne) :
+  seules les lettres sont remplacees (fond, cadres, traits et images restent, aucun rectangle blanc),
+  avec la police d'origine du PDF quand elle a toutes les lettres tapees ; sinon la police standard
+  la plus proche, annoncee avant d'appliquer. Taille, gras, italique, couleur, aligner a droite
+  (montants, dates). « Annuler » defait la modification.
+
 1.0.2
 - Appui long sur une signature, un paraphe ou un tampon deja pose : « Deplacer » (le faire glisser,
   puis « Ici »), « - » et « + » pour la taille, « Changer » (en mettre un autre a sa place, meme endroit,

@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 /** Outils d'annotation (comme sous Windows). MAIN = lire, faire defiler ; appui long sur une annotation = la modifier. */
 enum class Outil(val icone: String, val texte: Int) {
     MAIN("oeil", R.string.outil_lire),
+    TEXTE("modifier", R.string.outil_texte),        // modifier le texte de la page (police d'origine gardee)
     SURLIGNER("surligner", R.string.outil_surligner),
     SOULIGNER("souligner", R.string.outil_souligner),
     BARRER("barrer", R.string.outil_barrer),
@@ -94,7 +95,7 @@ fun PanneauAnnoter(etat: EtatLecteur, choisi: () -> Unit = {}) {
                 }
             }
         }
-        if (r.outil != Outil.MAIN && r.outil != Outil.GOMME && r.outil != Outil.POSER) {
+        if (r.outil != Outil.MAIN && r.outil != Outil.GOMME && r.outil != Outil.POSER && r.outil != Outil.TEXTE) {
             Spacer(Modifier.height(14.dp))
             Text(stringResource(R.string.couleur), fontSize = 13.sp)
             Palette(r.couleur()) { r.choisirCouleur(it) }
@@ -120,6 +121,7 @@ fun aideOutil(o: Outil): Int = when {
     o == Outil.NOTE -> R.string.aide_note
     o == Outil.GOMME -> R.string.aide_gomme
     o == Outil.POSER -> R.string.aide_poser
+    o == Outil.TEXTE -> R.string.aide_texte_modif
     else -> R.string.aide_dessin
 }
 

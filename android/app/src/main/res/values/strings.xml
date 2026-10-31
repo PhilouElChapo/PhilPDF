@@ -182,4 +182,21 @@
     <string name="ici">Ici</string>
     <string name="aide_deplacer">Faites glisser, puis « Ici »</string>
     <string name="remplacer_aide">Choisissez la signature ou le tampon qui prend sa place.</string>
+    <string name="outil_texte">Modifier le texte</string>
+    <string name="aide_texte_modif">Touchez une ligne de texte de la page : vous la modifiez dans une fenêtre. Seules les lettres sont remplacées (fond, cadres et images restent), avec la police d\'origine du PDF quand elle a toutes les lettres tapées.</string>
+    <string name="aucun_texte">Pas de texte à cet endroit (page scannée ? reconnaissance du texte : plus tard).</string>
+    <string name="modifier_texte">Modifier le texte</string>
+    <string name="texte_lignes">Texte (une ligne ici = une ligne sur la page)</string>
+    <string name="police_gardee">Police d\'origine gardée : %1$s.</string>
+    <string name="police_lettres">La police d\'origine n\'a pas ces lettres : %1$s. Le texte sera écrit en %2$s (la plus proche).</string>
+    <string name="police_style">Gras ou italique changé : le texte sera écrit en %1$s.</string>
+    <string name="police_illisible">Police d\'origine (%1$s) inutilisable pour réécrire : le texte sera écrit en %2$s.</string>
+    <string name="taille_pt">%1$s pt</string>
+    <string name="aligner_gauche">Aligner à gauche</string>
+    <string name="aligner_droite">Aligner à droite</string>
+    <string name="couleur_origine">Couleur d\'origine</string>
+    <string name="aide_texte_fenetre">« Aligner à droite » garde le bord droit de la ligne (montants, dates en colonne). « Annuler » (flèche en haut) défait la modification.</string>
+    <string name="texte_ok_origine">Texte modifié, police d\'origine gardée (%1$s).</string>
+    <string name="texte_ok_secours">Texte modifié, écrit en %1$s.</string>
+    <string name="texte_echec">Modification impossible : %1$s</string>
 </resources>

@@ -87,6 +87,9 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     /** Appui long > Changer : la prochaine signature ou le prochain tampon choisi prend sa place. */
     var remplacer by mutableStateOf<InfoAnnot?>(null)
     var ouvrirSigner by mutableStateOf(false)
+    /** Modifier le texte : paragraphe touche (fenetre d'edition), et petit message a montrer. */
+    var paragraphe by mutableStateOf<Paragraphe?>(null)
+    var message by mutableStateOf<String?>(null)
     /** Portee du lecteur : une pose lancee ici va au bout meme quand l'apercu disparait de l'ecran. */
     var portee: kotlinx.coroutines.CoroutineScope? = null
     val page: Int get() = liste.firstVisibleItemIndex
@@ -151,6 +154,11 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
     }
     etat.selection?.let { FeuilleAnnotation(etat, it) { etat.selection = null } }
     etat.champ?.let { SaisieChamp(etat, it) { etat.champ = null } }
+    etat.paragraphe?.let { p -> EditeurTexte(etat, p) { etat.paragraphe = null } }
+    etat.message?.let { m ->
+        val txt = if (m == "aucun_texte") stringResource(R.string.aucun_texte) else m
+        LaunchedEffect(m) { android.widget.Toast.makeText(ctx, txt, android.widget.Toast.LENGTH_LONG).show(); etat.message = null }
+    }
     etat.noteA?.let { (n, pt) -> DemandeNote({ etat.noteA = null }) { texte ->
         etat.noteA = null
         portee.launch { doc.note(n, pt, texte, etat.annot.couleur(Outil.NOTE).versPdf()) }
@@ -580,6 +588,12 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                     onDoubleTap = { etat.echelle = if (etat.echelle > 1.01f) 1f else 2f; if (etat.echelle == 1f) etat.decalage = Offset.Zero },
                     onLongPress = { o -> portee.launch { etat.selection = d.annotationA(n, k(o)) } })
                 Outil.NOTE -> detectTapGestures(onTap = { o -> etat.noteA = n to k(o) })
+                Outil.TEXTE -> detectTapGestures(onTap = { o ->
+                    portee.launch {
+                        val p = d.paragrapheA(n, k(o))
+                        if (p == null) etat.message = "aucun_texte" else etat.paragraphe = p
+                    }
+                })
                 // l'apercu suit le doigt (toucher ou glisser) ; rien n'est pose avant « Poser ici »
                 Outil.POSER -> awaitEachGesture {
                     val bas = awaitFirstDown()

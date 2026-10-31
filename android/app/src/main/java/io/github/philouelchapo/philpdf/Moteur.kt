@@ -257,6 +257,38 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
             }
         }
 
+    // ---------------------------------------------------------------- modifier le texte de la page
+    /** Paragraphe (lignes de meme taille) sous le point, avec sa police d'origine retrouvee. */
+    suspend fun paragrapheA(n: Int, a: Point): Paragraphe? = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val page = doc.loadPage(n) as? PDFPage ?: return@withContext null
+            try { TexteModif.paragraphe(page, n, a) } catch (e: Exception) {
+                Journal.ecrire("texte", "lecture du paragraphe impossible ($e)"); null
+            } finally { page.destroy() }
+        }
+    }
+
+    /** Remplace le texte du paragraphe (une seule etape d'annulation). */
+    suspend fun reecrireTexte(par: Paragraphe, lignes: List<String>, taille: Float, argb: Int, gras: Boolean,
+                              italique: Boolean, droite: Boolean): ResultatTexte {
+        val p = pdf ?: return ResultatTexte(false, false, "", "document non modifiable")
+        var res = ResultatTexte(false, false, "")
+        val r = verrou.withLock {
+            withContext(Dispatchers.IO) {
+                p.beginOperation("Modifier le texte")
+                try {
+                    surPage(p, par.page) { page -> res = TexteModif.reecrire(p, page, par, lignes, taille, argb, gras, italique, droite); res.ok }
+                } catch (e: Exception) {
+                    res = ResultatTexte(false, false, "", e.message ?: e.javaClass.simpleName); false
+                } finally { p.endOperation() }
+            }
+        }
+        apres(r)
+        Journal.ecrire("texte", if (res.ok) "texte modifié (${if (res.originale) "police d'origine" else "police de remplacement"} ${res.police})"
+            else "modification impossible (${res.message})")
+        return res
+    }
+
     /** Surlignage -> soulignement -> barre (meme texte, meme couleur). */
     suspend fun changerGenre(info: InfoAnnot, genre: Int, couleur: FloatArray, opacite: Float): Boolean =
         operation("Changer le marquage") { p ->
