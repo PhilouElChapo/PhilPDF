@@ -83,6 +83,11 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.47
+- Fermeture pendant une synchronisation lente (le Drive tarde a repondre) : PhilPDF ne se ferme plus
+  « brutalement » (ni message de plantage au lancement suivant) ; l'envoi est reporte au demarrage suivant
+  et c'est note dans Aide > Journal.
+
 0.9.46
 - Modifier un paragraphe : apres la modification, un bouton rond « ↻ » apparait a cote du paragraphe
   pendant 45 s. Si le resultat ne convient pas, il propose de refaire la modification autrement (methode

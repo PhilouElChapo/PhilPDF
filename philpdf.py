@@ -278,11 +278,28 @@ def main():
         pass
     from PySide6.QtCore import QTimer
     QTimer.singleShot(800, lambda: w.impressions_en_attente(impressions))
-    sys.exit(app.exec())
+    code = app.exec()
+    # une synchro qui attend encore le Drive (reseau lent) : Qt arreterait PhilPDF « brutalement » en detruisant sa
+    # tache (et le lancement suivant annoncerait un plantage). Fermeture normale : on note, puis on sort sans attendre.
+    try:
+        restantes = w.taches_en_cours()
+    except Exception:
+        restantes = []
+    if restantes:
+        try:
+            from app.journal import ecrire
+            ecrire("fermeture", f"{len(restantes)} tâche(s) encore en cours (réseau lent) : arrêtée(s) proprement")
+        except Exception:
+            pass
+        _sortie_normale()
+        sys.stdout.flush()
+        os._exit(code)
+    sys.exit(code)
 
 
 _VERROU = None
 _FICHIER_PLANTAGE = None
+_sortie_normale = lambda: None
 
 
 def _chemin_plantage():
@@ -319,6 +336,7 @@ def surveiller_plantages():
     # Windows : faulthandler note aussi des alertes internes sans gravite (ex. 0x80040155 dans la fenetre de choix
     # de dossier) alors que PhilPDF continue. Fermeture normale = pas de plantage : le fichier est vide a la sortie.
     import atexit
+    global _sortie_normale
 
     def sortie_normale():
         try:
@@ -330,6 +348,7 @@ def surveiller_plantages():
         except Exception:
             pass
     atexit.register(sortie_normale)
+    _sortie_normale = sortie_normale
     import threading
     threading.excepthook = lambda a: crochet(a.exc_type, a.exc_value, a.exc_traceback)
 

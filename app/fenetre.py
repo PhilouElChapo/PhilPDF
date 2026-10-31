@@ -1080,9 +1080,15 @@ class Fenetre(MixinCoteACote, QMainWindow):
             t = getattr(self, "_t_miroir", None)
             if t and t.isRunning():
                 fen.attendre(t, 8000, _("Synchronisation en cours avec {lieu}...", lieu=fen.lieu))
-            t = TacheMiroir(self.params, "envois_seuls")     # a la fermeture : seulement ce que ce poste a change
-            t.start()
-            fen.attendre(t, 8000, _("Envoi de vos derniers changements à {lieu} (8 s au plus)...", lieu=fen.lieu))
+            if t and t.isRunning():
+                # le Drive tarde a repondre : une 2e synchro attendrait la 1re (meme verrou) ; on n'en lance pas
+                from .journal import ecrire
+                ecrire("synchro", "fermeture : le Drive ne répond pas encore, envoi reporté au prochain démarrage")
+            else:
+                t = TacheMiroir(self.params, "envois_seuls")     # a la fermeture : seulement ce que ce poste a change
+                self._t_fermeture = t
+                t.start()
+                fen.attendre(t, 8000, _("Envoi de vos derniers changements à {lieu} (8 s au plus)...", lieu=fen.lieu))
         fen.close()
         srv = getattr(self, "serveur_instance", None)
         if srv is not None:                            # le PhilPDF relance (redemarrage) devient l'instance principale
@@ -1091,6 +1097,16 @@ class Fenetre(MixinCoteACote, QMainWindow):
         if getattr(self, "_redemarrage", None):
             from PySide6.QtCore import QProcess
             QProcess.startDetached(*self._redemarrage)
+
+    def taches_en_cours(self):
+        """Taches (QThread) encore en cours a la fermeture : Qt arreterait brutalement PhilPDF en les detruisant."""
+        from PySide6.QtCore import QThread
+        out = [t for t in list(getattr(self, "taches", [])) + [getattr(self, "_t_miroir", None), getattr(self, "_t_fermeture", None)]
+               if isinstance(t, QThread)]
+        try:
+            return [t for t in out if t.isRunning()]
+        except RuntimeError:
+            return []
 
     def _lieu_court(self):
         try:
