@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package io.github.philouelchapo.philpdf
 
 import android.content.Intent
@@ -45,10 +47,14 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit) {
     LaunchedEffect(Unit) { maj = MiseAJour.chercher(BuildConfig.VERSION_NAME) }
     var versionCompte by remember { mutableIntStateOf(0) }
     var ecranCompte by remember { mutableStateOf(false) }
+    var parcourir by remember { mutableStateOf<Nuage?>(null) }
+    val comptes = remember(versionCompte) { Nuage.liste(ctx) }
+    // Google Drive (autorisation limitee) : ses PDF passent par le selecteur d'Android, qui le propose deja
+    val voir: (Nuage) -> Unit = { n -> if (n.parcourable(ctx)) parcourir = n else choisir() }
     var nouveautes by remember { mutableIntStateOf(0) }
     // compte relie : on regarde (sans rien recuperer) si vos postes ont de nouvelles signatures ou de nouveaux tampons
     LaunchedEffect(versionCompte) {
-        nouveautes = if (!Nuage.connecte(ctx)) 0 else try {
+        nouveautes = if (!(Nuage.synchro(ctx) != null)) 0 else try {
             Bibliotheque.lireDrive(ctx).let { e -> e.nouveaux + Bibliotheque.locaux(ctx).count { l -> e.distants.none { it.id == l.id } } }
         } catch (_: Exception) { 0 }
     }
@@ -100,6 +106,17 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit) {
                 }
             }
         }
+        // vos comptes : un toucher pour parcourir leurs PDF (comme « Fichiers » d'Acrobat)
+        Spacer(Modifier.height(12.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            comptes.forEach { n ->
+                AssistChip(onClick = { voir(n) }, label = {
+                    Text(n.fournisseur(ctx).nom + (n.email(ctx)?.let { " · " + it.substringBefore('@') } ?: ""),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 220.dp))
+                }, leadingIcon = { AvatarCompte(n, versionCompte, 20.dp) })
+            }
+            AssistChip(onClick = { ecranCompte = true }, label = { Text(stringResource(R.string.ajouter_compte_court)) })
+        }
         if (nouveautes > 0) {
             Spacer(Modifier.height(12.dp))
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F0FE))) {
@@ -131,7 +148,9 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit) {
         Spacer(Modifier.height(6.dp))
         Text(stringResource(R.string.version, BuildConfig.VERSION_NAME), fontSize = 12.sp, color = Color.Gray)
     }
-    if (ecranCompte) EcranCompte(fermer = { ecranCompte = false; versionCompte++ }, change = { })
+    if (ecranCompte) EcranComptes(fermer = { ecranCompte = false; versionCompte++ },
+        parcourir = { n -> ecranCompte = false; versionCompte++; voir(n) })
+    parcourir?.let { n -> EcranFichiers(n, fermer = { parcourir = null }, ouvrir = ouvrir) }
 }
 
 @Composable

@@ -1159,7 +1159,7 @@ from PySide6.QtWidgets import QStyledItemDelegate as _Delegue
 
 
 class DelegueRecent(_Delegue):
-    """Ligne des Recents dessinee en texte riche (« aussi sur Cannes » en gras), sinon comme d'habitude.
+    """Ligne des Recents dessinee en texte riche (« aussi sur Bureau » en gras), sinon comme d'habitude.
     Le texte passe a la ligne quand la fenetre est etroite (petit ecran) : rien n'est coupe, la ligne grandit."""
 
     @staticmethod

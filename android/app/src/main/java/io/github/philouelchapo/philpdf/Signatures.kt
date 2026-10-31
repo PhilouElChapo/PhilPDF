@@ -146,7 +146,7 @@ fun PanneauSigner(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choisi: 
         val biblio = remember { Bibliotheque.locaux(ctx).filter { it.genre != "filigranes" } }
         if (biblio.isEmpty()) {
             Spacer(Modifier.height(8.dp))
-            Text(stringResource(if (Nuage.connecte(ctx)) R.string.biblio_vide_connecte else R.string.biblio_vide),
+            Text(stringResource(if ((Nuage.synchro(ctx) != null)) R.string.biblio_vide_connecte else R.string.biblio_vide),
                 fontSize = 12.sp, color = Color.Gray)
         }
         biblio.groupBy { it.genre }.forEach { (genre, liste) ->

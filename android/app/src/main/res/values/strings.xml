@@ -109,7 +109,7 @@
     <string name="h_date_heure">Date et heure</string>
     <string name="compte">Compte</string>
     <string name="compte_google">Compte Google</string>
-    <string name="compte_explication">Reliez PhilPDF au stockage où PhilPDF Windows synchronise son dossier « PhilPDF » (Préférences, Synchronisation) : vous retrouvez ici vos postes (Cannes, Pharma…), vos signatures et vos tampons.\n\nGoogle Drive : choisissez simplement l\'un des comptes Google déjà présents sur ce téléphone, sans mot de passe. Comme sous Windows, PhilPDF ne lit que son propre dossier, jamais le reste de votre stockage.</string>
+    <string name="compte_explication">Reliez PhilPDF au stockage où PhilPDF Windows synchronise son dossier « PhilPDF » (Préférences, Synchronisation) : vous retrouvez ici vos autres postes, vos signatures et vos tampons.\n\nGoogle Drive : choisissez simplement l\'un des comptes Google déjà présents sur ce téléphone, sans mot de passe. Comme sous Windows, PhilPDF ne lit que son propre dossier, jamais le reste de votre stockage.</string>
     <string name="choisir_compte">Choisir un compte Google du téléphone</string>
     <string name="autres_comptes">Pour ouvrir ou enregistrer un document, tous vos comptes (Drive, OneDrive, Dropbox, NAS…) sont déjà proposés par « Ouvrir un fichier » et « Autre nom… ».</string>
     <string name="philpdf_introuvable">Aucun dossier PhilPDF de PhilPDF Windows sur ce compte. Vérifiez lequel est réglé dans PhilPDF Windows (Préférences, Synchronisation), puis « Déconnecter » pour en choisir un autre.</string>
@@ -132,7 +132,7 @@
     <string name="navigateur_explication">Google n\'autorise pas encore la connexion directe de PhilPDF Android avec %1$s.\n\nSolution : la page Google s\'ouvre dans le navigateur, votre compte déjà choisi ; touchez « Autoriser », puis « Revenir à PhilPDF ». Une seule fois.</string>
     <string name="connexion_en_cours">Connexion au compte…</string>
     <string name="lecture_drive">Lecture du dossier PhilPDF…</string>
-    <string name="attente_navigateur">En attente de la réponse de Google dans le navigateur…</string>
+    <string name="attente_navigateur">En attente de votre accord dans le navigateur…</string>
     <string name="mode_telephone">Relié par le compte du téléphone</string>
     <string name="mode_navigateur">Relié par le navigateur</string>
     <string name="nouveautes_postes">Vos postes PhilPDF ont %1$d signature(s) ou tampon(s) à récupérer.</string>
@@ -150,4 +150,20 @@
     <string name="autres_emplacements">Votre PhilPDF Windows se synchronise ailleurs ? Choisissez le même emplacement (la page du service s\'ouvre dans le navigateur, puis « Revenir à PhilPDF ») :</string>
     <string name="non_disponible">pas encore disponible</string>
     <string name="nas_bientot">NAS, FTP, WebDAV : prochaine étape.</string>
+    <string name="comptes_titre">Vos comptes</string>
+    <string name="comptes_explication">Reliez vos comptes de stockage : vous y ouvrez vos PDF (et « Même fichier » les y renvoie), et le compte où PhilPDF Windows synchronise son dossier « PhilPDF » vous redonne vos autres postes, vos signatures et vos tampons. Aucun mot de passe n\'est donné à PhilPDF.</string>
+    <string name="ajouter_compte">Ajouter un compte</string>
+    <string name="ajouter_compte_court">+ Compte</string>
+    <string name="parcourir">Parcourir</string>
+    <string name="utiliser_synchro">Synchroniser avec ce compte</string>
+    <string name="synchro_ici">synchronisation avec vos postes</string>
+    <string name="retirer">Retirer</string>
+    <string name="retirer_question">Retirer le compte %1$s (%2$s) de PhilPDF ? Rien n\'est effacé sur le compte lui-même.</string>
+    <string name="synchro_titre">Vos postes PhilPDF (%1$s)</string>
+    <string name="navigateur_aide">La page du service s\'ouvre dans le navigateur : acceptez, puis touchez « Revenir à PhilPDF » (PhilPDF termine la connexion une fois revenu).</string>
+    <string name="attente_retour">Accord reçu : touchez « Revenir à PhilPDF » dans le navigateur, ou revenez ici.</string>
+    <string name="telechargement">Téléchargement…</string>
+    <string name="dossier_vide">Aucun PDF ni dossier ici.</string>
+    <string name="fichiers_aide">Seuls les dossiers et les PDF sont montrés. Après modification, « Même fichier » renvoie le PDF à sa place sur le compte.</string>
+    <string name="canal_connexion">Connexion d\'un compte</string>
 </resources>

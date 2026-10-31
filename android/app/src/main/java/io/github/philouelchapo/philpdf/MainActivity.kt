@@ -38,6 +38,12 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         Nuage.activite = java.lang.ref.WeakReference(this)   // Android y montre « Autoriser » si besoin
+        Nuage.premierPlan.value = true
+    }
+
+    override fun onPause() {
+        Nuage.premierPlan.value = false
+        super.onPause()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -63,6 +69,7 @@ fun Application(recu: MutableState<Uri?>) {
     fun ouvrir(uri: Uri) {
         portee.launch {
             try {
+                Distants.rafraichir(ctx, uri)          // fichier venu d'un compte : derniere version si possible
                 val d = DocumentPdf.ouvrir(ctx, uri)
                 doc?.fermer()
                 doc = d

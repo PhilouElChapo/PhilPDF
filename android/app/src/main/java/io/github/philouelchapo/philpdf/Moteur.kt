@@ -384,6 +384,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
             ctx.contentResolver.openOutputStream(cible, "wt")?.use { s -> tmp.inputStream().use { it.copyTo(s) } }
                 ?: throw IllegalStateException("écriture impossible")
         }
+        Distants.renvoyer(ctx, cible)        // copie d'un fichier OneDrive, Dropbox, Box... : renvoyee a sa place
         modifie = false
     }
 

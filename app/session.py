@@ -340,7 +340,7 @@ class Session:
     def recents_communs(self, jours=None, n=None, rapide=False):
         """Recents en une liste : d'abord ceux de CE poste (dans leur ordre), puis ceux de vos autres postes, plus bas.
         Un fichier d'un autre poste retrouve parmi les recents d'ici n'est pas repete : la ligne d'ici le signale
-        (« aussi sur Cannes »). Ceux des autres postes retrouves sur ce PC sont utilisables ; les autres sont grises.
+        (« aussi sur Bureau »). Ceux des autres postes retrouves sur ce PC sont utilisables ; les autres sont grises.
         [{chemin (ici, ou None), nom, dossier, date, poste, ouvert_sur, aussi_sur, autre_poste, machine, e}].
         Recherche instantanee seulement (pas de parcours du disque).
         rapide : les recents de ce poste seulement, sans toucher au reseau (affichage immediat)."""

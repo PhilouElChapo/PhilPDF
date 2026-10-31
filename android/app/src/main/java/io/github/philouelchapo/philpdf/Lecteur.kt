@@ -100,6 +100,8 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
                 doc.enregistrer(ctx, u)
                 android.widget.Toast.makeText(ctx, enregistre, android.widget.Toast.LENGTH_SHORT).show()
                 if (puisFermer) fermer()
+            } catch (e: ErreurCompte) {       // copie gardee sur le telephone, mais pas renvoyee au compte
+                android.widget.Toast.makeText(ctx, e.message, android.widget.Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
                 android.widget.Toast.makeText(ctx, erreurEcriture, android.widget.Toast.LENGTH_LONG).show()
             }
