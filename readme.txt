@@ -10,6 +10,11 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.3.0
+- Partager : « Envoyer le fichier » (piece jointe, comme avant) ou « Envoyer un lien » : le PDF (avec vos
+  modifications) est depose dans PhilPDF/Partages de votre compte de synchronisation (Google Drive, OneDrive,
+  Dropbox, Box), un lien en lecture seule est cree et part dans le texte du message ; il est aussi copie.
+
 1.2.3
 - Organiser les pages : la barre d'actions s'arrete au-dessus des boutons d'Android (retour, accueil) ;
   « Alleger » et « Mot de passe » ne sont plus caches dessous.

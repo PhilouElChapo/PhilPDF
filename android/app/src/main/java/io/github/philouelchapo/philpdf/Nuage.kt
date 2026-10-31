@@ -428,6 +428,89 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
         Journal.ecrire("compte", "${fournisseur(ctx).nom} : $nom renvoyé à sa place")
     }
 
+    // ------------------------------------------------------------ partage par lien
+    /** Depose le PDF dans PhilPDF/Partages du compte et renvoie un lien public (lecture seule), a mettre dans un e-mail. */
+    suspend fun partagerParLien(ctx: Context, nom: String, octets: ByteArray): String {
+        val f = fournisseur(ctx)
+        if (ids[""] == null && !trouverRacine(ctx)) throw ErreurCompte("${f.nom} : dossier PhilPDF introuvable (synchronisez d'abord avec PhilPDF Windows).")
+        val racine = ids[""]!!
+        fun erreur(etape: String, code: Int, b: ByteArray): Nothing {
+            Journal.ecrire("partage", "${f.nom} : $etape refusé ($code) ${String(b).take(200)}")
+            throw ErreurCompte("${f.nom} : $etape refusé ($code). ${String(b).take(160)}")
+        }
+        val lien: String = when (f.cle) {
+            "gdrive" -> {
+                val dossier = gEnfant(ctx, racine, "Partages")?.getString("id")
+                    ?: json(ctx, "POST", "$GOOGLE/files?fields=id", JSONObject().put("name", "Partages")
+                        .put("mimeType", "application/vnd.google-apps.folder").put("parents", JSONArray().put(racine)))?.getString("id")
+                    ?: throw ErreurCompte("${f.nom} : dossier Partages impossible à créer.")
+                val bord = "PhilPDF" + java.util.UUID.randomUUID().toString().replace("-", "")
+                val meta = JSONObject().put("name", nom).put("parents", JSONArray().put(dossier)).toString()
+                val corps = ("--$bord\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n$meta\r\n" +
+                    "--$bord\r\nContent-Type: application/pdf\r\n\r\n").toByteArray() + octets + "\r\n--$bord--\r\n".toByteArray()
+                val (c1, b1, _) = appel(ctx, "POST", "$GOOGLE_ENVOI/files?uploadType=multipart&fields=id", corps,
+                    mapOf("Content-Type" to "multipart/related; boundary=$bord"))
+                if (c1 !in 200..299) erreur("dépôt", c1, b1)
+                val fid = JSONObject(String(b1)).getString("id")
+                val (c2, b2, _) = appel(ctx, "POST", "$GOOGLE/files/$fid/permissions",
+                    JSONObject().put("role", "reader").put("type", "anyone").toString().toByteArray(), mapOf("Content-Type" to "application/json"))
+                if (c2 !in 200..299) erreur("lien", c2, b2)
+                "https://drive.google.com/file/d/$fid/view?usp=sharing"
+            }
+            "onedrive" -> {
+                val (c1, b1, _) = appel(ctx, "PUT", "$GRAPH/me/drive/items/$racine:/Partages/${enc(nom)}:/content?@microsoft.graph.conflictBehavior=rename",
+                    octets, mapOf("Content-Type" to "application/pdf"))
+                if (c1 !in 200..299) erreur("dépôt", c1, b1)
+                val fid = JSONObject(String(b1)).getString("id")
+                var r: Triple<Int, ByteArray, String?> = Triple(0, ByteArray(0), null)
+                for (portee in listOf("anonymous", "organization")) {      // comptes d'entreprise : lien interne si l'anonyme est interdit
+                    r = appel(ctx, "POST", "$GRAPH/me/drive/items/$fid/createLink",
+                        JSONObject().put("type", "view").put("scope", portee).toString().toByteArray(), mapOf("Content-Type" to "application/json"))
+                    if (r.first in 200..299) break
+                }
+                if (r.first !in 200..299) erreur("lien", r.first, r.second)
+                JSONObject(String(r.second)).getJSONObject("link").getString("webUrl")
+            }
+            "dropbox" -> {
+                val (c1, b1, _) = appel(ctx, "POST", "$DBX_CONTENU/files/upload", octets, mapOf("Content-Type" to "application/octet-stream",
+                    "Dropbox-API-Arg" to ascii(JSONObject().put("path", "$racine/Partages/$nom").put("mode", "add").put("autorename", true).put("mute", true).toString())))
+                if (c1 !in 200..299) erreur("dépôt", c1, b1)
+                val chemin = JSONObject(String(b1)).getString("path_lower")
+                val (c2, b2, _) = appel(ctx, "POST", "$DBX/sharing/create_shared_link_with_settings",
+                    JSONObject().put("path", chemin).toString().toByteArray(), mapOf("Content-Type" to "application/json"))
+                when {
+                    c2 in 200..299 -> JSONObject(String(b2)).getString("url")
+                    String(b2).contains("shared_link_already_exists") -> JSONObject(String(b2)).optJSONObject("error")
+                        ?.optJSONObject("shared_link_already_exists")?.optJSONObject("metadata")?.optString("url")
+                        ?.takeIf { it.isNotEmpty() } ?: erreur("lien", c2, b2)
+                    String(b2).contains("missing_scope") -> throw ErreurCompte("Dropbox : l'application PhilPDF n'a pas le droit de créer des liens " +
+                        "(permission « sharing.write » à cocher dans la console Dropbox, puis reconnecter le compte).")
+                    else -> erreur("lien", c2, b2)
+                }
+            }
+            "box" -> {
+                val dossier = bEnfant(ctx, racine, "Partages")
+                    ?: json(ctx, "POST", "$BOX/folders", JSONObject().put("name", "Partages").put("parent", JSONObject().put("id", racine)))?.optString("id")
+                    ?: throw ErreurCompte("Box : dossier Partages impossible à créer.")
+                val bord = "PhilPDF" + java.util.UUID.randomUUID().toString().replace("-", "")
+                val attr = JSONObject().put("name", nom).put("parent", JSONObject().put("id", dossier)).toString()
+                val corps = ("--$bord\r\nContent-Disposition: form-data; name=\"attributes\"\r\n\r\n$attr\r\n" +
+                    "--$bord\r\nContent-Disposition: form-data; name=\"file\"; filename=\"${nom.replace("\"", "")}\"\r\n" +
+                    "Content-Type: application/pdf\r\n\r\n").toByteArray() + octets + "\r\n--$bord--\r\n".toByteArray()
+                val (c1, b1, _) = appel(ctx, "POST", "$BOX_ENVOI/files/content", corps, mapOf("Content-Type" to "multipart/form-data; boundary=$bord"))
+                if (c1 !in 200..299) erreur("dépôt", c1, b1)
+                val fid = JSONObject(String(b1)).getJSONArray("entries").getJSONObject(0).getString("id")
+                val (c2, b2, _) = appel(ctx, "PUT", "$BOX/files/$fid?fields=shared_link",
+                    JSONObject().put("shared_link", JSONObject().put("access", "open")).toString().toByteArray(), mapOf("Content-Type" to "application/json"))
+                if (c2 !in 200..299) erreur("lien", c2, b2)
+                JSONObject(String(b2)).getJSONObject("shared_link").getString("url")
+            }
+            else -> throw ErreurCompte("${f.nom} : partage par lien non disponible.")
+        }
+        Journal.ecrire("partage", "${f.nom} : $nom déposé dans PhilPDF/Partages, lien créé")
+        return lien
+    }
+
     // ------------------------------------------------------------ dossier PhilPDF (synchronisation) et lecture de ses fichiers
     /** Trouve le dossier PhilPDF (a la racine d'abord, sinon ailleurs) ; renvoie false s'il n'existe pas. */
     suspend fun trouverRacine(ctx: Context): Boolean {

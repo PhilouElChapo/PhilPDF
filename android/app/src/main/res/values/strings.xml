@@ -234,4 +234,11 @@
     <string name="alleger_detail">images ramenées à %1$d dpi, qualité %2$d %%</string>
     <string name="alleger_images">%1$d image(s) réduite(s)</string>
     <string name="police_integree">police intégrée au PDF</string>
+    <string name="partage_fichier">Envoyer le fichier</string>
+    <string name="partage_fichier_aide">Le PDF en pièce jointe (e-mail, messagerie…).</string>
+    <string name="partage_lien">Envoyer un lien</string>
+    <string name="partage_lien_aide">Le PDF est déposé dans PhilPDF/Partages de %1$s ; le lien part dans le message (pratique pour un gros fichier). Le lien est aussi copié.</string>
+    <string name="partage_sans_compte">Reliez d\'abord un compte de synchronisation (Accueil, rond en haut à droite).</string>
+    <string name="partage_envoi">Dépôt et création du lien…</string>
+    <string name="partage_message">Bonjour,\n\nVoici le document « %1$s » :\n%2$s\n\nBonne réception.</string>
 </resources>

@@ -91,6 +91,7 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var paragraphe by mutableStateOf<Paragraphe?>(null)
     var message by mutableStateOf<String?>(null)
     var organiser by mutableStateOf(false)                  // ecran « Organiser les pages »
+    var choixPartage by mutableStateOf(false)               // envoyer le fichier ou un lien
     /** Portee du lecteur : une pose lancee ici va au bout meme quand l'apercu disparait de l'ecran. */
     var portee: kotlinx.coroutines.CoroutineScope? = null
     val page: Int get() = liste.firstVisibleItemIndex
@@ -160,6 +161,7 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
     etat.selection?.let { FeuilleAnnotation(etat, it) { etat.selection = null } }
     etat.champ?.let { SaisieChamp(etat, it) { etat.champ = null } }
     etat.paragraphe?.let { p -> EditeurTexte(etat, p) { etat.paragraphe = null } }
+    if (etat.choixPartage) ChoixPartage(etat) { etat.choixPartage = false }
     if (etat.organiser && t != null) OrganiserPages(etat, t) { etat.organiser = false }
     etat.message?.let { m ->
         val txt = if (m == "aucun_texte") stringResource(R.string.aucun_texte) else m
@@ -241,7 +243,7 @@ private fun DispositionTablette(etat: EtatLecteur, tailles: List<Pair<Float, Flo
                 Bouton("zoom_plus", stringResource(R.string.zoom_plus)) { etat.echelle = (etat.echelle * 1.25f).coerceAtMost(5f) }
                 Bouton("largeur", stringResource(R.string.ajuster)) { etat.echelle = 1f; etat.decalage = Offset.Zero }
                 Bouton("suivante", stringResource(R.string.aller_page)) { allerA = true }
-                Bouton("courriel", stringResource(R.string.partager)) { portee.launch { partager(ctx, etat.doc) } }
+                Bouton("courriel", stringResource(R.string.partager)) { etat.choixPartage = true }
                 Bouton("imprimer", stringResource(R.string.imprimer)) { portee.launch { imprimer(ctx, etat.doc) } }
             }
         }
@@ -395,7 +397,7 @@ private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, 
                     LigneAction("commentaire", stringResource(R.string.commentaires)) { comms = true }
                     if (etat.doc.modifiable) LigneAction("organiser", stringResource(R.string.organiser_pages)) { etat.organiser = true }
                     LigneAction("enregistrer", stringResource(R.string.enregistrer)) { etat.demandeEnregistrer = true }
-                    LigneAction("courriel", stringResource(R.string.partager)) { portee.launch { partager(ctx, etat.doc) } }
+                    LigneAction("courriel", stringResource(R.string.partager)) { etat.choixPartage = true }
                     LigneAction("imprimer", stringResource(R.string.imprimer)) { portee.launch { imprimer(ctx, etat.doc) } }
                     LigneAction("largeur", stringResource(R.string.ajuster)) { etat.echelle = 1f; etat.decalage = Offset.Zero }
                     Spacer(Modifier.height(8.dp))
