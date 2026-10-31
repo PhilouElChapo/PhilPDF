@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package io.github.philouelchapo.philpdf
 
 import androidx.compose.foundation.background
@@ -146,6 +148,7 @@ fun nomGenre(g: Int): Int = when (g) {
     PDFAnnotation.TYPE_CIRCLE -> R.string.outil_ellipse
     PDFAnnotation.TYPE_LINE -> R.string.outil_fleche
     PDFAnnotation.TYPE_FREE_TEXT -> R.string.g_tampon
+    PDFAnnotation.TYPE_STAMP -> R.string.g_image
     else -> R.string.g_autre
 }
 
@@ -190,9 +193,26 @@ fun FeuilleAnnotation(etat: EtatLecteur, info: InfoAnnot, fermer: () -> Unit) {
                     }
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            Text(stringResource(R.string.couleur), fontSize = 13.sp)
-            Palette(couleur) { couleur = it }
+            if (info.objet) {
+                // signature, paraphe, tampon : deplacer, taille, en mettre un autre a la place
+                Spacer(Modifier.height(10.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { etat.decalageDepl = androidx.compose.ui.geometry.Offset.Zero; etat.deplacement = info; fermer() }) {
+                        Text(stringResource(R.string.deplacer))
+                    }
+                    OutlinedButton(onClick = { (etat.portee ?: portee).launch { etat.doc.transformer(info, 0f, 0f, 1f / 1.2f) } }) { Text("−") }
+                    OutlinedButton(onClick = { (etat.portee ?: portee).launch { etat.doc.transformer(info, 0f, 0f, 1.2f) } }) { Text("+") }
+                    OutlinedButton(onClick = { etat.remplacer = info; etat.ouvrirSigner = true; fermer() }) {
+                        Text(stringResource(R.string.changer))
+                    }
+                }
+            }
+            // une image (signature ou tampon de vos postes) n'a pas de couleur a changer
+            if (info.genre != PDFAnnotation.TYPE_STAMP) {
+                Spacer(Modifier.height(10.dp))
+                Text(stringResource(R.string.couleur), fontSize = 13.sp)
+                Palette(couleur) { couleur = it }
+            }
             if (trait) {
                 Spacer(Modifier.height(10.dp))
                 Text(stringResource(R.string.epaisseur, epaisseur.toInt()), fontSize = 13.sp)
@@ -212,7 +232,7 @@ fun FeuilleAnnotation(etat: EtatLecteur, info: InfoAnnot, fermer: () -> Unit) {
                 Button(onClick = {
                     portee.launch {
                         if (marquage && genre != info.genre) etat.doc.changerGenre(info, genre, couleur.versPdf(), opacite)
-                        else etat.doc.modifierAnnotation(info, couleur.versPdf(), opacite, if (trait) epaisseur else null,
+                        else etat.doc.modifierAnnotation(info, if (info.genre == PDFAnnotation.TYPE_STAMP) null else couleur.versPdf(), opacite, if (trait) epaisseur else null,
                             if (avecTexte && texte != info.texte) texte else null)
                         fermer()
                     }

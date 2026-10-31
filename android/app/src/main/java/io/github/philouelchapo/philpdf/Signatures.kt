@@ -140,6 +140,25 @@ fun PanneauSigner(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choisi: 
         return
     }
     fun poser(a: APoser) {
+        // appui long > Changer : le nouveau prend la place (et la largeur) de l'ancien, sans apercu a placer
+        etat.remplacer?.let { ancien ->
+            etat.remplacer = null
+            val cx = (ancien.rect[0] + ancien.rect[2]) / 2
+            val cy = (ancien.rect[1] + ancien.rect[3]) / 2
+            val larg = (ancien.rect[2] - ancien.rect[0]).coerceAtLeast(20f)
+            val pt = com.artifex.mupdf.fitz.Point(cx, cy)
+            val d = etat.doc
+            (etat.portee ?: portee).launch {
+                d.supprimerAnnotation(ancien)
+                when (a) {
+                    is APoser.Traits -> d.poserTraits(ancien.page, pt, larg, a.t.ratio, a.t.traits, ENCRE.versPdf(), if (a.t.genre == "paraphe") 1.6f else 2f)
+                    is APoser.Image -> d.image(ancien.page, pt, larg, a.ratio, a.png.readBytes())
+                    is APoser.Tampon -> d.tampon(ancien.page, pt, a.texte, a.couleur.versPdf(), a.taille)
+                }
+            }
+            choisi()
+            return
+        }
         etat.aPoser = a
         etat.annot.outil = Outil.POSER
         // apercu tout de suite au milieu de la page affichee : on le fait glisser, puis « Poser ici »
@@ -148,6 +167,14 @@ fun PanneauSigner(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choisi: 
         choisi()
     }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(12.dp)) {
+        if (etat.remplacer != null) {
+            Row(Modifier.fillMaxWidth().background(Color(0xFFE8F0FE), RoundedCornerShape(8.dp)).padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.remplacer_aide), Modifier.weight(1f), fontSize = 13.sp)
+                TextButton(onClick = { etat.remplacer = null }) { Text(stringResource(R.string.annuler)) }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
         Text(stringResource(R.string.remplir_aide), fontSize = 12.sp, color = Color.Gray)
         // signatures et tampons de PhilPDF Windows, recuperes par le compte Google (Accueil, en haut a droite)
         val biblio = remember { Bibliotheque.locaux(ctx).filter { it.genre != "filigranes" } }

@@ -176,4 +176,10 @@
     <string name="ou_synchro">Où PhilPDF Windows se synchronise-t-il ?</string>
     <string name="changer_emplacement">Changer d\'emplacement</string>
     <string name="ouvrir_partout">Pour ouvrir ou enregistrer vos PDF, rien à relier ici : « Ouvrir un fichier » et « Autre nom… » passent par le gestionnaire de fichiers d\'Android, qui voit déjà tous vos comptes (Drive, OneDrive, Dropbox, NAS…).</string>
+    <string name="g_image">Signature ou tampon</string>
+    <string name="deplacer">Déplacer</string>
+    <string name="changer">Changer</string>
+    <string name="ici">Ici</string>
+    <string name="aide_deplacer">Faites glisser, puis « Ici »</string>
+    <string name="remplacer_aide">Choisissez la signature ou le tampon qui prend sa place.</string>
 </resources>

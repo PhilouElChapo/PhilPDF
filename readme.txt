@@ -10,6 +10,11 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.0.2
+- Appui long sur une signature, un paraphe ou un tampon deja pose : « Deplacer » (le faire glisser,
+  puis « Ici »), « - » et « + » pour la taille, « Changer » (en mettre un autre a sa place, meme endroit,
+  meme largeur). Titre « Signature ou tampon » ; plus de couleur proposee pour une image.
+
 1.0.1
 - Ecran « Synchronisation avec vos postes » simplifie : un seul emplacement (celui de PhilPDF Windows),
   « Changer d'emplacement », « Deconnecter ». Les PDF s'ouvrent et s'enregistrent par le gestionnaire

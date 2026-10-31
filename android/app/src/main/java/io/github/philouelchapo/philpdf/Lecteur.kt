@@ -81,6 +81,12 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var aPoser by mutableStateOf<APoser?>(null)            // signature, paraphe ou tampon choisi
     var champ by mutableStateOf<InfoChamp?>(null)           // champ de formulaire en cours de saisie
     var fantome by mutableStateOf<Pair<Int, Offset>?>(null) // apercu de ce qui va etre pose : page, centre en points
+    /** Signature ou tampon pose en cours de deplacement (appui long > Deplacer) et decalage du doigt, en points. */
+    var deplacement by mutableStateOf<InfoAnnot?>(null)
+    var decalageDepl by mutableStateOf(Offset.Zero)
+    /** Appui long > Changer : la prochaine signature ou le prochain tampon choisi prend sa place. */
+    var remplacer by mutableStateOf<InfoAnnot?>(null)
+    var ouvrirSigner by mutableStateOf(false)
     /** Portee du lecteur : une pose lancee ici va au bout meme quand l'apercu disparait de l'ecran. */
     var portee: kotlinx.coroutines.CoroutineScope? = null
     val page: Int get() = liste.firstVisibleItemIndex
@@ -205,6 +211,7 @@ private fun DispositionTablette(etat: EtatLecteur, tailles: List<Pair<Float, Flo
     val ctx = LocalContext.current
     var gauche by remember { mutableStateOf<Volet?>(Volet.VIGNETTES) }
     var droite by remember { mutableStateOf<Volet?>(null) }
+    LaunchedEffect(etat.ouvrirSigner) { if (etat.ouvrirSigner) { droite = Volet.SIGNER; etat.ouvrirSigner = false } }
     var allerA by remember { mutableStateOf(false) }
     val portee = rememberCoroutineScope()
     Column(Modifier.fillMaxSize().background(Color(0xFFF3F3F3))) {
@@ -290,6 +297,7 @@ private fun libelleVolet(v: Volet): String = stringResource(when (v) {
 private fun DispositionTelephone(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, fermer: () -> Unit) {
     var barres by remember { mutableStateOf(true) }
     var tiroir by remember { mutableStateOf<Volet?>(null) }
+    LaunchedEffect(etat.ouvrirSigner) { if (etat.ouvrirSigner) { tiroir = Volet.SIGNER; etat.ouvrirSigner = false } }
     val portee = rememberCoroutineScope()
     // en faisant defiler vers le bas, les barres se cachent ; vers le haut, elles reviennent
     val defilement = remember {
@@ -501,7 +509,7 @@ private fun Recherche(etat: EtatLecteur, aller: (Int) -> Unit) {
 // ================================================================ pages
 @Composable
 private fun Pages(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, modifier: Modifier, auToucher: (() -> Unit)? = null) {
-    val lire = etat.annot.outil == Outil.MAIN
+    val lire = etat.annot.outil == Outil.MAIN && etat.deplacement == null
     BoxWithConstraints(modifier
         .pointerInput(lire) {
             // deux doigts : zoom de 1x a 5x, et deplacement quand on est zoome (en lecture seulement :
@@ -534,8 +542,26 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
     var trace by remember { mutableStateOf<List<Offset>>(emptyList()) }
     val r = etat.annot
     Box(modifier.aspectRatio((w / h).coerceIn(0.1f, 10f)).background(Color.White)
-        .then(if (!marques) Modifier else Modifier.pointerInput(r.outil, n) {
+        .then(if (!marques) Modifier else Modifier.pointerInput(r.outil, n, etat.deplacement) {
             val k = { o: Offset -> com.artifex.mupdf.fitz.Point(o.x * w / size.width, o.y * w / size.width) }
+            val dep = etat.deplacement
+            if (dep != null) {
+                // deplacer une signature ou un tampon deja pose : il suit le doigt, puis « Ici »
+                if (dep.page == n) awaitEachGesture {
+                    val bas = awaitFirstDown()
+                    var dernier = bas.position
+                    while (true) {
+                        val ev = awaitPointerEvent()
+                        val c = ev.changes.firstOrNull() ?: break
+                        if (!c.pressed) break
+                        val d0 = c.position - dernier
+                        dernier = c.position
+                        etat.decalageDepl += Offset(d0.x * w / size.width, d0.y * w / size.width)
+                        c.consume()
+                    }
+                }
+                return@pointerInput
+            }
             when (r.outil) {
                 Outil.MAIN -> detectTapGestures(
                     onTap = { o ->
@@ -625,6 +651,7 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
         val f = etat.fantome
         val a = etat.aPoser
         if (marques && r.outil == Outil.POSER && a != null && f != null && f.first == n) Apercu(etat, a, f.second, w)
+        etat.deplacement?.takeIf { marques && it.page == n }?.let { Deplacement(etat, it, w) }
     }
 }
 
@@ -705,6 +732,42 @@ private fun Apercu(etat: EtatLecteur, a: APoser, centre: Offset, w: Float) {
             OutlinedButton(onClick = { etat.fantome = null; etat.aPoser = null; etat.annot.outil = Outil.MAIN },
                 colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White)) { Text(stringResource(R.string.annuler)) }
         }
+    }
+}
+
+/** Cadre de la signature ou du tampon que l'on deplace, avec « Ici » et « Annuler ». */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Deplacement(etat: EtatLecteur, info: InfoAnnot, w: Float) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val dens = LocalDensity.current
+        val s = with(dens) { maxWidth.toPx() } / w
+        val d = etat.decalageDepl
+        val x0 = (info.rect[0] + d.x) * s
+        val y0 = (info.rect[1] + d.y) * s
+        val lw = (info.rect[2] - info.rect[0]) * s
+        val lh = (info.rect[3] - info.rect[1]) * s
+        Canvas(Modifier.fillMaxSize()) {
+            drawRect(Color(0x331A73E8), Offset(x0, y0), Size(lw, lh))
+            drawRect(Color(0xFF1A73E8), Offset(x0, y0), Size(lw, lh), style = androidx.compose.ui.graphics.drawscope.Stroke(3f,
+                pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(14f, 10f))))
+        }
+        val hb = with(dens) { 48.dp.toPx() }
+        val yb = if (y0 + lh + hb + 8 < with(dens) { maxHeight.toPx() }) y0 + lh + 8 else (y0 - hb - 8).coerceAtLeast(0f)
+        FlowRow(Modifier.fillMaxWidth().offset { androidx.compose.ui.unit.IntOffset(0, yb.toInt()) },
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
+            Button(onClick = {
+                val dd = etat.decalageDepl
+                etat.deplacement = null
+                etat.decalageDepl = Offset.Zero
+                etat.portee?.launch { etat.doc.transformer(info, dd.x, dd.y, 1f) }
+            }, colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) { Text(stringResource(R.string.ici)) }
+            OutlinedButton(onClick = { etat.deplacement = null; etat.decalageDepl = Offset.Zero },
+                colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White)) { Text(stringResource(R.string.annuler)) }
+        }
+        Text(stringResource(R.string.aide_deplacer), Modifier.align(Alignment.TopCenter).padding(8.dp)
+            .background(Color(0xCC333333), RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
+            color = Color.White, fontSize = 12.sp)
     }
 }
 

@@ -193,7 +193,8 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                         trouve = InfoAnnot(n, i, t, if (coul == null || coul.isEmpty()) floatArrayOf(0f, 0f, 0f) else coul,
                             try { an.opacity } catch (_: Exception) { 1f },
                             try { an.borderWidth } catch (_: Exception) { 1f },
-                            try { an.contents ?: "" } catch (_: Exception) { "" })
+                            try { an.contents ?: "" } catch (_: Exception) { "" },
+                            floatArrayOf(r.x0, r.y0, r.x1, r.y1))
                         break
                     }
                 }
@@ -219,6 +220,37 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                     opacite?.let { an.setOpacity(it) }
                     epaisseur?.let { an.setBorderWidth(it) }
                     texte?.let { an.setContents(it) }
+                    an.update()
+                    true
+                }
+            }
+        }
+
+    /** Deplace (dx, dy en points) et agrandit (k) une signature, un paraphe ou un tampon deja pose, autour de son centre. */
+    suspend fun transformer(info: InfoAnnot, dx: Float, dy: Float, k: Float): Boolean =
+        operation(if (k == 1f) "Déplacer" else "Taille") { p ->
+            surPage(p, info.page) { page ->
+                val an = page.annotations?.getOrNull(info.index)
+                if (an == null) false else {
+                    val b = an.rect
+                    val cx = (b.x0 + b.x1) / 2
+                    val cy = (b.y0 + b.y1) / 2
+                    val f = { x: Float, y: Float -> Point(cx + dx + (x - cx) * k, cy + dy + (y - cy) * k) }
+                    when (an.type) {
+                        PDFAnnotation.TYPE_INK -> {
+                            an.setInkList(an.inkList.map { t -> t.map { q -> f(q.x, q.y) }.toTypedArray() }.toTypedArray())
+                            if (k != 1f) an.setBorderWidth((an.borderWidth * k).coerceIn(0.5f, 12f))
+                        }
+                        PDFAnnotation.TYPE_FREE_TEXT -> {
+                            if (k != 1f) {
+                                val da = try { an.defaultAppearance } catch (_: Exception) { null }
+                                an.setDefaultAppearance("Helv", ((da?.size ?: 14f) * k).coerceIn(4f, 96f), da?.color ?: floatArrayOf(0f, 0f, 0f))
+                            }
+                            val a0 = f(b.x0, b.y0); val a1 = f(b.x1, b.y1)
+                            an.setRect(Rect(a0.x, a0.y, a1.x, a1.y))
+                        }
+                        else -> { val a0 = f(b.x0, b.y0); val a1 = f(b.x1, b.y1); an.setRect(Rect(a0.x, a0.y, a1.x, a1.y)) }
+                    }
                     an.update()
                     true
                 }
@@ -549,6 +581,9 @@ data class Signet(val titre: String, val profondeur: Int, val page: Int)
 data class Trouve(val page: Int, val zones: List<FloatArray>)
 data class Commentaire(val page: Int, val genre: Int, val texte: String, val auteur: String)
 data class InfoAnnot(val page: Int, val index: Int, val genre: Int, val couleur: FloatArray, val opacite: Float,
-                     val epaisseur: Float, val texte: String)
+                     val epaisseur: Float, val texte: String, val rect: FloatArray = floatArrayOf(0f, 0f, 0f, 0f)) {
+    /** Signature, paraphe ou tampon (image, texte encadre ou trace) : deplacable, redimensionnable, remplacable. */
+    val objet: Boolean get() = genre == PDFAnnotation.TYPE_STAMP || genre == PDFAnnotation.TYPE_FREE_TEXT || genre == PDFAnnotation.TYPE_INK
+}
 data class InfoChamp(val page: Int, val index: Int, val genre: Int, val valeur: String, val options: List<String>,
                      val lectureSeule: Boolean)
