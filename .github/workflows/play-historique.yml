@@ -1,0 +1,76 @@
+# Une seule fois : paquets Google Play (.aab) des versions Android 1.1.0, 1.1.1 et 1.1.2, refaits a partir de leur
+# code d'origine, avec seulement ce que Google Play exige en plus (Android 16 vise, mises a jour par Google Play).
+# Ils sont ajoutes a leurs publications « android-v... » existantes, pour les deposer peu a peu sur la Play Console.
+name: Paquets Google Play (anciennes versions)
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/play-historique.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  aab:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { version: "1.1.0", commit: "8c675d9" }
+          - { version: "1.1.1", commit: "ac7f5df" }
+          - { version: "1.1.2", commit: "1749cc2" }
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Code de la version ${{ matrix.version }} + reglages Google Play d'aujourd'hui
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/actuel"
+          for f in android/build.gradle.kts android/app/build.gradle.kts \
+                   android/app/src/main/java/io/github/philouelchapo/philpdf/MiseAJour.kt .github/verifier-16ko.sh; do
+            mkdir -p "$RUNNER_TEMP/actuel/$(dirname "$f")"; cp "$f" "$RUNNER_TEMP/actuel/$f"
+          done
+          git checkout -q ${{ matrix.commit }}
+          test "$(tr -d ' \r\n' < android/version.txt)" = "${{ matrix.version }}"
+          cp -r "$RUNNER_TEMP/actuel/." .
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Clef de signature
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/philpdf-android.jks"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/philpdf-android.jks" >> "$GITHUB_ENV"
+      - name: Paquet .aab
+        working-directory: android
+        shell: bash
+        env:
+          PHILPDF_PLAY: "1"
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID || vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET || vars.GOOGLE_CLIENT_SECRET }}
+          ONEDRIVE_CLIENT_ID: ${{ secrets.ONEDRIVE_CLIENT_ID || vars.ONEDRIVE_CLIENT_ID }}
+          DROPBOX_CLIENT_ID: ${{ secrets.DROPBOX_CLIENT_ID || vars.DROPBOX_CLIENT_ID }}
+          DROPBOX_CLIENT_SECRET: ${{ secrets.DROPBOX_CLIENT_SECRET || vars.DROPBOX_CLIENT_SECRET }}
+          BOX_CLIENT_ID: ${{ secrets.BOX_CLIENT_ID || vars.BOX_CLIENT_ID }}
+          BOX_CLIENT_SECRET: ${{ secrets.BOX_CLIENT_SECRET || vars.BOX_CLIENT_SECRET }}
+        run: |
+          gradle --no-daemon bundleRelease > bundle.log 2>&1 || { tail -n 60 bundle.log; exit 1; }
+          cp app/build/outputs/bundle/release/app-release.aab "../PhilPDF-GooglePlay-${{ matrix.version }}.aab"
+          bash ../.github/verifier-16ko.sh "../PhilPDF-GooglePlay-${{ matrix.version }}.aab"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-v${{ matrix.version }}
+          make_latest: false
+          files: PhilPDF-GooglePlay-${{ matrix.version }}.aab

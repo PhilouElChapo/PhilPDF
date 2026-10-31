@@ -455,10 +455,16 @@ jobs:
           for a in arm64-v8a armeabi-v7a x86_64; do cp "app/build/outputs/apk/release/app-$a-release.apk" "../PhilPDF-$a.apk"; done
           ls -la ../PhilPDF*.apk
           echo "::notice title=Android::APK $(ls -s --block-size=M ../PhilPDF*.apk | tr '\n' ' ')"
+          # paquet Google Play (.aab) : sans recherche de mise a jour sur GitHub (Google Play s'en charge)
+          PHILPDF_PLAY=1 gradle --no-daemon bundleRelease > bundle.log 2>&1 || { tail -n 40 bundle.log; exit 1; }
+          cp app/build/outputs/bundle/release/app-release.aab "../PhilPDF-GooglePlay-$(tr -d ' \r\n' < version.txt).aab"
+          bash ../.github/verifier-16ko.sh ../PhilPDF-GooglePlay-*.aab
       - uses: actions/upload-artifact@v5
         with:
           name: android-apk
-          path: PhilPDF*.apk
+          path: |
+            PhilPDF*.apk
+            PhilPDF-GooglePlay-*.aab
 
   publier-android:
     needs: [android]
@@ -483,5 +489,8 @@ jobs:
             PhilPDF ${{ env.AVERSION }} pour Android (8 et plus).
             - PhilPDF.apk : a ouvrir sur le telephone ou la tablette (autoriser l'installation depuis cette source).
             - PhilPDF-arm64-v8a.apk (telephones recents), PhilPDF-armeabi-v7a.apk (anciens), PhilPDF-x86_64.apk (emulateurs) : plus legers.
+            - PhilPDF-GooglePlay-x.y.z.aab : paquet pour la Play Console (pas a installer sur le telephone).
             Ce qui a change : readme.txt du depot (aussi dans l'application : Accueil > Aide > Nouveautes).
-          files: PhilPDF*.apk
+          files: |
+            PhilPDF*.apk
+            PhilPDF-GooglePlay-*.aab

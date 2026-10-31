@@ -10,6 +10,10 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.1.3
+- Prete pour Google Play : vise Android 16 ; la version installee depuis Google Play est mise a jour par
+  Google Play (elle ne cherche plus de nouvelle version sur GitHub). L'APK de GitHub continue de le faire.
+
 1.1.2
 - Modifier le texte : polices sans table de caracteres classique (OCR-B des releves bancaires, polices
   decrites par noms de lettres) reconnues : la police d'origine est gardee au lieu d'une police de

@@ -28,6 +28,7 @@ object MiseAJour {
 
     /** Derniere publication Android (« android-v1.2.3 »), distincte de celles de Windows et Linux (« v0.9.x »). */
     suspend fun chercher(actuelle: String): NouvelleVersion? = withContext(Dispatchers.IO) {
+        if (BuildConfig.PLAY_STORE) return@withContext null      // installe par Google Play : il fait les mises a jour
         try {
             val c = URL("https://api.github.com/repos/$DEPOT/releases?per_page=40").openConnection() as HttpURLConnection
             c.connectTimeout = 8000

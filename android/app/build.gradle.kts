@@ -12,14 +12,16 @@ val clef: String? = System.getenv("ANDROID_KEYSTORE_FILE")
 
 android {
     namespace = "io.github.philouelchapo.philpdf"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "io.github.philouelchapo.philpdf"
         minSdk = 26                      // Android 8 (2017)
-        targetSdk = 35
+        targetSdk = 36              // Android 16 : exige par Google Play pour une nouvelle application
         versionCode = versionCodePhilpdf
         versionName = versionPhilpdf
+        // PHILPDF_PLAY=1 : paquet pour Google Play (les mises a jour passent par le Play Store, pas par GitHub)
+        buildConfigField("boolean", "PLAY_STORE", if (System.getenv("PHILPDF_PLAY") == "1") "true" else "false")
         // meme identifiant Google que PhilPDF Windows : il voit le dossier PhilPDF que Windows a cree (drive.file)
         buildConfigField("String", "GOOGLE_ID", "\"${(System.getenv("GOOGLE_CLIENT_ID") ?: "").trim()}\"")
         buildConfigField("String", "GOOGLE_SECRET", "\"${(System.getenv("GOOGLE_CLIENT_SECRET") ?: "").trim()}\"")
