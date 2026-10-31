@@ -269,36 +269,63 @@ private fun DialogueCompresser(d: DocumentPdf, fermer: () -> Unit) {
     val ctx = LocalContext.current
     val avantModifie = remember { d.modifie }
     val avantCompresser = remember { d.compresser }
+    val origine = remember { d.tailleOrigine() }
+    var choix by remember { mutableStateOf(0) }
+    var reduites by remember { mutableStateOf(0) }          // images reduites par le reglage applique (a defaire)
     var apres by remember { mutableStateOf<Long?>(null) }
-    LaunchedEffect(Unit) {
+    var calcul by remember { mutableStateOf(0) }
+    LaunchedEffect(choix, calcul) {
+        apres = null
+        if (reduites > 0) { d.annuler(); reduites = 0 }    // reglage precedent defait avant d'essayer celui-ci
         d.compresser = true
         d.modifie = true
-        apres = try { d.tailleEnregistree(ctx) } catch (_: Exception) { -1L }
+        apres = try {
+            reduites = d.alleger(Alleger.PREREGLAGES[choix])
+            d.tailleEnregistree(ctx)
+        } catch (_: Exception) { -1L }
     }
+    val portee = rememberCoroutineScope()
     AlertDialog(onDismissRequest = {},
         title = { Text(stringResource(R.string.compresser)) },
         text = {
             Column {
-                Text(stringResource(R.string.compresser_texte), fontSize = 14.sp)
-                Spacer(Modifier.height(10.dp))
+                Text(stringResource(R.string.compresser_texte), fontSize = 13.sp)
+                Spacer(Modifier.height(6.dp))
+                Alleger.PREREGLAGES.forEachIndexed { i, r ->
+                    Row(Modifier.fillMaxWidth().clickable(enabled = apres != null) { choix = i },
+                        verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(choix == i, { choix = i }, enabled = apres != null)
+                        Column {
+                            Text(stringResource(r.nom), fontSize = 14.sp)
+                            if (r.dpi > 0) Text(stringResource(R.string.alleger_detail, r.dpi, r.qualite), fontSize = 11.sp, color = Color.Gray)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
                 val a = apres
                 Text(when {
                     a == null -> stringResource(R.string.compresser_calcul)
                     a < 0 -> stringResource(R.string.compresser_impossible)
-                    else -> stringResource(R.string.compresser_resultat, mo(d.tailleOrigine()), mo(a))
+                    else -> stringResource(R.string.compresser_resultat, mo(origine), mo(a)) +
+                        if (reduites > 0) "\n" + stringResource(R.string.alleger_images, reduites) else ""
                 }, fontWeight = FontWeight.SemiBold)
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                Journal.ecrire("organiser", "${d.nom} : compression demandée (${mo(d.tailleOrigine())} → ${apres?.let { mo(it) }})")
+                Journal.ecrire("organiser", "${d.nom} : allégé (${mo(origine)} → ${apres?.let { mo(it) }}, $reduites image(s) réduite(s))")
                 fermer()
             }, enabled = (apres ?: -1) >= 0) { Text(stringResource(R.string.compresser_garder)) }
         },
         dismissButton = {
-            TextButton(onClick = { d.compresser = avantCompresser; d.modifie = avantModifie; fermer() }) {
-                Text(stringResource(R.string.annuler))
-            }
+            TextButton(onClick = {
+                portee.launch {
+                    if (reduites > 0) d.annuler()
+                    d.compresser = avantCompresser
+                    d.modifie = avantModifie
+                    fermer()
+                }
+            }, enabled = apres != null) { Text(stringResource(R.string.annuler)) }
         })
 }
 

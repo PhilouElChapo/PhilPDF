@@ -81,7 +81,7 @@ fun PanneauAnnoter(etat: EtatLecteur, choisi: () -> Unit = {}) {
         return
     }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(12.dp)) {
-        Text(stringResource(R.string.annoter), fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.annoter_titre), fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Outil.entries.filter { it != Outil.POSER }.forEach { o ->

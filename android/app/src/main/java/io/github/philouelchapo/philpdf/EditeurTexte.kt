@@ -38,7 +38,8 @@ fun EditeurTexte(etat: EtatLecteur, par: Paragraphe, fermer: () -> Unit) {
     val styleChange = gras != l0.gras || italique != l0.italique
     val originale = t != null && !styleChange && manquantes.isEmpty()
     val secours = TexteModif.policeSecours(l0, gras, italique)
-    val nomOrigine = t?.nomBase?.substringAfter('+')?.ifEmpty { null } ?: l0.police
+    val nomOrigine = t?.nomBase?.substringAfter('+')?.ifEmpty { null }
+        ?: if (l0.police.startsWith("Type3")) stringResource(R.string.police_integree) else l0.police
 
     Dialog(onDismissRequest = { if (!occupe) fermer() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxWidth(0.96f).widthIn(max = 620.dp), shape = RoundedCornerShape(16.dp)) {

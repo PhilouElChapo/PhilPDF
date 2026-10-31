@@ -10,6 +10,15 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.2.1
+- Modifier le texte : polices « Type3 » decoupees en morceaux (factures faites depuis un navigateur ou un site) :
+  la police d'origine est gardee, en reprenant chaque lettre dans le morceau qui la contient (plus de passage
+  en Helvetica) ; le gras reste du gras.
+- « Alleger » remplace « Compresser » : comme PhilPDF Windows, photos et scans trop fins ramenes a la resolution
+  choisie (qualite ecran, impression, tres leger pour l'e-mail, ou sans toucher aux images), taille avant et apres
+  annoncee ; le texte et les images noir et blanc ne sont pas touches. « Annuler » remet tout.
+- Barre du bas : « Commenter » devient « Modifier » (plus court, jamais coupe).
+
 1.2.0
 - Organiser les pages (volet Pages, ou Plus) : vignettes en grille ; toucher choisit une page, appui long puis
   glisser la deplace (avec toutes les pages choisies). Pivoter a gauche ou a droite, supprimer (avec confirmation),

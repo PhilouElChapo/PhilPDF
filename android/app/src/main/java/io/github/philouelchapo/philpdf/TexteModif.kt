@@ -25,17 +25,25 @@ import com.artifex.mupdf.fitz.StructuredTextWalker
 /** Une ligne de texte de la page (coordonnees de la page en points, y vers le bas). */
 data class LigneTexte(val texte: String, val x0: Float, val x1: Float, val base: Float, val haut: Float, val bas: Float,
                       val taille: Float, val argb: Int, val police: String, val gras: Boolean, val italique: Boolean,
-                      val serif: Boolean, val mono: Boolean)
+                      val serif: Boolean, val mono: Boolean, val polices: Set<String> = emptySet())
 
 /** Codes d'une police du PDF : lettre -> code (1 ou 2 octets), largeurs (1/1000 de la taille). */
 class TablePolice(val nomRessource: String, val objet: PDFObject, val octets: Int, val codes: Map<Char, Int>,
                   val largeurs: Map<Int, Float>, val largeurDefaut: Float, val nomBase: String) {
-    fun code(c: Char): Int? = codes[c] ?: EQUIVALENTS[c]?.let { codes[it] }
+    /** Polices Type3 decoupees (une police par paquet de lettres, meme dessin) : les autres morceaux du jeu. */
+    var autres: List<TablePolice> = emptyList()
+    private fun codeSeul(c: Char): Int? = codes[c] ?: EQUIVALENTS[c]?.let { codes[it] }
+    /** Le morceau du jeu qui sait ecrire cette lettre. */
+    fun source(c: Char): TablePolice? = if (codeSeul(c) != null) this else autres.firstOrNull { it.codeSeul(c) != null }
+    fun code(c: Char): Int? = source(c)?.codeSeul(c)
     fun peutEcrire(t: String) = t.all { code(it) != null }
     fun manquantes(t: String) = t.filter { code(it) == null }.toSet()
     fun largeur(t: String, taille: Float): Float? {
         if (largeurs.isEmpty()) return null
-        return t.sumOf { c -> (code(c)?.let { largeurs[it] ?: largeurDefaut } ?: largeurDefaut).toDouble() }.toFloat() * taille / 1000f
+        return t.sumOf { c ->
+            val s = source(c)
+            (s?.codeSeul(c)?.let { s.largeurs[it] ?: s.largeurDefaut } ?: largeurDefaut).toDouble()
+        }.toFloat() * taille / 1000f
     }
 
     companion object {
@@ -64,24 +72,26 @@ object TexteModif {
         var x0 = 0f; var x1 = 0f; var base = 0f; var haut = 0f; var bas = 0f
         var taille = 0f; var argb = 0; var police: Font? = null
         var premier = true
+        var noms = HashSet<String>()
         st.walk(object : StructuredTextWalker {
             override fun onImageBlock(bbox: Rect?, transform: Matrix?, image: Image?) {}
             override fun beginTextBlock(bbox: Rect?, flags: Int) { bloc = ArrayList<LigneTexte>().also { blocs += it } }
             override fun endTextBlock() { bloc = null }
             override fun beginLine(bbox: Rect?, wmode: Int, dir: Point?) {
-                ligne = StringBuilder(); premier = true
+                ligne = StringBuilder(); premier = true; noms = HashSet()
                 haut = bbox?.y0 ?: 0f; bas = bbox?.y1 ?: 0f; x1 = bbox?.x1 ?: 0f
             }
             override fun endLine() {
                 val f = police
                 if (ligne.isNotBlank() && f != null) bloc?.add(LigneTexte(ligne.toString().trimEnd(), x0, x1, base, haut, bas,
-                    taille, argb, f.name ?: "", f.isBold, f.isItalic, f.isSerif, f.isMono))
+                    taille, argb, f.name ?: "", f.isBold, f.isItalic, f.isSerif, f.isMono, noms))
             }
             override fun onChar(c: Int, origin: Point?, font: Font?, size: Float, q: Quad?, argb_: Int, flags: Int, bidi: Int) {
                 if (premier && origin != null) {
                     x0 = origin.x; base = origin.y; taille = size; argb = argb_; police = font; premier = false
                 }
                 ligne.appendCodePoint(c)
+                font?.name?.let { noms.add(it) }
             }
             override fun beginStruct(standard: String?, raw: String?, index: Int) {}
             override fun endStruct() {}
@@ -97,7 +107,7 @@ object TexteModif {
         while (a > 0 && kotlin.math.abs(choisi[a - 1].taille - t0) < 0.6f && choisi[a].haut - choisi[a - 1].bas < t0 * 0.9f) a--
         while (b < choisi.size - 1 && kotlin.math.abs(choisi[b + 1].taille - t0) < 0.6f && choisi[b + 1].haut - choisi[b].bas < t0 * 0.9f) b++
         val lignes = choisi.subList(a, b + 1).toList()
-        return Paragraphe(n, lignes, trouverPolice(page, lignes))
+        return Paragraphe(n, lignes, trouverPolice(page, lignes, familles(blocs.flatten())))
     }
 
     // ------------------------------------------------------------ polices du PDF
@@ -118,8 +128,41 @@ object TexteModif {
         return out
     }
 
+    private val TYPE3 = Regex("""Type3 \((\d+) 0 R\)""")
+
+    /** Polices Type3 de la page regroupees par famille : celles qui se melent dans une meme ligne (un logiciel
+     *  decoupe une police en morceaux de quelques lettres ; le gras forme une autre famille). numero -> famille. */
+    private fun familles(lignes: List<LigneTexte>): Map<Int, Set<Int>> {
+        val parent = HashMap<Int, Int>()
+        fun racine(x: Int): Int { var r = x; while (parent[r] != null && parent[r] != r) r = parent[r]!!; return r }
+        for (l in lignes) {
+            val nums = l.polices.mapNotNull { TYPE3.find(it)?.groupValues?.get(1)?.toIntOrNull() }
+            nums.forEach { parent.putIfAbsent(it, it) }
+            for (k in 1 until nums.size) { val a = racine(nums[0]); val b = racine(nums[k]); if (a != b) parent[b] = a }
+        }
+        val groupes = parent.keys.groupBy { racine(it) }.mapValues { it.value.toSet() }
+        return parent.keys.associateWith { groupes[racine(it)] ?: setOf(it) }
+    }
+
+    /** Jeu de morceaux Type3 de la meme famille que ces lignes (null si ce ne sont pas des polices Type3). */
+    private fun jeuType3(page: PDFPage, lignes: List<LigneTexte>, fam: Map<Int, Set<Int>>): TablePolice? {
+        val nums = lignes.flatMap { l -> l.polices.mapNotNull { TYPE3.find(it)?.groupValues?.get(1)?.toIntOrNull() } }
+        if (nums.isEmpty()) return null
+        val premier = TYPE3.find(lignes.first().police)?.groupValues?.get(1)?.toIntOrNull() ?: nums.first()
+        val voulus = LinkedHashSet<Int>().apply { add(premier); addAll(nums); nums.forEach { addAll(fam[it] ?: emptySet()) } }
+        val tables = HashMap<Int, TablePolice>()
+        for ((nom, obj) in polices(page)) {
+            val num = try { if (obj.isIndirect) obj.asIndirect() else -1 } catch (_: Exception) { -1 }
+            if (num in voulus && num !in tables) (try { table(nom, obj) } catch (_: Exception) { null })?.let { tables[num] = it }
+        }
+        val ordre = voulus.mapNotNull { tables[it] }
+        if (ordre.isEmpty()) return null
+        return ordre.first().also { it.autres = ordre.drop(1) }
+    }
+
     /** La police d'origine de ces lignes : celle qui sait ecrire leur texte, avec la bonne largeur. */
-    private fun trouverPolice(page: PDFPage, lignes: List<LigneTexte>): TablePolice? {
+    private fun trouverPolice(page: PDFPage, lignes: List<LigneTexte>, fam: Map<Int, Set<Int>> = emptyMap()): TablePolice? {
+        jeuType3(page, lignes, fam)?.let { j -> if (j.peutEcrire(lignes.joinToString("") { it.texte }.filter { !it.isWhitespace() })) return j }
         val l = lignes.first()
         val echant = lignes.joinToString("") { it.texte }
         var meilleur: TablePolice? = null
@@ -271,18 +314,38 @@ object TexteModif {
         val nomAffiche: String
         val coder: (String) -> String
         if (originale && t != null) {
-            nomPolice = if (fonts.get(t.nomRessource).isNull || !fonts.get(t.nomRessource).resolve().equals(t.objet.resolve())) {
-                nouveauNom(fonts, "PhilA").also { fonts.put(it, t.objet) }           // police venue d'un formulaire XObject
-            } else t.nomRessource
-            nomAffiche = t.nomBase.substringAfter('+').ifEmpty { l0.police }
-            coder = { s -> s.map { c -> "%0${t.octets * 2}X".format(t.code(c)!!) }.joinToString("") }
+            // le caviardage peut reecrire les ressources : chaque police (ou morceau Type3) est rattachee sous un nom sur
+            val noms = HashMap<TablePolice, String>()
+            fun nomDe(x: TablePolice): String = noms.getOrPut(x) {
+                if (fonts.get(x.nomRessource).isNull || !fonts.get(x.nomRessource).resolve().equals(x.objet.resolve()))
+                    nouveauNom(fonts, "PhilA").also { fonts.put(it, x.objet) }
+                else x.nomRessource
+            }
+            nomPolice = nomDe(t)
+            nomAffiche = t.nomBase.substringAfter('+').ifEmpty { if (l0.police.startsWith("Type3")) "Type3" else l0.police }
+            coder = { s ->
+                // une suite de lettres du meme morceau = un Tj ; changement de morceau = Tf puis Tj
+                val sb = StringBuilder()
+                var cour: TablePolice? = null
+                for (c in s) {
+                    val src = t.source(c)!!
+                    if (src !== cour) {
+                        if (cour != null) sb.append("> Tj ")
+                        sb.append("/${nomDe(src)} ${f(taille)} Tf <")
+                        cour = src
+                    }
+                    sb.append("%0${src.octets * 2}X".format(t.code(c)!!))
+                }
+                if (cour != null) sb.append(">") else sb.append("/$nomPolice ${f(taille)} Tf <>")
+                sb.toString()
+            }
         } else {
             val std = policeSecours(l0, gras, italique)
             val fobj = pdf.addSimpleFont(Font(std), Font.SIMPLE_ENCODING_LATIN)
             nomPolice = nouveauNom(fonts, "PhilB").also { fonts.put(it, fobj) }
             nomAffiche = std
             val cp = java.nio.charset.Charset.forName("windows-1252")
-            coder = { s -> s.toByteArray(cp).joinToString("") { "%02X".format(it.toInt() and 255) } }
+            coder = { s -> "<" + s.toByteArray(cp).joinToString("") { "%02X".format(it.toInt() and 255) } + ">" }
         }
         // 3. le texte, ligne par ligne, a l'emplacement des anciennes (repere de la page : y vers le haut)
         val inv = page.getTransform().invert()
@@ -304,7 +367,7 @@ object TexteModif {
             // repere de la page -> repere PDF : axe des x (a,b), axe des y vers le haut (-c,-d)
             val ox = x * inv.a + base * inv.c + inv.e
             val oy = x * inv.b + base * inv.d + inv.f
-            flux.append("${f(inv.a)} ${f(inv.b)} ${f(-inv.c)} ${f(-inv.d)} ${f(ox)} ${f(oy)} Tm <${coder(s)}> Tj\n")
+            flux.append("${f(inv.a)} ${f(inv.b)} ${f(-inv.c)} ${f(-inv.d)} ${f(ox)} ${f(oy)} Tm ${coder(s)} Tj\n")
         }
         flux.append("ET Q\n")
         // contenu existant entre q ... Q (ses changements de repere ne touchent pas notre texte), puis le notre

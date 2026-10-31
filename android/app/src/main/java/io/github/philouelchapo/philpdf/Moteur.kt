@@ -173,6 +173,13 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         }
     }
 
+    /** Alleger : images trop fines reduites (comme PhilPDF Windows), annulable. Renvoie le nombre d'images reduites. */
+    suspend fun alleger(r: ReglageAlleger): Int {
+        var n = 0
+        if (r.dpi > 0) operation("Alleger") { p -> n = Alleger.images(p, r); n > 0 }
+        return n
+    }
+
     /** Taille du fichier tel qu'il serait enregistre maintenant (pour montrer le gain d'une compression). */
     suspend fun tailleEnregistree(ctx: Context): Long =
         ecrire(File(ctx.cacheDir, "ouverts/estimation/" + nom.replace('/', '_'))).length().also {
