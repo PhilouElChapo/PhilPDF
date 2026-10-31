@@ -551,7 +551,8 @@ class Fenetre(MixinCoteACote, QMainWindow):
         act(m, _('Mes tampons...'), lambda: self.lancer_outil("tampons"), None, "tampon")
         act(m, _('Mes signatures...'), lambda: self.lancer_outil("remplir_signer"), None, "signer")
         act(m, _('Rechercher les mises à jour...'), lambda: self.verifier_maj(silencieux=False), None, "mise_a_jour")
-        act(m, _('Journal des échanges (Drives, NAS, IA)...'), self.journal_echanges, None, "lot")
+        act(m, _('Journal (échanges, mises à jour)...'), self.journal_echanges, None, "lot")
+        act(m, _('Nouveautés (readme.txt)...'), self.nouveautes, None, "info")
         act(m, _('A propos de PhilPDF'), self.a_propos, None, "aide")
 
     def verifier_orthographe(self):
@@ -666,8 +667,8 @@ class Fenetre(MixinCoteACote, QMainWindow):
         d.setWindowTitle(_("Journal des échanges"))
         d.resize(1000, 620)
         v = QVBoxLayout(d)
-        lb = QLabel(_("Ce qu'ont échangé PhilPDF et vos Drives, NAS, FTP et IA (les 800 dernières lignes ; mots de passe, "
-                      "codes et jetons masqués). Copiez-le pour signaler un problème."))
+        lb = QLabel(_("Ce qu'ont échangé PhilPDF et vos Drives, NAS, FTP et IA, et le déroulé des mises à jour (les 800 dernières "
+                      "lignes ; mots de passe, codes et jetons masqués). Copiez-le pour signaler un problème."))
         lb.setWordWrap(True)
         v.addWidget(lb)
         t = QPlainTextEdit("".join(lignes) or _("Aucun échange enregistré."))
@@ -690,6 +691,34 @@ class Fenetre(MixinCoteACote, QMainWindow):
         h.addWidget(b)
         v.addLayout(h)
         t.moveCursor(t.textCursor().MoveOperation.End)
+        d.exec()
+
+    def nouveautes(self):
+        """Ce qui a change a chaque version (readme.txt, livre avec PhilPDF)."""
+        from PySide6.QtWidgets import QPlainTextEdit
+        from .config import dossier_programme
+        p = next((x for x in (os.path.join(dossier_programme(), "readme.txt"),
+                              os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "readme.txt"))
+                  if os.path.exists(x)), None)
+        try:
+            with open(p, encoding="utf-8", errors="replace") as f:
+                texte = f.read()
+        except (OSError, TypeError):
+            texte = _("Fichier readme.txt introuvable.")
+        d = QDialog(self)
+        d.setWindowTitle(_("Nouveautés de PhilPDF"))
+        ecran = self.screen().availableGeometry() if self.screen() else None
+        d.resize(min(900, ecran.width() - 40) if ecran else 900, min(640, ecran.height() - 80) if ecran else 640)
+        v = QVBoxLayout(d)
+        t = QPlainTextEdit(texte)
+        t.setReadOnly(True)
+        v.addWidget(t, 1)
+        h = QHBoxLayout()
+        h.addStretch(1)
+        b = QPushButton(_("Fermer"))
+        b.clicked.connect(d.accept)
+        h.addWidget(b)
+        v.addLayout(h)
         d.exec()
 
     def _remplir_recents(self):
@@ -3032,7 +3061,9 @@ class Fenetre(MixinCoteACote, QMainWindow):
         t.start()
 
     def _maj_trouvee(self, res, silencieux):
+        from .journal import ecrire
         if not res:
+            ecrire("mise a jour", f"verification ({'automatique' if silencieux else 'demandee'}) : PhilPDF {VERSION} est a jour")
             if not silencieux:
                 QMessageBox.information(self, _('Mises à jour'), _('PhilPDF {VERSION} est à jour.', VERSION=VERSION))
             return
@@ -3064,15 +3095,17 @@ class Fenetre(MixinCoteACote, QMainWindow):
                     QDesktopServices.openUrl(QUrl(f"https://github.com/{DEPOT}/releases/latest"))
             else:
                 QTimer.singleShot(15 * 60 * 1000, lambda: self.verifier_maj(True))
-            from .journal import ecrire
             ecrire("mise a jour", f"verification : {res}")
             return
         version, paquet, notes = res
+        ecrire("mise a jour", f"PhilPDF {version} trouvee (installee : {VERSION}) ; paquet {paquet}")
         r = QMessageBox.question(self, _('Mise à jour disponible'),
                                  _('PhilPDF {version} est disponible (vous avez {VERSION}).\n\n{x}\n\nInstaller maintenant ? PhilPDF se fermera puis se relancera.', version=version, VERSION=VERSION, x=notes[:600]))
         if r != QMessageBox.Yes:
+            ecrire("mise a jour", f"{version} : refusee pour le moment")
             return
         from .mise_a_jour import possible
+        ecrire("mise a jour", f"{version} : acceptee, telechargement...")
         if not possible():
             QMessageBox.information(self, _('Mise à jour'), _('Téléchargez la nouvelle version ici :\n{paquet}', paquet=paquet))
             return
@@ -3092,6 +3125,8 @@ class Fenetre(MixinCoteACote, QMainWindow):
 
         def fini(fichier, erreur):
             dlg.close()
+            ecrire("mise a jour", f"{version} : telechargement " + (("annule" if t.stop else f"en echec ({erreur})") if erreur
+                                                                    else f"termine ({fichier})"))
             if erreur:
                 if not t.stop:
                     QMessageBox.warning(self, _('Mise à jour'), _('Echec du téléchargement :\n{e}', e=erreur))
@@ -3100,8 +3135,11 @@ class Fenetre(MixinCoteACote, QMainWindow):
             try:
                 lance = appliquer(fichier)
             except Exception as e:
+                ecrire("mise a jour", f"{version} : installation impossible ({e})")
                 QMessageBox.warning(self, _('Mise à jour'), _("Installation impossible :\n{e}", e=e))
                 return
+            ecrire("mise a jour", f"{version} : " + ("installation lancee, PhilPDF se ferme puis se relance" if lance
+                                                    else "installation non lancee (version non installable ici)"))
             if lance:
                 self._maj_en_cours = True
                 self.close()

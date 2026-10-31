@@ -4,9 +4,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// Meme numero de version que PhilPDF Windows et Linux (app/config.py) : une seule version par publication
-val versionPhilpdf: String = Regex("VERSION = \"([^\"]+)\"")
-    .find(rootProject.file("../app/config.py").readText())?.groupValues?.get(1) ?: "0.0.0"
+// Numero propre a Android (android/version.txt) : l'APK n'est refabrique et publie que si android/ change
+val versionPhilpdf: String = rootProject.file("version.txt").readText().trim().ifEmpty { "0.0.0" }
 val versionCodePhilpdf: Int = versionPhilpdf.split(".").map { p -> p.filter { it.isDigit() }.toIntOrNull() ?: 0 }
     .let { (it.getOrElse(0) { 0 }) * 1_000_000 + (it.getOrElse(1) { 0 }) * 1_000 + (it.getOrElse(2) { 0 }) }
 val clef: String? = System.getenv("ANDROID_KEYSTORE_FILE")
@@ -91,3 +90,11 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 }
+
+// Nouveautes (readme.txt du depot) livrees dans l'APK : Accueil > Aide > Nouveautes
+val copierNouveautes by tasks.registering(Copy::class) {
+    from(rootProject.file("../readme.txt"))
+    into(layout.buildDirectory.dir("nouveautes"))
+}
+android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("nouveautes").get().asFile)
+tasks.named("preBuild") { dependsOn(copierNouveautes) }

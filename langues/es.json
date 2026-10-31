@@ -1988,5 +1988,10 @@
  "Word, Excel, PowerPoint, texte ({x})": "Word, Excel, PowerPoint, texto ({x})",
  "Tous les fichiers (*)": "Todos los archivos (*)",
  "Imprimante PhilPDF : paramètres de conversion": "Impresora PhilPDF: ajustes de conversión",
- "Imprimante PhilPDF : nom dans Windows": "Impresora PhilPDF: nombre en Windows"
+ "Imprimante PhilPDF : nom dans Windows": "Impresora PhilPDF: nombre en Windows",
+ "Journal (échanges, mises à jour)...": "Registro (intercambios, actualizaciones)...",
+ "Nouveautés (readme.txt)...": "Novedades (readme.txt)...",
+ "Nouveautés de PhilPDF": "Novedades de PhilPDF",
+ "Fichier readme.txt introuvable.": "No se encuentra el archivo readme.txt.",
+ "Ce qu'ont échangé PhilPDF et vos Drives, NAS, FTP et IA, et le déroulé des mises à jour (les 800 dernières lignes ; mots de passe, codes et jetons masqués). Copiez-le pour signaler un problème.": "Lo que PhilPDF intercambió con sus Drives, NAS, FTP e IA, y el desarrollo de las actualizaciones (últimas 800 líneas; contraseñas, códigos y tokens ocultos). Cópielo para informar de un problema."
 }

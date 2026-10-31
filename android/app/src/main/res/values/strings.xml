@@ -166,4 +166,9 @@
     <string name="dossier_vide">Aucun PDF ni dossier ici.</string>
     <string name="fichiers_aide">Seuls les dossiers et les PDF sont montrés. Après modification, « Même fichier » renvoie le PDF à sa place sur le compte.</string>
     <string name="canal_connexion">Connexion d\'un compte</string>
+    <string name="aide">Aide</string>
+    <string name="nouveautes">Nouveautés</string>
+    <string name="journal">Journal</string>
+    <string name="journal_explication">Ce qui s\'est passé (le plus récent en haut) : connexions aux comptes, synchronisation, mises à jour, erreurs. Jetons et codes masqués. « Partager » pour l\'envoyer en cas de problème.</string>
+    <string name="journal_vide">Journal vide.</string>
 </resources>

@@ -48,6 +48,7 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit) {
     var versionCompte by remember { mutableIntStateOf(0) }
     var ecranCompte by remember { mutableStateOf(false) }
     var parcourir by remember { mutableStateOf<Nuage?>(null) }
+    var aide by remember { mutableStateOf(false) }
     val comptes = remember(versionCompte) { Nuage.liste(ctx) }
     // Google Drive (autorisation limitee) : ses PDF passent par le selecteur d'Android, qui le propose deja
     val voir: (Nuage) -> Unit = { n -> if (n.parcourable(ctx)) parcourir = n else choisir() }
@@ -98,10 +99,13 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit) {
                 Column(Modifier.padding(12.dp)) {
                     Text(stringResource(R.string.maj_dispo, v.version, BuildConfig.VERSION_NAME))
                     Row {
-                        TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(v.lien))) }) {
+                        TextButton(onClick = {
+                            Journal.ecrire("mise à jour", "${v.version} : téléchargement demandé (${v.lien})")
+                            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(v.lien)))
+                        }) {
                             Text(stringResource(R.string.telecharger))
                         }
-                        TextButton(onClick = { maj = null }) { Text(stringResource(R.string.plus_tard)) }
+                        TextButton(onClick = { Journal.ecrire("mise à jour", "${v.version} : « Plus tard »"); maj = null }) { Text(stringResource(R.string.plus_tard)) }
                     }
                 }
             }
@@ -146,11 +150,15 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit) {
             }
         }
         Spacer(Modifier.height(6.dp))
-        Text(stringResource(R.string.version, BuildConfig.VERSION_NAME), fontSize = 12.sp, color = Color.Gray)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.version, BuildConfig.VERSION_NAME), Modifier.weight(1f), fontSize = 12.sp, color = Color.Gray)
+            TextButton(onClick = { aide = true }) { Text(stringResource(R.string.aide)) }
+        }
     }
     if (ecranCompte) EcranComptes(fermer = { ecranCompte = false; versionCompte++ },
         parcourir = { n -> ecranCompte = false; versionCompte++; voir(n) })
     parcourir?.let { n -> EcranFichiers(n, fermer = { parcourir = null }, ouvrir = ouvrir) }
+    if (aide) EcranAide { aide = false }
 }
 
 @Composable

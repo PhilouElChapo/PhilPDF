@@ -24,6 +24,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Journal.demarrer(this)
         DocumentPdf.nettoyerCache(this)
         recu.value = uriDe(intent)
         setContent {
@@ -78,6 +79,7 @@ fun Application(recu: MutableState<Uri?>) {
             } catch (e: java.io.FileNotFoundException) {
                 erreur = texteInaccessible
             } catch (e: Exception) {
+                Journal.ecrire("ouverture", "${uri.scheme} : échec ($e)")
                 erreur = ctx.getString(R.string.illisible, e.message ?: e.javaClass.simpleName)
             }
         }

@@ -37,9 +37,14 @@ object Recents {
 
     fun ajouter(ctx: Context, uri: Uri, nom: String, pages: Int) {
         // garder le droit de rouvrir le fichier plus tard (seulement possible pour ce qui vient du selecteur)
+        // lecture ET ecriture si le fournisseur l'accorde : « Meme fichier » marche encore des jours apres (Drive...)
         try {
-            ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         } catch (_: Exception) {
+            try {
+                ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: Exception) {
+            }
         }
         val l = liste(ctx).filter { it.uri != uri.toString() }
         ecrire(ctx, listOf(Recent(uri.toString(), nom, System.currentTimeMillis(), pages)) + l)

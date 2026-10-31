@@ -32,6 +32,7 @@ Name: "bureau"; Description: "Créer une icône sur le Bureau"; Flags: unchecked
 [Files]
 Source: "dist\PhilPDF\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 Source: "LISEZMOI.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "readme.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\PhilPDF"; Filename: "{app}\PhilPDF.exe"

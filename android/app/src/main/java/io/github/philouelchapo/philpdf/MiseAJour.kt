@@ -2,6 +2,7 @@ package io.github.philouelchapo.philpdf
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -25,23 +26,33 @@ object MiseAJour {
         return false
     }
 
+    /** Derniere publication Android (« android-v1.2.3 »), distincte de celles de Windows et Linux (« v0.9.x »). */
     suspend fun chercher(actuelle: String): NouvelleVersion? = withContext(Dispatchers.IO) {
         try {
-            val c = URL("https://api.github.com/repos/$DEPOT/releases/latest").openConnection() as HttpURLConnection
+            val c = URL("https://api.github.com/repos/$DEPOT/releases?per_page=40").openConnection() as HttpURLConnection
             c.connectTimeout = 8000
             c.readTimeout = 8000
             c.setRequestProperty("Accept", "application/vnd.github+json")
-            val j = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
-            val v = j.getString("tag_name").trimStart('v')
-            if (!plusRecente(v, actuelle)) return@withContext null
+            val l = JSONArray(c.inputStream.bufferedReader().use { it.readText() })
+            val j = (0 until l.length()).map { l.getJSONObject(it) }
+                .filter { !it.optBoolean("draft") && it.optString("tag_name").startsWith("android-v") }
+                .maxWithOrNull { a, b -> if (plusRecente(a.optString("tag_name").removePrefix("android-v"), b.optString("tag_name").removePrefix("android-v"))) 1 else -1 }
+                ?: run { Journal.ecrire("mise à jour", "aucune publication Android trouvée"); return@withContext null }
+            val v = j.getString("tag_name").removePrefix("android-v")
+            if (!plusRecente(v, actuelle)) {
+                Journal.ecrire("mise à jour", "vérification : $actuelle est à jour (dernière publiée : $v)")
+                return@withContext null
+            }
             val assets = j.getJSONArray("assets")
-            var lien = "https://github.com/$DEPOT/releases/latest"
+            var lien = j.optString("html_url", "https://github.com/$DEPOT/releases")
             for (i in 0 until assets.length()) {
                 val a = assets.getJSONObject(i)
                 if (a.getString("name") == "PhilPDF.apk") lien = a.getString("browser_download_url")   // universel
             }
+            Journal.ecrire("mise à jour", "PhilPDF Android $v disponible (installée : $actuelle)")
             NouvelleVersion(v, lien)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Journal.ecrire("mise à jour", "vérification impossible ($e)")
             null
         }
     }

@@ -266,7 +266,8 @@ def main():
     w.show()
     demarrage.fermer(w)
     try:                                          # duree du lancement, dans le journal (pour l'ameliorer)
-        from app.journal import ecrire
+        from app.journal import ecrire, noter_version
+        noter_version(_cfg.VERSION)
         ecrire("démarrage", f"fenêtre prête en {_tm.monotonic() - _t0:.1f} s (Qt {_t1 - _t0:.1f} s, moteur PDF "
                             f"{_t2 - _t1:.1f} s, interface {_t3 - _t2:.1f} s, fenêtre {_t5 - _t4:.1f} s)")
         if impressions:

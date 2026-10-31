@@ -16,7 +16,40 @@ permissions:
   contents: write
 
 jobs:
+  # ---------------------------------------------------------------- ce qui a change
+  # Windows et Linux (numero dans app/config.py) ne sont refabriques que si leur code change ;
+  # Android (numero dans android/version.txt) seulement si android/ change. readme.txt, docs, fastlane : rien.
+  changements:
+    runs-on: ubuntu-latest
+    outputs:
+      bureau: ${{ steps.c.outputs.bureau }}
+      android: ${{ steps.c.outputs.android }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: c
+        shell: bash
+        run: |
+          avant="${{ github.event.before }}"
+          if [ "${{ github.event_name }}" != "push" ] || [ -z "$avant" ] || [ "$avant" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$avant" 2>/dev/null || [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "bureau=true" >> "$GITHUB_OUTPUT"; echo "android=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Fabrication::tout (lancement manuel, etiquette ou premier envoi)"; exit 0
+          fi
+          f=$(git diff --name-only "$avant" "${{ github.sha }}")
+          echo "$f"
+          a=false; b=false
+          echo "$f" | grep -q '^android/' && a=true
+          echo "$f" | grep -vE '^(android/|readme\.txt$|docs/|fastlane/|README\.md$)' | grep -q . && b=true
+          # le programme de fabrication lui-meme change : tout refaire pour le verifier
+          echo "$f" | grep -q '^\.github/' && { a=true; b=true; }
+          echo "bureau=$b" >> "$GITHUB_OUTPUT"; echo "android=$a" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Fabrication::Windows et Linux : $b ; Android : $a"
+
   windows:
+    needs: changements
+    if: needs.changements.outputs.bureau == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -162,7 +195,7 @@ jobs:
       - name: Version portable
         shell: pwsh
         run: |
-          Copy-Item LISEZMOI.txt, LICENSE dist\PhilPDF\
+          Copy-Item LISEZMOI.txt, readme.txt, LICENSE dist\PhilPDF\
           Set-Content dist\PhilPDF\portable.txt "PhilPDF portable : parametres et session ranges dans le dossier donnees"
           Compress-Archive -Force -Path dist\PhilPDF\* -DestinationPath PhilPDF_portable.zip
           Remove-Item dist\PhilPDF\portable.txt
@@ -198,15 +231,16 @@ jobs:
             - PhilPDF.flatpak : double-clic (ou `flatpak install --user PhilPDF.flatpak`), tout est dedans, OCR compris.
             - PhilPDF_linux_x86_64.tar.gz : version a decompresser, sans installation (OCR : paquet tesseract-ocr du systeme).
 
-            PhilPDF pour Android (8 et plus) :
-            - PhilPDF.apk : a ouvrir sur le telephone ou la tablette (autoriser l'installation depuis cette source).
-            - PhilPDF-arm64-v8a.apk (telephones recents), PhilPDF-armeabi-v7a.apk (anciens), PhilPDF-x86_64.apk (emulateurs) : plus legers.
+            PhilPDF pour Android : publications « PhilPDF Android » (numero propre a Android).
+            Ce qui a change : readme.txt (aussi dans PhilPDF : Aide > Nouveautes).
           files: |
             PhilPDF_portable.zip
             PhilPDF_Setup.exe
 
   # ---------------------------------------------------------------- Linux
   linux:
+    needs: changements
+    if: needs.changements.outputs.bureau == 'true'
     runs-on: ubuntu-22.04            # glibc 2.35 : l'archive marche sur Ubuntu 22.04+, Zorin 17+, Fedora 36+
     steps:
       - uses: actions/checkout@v5
@@ -280,7 +314,7 @@ jobs:
           exit $r
       - name: Archive
         run: |
-          cp LISEZMOI.txt LICENSE linux/philpdf-256.png dist/PhilPDF/
+          cp LISEZMOI.txt readme.txt LICENSE linux/philpdf-256.png dist/PhilPDF/
           tar czf PhilPDF_linux_x86_64.tar.gz -C dist PhilPDF
       - uses: actions/upload-artifact@v5
         with:
@@ -288,6 +322,8 @@ jobs:
           path: PhilPDF_linux_x86_64.tar.gz
 
   flatpak:
+    needs: changements
+    if: needs.changements.outputs.bureau == 'true'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
@@ -369,6 +405,8 @@ jobs:
 
   # ---------------------------------------------------------------- Android
   android:
+    needs: changements
+    if: needs.changements.outputs.android == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -423,20 +461,27 @@ jobs:
           path: PhilPDF*.apk
 
   publier-android:
-    needs: [windows, android]
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    needs: [android]
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - name: Version
-        run: |
-          v=$(grep -oP 'VERSION = "\K[^"]+' app/config.py)
-          case "$GITHUB_REF" in refs/tags/v*) v="${GITHUB_REF_NAME#v}";; esac
-          echo "VERSION=$v" >> "$GITHUB_ENV"
+        run: echo "AVERSION=$(tr -d ' \r\n' < android/version.txt)" >> "$GITHUB_ENV"
       - uses: actions/download-artifact@v5
         with:
           name: android-apk
+      # publication a part (« android-v1.0.0 »), jamais marquee « derniere » : PhilPDF Windows cherche ses
+      # mises a jour dans la derniere publication, qui doit rester celle de Windows et Linux
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.VERSION }}
+          tag_name: android-v${{ env.AVERSION }}
+          name: PhilPDF Android ${{ env.AVERSION }}
+          target_commitish: ${{ github.sha }}
+          make_latest: false
+          body: |
+            PhilPDF ${{ env.AVERSION }} pour Android (8 et plus).
+            - PhilPDF.apk : a ouvrir sur le telephone ou la tablette (autoriser l'installation depuis cette source).
+            - PhilPDF-arm64-v8a.apk (telephones recents), PhilPDF-armeabi-v7a.apk (anciens), PhilPDF-x86_64.apk (emulateurs) : plus legers.
+            Ce qui a change : readme.txt du depot (aussi dans l'application : Accueil > Aide > Nouveautes).
           files: PhilPDF*.apk

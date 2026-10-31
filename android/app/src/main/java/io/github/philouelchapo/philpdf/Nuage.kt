@@ -115,11 +115,13 @@ class Nuage private constructor(val id: String) {
             prefs(ctx).edit().clear().putString("fournisseur", "gdrive").putString("email", email).putString("mode", "telephone").apply()
             acces = j; expire = System.currentTimeMillis() + 50 * 60_000; ids.clear()
             enregistrer(ctx, this@Nuage)
+            Journal.ecrire("compte", "Google Drive : relié par le compte du téléphone")
             true
         } catch (e: android.accounts.OperationCanceledException) {
+            Journal.ecrire("compte", "Google Drive (compte du téléphone) : annulé")
             throw ErreurCompte("Connexion annulée.")
         } catch (e: Exception) {
-            android.util.Log.w("PhilPDF", "compte telephone refuse : $e")
+            Journal.ecrire("compte", "Google Drive (compte du téléphone) : refusé par Google ($e)")
             false
         }
     }
@@ -159,6 +161,7 @@ class Nuage private constructor(val id: String) {
                 if (f.portee.isNotEmpty()) params["scope"] = f.portee
                 if (!indice.isNullOrEmpty() && f.cle == "gdrive") params["login_hint"] = indice
                 val url = f.auth + "?" + formulaire(params)
+                Journal.ecrire("compte", "${f.nom} : page d'autorisation ouverte dans le navigateur (retour sur $retour)")
                 withContext(Dispatchers.Main) {
                     AttenteConnexion.demarrer(ctx, ctx.getString(R.string.attente_navigateur))
                     ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -178,11 +181,13 @@ class Nuage private constructor(val id: String) {
                         it.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n" +
                             "Content-Length: ${page.toByteArray().size}\r\nConnection: close\r\n\r\n$page").toByteArray())
                         it.getOutputStream().flush()
+                        Journal.ecrire("compte", "${f.nom} : réponse du navigateur — " + when {
+                            ok -> "accord reçu"; q["error"] != null -> "refus (${q["error"]})"; else -> "autre demande (${chemin.take(40)})" })
                         if (q["error"] != null) throw ErreurCompte("${f.nom} a refusé : ${q["error_description"] ?: q["error"]}")
                         if (ok) code = q["code"]
                     }
                 }
-            } } catch (e: Exception) { AttenteConnexion.arreter(ctx); throw e }
+            } } catch (e: Exception) { AttenteConnexion.arreter(ctx); Journal.ecrire("compte", "${f.nom} : échec ($e)"); throw e }
             // attendre le retour dans PhilPDF (bouton « Revenir a PhilPDF » de la page, ou l'utilisateur revient lui-meme)
             if (!premierPlan.value) {
                 attente(ctx.getString(R.string.attente_retour))
@@ -190,11 +195,14 @@ class Nuage private constructor(val id: String) {
                     ?: run { AttenteConnexion.arreter(ctx); throw ErreurCompte("PhilPDF n'a pas été rouvert : recommencez.") }
             }
             AttenteConnexion.arreter(ctx)
+            Journal.ecrire("compte", "${f.nom} : PhilPDF revenu au premier plan, échange du code...")
             attente(ctx.getString(R.string.connexion_en_cours))
             val champs = mutableMapOf("code" to code!!, "client_id" to f.id, "redirect_uri" to retour,
                 "grant_type" to "authorization_code", "code_verifier" to verif)
             if (f.secret.isNotEmpty()) champs["client_secret"] = f.secret
-            val r = JSONObject(String(post(f.jeton, champs)))
+            val r = try { JSONObject(String(post(f.jeton, champs))) } catch (e: Exception) {
+                Journal.ecrire("compte", "${f.nom} : échange du code refusé (${e.message})"); throw e
+            }
             val durable = r.optString("refresh_token")
             if (durable.isEmpty()) throw ErreurCompte("${f.nom} n'a pas donné d'autorisation durable : recommencez.")
             acces = r.getString("access_token"); expire = System.currentTimeMillis() + (r.optLong("expires_in", 3600) - 120) * 1000
@@ -202,6 +210,7 @@ class Nuage private constructor(val id: String) {
             prefs(ctx).edit().clear().putString("fournisseur", f.cle).putString("email", indice ?: "")
                 .putString("mode", "navigateur").putString("jeton", Coffre.chiffrer(durable)).apply()
             enregistrer(ctx, this@Nuage)
+            Journal.ecrire("compte", "${f.nom} : relié")
         }
 
     private fun pageRetour(f: Fournisseur, ok: Boolean, erreur: String?, vide: Boolean): String {
@@ -231,7 +240,9 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                     ?: throw ErreurCompte("Autorisation perdue : reconnectez le compte ${f.nom}.")
                 val champs = mutableMapOf("client_id" to f.id, "refresh_token" to r, "grant_type" to "refresh_token")
                 if (f.secret.isNotEmpty()) champs["client_secret"] = f.secret
-                val o = JSONObject(String(post(f.jeton, champs)))
+                val o = try { JSONObject(String(post(f.jeton, champs))) } catch (e: Exception) {
+                    Journal.ecrire("compte", "${f.nom} : renouvellement de l'autorisation refusé (${e.message})"); throw e
+                }
                 // Microsoft et Box donnent un nouveau jeton durable a chaque fois (l'ancien ne sert plus)
                 o.optString("refresh_token").takeIf { it.isNotEmpty() && it != r }?.let {
                     prefs(ctx).edit().putString("jeton", Coffre.chiffrer(it)).apply()
@@ -410,7 +421,11 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
             }
             else -> Triple(0, ByteArray(0), null)
         }
-        if (code !in 200..299) throw ErreurCompte("${fournisseur(ctx).nom} : envoi refusé ($code) ${String(b).take(160)}")
+        if (code !in 200..299) {
+            Journal.ecrire("compte", "${fournisseur(ctx).nom} : renvoi de $nom refusé ($code)")
+            throw ErreurCompte("${fournisseur(ctx).nom} : envoi refusé ($code) ${String(b).take(160)}")
+        }
+        Journal.ecrire("compte", "${fournisseur(ctx).nom} : $nom renvoyé à sa place")
     }
 
     // ------------------------------------------------------------ dossier PhilPDF (synchronisation) et lecture de ses fichiers
@@ -439,7 +454,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 }
             else -> null
         }
-        if (r.isNullOrEmpty()) return false
+        if (r.isNullOrEmpty()) { Journal.ecrire("synchro", "${fournisseur(ctx).nom} : aucun dossier PhilPDF"); return false }
         ids[""] = r
         return true
     }
@@ -694,6 +709,7 @@ object Bibliotheque {
         } ?: emptyList()
         val ici = locaux(ctx).associateBy { it.id }
         val nouveaux = distants.count { ici[it.id]?.hash != it.hash }
+        Journal.ecrire("synchro", "${postes.size} poste(s), ${distants.size} élément(s) de bibliothèque, $nouveaux à récupérer")
         return EtatDrive(true, postes, distants, nouveaux)
     }
 
@@ -717,7 +733,7 @@ object Bibliotheque {
                 gardes += e.copy(ratio = ratio)
                 n++
             } catch (ex: Exception) {
-                android.util.Log.w("PhilPDF", "bibliotheque ${e.nom} : $ex")
+                Journal.ecrire("synchro", "bibliothèque : ${e.nom} non récupéré ($ex)")
                 deja?.let { gardes += it }
             }
         }
@@ -731,6 +747,7 @@ object Bibliotheque {
         }
         index(ctx).parentFile?.mkdirs()
         index(ctx).writeText(JSONObject().put("elements", a).toString())
+        Journal.ecrire("synchro", "bibliothèque : $n élément(s) récupéré(s), ${gardes.size} sur le téléphone")
         return n
     }
 

@@ -98,11 +98,14 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
         portee.launch {
             try {
                 doc.enregistrer(ctx, u)
+                Journal.ecrire("enregistrement", "${doc.nom} : enregistré (${if (u == doc.uri) "même fichier" else "autre nom"})")
                 android.widget.Toast.makeText(ctx, enregistre, android.widget.Toast.LENGTH_SHORT).show()
                 if (puisFermer) fermer()
             } catch (e: ErreurCompte) {       // copie gardee sur le telephone, mais pas renvoyee au compte
+                Journal.ecrire("enregistrement", "${doc.nom} : renvoi au compte impossible (${e.message})")
                 android.widget.Toast.makeText(ctx, e.message, android.widget.Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
+                Journal.ecrire("enregistrement", "${doc.nom} : écriture impossible ($e)")
                 android.widget.Toast.makeText(ctx, erreurEcriture, android.widget.Toast.LENGTH_LONG).show()
             }
         }
