@@ -110,7 +110,7 @@
     <string name="compte">Compte</string>
     <string name="compte_google">Compte Google</string>
     <string name="compte_explication">Reliez PhilPDF au stockage où PhilPDF Windows synchronise son dossier « PhilPDF » (Préférences, Synchronisation) : vous retrouvez ici vos autres postes, vos signatures et vos tampons.\n\nGoogle Drive : choisissez simplement l\'un des comptes Google déjà présents sur ce téléphone, sans mot de passe. Comme sous Windows, PhilPDF ne lit que son propre dossier, jamais le reste de votre stockage.</string>
-    <string name="choisir_compte">Choisir un compte Google du téléphone</string>
+    <string name="choisir_compte">Google Drive (compte du téléphone)</string>
     <string name="autres_comptes">Pour ouvrir ou enregistrer un document, tous vos comptes (Drive, OneDrive, Dropbox, NAS…) sont déjà proposés par « Ouvrir un fichier » et « Autre nom… ».</string>
     <string name="philpdf_introuvable">Aucun dossier PhilPDF de PhilPDF Windows sur ce compte. Vérifiez lequel est réglé dans PhilPDF Windows (Préférences, Synchronisation), puis « Déconnecter » pour en choisir un autre.</string>
     <string name="vos_postes">Vos postes PhilPDF</string>
@@ -158,7 +158,7 @@
     <string name="utiliser_synchro">Synchroniser avec ce compte</string>
     <string name="synchro_ici">synchronisation avec vos postes</string>
     <string name="retirer">Retirer</string>
-    <string name="retirer_question">Retirer le compte %1$s (%2$s) de PhilPDF ? Rien n\'est effacé sur le compte lui-même.</string>
+    <string name="retirer_question">Déconnecter %1$s (%2$s) ? PhilPDF Android ne se synchronisera plus avec vos postes ; rien n\'est effacé sur le compte lui-même.</string>
     <string name="synchro_titre">Vos postes PhilPDF (%1$s)</string>
     <string name="navigateur_aide">La page du service s\'ouvre dans le navigateur : acceptez, puis touchez « Revenir à PhilPDF » (PhilPDF termine la connexion une fois revenu).</string>
     <string name="attente_retour">Accord reçu : touchez « Revenir à PhilPDF » dans le navigateur, ou revenez ici.</string>
@@ -171,4 +171,9 @@
     <string name="journal">Journal</string>
     <string name="journal_explication">Ce qui s\'est passé (le plus récent en haut) : connexions aux comptes, synchronisation, mises à jour, erreurs. Jetons et codes masqués. « Partager » pour l\'envoyer en cas de problème.</string>
     <string name="journal_vide">Journal vide.</string>
+    <string name="synchro_titre_ecran">Synchronisation avec vos postes</string>
+    <string name="synchro_explication">PhilPDF Android retrouve vos autres postes PhilPDF, vos signatures et vos tampons dans le dossier « PhilPDF » que PhilPDF Windows synchronise (Windows : Préférences, Synchronisation). Choisissez le même emplacement ici.</string>
+    <string name="ou_synchro">Où PhilPDF Windows se synchronise-t-il ?</string>
+    <string name="changer_emplacement">Changer d\'emplacement</string>
+    <string name="ouvrir_partout">Pour ouvrir ou enregistrer vos PDF, rien à relier ici : « Ouvrir un fichier » et « Autre nom… » passent par le gestionnaire de fichiers d\'Android, qui voit déjà tous vos comptes (Drive, OneDrive, Dropbox, NAS…).</string>
 </resources>

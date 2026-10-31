@@ -140,6 +140,17 @@ class Bibliotheque:
         self._ecrire()
         self._auto()
 
+    def rendre_transparent(self, e):
+        """Remplace l'element par sa version sans fond blanc. Nouvel element (meme nom, categorie, favori...) et
+        l'ancien supprime : vos autres postes, Android compris, recoivent le remplacement a la synchro."""
+        from moteur.objets import fond_blanc_transparent
+        octets = fond_blanc_transparent(self.lire(e))
+        extra = {k: v for k, v in e.items() if k not in ("id", "genre", "nom", "ext", "hash", "date", "machine", "maj", "supprime")}
+        n = self.ajouter(e["genre"], e["nom"], octets, ext=".pdf", **extra)
+        if n.get("id") != e.get("id"):
+            self.supprimer(e)
+        return n
+
     def categories(self, genre="tampons"):
         return sorted({e.get("categorie", "") for e in self.elements(genre) if e.get("categorie")}, key=str.lower)
 

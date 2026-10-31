@@ -81,6 +81,8 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var aPoser by mutableStateOf<APoser?>(null)            // signature, paraphe ou tampon choisi
     var champ by mutableStateOf<InfoChamp?>(null)           // champ de formulaire en cours de saisie
     var fantome by mutableStateOf<Pair<Int, Offset>?>(null) // apercu de ce qui va etre pose : page, centre en points
+    /** Portee du lecteur : une pose lancee ici va au bout meme quand l'apercu disparait de l'ecran. */
+    var portee: kotlinx.coroutines.CoroutineScope? = null
     val page: Int get() = liste.firstVisibleItemIndex
 }
 
@@ -92,6 +94,7 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
     var quitter by remember { mutableStateOf(false) }
     var fermerApres by remember { mutableStateOf(false) }
     val portee = rememberCoroutineScope()
+    etat.portee = portee
     val erreurEcriture = stringResource(R.string.enregistrement_impossible)
     val enregistre = stringResource(R.string.enregistre)
     fun ecrireVers(u: android.net.Uri, puisFermer: Boolean) {
@@ -626,6 +629,7 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
 }
 
 /** Apercu de la signature ou du tampon a poser, avec « Poser ici » / « Annuler » juste en dessous (ou au-dessus). */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Apercu(etat: EtatLecteur, a: APoser, centre: Offset, w: Float) {
     val ctx = LocalContext.current
@@ -674,8 +678,11 @@ private fun Apercu(etat: EtatLecteur, a: APoser, centre: Offset, w: Float) {
         val hautBoutons = with(dens) { 48.dp.toPx() }
         val enDessous = y0 + lh * s + hautBoutons + 8 < with(dens) { maxHeight.toPx() }
         val yb = if (enDessous) y0 + lh * s + 8 else (y0 - hautBoutons - 8).coerceAtLeast(0f)
-        Row(Modifier.fillMaxWidth().offset { androidx.compose.ui.unit.IntOffset(0, yb.toInt()) },
-            horizontalArrangement = Arrangement.Center) {
+        FlowRow(Modifier.fillMaxWidth().offset { androidx.compose.ui.unit.IntOffset(0, yb.toInt()) },
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
+            // taille : plus petit / plus grand, avant de poser
+            FilledTonalButton(onClick = { etat.aPoser = a.agrandi(1f / 1.2f) }, contentPadding = PaddingValues(horizontal = 14.dp)) { Text("−", fontSize = 20.sp) }
+            FilledTonalButton(onClick = { etat.aPoser = a.agrandi(1.2f) }, contentPadding = PaddingValues(horizontal = 14.dp)) { Text("+", fontSize = 20.sp) }
             Button(onClick = {
                 val f = etat.fantome ?: return@Button
                 etat.fantome = null
@@ -684,7 +691,9 @@ private fun Apercu(etat: EtatLecteur, a: APoser, centre: Offset, w: Float) {
                 val pt = com.artifex.mupdf.fitz.Point(f.second.x, f.second.y)
                 val d = etat.doc
                 val n = f.first
-                portee.launch {
+                // pas la portee de l'apercu : il quitte l'ecran tout de suite, ce qui annulerait la pose a mi-chemin
+                // (la page ne se redessinait qu'a l'action suivante)
+                (etat.portee ?: portee).launch {
                     when (a) {
                         is APoser.Traits -> d.poserTraits(n, pt, a.largeur, a.t.ratio, a.t.traits, ENCRE.versPdf(),
                             if (a.t.genre == "paraphe") 1.6f else 2f)
@@ -693,7 +702,6 @@ private fun Apercu(etat: EtatLecteur, a: APoser, centre: Offset, w: Float) {
                     }
                 }
             }, colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) { Text(stringResource(R.string.poser_ici)) }
-            Spacer(Modifier.width(8.dp))
             OutlinedButton(onClick = { etat.fantome = null; etat.aPoser = null; etat.annot.outil = Outil.MAIN },
                 colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White)) { Text(stringResource(R.string.annuler)) }
         }

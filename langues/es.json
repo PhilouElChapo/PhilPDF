@@ -1993,5 +1993,7 @@
  "Nouveautés (readme.txt)...": "Novedades (readme.txt)...",
  "Nouveautés de PhilPDF": "Novedades de PhilPDF",
  "Fichier readme.txt introuvable.": "No se encuentra el archivo readme.txt.",
- "Ce qu'ont échangé PhilPDF et vos Drives, NAS, FTP et IA, et le déroulé des mises à jour (les 800 dernières lignes ; mots de passe, codes et jetons masqués). Copiez-le pour signaler un problème.": "Lo que PhilPDF intercambió con sus Drives, NAS, FTP e IA, y el desarrollo de las actualizaciones (últimas 800 líneas; contraseñas, códigos y tokens ocultos). Cópielo para informar de un problema."
+ "Ce qu'ont échangé PhilPDF et vos Drives, NAS, FTP et IA, et le déroulé des mises à jour (les 800 dernières lignes ; mots de passe, codes et jetons masqués). Copiez-le pour signaler un problème.": "Lo que PhilPDF intercambió con sus Drives, NAS, FTP e IA, y el desarrollo de las actualizaciones (últimas 800 líneas; contraseñas, códigos y tokens ocultos). Cópielo para informar de un problema.",
+ "Fond blanc transparent": "Fondo blanco transparente",
+ "Impossible : {e}": "Imposible: {e}"
 }

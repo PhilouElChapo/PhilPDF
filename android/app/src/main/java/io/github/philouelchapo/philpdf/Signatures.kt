@@ -49,6 +49,13 @@ sealed class APoser {
     data class Image(val png: java.io.File, val ratio: Float, val largeur: Float) : APoser()
 }
 
+/** Meme chose, plus grand (k > 1) ou plus petit (k < 1), dans des limites raisonnables. */
+fun APoser.agrandi(k: Float): APoser = when (this) {
+    is APoser.Traits -> copy(largeur = (largeur * k).coerceIn(20f, 600f))
+    is APoser.Image -> copy(largeur = (largeur * k).coerceIn(20f, 600f))
+    is APoser.Tampon -> copy(taille = (taille * k).coerceIn(6f, 72f))
+}
+
 /** Largeur et hauteur (en points) de ce qui sera pose : sert a l'apercu sur la page. */
 fun APoser.taillePt(): Pair<Float, Float> = when (this) {
     is APoser.Traits -> largeur to largeur / t.ratio.coerceAtLeast(0.05f)

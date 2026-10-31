@@ -2975,7 +2975,13 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         a = m.addAction(QIcon(etoile_jaune(16)), _("Retirer des favoris") if e.get("favori") else _("Ajouter aux favoris"))
         a_nom = m.addAction(_("Renommer..."))
         a_cat = m.addAction(_("Catégorie et date...") if self.genre_biblio == "tampons" else _("Catégorie..."))
+        a_tr = m.addAction(_("Fond blanc transparent"))
         r = m.exec(self.liste_biblio.viewport().mapToGlobal(pos))
+        if r == a_tr:
+            try:
+                self.biblio.rendre_transparent(e)
+            except Exception as ex:
+                QMessageBox.warning(self, _("Fond blanc transparent"), _("Impossible : {e}", e=ex))
         if r == a:
             self.biblio.basculer_favori(e)
         elif r == a_nom:

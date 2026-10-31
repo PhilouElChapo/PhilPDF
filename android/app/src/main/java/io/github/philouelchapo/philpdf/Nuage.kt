@@ -656,7 +656,10 @@ object Coffre {
 data class Poste(val nom: String, val activite: String, val fichiers: Int, val reglagesPar: Boolean)
 
 data class ElementBiblio(val id: String, val genre: String, val nom: String, val ext: String, val hash: String,
-                         val maj: String, val categorie: String, val ratio: Float)
+                         val maj: String, val categorie: String, val ratio: Float, val rendu: Int = 1)
+
+/** Version de la fabrication des apercus : 2 = fond blanc rendu transparent. Plus ancien : refait a la recuperation. */
+private const val RENDU = 2
 
 /** Ce que l'on lit dans le dossier PhilPDF du compte relie. */
 data class EtatDrive(val trouve: Boolean, val postes: List<Poste>, val distants: List<ElementBiblio>, val nouveaux: Int)
@@ -674,7 +677,7 @@ object Bibliotheque {
 
     private fun versElement(o: JSONObject) = ElementBiblio(o.optString("id"), o.optString("genre"), o.optString("nom"),
         o.optString("ext", ".pdf").ifEmpty { ".pdf" }, o.optString("hash"), o.optString("maj"), o.optString("categorie"),
-        o.optDouble("ratio", 3.0).toFloat())
+        o.optDouble("ratio", 3.0).toFloat(), o.optInt("rendu", 1))
 
     /** Elements deja recuperes sur ce telephone (utilisables sans reseau). */
     fun locaux(ctx: Context): List<ElementBiblio> = try {
@@ -708,7 +711,7 @@ object Bibliotheque {
             (0 until a.length()).map { versElement(a.getJSONObject(it)) }.filter { it.id.isNotEmpty() && it.id !in supprimes }
         } ?: emptyList()
         val ici = locaux(ctx).associateBy { it.id }
-        val nouveaux = distants.count { ici[it.id]?.hash != it.hash }
+        val nouveaux = distants.count { d -> ici[d.id]?.let { it.hash != d.hash || it.rendu < RENDU } ?: true }
         Journal.ecrire("synchro", "${postes.size} poste(s), ${distants.size} élément(s) de bibliothèque, $nouveaux à récupérer")
         return EtatDrive(true, postes, distants, nouveaux)
     }
@@ -721,7 +724,7 @@ object Bibliotheque {
         distants.forEachIndexed { i, e ->
             avance(i, distants.size)
             val deja = ici[e.id]
-            if (deja != null && deja.hash == e.hash && fichier(ctx, deja).exists()) { gardes += deja; return@forEachIndexed }
+            if (deja != null && deja.hash == e.hash && deja.rendu >= RENDU && fichier(ctx, deja).exists()) { gardes += deja; return@forEachIndexed }
             try {
                 val octets = sync(ctx).lire(ctx, "sauvegarde/${e.genre}/${e.id}${e.ext}") ?: return@forEachIndexed
                 val dest = fichier(ctx, e)
@@ -730,7 +733,7 @@ object Bibliotheque {
                     dest.writeBytes(octets)
                     rendreApercu(dest, apercu(ctx, e))
                 }
-                gardes += e.copy(ratio = ratio)
+                gardes += e.copy(ratio = ratio, rendu = RENDU)
                 n++
             } catch (ex: Exception) {
                 Journal.ecrire("synchro", "bibliothèque : ${e.nom} non récupéré ($ex)")
@@ -743,7 +746,7 @@ object Bibliotheque {
         val a = JSONArray()
         gardes.forEach { e ->
             a.put(JSONObject().put("id", e.id).put("genre", e.genre).put("nom", e.nom).put("ext", e.ext).put("hash", e.hash)
-                .put("maj", e.maj).put("categorie", e.categorie).put("ratio", e.ratio.toDouble()))
+                .put("maj", e.maj).put("categorie", e.categorie).put("ratio", e.ratio.toDouble()).put("rendu", e.rendu))
         }
         index(ctx).parentFile?.mkdirs()
         index(ctx).writeText(JSONObject().put("elements", a).toString())
@@ -765,11 +768,29 @@ object Bibliotheque {
                 bm.eraseColor(android.graphics.Color.TRANSPARENT)
                 val dev = AndroidDrawDevice(bm, 0, 0)
                 try { p.run(dev, Matrix(z, z), null as Cookie?); dev.close() } finally { dev.destroy() }
+                blancTransparent(bm)
                 dest.parentFile?.mkdirs()
                 dest.outputStream().use { bm.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 return w / h
             } finally { p.destroy() }
         } finally { d.destroy() }
+    }
+
+    /** Fond blanc (scan, signature photographiee) rendu transparent, bords adoucis : le texte de la page reste
+     *  visible sous la signature ou le tampon. Meme regle que PhilPDF Windows (clair au-dessus de 225 : transparent). */
+    private fun blancTransparent(bm: Bitmap) {
+        val w = bm.width
+        val px = IntArray(w * bm.height)
+        bm.getPixels(px, 0, w, 0, 0, w, bm.height)
+        for (i in px.indices) {
+            val c = px[i]
+            val a = c ushr 24
+            if (a == 0) continue
+            val lum = (((c shr 16) and 255) + ((c shr 8) and 255) + (c and 255)) / 3f
+            val k = ((225f - lum) / 45f).coerceIn(0f, 1f)
+            px[i] = ((a * k).toInt() shl 24) or (c and 0xFFFFFF)
+        }
+        bm.setPixels(px, 0, w, 0, 0, w, bm.height)
     }
 
     fun image(ctx: Context, e: ElementBiblio): Bitmap? = BitmapFactory.decodeFile(apercu(ctx, e).absolutePath)

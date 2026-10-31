@@ -506,9 +506,22 @@ class PanneauBibliotheque(QWidget):
         m.addAction(QIcon(etoile_jaune(16)), _("Retirer des favoris") if e.get("favori") else _("Ajouter aux favoris"), self.defaut)
         m.addAction(_("Renommer"), self.renommer)
         m.addAction(_("Catégorie et date...") if self.genre == "tampons" else _("Catégorie..."), self.proprietes)
+        m.addAction(_("Fond blanc transparent"), self.transparent)
         m.addSeparator()
         m.addAction(_("Supprimer"), self.supprimer)
         m.exec(self.liste.mapToGlobal(pos))
+
+    def transparent(self):
+        """Le fond blanc (scan, zone decoupee) cachait le texte sous la signature ou le tampon : on le retire."""
+        e = self.courant()
+        if not e:
+            return
+        try:
+            n = self.b.rendre_transparent(e)
+        except Exception as ex:
+            QMessageBox.warning(self, _("Fond blanc transparent"), _("Impossible : {e}", e=ex))
+            return
+        self.rafraichir(n)
 
     def proprietes(self):
         e = self.courant()

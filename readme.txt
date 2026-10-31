@@ -10,6 +10,15 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.0.1
+- Ecran « Synchronisation avec vos postes » simplifie : un seul emplacement (celui de PhilPDF Windows),
+  « Changer d'emplacement », « Deconnecter ». Les PDF s'ouvrent et s'enregistrent par le gestionnaire
+  de fichiers d'Android (« Ouvrir un fichier », « Autre nom... »), qui voit deja tous vos comptes.
+- Signer : la signature ou le tampon pose apparait tout de suite (il n'apparaissait qu'a l'action suivante).
+- Signer : boutons « - » et « + » pour choisir la taille avant « Poser ici ».
+- Signatures et tampons de vos postes : fond blanc rendu transparent (le texte de la page reste visible) ;
+  touchez « Recuperer » une fois pour refaire ceux deja recuperes.
+
 1.0.0
 - Numero de version propre a Android (les versions 0.9.35 a 0.9.42 sont les premieres versions Android).
 - Journal sur le telephone (Accueil > Aide > Journal) : connexions aux comptes, synchronisation,
@@ -57,6 +66,10 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.44
+- Mes tampons, mes signatures (clic droit) : « Fond blanc transparent » retire le fond blanc d'un tampon
+  ou d'une signature scannes, qui cachait le texte de la page ; vos autres postes et Android le recoivent.
 
 0.9.43
 - Aide > Journal (echanges, mises a jour) : chaque etape des mises a jour y est notee

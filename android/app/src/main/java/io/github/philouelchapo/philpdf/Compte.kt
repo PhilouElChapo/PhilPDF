@@ -118,9 +118,16 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
         }
     }
 
+    var changer by remember { mutableStateOf(false) }
+
+    // un seul emplacement de synchronisation (comme PhilPDF Windows) : le nouveau compte remplace l'ancien
     fun apresConnexion(n: Nuage) {
         portee.launch {
             try { n.profil(ctx) } catch (_: Exception) {}
+            Nuage.liste(ctx).filter { it.id != n.id }.forEach { Nuage.retirer(ctx, it) }
+            Nuage.choisirSynchro(ctx, n)
+            changer = false
+            locaux = Bibliotheque.locaux(ctx)
             version++
             occupe = null
             lireSynchro()
@@ -154,50 +161,48 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
     Dialog(onDismissRequest = fermer, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxWidth(0.94f).widthIn(max = 560.dp).fillMaxHeight(0.92f), shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.fillMaxSize().padding(16.dp)) {
-                Text(stringResource(R.string.comptes_titre), fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
+                Text(stringResource(R.string.synchro_titre_ecran), fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
                 Spacer(Modifier.height(10.dp))
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                    // ---------------------------------------------------- comptes relies
-                    if (comptes.isEmpty()) Text(stringResource(R.string.comptes_explication), fontSize = 14.sp)
-                    comptes.forEach { n ->
-                        val f = n.fournisseur(ctx)
-                        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).background(Color(0xFFF6F6F6), RoundedCornerShape(10.dp)).padding(10.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                AvatarCompte(n, version, 40.dp)
-                                Spacer(Modifier.width(10.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(n.libelle(ctx), fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(f.nom + if (n.id == synchro?.id) " · " + stringResource(R.string.synchro_ici) else "",
-                                        fontSize = 12.sp, color = if (n.id == synchro?.id) Color(0xFF2E7D32) else Color.Gray, maxLines = 2)
-                                }
-                            }
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                TextButton(onClick = { parcourir(n) }) { Text(stringResource(R.string.parcourir)) }
-                                if (n.id != synchro?.id) TextButton(onClick = {
-                                    Nuage.choisirSynchro(ctx, n); version++; locaux = Bibliotheque.locaux(ctx); lireSynchro()
-                                }) { Text(stringResource(R.string.utiliser_synchro)) }
-                                TextButton(onClick = { aRetirer = n }) { Text(stringResource(R.string.retirer), color = Color.Gray) }
+                    // ---------------------------------------------------- emplacement de synchronisation
+                    Text(stringResource(R.string.synchro_explication), fontSize = 14.sp)
+                    Spacer(Modifier.height(8.dp))
+                    synchro?.let { n ->
+                        Row(Modifier.fillMaxWidth().background(Color(0xFFF6F6F6), RoundedCornerShape(10.dp)).padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            AvatarCompte(n, version, 40.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(n.libelle(ctx), fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(n.fournisseur(ctx).nom, fontSize = 12.sp, color = Color(0xFF2E7D32), maxLines = 1)
                             }
                         }
-                    }
-                    // ---------------------------------------------------- ajouter
-                    Spacer(Modifier.height(12.dp))
-                    Text(stringResource(R.string.ajouter_compte), fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(6.dp))
-                    Button(onClick = { erreur = null; choixGoogle.launch(Nuage.intentChoisirGoogle()) }, enabled = occupe == null,
-                        modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) {
-                        Text(stringResource(R.string.choisir_compte), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                    FOURNISSEURS.drop(1).forEach { f ->
-                        OutlinedButton(onClick = { parNavigateur(f, null) }, enabled = occupe == null && Nuage.disponible(f),
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                            Text(if (Nuage.disponible(f)) f.nom else f.nom + " — " + stringResource(R.string.non_disponible),
-                                maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TextButton(onClick = { changer = !changer }, enabled = occupe == null) { Text(stringResource(R.string.changer_emplacement)) }
+                            TextButton(onClick = { aRetirer = n }, enabled = occupe == null) { Text(stringResource(R.string.deconnecter), color = Color.Gray) }
                         }
                     }
-                    Text(stringResource(R.string.navigateur_aide), fontSize = 12.sp, color = Color.Gray)
-                    Spacer(Modifier.height(4.dp))
-                    Text(stringResource(R.string.nas_bientot), fontSize = 12.sp, color = Color.Gray)
+                    if (synchro == null || changer) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(stringResource(R.string.ou_synchro), fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(6.dp))
+                        Button(onClick = { erreur = null; choixGoogle.launch(Nuage.intentChoisirGoogle()) }, enabled = occupe == null,
+                            modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) {
+                            Text(stringResource(R.string.choisir_compte), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                        FOURNISSEURS.drop(1).forEach { f ->
+                            OutlinedButton(onClick = { parNavigateur(f, null) }, enabled = occupe == null && Nuage.disponible(f),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                                Text(if (Nuage.disponible(f)) f.nom else f.nom + " — " + stringResource(R.string.non_disponible),
+                                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                        Text(stringResource(R.string.navigateur_aide), fontSize = 12.sp, color = Color.Gray)
+                        Spacer(Modifier.height(4.dp))
+                        Text(stringResource(R.string.nas_bientot), fontSize = 12.sp, color = Color.Gray)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(stringResource(R.string.ouvrir_partout), fontSize = 12.sp, color = Color.Gray)
 
                     occupe?.let {
                         Spacer(Modifier.height(12.dp))
@@ -217,8 +222,7 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
                         Spacer(Modifier.height(18.dp))
                         HorizontalDivider()
                         Spacer(Modifier.height(10.dp))
-                        Text(stringResource(R.string.synchro_titre, synchro.fournisseur(ctx).nom), fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(6.dp))
+
                         val e = etat
                         if (e != null && !e.trouve) {
                             Text(stringResource(R.string.philpdf_introuvable), fontSize = 14.sp, color = Color(0xFF9A5B00))
@@ -282,7 +286,7 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
             confirmButton = {
                 TextButton(onClick = {
                     Nuage.retirer(ctx, n); aRetirer = null; version++; etat = null; locaux = Bibliotheque.locaux(ctx); lireSynchro()
-                }) { Text(stringResource(R.string.retirer)) }
+                }) { Text(stringResource(R.string.deconnecter)) }
             },
             dismissButton = { TextButton(onClick = { aRetirer = null }) { Text(stringResource(R.string.annuler)) } })
     }

@@ -117,6 +117,14 @@ def pdf_depuis_image(chemin_ou_octets, blanc_transparent=True, zone=None):
     return d.tobytes(garbage=3, deflate=True)
 
 
+def fond_blanc_transparent(pdf_octets):
+    """Signature ou tampon dont le fond blanc cache le texte de la page (scan, zone decoupee) : on le redessine
+    a 150 dpi puis le blanc devient transparent (bords adoucis). Meme taille, sans le fond."""
+    src = fitz.open("pdf", pdf_octets)
+    pix = src[0].get_pixmap(dpi=150, alpha=False)
+    return pdf_depuis_image(pix.tobytes("png"), blanc_transparent=True)
+
+
 def tampons_du_pdf(chemin):
     """Tampons Acrobat (annotations Stamp) presents dans un PDF : [(page, rect, nom)]."""
     d = fitz.open(chemin)
