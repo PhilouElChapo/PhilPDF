@@ -82,7 +82,7 @@ object Alleger {
             val xo = res.get("XObject")
             if (!xo.isDictionary) return
             val cles = ArrayList<PDFObject>()
-            for (k in xo) cles += k
+            for (k in xo) cles.add(k)
             for (k in cles) {
                 val ref = xo.get(k)
                 val o = ref.resolve()
@@ -90,7 +90,8 @@ object Alleger {
                 if (sous == "Form") { if (profondeur < 3) traiter(o.get("Resources"), profondeur + 1); continue }
                 if (sous != "Image" || !ref.isIndirect) continue
                 val num = ref.asIndirect()
-                remplacees[num]?.let { xo.put(k, it); continue }
+                val deja = remplacees[num]
+                if (deja != null) { xo.put(k, deja); continue }
                 if (!vues.add(num)) continue
                 val nouvelle = try { reduire(p, o, mesure.largeurs, r) } catch (_: Exception) { null } ?: continue
                 remplacees[num] = nouvelle
