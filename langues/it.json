@@ -2698,5 +2698,12 @@
  "Changer de méthode pour améliorer cette modification ?\n\n• Méthode actuelle : le paragraphe est réécrit et redistribué sur la largeur, lettre par lettre.\n• Autre méthode (celle de PhilPDF Android) : chaque ligne tapée est écrite à la place de l'ancienne ligne, avec la police d'origine du PDF ; seules les lettres sont retirées (fond, cadres et images restent), rien n'est décalé.\n\nCtrl+Z revient au texte d'origine dans les deux cas.": "",
  "Autre méthode impossible : {e}": "",
  "Autre méthode : police d'origine gardée ({p}).": "",
- "Autre méthode : police de remplacement pour une partie du texte.": ""
+ "Autre méthode : police de remplacement pour une partie du texte.": "",
+ "Groupes : par lettre": "",
+ "Groupes : A-C, D-F...": "",
+ "Sans groupes": "",
+ "Contacts regroupés par la première lettre de la colonne de gauche (glissez un en-tête pour changer l'ordre des colonnes). Un clic sur un groupe le replie ou le déplie.": "",
+ "Toutes ces adresses": "",
+ "{n} adresses : laquelle utiliser vous sera demandé": "",
+ "Supprimer {n} adresse(s) du carnet ?": ""
 }

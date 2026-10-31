@@ -310,6 +310,22 @@ def sortir(w, code):
             f.flush()
         except Exception:
             pass
+    try:                                             # plus de messages Qt vers Python : Python ne tourne plus
+        from PySide6.QtCore import qInstallMessageHandler
+        qInstallMessageHandler(None)
+    except Exception:
+        pass
+    if sys.platform == "win32":
+        # Windows : os._exit fait encore tourner les destructeurs des DLL de Qt (QThreadStorage...), qui appelaient
+        # PySide alors que Python s'arretait (« APPCRASH pyside6.abi3.dll »). Arret immediat du processus, sans eux.
+        try:
+            import ctypes
+            k = ctypes.windll.kernel32
+            k.GetCurrentProcess.restype = ctypes.c_void_p
+            k.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+            k.TerminateProcess(k.GetCurrentProcess(), int(code) & 0xFFFFFFFF)
+        except Exception:
+            pass
     os._exit(code)
 
 

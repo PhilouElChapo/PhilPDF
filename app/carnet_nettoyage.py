@@ -38,6 +38,24 @@ hans klaus peter stefan andreas michael john james william robert mary elizabeth
 PARTICULES = {"de", "du", "des", "la", "le", "van", "von", "der", "di", "da", "del", "d'", "mac", "mc"}
 
 
+# mots qui forment un seul nom avec le mot suivant : « Saint Martin », « Dal Moro », « Le Goff », « Van Damme »
+LIES = PARTICULES | {"saint", "sainte", "st", "ste", "dal", "dalla", "della", "delle", "dei", "degli", "dello", "lo",
+                     "ben", "el", "al", "ter", "ten", "dos", "das", "do", "vander", "vanden", "o'"}
+
+
+def _mots(nom):
+    """Mots du nom, un nom compose restant un seul mot : « Saint Martin Claude » -> [« Saint Martin », « Claude »]."""
+    brut, out, i = nom.split(" "), [], 0
+    while i < len(brut):
+        m = brut[i]
+        while _sans_accents(brut[i]).strip(".") in LIES and i + 1 < len(brut) - (0 if out else 1):
+            i += 1                                    # le mot lie s'accroche au suivant (sauf s'il ne resterait rien)
+            m += " " + brut[i]
+        out.append(m)
+        i += 1
+    return out
+
+
 def _sans_accents(t):
     return "".join(c for c in unicodedata.normalize("NFD", t or "") if unicodedata.category(c) != "Mn").lower()
 
@@ -54,6 +72,11 @@ def _majuscules(mot):
 
 def joli(mot):
     """« jean-PIERRE » -> « Jean-Pierre », « d'ARC » -> « d'Arc » ; particules en minuscules."""
+    if " " in mot:                                    # nom compose : « Le Goff », « de la Fontaine »
+        ms = [joli(m) for m in mot.split(" ")]
+        if _sans_accents(ms[0]) in ("le", "la", "les"):
+            ms[0] = ms[0][:1].upper() + ms[0][1:]
+        return " ".join(ms)
     if _sans_accents(mot) in PARTICULES:
         return mot.lower()
     out = []
@@ -89,10 +112,13 @@ def analyser_nom(nom, email=""):
     if "," in nom:                                    # « Dupont, Jean » (export Outlook)
         n, _v, p = nom.partition(",")
         return {"prenom": " ".join(joli(x) for x in p.split()), "nom_famille": n.strip(), "sur": True}
-    mots = nom.split(" ")
+    mots = _mots(nom)
     if len(mots) < 2:
         return None
     hauts = [i for i, m in enumerate(mots) if _majuscules(m)]
+    if (hauts and len(hauts) < len(mots) and all(est_prenom(mots[i]) for i in hauts)
+            and not any(est_prenom(m) for i, m in enumerate(mots) if i not in hauts)):
+        hauts = []                                    # « Saint Martin CLAUDE » : le mot en capitales est le prenom
     if hauts and len(hauts) < len(mots):              # NOM en capitales : c'est le nom de famille
         nf = " ".join(mots[i] for i in hauts)
         pr = " ".join(joli(m) for i, m in enumerate(mots) if i not in hauts)

@@ -419,6 +419,19 @@ def _valeur_reprise(params, communs, k, v):
     return v
 
 
+def comptes_mail_ailleurs(params):
+    """Adresses d'envoi d'e-mails enregistrees par un autre poste et absentes ici (sauf celles retirees expres),
+    que la fenetre de choix ait deja ete vue ou non."""
+    p = chemin_drive(params)
+    if not p:
+        return []
+    c = lire_drive(p).get("communs") or {}
+    retires = set(params.get("comptes_mail_retires") or []) | set(c.get("comptes_mail_retires") or [])
+    ici = {x.get("id") for x in params.get("comptes_mail") or [] if isinstance(x, dict)}
+    return [x for x in c.get("comptes_mail") or [] if isinstance(x, dict) and x.get("id") and x.get("adresse")
+            and x["id"] not in ici and x["id"] not in retires]
+
+
 UNIONS_CLES = ("identites", "certificats_approuves", "comptes_mail", "carnet")
 
 

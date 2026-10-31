@@ -88,6 +88,15 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.50
+- Fermeture : plus d'« APPCRASH pyside6.abi3.dll » dans le Moniteur de fiabilite de Windows (Qt ecrivait encore
+  au journal de PhilPDF pendant l'arret du programme) : PhilPDF s'arrete maintenant en une fois.
+- Adresses d'envoi d'e-mails reglees sur un autre poste : reprises automatiquement (au demarrage, dans
+  Preferences > E-mail et dans la fenetre d'envoi), mot de passe compris s'il voyage avec vos postes.
+- Carnet d'adresses : groupes repliables d'un clic (par lettre, ou par serie A-C, D-F...), lettre affichee dans
+  la colonne de gauche ; une personne avec plusieurs adresses = une seule ligne, l'adresse voulue se choisit a
+  l'envoi (ou toutes) ; noms composes gardes entiers (Saint Martin, Dal Moro, Le Goff...).
+
 0.9.49
 - Fermeture (et fermeture pour mise a jour) : PhilPDF ne figure plus en « Fonctionnement arrete » (Qt6Core.dll)
   dans le Moniteur de fiabilite de Windows. Une tache encore active a la fermeture (verification de mise a jour,

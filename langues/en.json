@@ -2707,5 +2707,12 @@
  "Changer de méthode pour améliorer cette modification ?\n\n• Méthode actuelle : le paragraphe est réécrit et redistribué sur la largeur, lettre par lettre.\n• Autre méthode (celle de PhilPDF Android) : chaque ligne tapée est écrite à la place de l'ancienne ligne, avec la police d'origine du PDF ; seules les lettres sont retirées (fond, cadres et images restent), rien n'est décalé.\n\nCtrl+Z revient au texte d'origine dans les deux cas.": "Change method to improve this change?\n\n• Current method: the paragraph is rewritten and spread over the width, letter by letter.\n• Other method (the PhilPDF Android one): each typed line is written in place of the old line, with the PDF's original font; only the letters are removed (background, frames and images stay), nothing is shifted.\n\nCtrl+Z goes back to the original text in both cases.",
  "Autre méthode impossible : {e}": "Other method not possible: {e}",
  "Autre méthode : police d'origine gardée ({p}).": "Other method: original font kept ({p}).",
- "Autre méthode : police de remplacement pour une partie du texte.": "Other method: replacement font for part of the text."
+ "Autre méthode : police de remplacement pour une partie du texte.": "Other method: replacement font for part of the text.",
+ "Groupes : par lettre": "Groups: by letter",
+ "Groupes : A-C, D-F...": "Groups: A-C, D-F...",
+ "Sans groupes": "No groups",
+ "Contacts regroupés par la première lettre de la colonne de gauche (glissez un en-tête pour changer l'ordre des colonnes). Un clic sur un groupe le replie ou le déplie.": "Contacts grouped by the first letter of the left column (drag a header to reorder columns). Click a group to collapse or expand it.",
+ "Toutes ces adresses": "All these addresses",
+ "{n} adresses : laquelle utiliser vous sera demandé": "{n} addresses: you will be asked which one to use",
+ "Supprimer {n} adresse(s) du carnet ?": "Delete {n} address(es) from the address book?"
 }

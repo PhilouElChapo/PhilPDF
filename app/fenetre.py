@@ -2678,6 +2678,25 @@ class Fenetre(MixinCoteACote, QMainWindow):
                         sec = reglages.secrets_nouveaux(self.params, phrase)   # leurs autorisations, maintenant connues
                     except Exception:
                         pass
+        # adresses d'envoi d'e-mails ajoutees sur un autre poste : reprises de meme (un ajout ne retire rien)
+        try:
+            mails = reglages.comptes_mail_ailleurs(self.params)
+        except Exception:
+            mails = []
+        if mails:
+            self.params["comptes_mail"] = list(self.params.get("comptes_mail") or []) + mails
+            self.params.enregistrer()
+            if ch:
+                ch["items"] = [i for i in ch["items"] if not (i["cle"] == "comptes_mail" and isinstance(i.get("valeur"), list)
+                               and {x.get("id") for x in i["valeur"]} <= {x.get("id") for x in self.params["comptes_mail"]})]
+            from .journal import ecrire
+            ecrire("synchro", "adresse(s) d'envoi d'e-mails reprise(s) d'un autre poste : " + ", ".join(x["adresse"] for x in mails))
+            if phrase:
+                try:
+                    sec = reglages.secrets_nouveaux(self.params, phrase)     # leurs mots de passe, s'ils voyagent
+                except Exception:
+                    pass
+            ajoutes = ajoutes + [{"nom": x["adresse"]} for x in mails]
         visibles = [it for it in (ch["items"] if ch else []) if not it.get("cache")]
         if ajoutes:
             noms = ", ".join("« " + (c.get("nom") or c.get("id")) + " »" for c in ajoutes)

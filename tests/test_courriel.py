@@ -94,9 +94,23 @@ pc._tri = (1, Qt.AscendingOrder); pc._remplir(); app.processEvents()
 ordre = list(pc._lignes_contacts)
 verif(ordre.index("jean.dupont@ex.fr") < ordre.index("peratvalentin@gmail.com") < ordre.index("theodore.yakite@orange.fr"),
       f"carnet trié par nom de famille (Dupont, Perat, ... Yakite) {ordre}")
-verif(pc.liste.topLevelItem(0).data(0, Qt.UserRole) is None and pc.liste.topLevelItem(0).text(0) == "D",
-      "carnet groupé par lettre (D pour Dupont en tête)")
+g0 = pc.liste.topLevelItem(0)
+verif(g0.data(0, Qt.UserRole) is None and g0.text(pc.liste.header().logicalIndex(0)).startswith("D ")
+      and g0.childCount() >= 1, "carnet groupé par lettre (D pour Dupont en tête, contacts dans le groupe)")
+g0.setExpanded(False); app.processEvents()
+verif(any(x.endswith(":D") for x in f.params.get("carnet_replies", [])), "groupe replié retenu")
 pc.liste.header().moveSection(2, 0); app.processEvents()
-verif(pc.liste.topLevelItem(0).text(0) in ("J", "L", "P", "T"), "colonne Adresse déplacée à gauche : groupes par lettre de l'adresse")
+verif(pc.liste.topLevelItem(0).text(2)[:1] in ("J", "L", "P", "T"), "colonne Adresse déplacée à gauche : groupes par lettre de l'adresse")
+pc.grouper.setCurrentIndex(pc.grouper.findData("serie")); app.processEvents()
+verif(pc.liste.topLevelItem(0).text(2)[:3] in ("J-L", "P-R", "S-U"), "groupes par série de lettres (A-C, D-F...)")
+# meme personne, deux adresses : une seule ligne
+f.params["carnet"] = [{"nom": "Claude Saint Martin", "email": "c1@ex.fr"}, {"nom": "Claude Saint Martin", "email": "c2@ex.fr"},
+                      {"nom": "Dal Moro Christian", "email": "cdm@ex.fr"}]
+pc.grouper.setCurrentIndex(pc.grouper.findData("")); app.processEvents()
+lignes = [pc.liste.topLevelItem(i) for i in range(pc.liste.topLevelItemCount())]
+sm = [x for x in lignes if x.text(1) == "Saint Martin"]
+verif(len(sm) == 1 and len(sm[0].data(0, Qt.UserRole + 1)) == 2 and sm[0].text(0) == "Claude",
+      "même personne, deux adresses : une ligne (Saint Martin, Claude)")
+verif(any(x.text(1) == "Dal Moro" and x.text(0) == "Christian" for x in lignes), "nom composé gardé : Dal Moro, Christian")
 if len(sys.argv) > 1: f.grab().save(sys.argv[1] + "/mail.png")
 print(); print(f"{sum(R)}/{len(R)} vérifications d'envoi par e-mail réussies"); sys.exit(0 if all(R) else 1)
