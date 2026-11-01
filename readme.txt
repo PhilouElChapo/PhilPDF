@@ -10,6 +10,11 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.8.4
+- Signature dans un champ ecrit en double : correction refaite (le champ est recree proprement, une seule fois, avant
+  de signer ; s'il reste illisible, un message le dit au lieu de produire un PDF mal signe).
+- PDF signe par une version precedente avec ce defaut : son ouverture ne tente plus de verifier ce champ.
+
 1.8.3
 - Signature avec un certificat dans un champ de signature deja pose : le document restait « non signe » (le champ
   existait en deux exemplaires dans le PDF, la signature allait dans celui qu'on ne voit pas). Le champ est remis en un

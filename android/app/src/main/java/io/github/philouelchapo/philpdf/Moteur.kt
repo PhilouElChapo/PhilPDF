@@ -11,6 +11,7 @@ import com.artifex.mupdf.fitz.Matrix
 import com.artifex.mupdf.fitz.Outline
 import com.artifex.mupdf.fitz.PDFAnnotation
 import com.artifex.mupdf.fitz.PDFDocument
+import com.artifex.mupdf.fitz.PDFObject
 import com.artifex.mupdf.fitz.PDFPage
 import com.artifex.mupdf.fitz.PDFWidget
 import com.artifex.mupdf.fitz.PKCS7Verifier
@@ -659,30 +660,59 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
      *  copie, la page en affichait une autre, restee vide. Chaque champ devient un objet unique, partage par la page et
      *  par le formulaire. */
     private fun champsIndirects(d: PDFDocument) {
-        val af = d.getTrailer().get("Root").get("AcroForm")
-        val champs = if (af.isNull) null else af.get("Fields").takeIf { it.isArray }
-        var k = 0
+        // copie neuve d'un objet ecrit en ligne (les objets deja numerotes restent partages)
+        fun copie(o: PDFObject): PDFObject = when {
+            o.isIndirect -> o
+            o.isArray -> d.newArray().also { t -> for (i in 0 until o.size()) t.push(copie(o.get(i))) }
+            o.isDictionary -> d.newDictionary().also { t -> for (cle in o) t.put(cle, copie(o.get(cle))) }
+            else -> o
+        }
+        fun nom(o: PDFObject) = try { o.get("T").asString() } catch (_: Exception) { "" }
+        val refs = LinkedHashMap<String, PDFObject>()
         for (n in 0 until d.countPages()) {
-            val an = d.findPage(n).get("Annots")
+            val po = d.findPage(n)
+            val an = po.get("Annots")
             if (!an.isArray) continue
+            var change = false
+            val neuf = d.newArray()
             for (i in 0 until an.size()) {
                 val a = an.get(i)
-                if (a.isIndirect || !a.isDictionary || a.get("Subtype").asName() != "Widget") continue
-                val ref = d.addObject(a)
-                an.put(i, ref); k++
-                if (champs == null) continue
-                val nom = try { a.get("T").asString() } catch (_: Exception) { "" }
-                var place = false
-                for (j in 0 until champs.size()) {
-                    val c = champs.get(j)
-                    if (!c.isIndirect && c.isDictionary && (try { c.get("T").asString() } catch (_: Exception) { "" }) == nom) {
-                        if (!place) { champs.put(j, ref); place = true }
-                    }
-                }
-                if (!place) champs.push(ref)
+                if (!a.isIndirect && a.isDictionary && a.get("Subtype").asName() == "Widget") {
+                    val nd = d.newDictionary()
+                    for (cle in a) if (cle.asName() != "AP") nd.put(cle, copie(a.get(cle)))   // apparence refaite par le moteur
+                    nd.put("P", po)
+                    val ref = d.addObject(nd)
+                    neuf.push(ref); refs[nom(a)] = ref; change = true
+                } else neuf.push(a)
             }
+            if (change) po.put("Annots", neuf)
         }
-        if (k > 0) Journal.ecrire("certificat", "$k champ(s) du formulaire remis en objet unique avant de signer")
+        if (refs.isEmpty()) return
+        // liste du formulaire : les copies en ligne remplacees par les champs de la page (une seule fois chacun)
+        val af = d.getTrailer().get("Root").get("AcroForm")
+        if (!af.isNull) {
+            val f = af.get("Fields")
+            val neuf = d.newArray()
+            val places = HashSet<String>()
+            if (f.isArray) for (i in 0 until f.size()) {
+                val c = f.get(i)
+                val r = if (!c.isIndirect && c.isDictionary) refs[nom(c)] else null
+                when {
+                    r == null -> neuf.push(c)
+                    places.add(nom(c)) -> neuf.push(r)
+                }
+            }
+            refs.forEach { (k, r) -> if (k !in places) neuf.push(r) }
+            af.put("Fields", neuf)
+        }
+        // controle : sinon la signature irait encore dans une copie invisible
+        for (n in 0 until d.countPages()) {
+            val an = d.findPage(n).get("Annots")
+            if (an.isArray) for (i in 0 until an.size()) { val a = an.get(i)
+                if (!a.isIndirect && a.isDictionary && a.get("Subtype").asName() == "Widget")
+                    throw ErreurCertificat("Champ de signature illisible dans ce PDF : tracez un nouveau cadre de signature.") }
+        }
+        Journal.ecrire("certificat", "${refs.size} champ(s) du formulaire remis en objet unique avant de signer")
     }
 
     /** Signatures numeriques du document, verifiees (empreinte, certificat approuve, modifications apres). */
@@ -697,6 +727,10 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                     try {
                         page.widgets?.forEach { w ->
                             if (w.fieldType != PDFWidget.TYPE_SIGNATURE || !w.isSigned) return@forEach
+                            // champ ecrit en ligne (PDF signe par une version precedente) : pas verifiable sans risque
+                            if (!w.getObject().isIndirect) {
+                                out += InfoSignature(n, "?", false, false, false, true, ""); return@forEach
+                            }
                             val dig = try { w.checkDigest(v) } catch (_: Exception) { -1 }
                             val cer = try { w.checkCertificate(v) } catch (_: Exception) { -1 }
                             val nomS = try { w.getSignatory(v) } catch (_: Exception) { null } ?: try { w.getDistinguishedName(v)?.cn } catch (_: Exception) { null } ?: "?"
