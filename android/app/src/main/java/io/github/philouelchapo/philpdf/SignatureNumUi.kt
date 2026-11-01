@@ -43,6 +43,12 @@ fun SectionSignatureNumerique(etat: EtatLecteur, choisi: () -> Unit) {
     var importer by remember { mutableStateOf<ByteArray?>(null) }
     var recuperer by remember { mutableStateOf(false) }
     var verifier by remember { mutableStateOf(false) }
+    // certificats de vos postes : ceux qui ne sont pas encore ici (et pourquoi), synchronisation automatique
+    var distantes by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        if (Identites.synchroAuto(ctx) > 0) liste = Identites.liste(ctx)
+        distantes = Identites.distantes(ctx)
+    }
     val choisirPfx = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u: Uri? ->
         if (u != null) portee.launch {
             importer = withContext(Dispatchers.IO) { ctx.contentResolver.openInputStream(u)?.use { it.readBytes() } }
@@ -78,7 +84,22 @@ fun SectionSignatureNumerique(etat: EtatLecteur, choisi: () -> Unit) {
             }
         }
     }
-    if (liste.isEmpty()) Text(stringResource(R.string.sig_aucune), fontSize = 12.sp, color = Color.Gray)
+    val ici = liste.map { it.id }.toSet() + liste.map { it.empreinte }.filter { it.isNotEmpty() }
+    val absentes = distantes.filter { it.optString("id") !in ici && it.optString("empreinte").uppercase() !in ici }
+    absentes.forEach { d ->
+        val windows = d.optBoolean("windows")
+        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp).background(Color(0xFFF5F5F5), RoundedCornerShape(8.dp))
+            .clickable(enabled = !windows) { recuperer = true }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icones.get("certificat", Color(0xFFAAAAAA)), null)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(d.optString("nom").ifEmpty { d.optString("email") }, fontSize = 14.sp, color = Color.Gray)
+                Text(stringResource(if (windows) R.string.sig_magasin_windows else R.string.sig_a_recuperer), fontSize = 11.sp,
+                    color = if (windows) Color(0xFF9A5B00) else Color(0xFF0F6CBD))
+            }
+        }
+    }
+    if (liste.isEmpty() && absentes.isEmpty()) Text(stringResource(R.string.sig_aucune), fontSize = 12.sp, color = Color.Gray)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         OutlinedButton(onClick = { choisirPfx.launch(arrayOf("application/x-pkcs12", "application/octet-stream", "*/*")) }) {
             Text(stringResource(R.string.sig_importer), fontSize = 13.sp)
@@ -89,7 +110,7 @@ fun SectionSignatureNumerique(etat: EtatLecteur, choisi: () -> Unit) {
         OutlinedButton(onClick = { verifier = true }) { Text(stringResource(R.string.sig_verifier), fontSize = 13.sp) }
     }
     importer?.let { o -> DialogueImporterPfx(o, { importer = null }) { liste = Identites.liste(ctx) } }
-    if (recuperer) DialogueRecuperer({ recuperer = false }) { liste = Identites.liste(ctx) }
+    if (recuperer) DialogueRecuperer({ recuperer = false }) { liste = Identites.liste(ctx); portee.launch { distantes = Identites.distantes(ctx) } }
     if (verifier) DialogueVerifier(etat) { verifier = false }
 }
 
@@ -129,6 +150,7 @@ private fun DialogueRecuperer(fermer: () -> Unit, fait: () -> Unit) {
     var indice by remember { mutableStateOf<String?>(null) }
     var erreur by remember { mutableStateOf<String?>(null) }
     var occupe by remember { mutableStateOf(false) }
+    var retenir by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) { indice = Identites.indice(ctx) }
     AlertDialog(onDismissRequest = { if (!occupe) fermer() }, title = { Text(stringResource(R.string.sig_recuperer)) },
         text = {
@@ -137,6 +159,10 @@ private fun DialogueRecuperer(fermer: () -> Unit, fait: () -> Unit) {
                 indice?.let { Text(stringResource(R.string.sig_indice, it), fontSize = 12.sp, color = Color.Gray) }
                 Spacer(Modifier.height(8.dp))
                 ChampMotDePasse(phrase, { phrase = it }, stringResource(R.string.sig_phrase))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(retenir, { retenir = it })
+                    Text(stringResource(R.string.sig_retenir_phrase), fontSize = 13.sp)
+                }
                 if (occupe) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
                 erreur?.let { Text(it, color = ROUGE, fontSize = 13.sp) }
             }
@@ -147,8 +173,11 @@ private fun DialogueRecuperer(fermer: () -> Unit, fait: () -> Unit) {
                 portee.launch {
                     try {
                         val n = Identites.recupererWindows(ctx, phrase)
+                        Identites.retenirPhrase(ctx, if (retenir) phrase else null)
                         fait()
-                        android.widget.Toast.makeText(ctx, ctx.getString(R.string.sig_recuperees, n), android.widget.Toast.LENGTH_LONG).show()
+                        // aucun .pfx dans les secrets : certificats ranges dans le magasin de Windows, ou partage desactive
+                        android.widget.Toast.makeText(ctx, if (n > 0) ctx.getString(R.string.sig_recuperees, n) else ctx.getString(R.string.sig_rien_recupere),
+                            android.widget.Toast.LENGTH_LONG).show()
                         fermer()
                     } catch (e: Exception) { erreur = e.message ?: e.toString() } finally { occupe = false }
                 }

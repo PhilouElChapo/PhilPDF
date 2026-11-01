@@ -10,6 +10,11 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.7.1
+- Certificats de signature (identites numeriques) de vos postes : ceux qui ne sont pas encore sur le telephone
+  sont montres dans le volet Signer (et pourquoi : a recuperer, ou ranges dans le magasin de Windows) ; la
+  phrase secrete peut etre retenue sur le telephone : les certificats ajoutes sous Windows arrivent ensuite tout seuls.
+
 1.7.0
 - Regles des champs de formulaire, comme PhilPDF Windows (et compatibles Acrobat : meme JavaScript) :
   type devine d'apres le libelle a la creation (Date, Montant, Quantite, Telephone, Code postal, E-mail,

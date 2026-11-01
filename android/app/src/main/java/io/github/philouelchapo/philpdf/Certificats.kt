@@ -164,6 +164,29 @@ object Identites {
         Nuage.synchro(ctx)?.lire(ctx, "indice_phrase.json")?.let { JSONObject(String(it)).optString("indice") }?.ifEmpty { null }
     } catch (_: Exception) { null }
 
+    /** Identites de vos postes (reglages communs de PhilPDF Windows), meme celles qui ne sont pas encore ici. */
+    suspend fun distantes(ctx: Context): List<JSONObject> = try {
+        val n = Nuage.synchro(ctx)
+        val c = n?.lire(ctx, "preferences.json")?.let { JSONObject(String(it)).optJSONObject("communs") }
+        val a = c?.optJSONArray("identites")
+        val supprimees = c?.optJSONArray("identites_supprimees")?.let { x -> (0 until x.length()).map { x.optString(it) }.toSet() } ?: emptySet()
+        (0 until (a?.length() ?: 0)).mapNotNull { a!!.optJSONObject(it) }.filter { it.optString("id") !in supprimees && !it.optBoolean("orpheline") }
+    } catch (_: Exception) { emptyList() }
+
+    /** Phrase secrete retenue sur ce telephone (chiffree par sa clef) : les certificats suivent tout seuls. */
+    fun phraseRetenue(ctx: Context): String? =
+        ctx.getSharedPreferences("identites", Context.MODE_PRIVATE).getString("phrase", null)?.let { Coffre.dechiffrer(it) }
+    fun retenirPhrase(ctx: Context, phrase: String?) = ctx.getSharedPreferences("identites", Context.MODE_PRIVATE).edit()
+        .apply { if (phrase == null) remove("phrase") else putString("phrase", Coffre.chiffrer(phrase)) }.apply()
+
+    /** Synchronisation : avec la phrase retenue, les certificats ajoutes sur vos postes arrivent ici sans rien demander. */
+    suspend fun synchroAuto(ctx: Context): Int {
+        val phrase = phraseRetenue(ctx) ?: return 0
+        val ici = liste(ctx).map { it.id }.toSet()
+        if (distantes(ctx).none { it.optString("id") !in ici && !it.optBoolean("windows") }) return 0
+        return try { recupererWindows(ctx, phrase) } catch (e: Exception) { Journal.ecrire("certificat", "synchronisation : $e"); 0 }
+    }
+
     /** Recupere les identites (.pfx) et certificats approuves de vos postes. Renvoie le nombre d'identites. */
     suspend fun recupererWindows(ctx: Context, phrase: String): Int = withContext(Dispatchers.IO) {
         val n = Nuage.synchro(ctx) ?: throw ErreurCertificat("Aucun compte de synchronisation relié.")

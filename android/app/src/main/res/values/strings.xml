@@ -369,4 +369,8 @@
     <string name="tampon_modifier">Modifier le tampon</string>
     <string name="tampon_texte">Texte du tampon</string>
     <string name="categorie">Catégorie</string>
+    <string name="sig_a_recuperer">Sur vos postes : touchez pour le récupérer (phrase secrète).</string>
+    <string name="sig_magasin_windows">Rangé dans le magasin de certificats de Windows : il ne quitte pas ce PC. Sous Windows, ajoutez-le à PhilPDF depuis son fichier .pfx pour le retrouver ici.</string>
+    <string name="sig_retenir_phrase">Retenir la phrase sur ce téléphone (les certificats suivront tout seuls)</string>
+    <string name="sig_rien_recupere">Aucun certificat transférable : sous Windows, vérifiez « Partager les mots de passe » et que vos certificats sont des fichiers .pfx (pas seulement dans le magasin de Windows).</string>
 </resources>
