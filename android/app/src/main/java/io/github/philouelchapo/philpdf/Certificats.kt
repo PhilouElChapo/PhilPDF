@@ -135,8 +135,10 @@ object Identites {
         ecrireListe(ctx, l)
     }
 
-    fun octets(ctx: Context, id: String): ByteArray? =
-        Coffre.dechiffrer(fichier(ctx, id).takeIf { it.exists() }?.readText() ?: return null)?.let { Base64.decode(it, Base64.NO_WRAP) }
+    fun octets(ctx: Context, id: String): ByteArray? {
+        val f = fichier(ctx, id).takeIf { it.exists() } ?: return null
+        return Coffre.dechiffrer(f.readText())?.let { Base64.decode(it, Base64.NO_WRAP) }
+    }
 
     fun retirer(ctx: Context, id: String) {
         fichier(ctx, id).delete()
@@ -287,7 +289,7 @@ class Verifieur(private val approuves: List<ByteArray>) : PKCS7Verifier() {
         val cms = CMSSignedData(CMSProcessableByteArray(stream.readBytes()), signature)
         val si = cms.signerInfos.signers.first()
         @Suppress("UNCHECKED_CAST")
-        val cert = (cms.certificates.getMatches(si.sid) as Collection<X509CertificateHolder>).first()
+        val cert = (cms.certificates.getMatches(si.sid as org.bouncycastle.util.Selector<X509CertificateHolder>) as Collection<X509CertificateHolder>).first()
         if (si.verify(JcaSimpleSignerInfoVerifierBuilder().setProvider(bc).build(cert))) PKCS7Verifier.PKCS7VerifierOK else PKCS7Verifier.PKCS7VerifierDigestFailure
     } catch (_: Exception) { PKCS7Verifier.PKCS7VerifierDigestFailure }
 
@@ -295,7 +297,7 @@ class Verifieur(private val approuves: List<ByteArray>) : PKCS7Verifier() {
         val cms = CMSSignedData(signature)
         val si = cms.signerInfos.signers.first()
         @Suppress("UNCHECKED_CAST")
-        val cert = (cms.certificates.getMatches(si.sid) as Collection<X509CertificateHolder>).first()
+        val cert = (cms.certificates.getMatches(si.sid as org.bouncycastle.util.Selector<X509CertificateHolder>) as Collection<X509CertificateHolder>).first()
         when {
             approuves.any { it.contentEquals(cert.encoded) } -> PKCS7Verifier.PKCS7VerifierOK
             cert.subject == cert.issuer -> PKCS7Verifier.PKCS7VerifierSelfSigned
