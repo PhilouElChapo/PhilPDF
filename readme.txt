@@ -10,6 +10,11 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.8.5
+- Champs de formulaire et de signature poses sur le telephone : ils etaient enregistres en double dans le PDF (defaut
+  du moteur PDF utilise, contourne). Ils sont maintenant ecrits une seule fois ; ceux deja poses sont repares au moment
+  de signer.
+
 1.8.4
 - Signature dans un champ ecrit en double : correction refaite (le champ est recree proprement, une seule fois, avant
   de signer ; s'il reste illisible, un message le dit au lieu de produire un PDF mal signe).

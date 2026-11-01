@@ -218,7 +218,7 @@ object Formulaire {
     private fun formulaire(pdf: PDFDocument): PDFObject {
         val racine = pdf.getTrailer().get("Root")
         var af = racine.get("AcroForm")
-        if (af.isNull) { af = pdf.addObject(pdf.newDictionary()); racine.put("AcroForm", af) }
+        if (af.isNull) { af = objetIndirect(pdf, pdf.newDictionary()); racine.put("AcroForm", af) }
         if (af.get("Fields").isNull) af.put("Fields", pdf.newArray())
         if (af.get("DA").isNull) af.put("DA", pdf.newString("/Helv 0 Tf 0 g"))
         var dr = af.get("DR")
@@ -229,7 +229,7 @@ object Formulaire {
             val p = pdf.newDictionary()
             p.put("Type", pdf.newName("Font")); p.put("Subtype", pdf.newName("Type1")); p.put("BaseFont", pdf.newName(base))
             if (base == "Helvetica") p.put("Encoding", pdf.newName("WinAnsiEncoding"))
-            polices.put(nom, pdf.addObject(p))
+            polices.put(nom, objetIndirect(pdf, p))
         }
         af.put("NeedAppearances", pdf.newBoolean(true))      // les lecteurs redessinent les champs au besoin
         return af
@@ -263,7 +263,7 @@ object Formulaire {
             if (c.lignes) a.put("Ff", 4096)                    // plusieurs lignes
         }
         a.put("MK", mk)
-        val ref = pdf.addObject(a)
+        val ref = objetIndirect(pdf, a)
         val po = page.getObject()
         var annots = po.get("Annots")
         if (annots.isNull) { annots = pdf.newArray(); po.put("Annots", annots) }
@@ -288,4 +288,12 @@ object Formulaire {
         w.getObject().put("TU", pdf.newString(nom))
         return true
     }
+}
+
+/** Objet numerote (indirect) du PDF. Ne pas utiliser PDFDocument.addObject de MuPDF Java : il renvoie l'objet d'origine
+ *  au lieu de sa reference (le champ se retrouvait recopie en ligne, en double) et libere une reference de trop. */
+internal fun objetIndirect(pdf: com.artifex.mupdf.fitz.PDFDocument, o: com.artifex.mupdf.fitz.PDFObject): com.artifex.mupdf.fitz.PDFObject {
+    val ref = pdf.createObject()
+    ref.writeObject(o)
+    return ref
 }

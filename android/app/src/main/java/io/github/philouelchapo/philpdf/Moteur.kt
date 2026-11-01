@@ -681,7 +681,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                     val nd = d.newDictionary()
                     for (cle in a) if (cle.asName() != "AP") nd.put(cle, copie(a.get(cle)))   // apparence refaite par le moteur
                     nd.put("P", po)
-                    val ref = d.addObject(nd)
+                    val ref = objetIndirect(d, nd)
                     neuf.push(ref); refs[nom(a)] = ref; change = true
                 } else neuf.push(a)
             }
