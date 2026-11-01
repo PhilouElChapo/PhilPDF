@@ -362,6 +362,5 @@
     <string name="attendu_nombre">Nombre</string>
     <string name="attendu_pourcentage">Pourcentage</string>
     <string name="attendu_masque">Format : %1$s</string>
-    <string name="aujourdhui">Aujourd\'hui</string>
     <string name="maintenant">Maintenant</string>
 </resources>
