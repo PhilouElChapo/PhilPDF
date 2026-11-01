@@ -46,10 +46,11 @@ object MiseAJour {
             }
             val assets = j.getJSONArray("assets")
             var lien = j.optString("html_url", "https://github.com/$DEPOT/releases")
-            for (i in 0 until assets.length()) {
-                val a = assets.getJSONObject(i)
-                if (a.getString("name") == "PhilPDF.apk") lien = a.getString("browser_download_url")   // universel
-            }
+            // l'APK fait pour ce telephone (3 fois plus leger que l'universel) ; sinon l'universel
+            val liens = (0 until assets.length()).map { assets.getJSONObject(it) }.associate { it.getString("name") to it.getString("browser_download_url") }
+            val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull { liens.containsKey("PhilPDF-$it.apk") }
+            lien = abi?.let { liens["PhilPDF-$it.apk"] } ?: liens["PhilPDF.apk"] ?: lien
+            Journal.ecrire("mise à jour", "paquet choisi : " + (abi ?: "universel"))
             Journal.ecrire("mise à jour", "PhilPDF Android $v disponible (installée : $actuelle)")
             NouvelleVersion(v, lien)
         } catch (e: Exception) {

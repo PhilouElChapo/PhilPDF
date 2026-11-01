@@ -10,6 +10,10 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.8.2
+- Mise a jour automatique : telecharge l'APK fait pour ce telephone (environ 30 Mo) au lieu de la version universelle
+  (environ 80 Mo, qui contient les trois types de processeur).
+
 1.8.1
 - Certificats : ceux qu'on ne peut pas utiliser (retires sur vos postes, ou ancien doublon d'un autre, affiches
   « Certificat » sans nom) ne sont plus repris de Windows, et ceux deja la sont retires tout seuls.
