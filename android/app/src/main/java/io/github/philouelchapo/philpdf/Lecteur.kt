@@ -91,6 +91,7 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var paragraphe by mutableStateOf<Paragraphe?>(null)
     var message by mutableStateOf<String?>(null)
     var organiser by mutableStateOf(false)                  // ecran « Organiser les pages »
+    var ocr by mutableStateOf<Int?>(null)                   // reconnaissance du texte proposee (page de depart)
     var choixPartage by mutableStateOf(false)               // envoyer le fichier ou un lien
     var detecter by mutableStateOf(false)                   // creer un formulaire : champs reperes a choisir
     var champOptions by mutableStateOf<InfoChamp?>(null)    // appui long sur un champ : renommer, supprimer
@@ -183,6 +184,7 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
     }
     etat.champOptions?.let { c -> OptionsChamp(etat, c) { etat.champOptions = null } }
     if (etat.organiser && t != null) OrganiserPages(etat, t) { etat.organiser = false }
+    etat.ocr?.let { n -> DialogueOcr(etat, n) { etat.ocr = null } }
     etat.message?.let { m ->
         val txt = if (m == "aucun_texte") stringResource(R.string.aucun_texte) else m
         LaunchedEffect(m) { android.widget.Toast.makeText(ctx, txt, android.widget.Toast.LENGTH_LONG).show(); etat.message = null }
@@ -416,6 +418,7 @@ private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, 
                     LigneAction("liste_fichiers", stringResource(R.string.signets)) { signets = true }
                     LigneAction("commentaire", stringResource(R.string.commentaires)) { comms = true }
                     if (etat.doc.modifiable) LigneAction("organiser", stringResource(R.string.organiser_pages)) { etat.organiser = true }
+                    if (etat.doc.modifiable) LigneAction("ocr", stringResource(R.string.ocr_titre_menu)) { etat.ocr = etat.page }
                     LigneAction("certificat", stringResource(R.string.sig_verifier)) { etat.verifierSignatures = true }
                     LigneAction("enregistrer", stringResource(R.string.enregistrer)) { etat.demandeEnregistrer = true }
                     LigneAction("courriel", stringResource(R.string.partager)) { etat.choixPartage = true }
@@ -652,7 +655,9 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                 Outil.TEXTE -> detectTapGestures(onTap = { o ->
                     portee.launch {
                         val p = d.paragrapheA(n, k(o))
-                        if (p == null) etat.message = "aucun_texte" else etat.paragraphe = p
+                        // page scannee (aucun texte) : on propose la reconnaissance du texte
+                        if (p == null) { if (etat.doc.modifiable && d.pageSansTexte(n)) etat.ocr = n else etat.message = "aucun_texte" }
+                        else etat.paragraphe = p
                     }
                 })
                 // l'apercu suit le doigt (toucher ou glisser) ; rien n'est pose avant « Poser ici »
@@ -1012,4 +1017,50 @@ fun TexteAjuste(texte: String, taille: androidx.compose.ui.unit.TextUnit, minimu
         onTextLayout = { r ->
             if (r.hasVisualOverflow && t.value > minimum) t = (t.value * 0.9f).sp else pret = true
         })
+}
+
+/** Reconnaissance du texte (OCR) d'une page scannee ou de tout le document : le texte est pose invisible sous l'image
+ *  (recherche, copie, « Modifier le texte »). Tout se fait sur le telephone. */
+@Composable
+private fun DialogueOcr(etat: EtatLecteur, page: Int, fermer: () -> Unit) {
+    val ctx = LocalContext.current
+    val portee = rememberCoroutineScope()
+    var occupe by remember { mutableStateOf(false) }
+    var fait by remember { mutableStateOf(0) }
+    var total by remember { mutableStateOf(0) }
+    var travail by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    fun lancer(pages: List<Int>?) {
+        occupe = true
+        travail = portee.launch {
+            try {
+                val k = etat.doc.reconnaitre(ctx, pages) { a, b -> fait = a; total = b }
+                etat.message = if (k > 0) ctx.getString(R.string.ocr_fini, k) else ctx.getString(R.string.ocr_rien)
+                fermer()
+            } catch (x: kotlinx.coroutines.CancellationException) { throw x
+            } catch (x: Throwable) {
+                Journal.ecrire("ocr", "reconnaissance impossible : $x")
+                etat.message = ctx.getString(R.string.ocr_erreur, x.message ?: x.toString()); fermer()
+            }
+        }
+    }
+    AlertDialog(onDismissRequest = { if (!occupe) fermer() }, title = { Text(stringResource(R.string.ocr_titre)) },
+        text = {
+            Column {
+                Text(stringResource(R.string.ocr_aide), fontSize = 14.sp)
+                if (occupe) {
+                    Spacer(Modifier.height(10.dp))
+                    if (total > 1) LinearProgressIndicator({ fait.toFloat() / total }, Modifier.fillMaxWidth())
+                    else LinearProgressIndicator(Modifier.fillMaxWidth())
+                    Text(stringResource(R.string.ocr_en_cours, (fait + 1).coerceAtMost(total.coerceAtLeast(1)), total.coerceAtLeast(1)),
+                        fontSize = 12.sp, color = Color.Gray)
+                }
+            }
+        },
+        confirmButton = {
+            if (!occupe) Row {
+                TextButton(onClick = { lancer(listOf(page)) }) { Text(stringResource(R.string.ocr_cette_page, page + 1)) }
+                TextButton(onClick = { lancer(null) }) { Text(stringResource(R.string.ocr_tout)) }
+            }
+        },
+        dismissButton = { TextButton(onClick = { travail?.cancel(); fermer() }) { Text(stringResource(R.string.annuler)) } })
 }

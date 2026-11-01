@@ -117,9 +117,11 @@ object Identites {
         val ident = id ?: l.firstOrNull { it.empreinte == emp }?.id ?: java.util.UUID.randomUUID().toString().take(12)
         val e = infos(ident, chaine[0])
         fichier(ctx, ident).writeText(Coffre.chiffrer(Base64.encodeToString(octets, Base64.NO_WRAP)))
+        val place = l.indexOfFirst { it.id == ident || it.empreinte == emp }   // deja la : garde sa place dans la liste
         l.removeAll { it.id == ident || it.empreinte == emp }
-        l += e
+        if (place in 0..l.size) l.add(place, e) else l += e
         ecrireListe(ctx, l)
+        oublierRetrait(ctx, ident)
         ajouterApprouve(ctx, chaine[0].encoded)                 // vos propres signatures sont approuvees
         Journal.ecrire("certificat", "identité ajoutée : ${e.nom} (jusqu'au ${e.fin})")
         return e
@@ -128,11 +130,15 @@ object Identites {
     /** Identite de Windows dont on n'a pas encore verifie le mot de passe : gardee telle quelle, infos du Drive. */
     private fun ajouterBrut(ctx: Context, id: String, octets: ByteArray, info: JSONObject?) {
         fichier(ctx, id).writeText(Coffre.chiffrer(Base64.encodeToString(octets, Base64.NO_WRAP)))
-        val l = liste(ctx).filter { it.id != id }.toMutableList()
-        l += Identite(id, info?.optString("nom").orEmpty().ifEmpty { "Certificat" }, info?.optString("email").orEmpty(),
+        val l = liste(ctx).toMutableList()
+        val place = l.indexOfFirst { it.id == id }
+        l.removeAll { it.id == id }
+        val nouvelle = Identite(id, info?.optString("nom").orEmpty().ifEmpty { "Certificat" }, info?.optString("email").orEmpty(),
             info?.optString("organisation").orEmpty(), info?.optString("emetteur").orEmpty(),
             info?.optString("fin").orEmpty().take(10), info?.optString("empreinte").orEmpty(), info?.optBoolean("autosigne") ?: false)
+        if (place >= 0) l.add(place, nouvelle) else l += nouvelle
         ecrireListe(ctx, l)
+        oublierRetrait(ctx, id)
     }
 
     fun octets(ctx: Context, id: String): ByteArray? {
@@ -140,9 +146,75 @@ object Identites {
         return Coffre.dechiffrer(f.readText())?.let { Base64.decode(it, Base64.NO_WRAP) }
     }
 
+    /** Retiree de ce telephone : la synchronisation ne la remet pas (tant qu'on ne la reprend pas soi-meme). */
     fun retirer(ctx: Context, id: String) {
         fichier(ctx, id).delete()
         ecrireListe(ctx, liste(ctx).filter { it.id != id })
+        val p = ctx.getSharedPreferences("identites", Context.MODE_PRIVATE)
+        p.edit().putStringSet("retirees", (p.getStringSet("retirees", emptySet()) ?: emptySet()) + id).apply()
+    }
+    fun retirees(ctx: Context): Set<String> =
+        ctx.getSharedPreferences("identites", Context.MODE_PRIVATE).getStringSet("retirees", emptySet()) ?: emptySet()
+    private fun oublierRetrait(ctx: Context, id: String) {
+        val p = ctx.getSharedPreferences("identites", Context.MODE_PRIVATE)
+        val r = retirees(ctx); if (id in r) p.edit().putStringSet("retirees", r - id).apply()
+    }
+
+    /** Change la place d'une identite dans la liste (sens -1 : monter, +1 : descendre). */
+    fun deplacer(ctx: Context, id: String, sens: Int) {
+        val l = liste(ctx).toMutableList()
+        val i = l.indexOfFirst { it.id == id }; val j = i + sens
+        if (i < 0 || j !in l.indices) return
+        java.util.Collections.swap(l, i, j)
+        ecrireListe(ctx, l)
+    }
+
+    /** Cree un certificat personnel (auto-signe, RSA 3072, SHA-256) comme PhilPDF Windows, l'ajoute et le depose
+     *  dans PhilPDF/identites du compte synchronise : vos postes Windows le reprennent. */
+    suspend fun creer(ctx: Context, nom: String, mdp: String, organisation: String, service: String, email: String,
+                      pays: String, annees: Int): Identite = withContext(Dispatchers.Default) {
+        val gen = java.security.KeyPairGenerator.getInstance("RSA").apply { initialize(3072) }
+        val kp = gen.generateKeyPair()
+        val b = org.bouncycastle.asn1.x500.X500NameBuilder(BCStyle.INSTANCE)
+        b.addRDN(BCStyle.CN, nom.trim())
+        if (organisation.isNotBlank()) b.addRDN(BCStyle.O, organisation.trim())
+        if (service.isNotBlank()) b.addRDN(BCStyle.OU, service.trim())
+        if (email.isNotBlank()) b.addRDN(BCStyle.EmailAddress, email.trim())
+        if (pays.trim().length == 2) b.addRDN(BCStyle.C, pays.trim().uppercase())
+        val x500 = b.build()
+        val debut = java.util.Date(System.currentTimeMillis() - 60_000)
+        val fin = java.util.Calendar.getInstance().apply { add(java.util.Calendar.YEAR, annees.coerceIn(1, 30)) }.time
+        val cb = org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder(x500, java.math.BigInteger(64, java.security.SecureRandom()).abs(),
+            debut, fin, x500, kp.public)
+        cb.addExtension(org.bouncycastle.asn1.x509.Extension.basicConstraints, true, org.bouncycastle.asn1.x509.BasicConstraints(false))
+        cb.addExtension(org.bouncycastle.asn1.x509.Extension.keyUsage, true,
+            org.bouncycastle.asn1.x509.KeyUsage(org.bouncycastle.asn1.x509.KeyUsage.digitalSignature or org.bouncycastle.asn1.x509.KeyUsage.nonRepudiation))
+        cb.addExtension(org.bouncycastle.asn1.x509.Extension.extendedKeyUsage, false, org.bouncycastle.asn1.x509.ExtendedKeyUsage(arrayOf(
+            org.bouncycastle.asn1.x509.KeyPurposeId.id_kp_emailProtection,
+            org.bouncycastle.asn1.x509.KeyPurposeId.getInstance(ASN1ObjectIdentifier("1.2.840.113583.1.1.5")),    // Adobe : signature de PDF
+            org.bouncycastle.asn1.x509.KeyPurposeId.getInstance(ASN1ObjectIdentifier("1.3.6.1.4.1.311.10.3.12")))))  // signature de documents
+        if (email.isNotBlank()) cb.addExtension(org.bouncycastle.asn1.x509.Extension.subjectAlternativeName, false,
+            org.bouncycastle.asn1.x509.GeneralNames(org.bouncycastle.asn1.x509.GeneralName(org.bouncycastle.asn1.x509.GeneralName.rfc822Name, email.trim())))
+        val signeur = JcaContentSignerBuilder("SHA256withRSA").setProvider(BC).build(kp.private)
+        val cert = org.bouncycastle.cert.jcajce.JcaX509CertificateConverter().setProvider(BC).getCertificate(cb.build(signeur))
+        val ks = KeyStore.getInstance("PKCS12", BC)
+        ks.load(null, null)
+        ks.setKeyEntry(nom.trim().ifEmpty { "PhilPDF" }, kp.private, mdp.toCharArray(), arrayOf(cert))
+        val o = java.io.ByteArrayOutputStream().also { ks.store(it, mdp.toCharArray()) }.toByteArray()
+        val e = ajouter(ctx, o, mdp)
+        Journal.ecrire("certificat", "certificat créé sur ce téléphone : ${e.nom} (jusqu'au ${e.fin})")
+        try { publier(ctx, e, o) } catch (x: Exception) { Journal.ecrire("certificat", "dépôt dans PhilPDF/identites impossible : $x") }
+        e
+    }
+
+    /** Depose le .pfx (protege par son mot de passe) et sa fiche dans PhilPDF/identites : vos postes le reprennent. */
+    suspend fun publier(ctx: Context, e: Identite, octets: ByteArray) {
+        val n = Nuage.synchro(ctx) ?: return
+        val fiche = JSONObject().put("id", e.id).put("nom", e.nom).put("email", e.email).put("organisation", e.organisation)
+            .put("emetteur", e.emetteur).put("fin", e.fin).put("empreinte", e.empreinte).put("autosigne", e.autosigne).put("origine", "android")
+        n.deposer(ctx, "identites", "${e.id}.pfx", octets)
+        n.deposer(ctx, "identites", "${e.id}.json", fiche.toString(1).toByteArray())
+        Journal.ecrire("certificat", "${e.nom} déposé dans PhilPDF/identites (vos postes le reprendront)")
     }
 
     // ------------------------------------------------------------ certificats approuves (comme Acrobat)
@@ -182,7 +254,8 @@ object Identites {
     /** Synchronisation : avec la phrase retenue, les certificats ajoutes sur vos postes arrivent ici sans rien demander. */
     suspend fun synchroAuto(ctx: Context): Int {
         val ici = liste(ctx).map { it.id }.toSet()
-        val manquantes = distantes(ctx).filter { it.optString("id") !in ici }
+        val r = retirees(ctx)
+        val manquantes = distantes(ctx).filter { it.optString("id") !in ici && it.optString("id") !in r }
         if (manquantes.isEmpty()) return 0
         // 1. les .pfx que vos postes deposent dans PhilPDF/identites (proteges par leur propre mot de passe)
         var k = 0
@@ -267,6 +340,14 @@ object Identites {
 }
 
 /** Signe avec la clef du certificat (CMS detache, SHA-256), horodatage gratuit si Internet (comme sous Windows). */
+/** Lit tout un flux MuPDF : sa fin est signalee par 0 (et non -1), d'ou une boucle sans fin avec readBytes(). */
+internal fun lireFlux(stm: FitzInputStream): ByteArray {
+    val out = java.io.ByteArrayOutputStream()
+    val buf = ByteArray(65536)
+    while (true) { val n = stm.read(buf, 0, buf.size); if (n <= 0) break; out.write(buf, 0, n) }
+    return out.toByteArray()
+}
+
 class Signataire(private val clef: PrivateKey, private val chaine: List<X509Certificate>) : PKCS7Signer() {
     var horodatee = false
         private set
@@ -283,7 +364,7 @@ class Signataire(private val clef: PrivateKey, private val chaine: List<X509Cert
     override fun maxDigest(): Int = 12000 + chaine.sumOf { it.encoded.size } * 2
 
     override fun sign(stm: FitzInputStream): ByteArray {
-        val donnees = stm.readBytes()
+        val donnees = lireFlux(stm)
         val algo = when (clef.algorithm) { "EC", "ECDSA" -> "SHA256withECDSA"; else -> "SHA256withRSA" }
         val bc = BouncyCastleProvider()
         val gen = CMSSignedDataGenerator()
@@ -305,7 +386,7 @@ class Signataire(private val clef: PrivateKey, private val chaine: List<X509Cert
         for (url in listOf("http://timestamp.digicert.com", "http://timestamp.sectigo.com", "https://freetsa.org/tsr")) {
             try {
                 val c = URL(url).openConnection() as HttpURLConnection
-                c.connectTimeout = 8000; c.readTimeout = 10000; c.doOutput = true; c.requestMethod = "POST"
+                c.connectTimeout = 5000; c.readTimeout = 7000; c.doOutput = true; c.requestMethod = "POST"
                 c.setRequestProperty("Content-Type", "application/timestamp-query")
                 c.outputStream.use { it.write(req.encoded) }
                 if (c.responseCode != 200) continue
@@ -330,7 +411,7 @@ class Verifieur(private val approuves: List<ByteArray>) : PKCS7Verifier() {
     private val bc = BouncyCastleProvider()
 
     override fun checkDigest(stream: FitzInputStream, signature: ByteArray): Int = try {
-        val cms = CMSSignedData(CMSProcessableByteArray(stream.readBytes()), signature)
+        val cms = CMSSignedData(CMSProcessableByteArray(lireFlux(stream)), signature)
         val si = cms.signerInfos.signers.first()
         @Suppress("UNCHECKED_CAST")
         val cert = (cms.certificates.getMatches(si.sid as org.bouncycastle.util.Selector<X509CertificateHolder>) as Collection<X509CertificateHolder>).first()

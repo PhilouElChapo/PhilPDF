@@ -96,11 +96,15 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     // signature numerique : CMS (PKCS#7), lecture des .pfx, horodatage (meme principe que pyHanko sous Windows)
     implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
+    // reconnaissance du texte des pages scannees (Tesseract, comme PhilPDF Windows), sur le telephone, sans Internet
+    implementation("cz.adaptech.tesseract4android:tesseract4android:4.9.0")
 }
 
 // Nouveautes (readme.txt du depot) livrees dans l'APK : Accueil > Aide > Nouveautes
 val copierNouveautes by tasks.registering(Copy::class) {
     from(rootProject.file("../readme.txt"))
+    // reconnaissance du texte (OCR) : meme langue francaise que PhilPDF Windows (tessdata du depot)
+    from(rootProject.file("../tessdata/fra.traineddata")) { into("tessdata") }
     into(layout.buildDirectory.dir("nouveautes"))
 }
 android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("nouveautes").get().asFile)

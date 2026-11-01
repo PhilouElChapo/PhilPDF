@@ -299,13 +299,18 @@ object TexteModif {
         val texteTotal = nouvelles.joinToString("")
         val originale = t != null && !styleChange && t.peutEcrire(texteTotal)
         // 1. retirer seulement les lettres des anciennes lignes (fond, cadres, images gardes)
+        // page scannee dont le texte a ete reconnu (OCR) : les lettres visibles sont dans l'image, on efface aussi ses
+        // pixels sous la ligne (sinon l'ancien texte resterait visible sous le nouveau)
+        val ocr = try { page.getObject().get("PhilPDF_OCR").let { !it.isNull && it.asBoolean() } } catch (_: Exception) { false }
         val annot = page.createAnnotation(com.artifex.mupdf.fitz.PDFAnnotation.TYPE_REDACT)
         annot.setQuadPoints(par.lignes.map { l ->
-            val y0 = l.haut + (l.bas - l.haut) * 0.15f; val y1 = l.bas - (l.bas - l.haut) * 0.15f
+            val marge = if (ocr) -(l.bas - l.haut) * 0.08f else (l.bas - l.haut) * 0.15f
+            val y0 = l.haut + marge; val y1 = l.bas - marge
             Quad(l.x0, y0, l.x1, y0, l.x0, y1, l.x1, y1)
         }.toTypedArray())
         annot.update()
-        page.applyRedactions(false, PDFPage.REDACT_IMAGE_NONE, PDFPage.REDACT_LINE_ART_NONE, PDFPage.REDACT_TEXT_REMOVE)
+        page.applyRedactions(false, if (ocr) PDFPage.REDACT_IMAGE_PIXELS else PDFPage.REDACT_IMAGE_NONE,
+            PDFPage.REDACT_LINE_ART_NONE, PDFPage.REDACT_TEXT_REMOVE)
         // 2. la police : celle d'origine, ou la standard la plus proche
         val pobj = page.getObject()
         var res = pobj.get("Resources")

@@ -11,6 +11,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.Surface
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -43,6 +47,8 @@ fun SectionSignatureNumerique(etat: EtatLecteur, choisi: () -> Unit) {
     var importer by remember { mutableStateOf<ByteArray?>(null) }
     var recuperer by remember { mutableStateOf(false) }
     var verifier by remember { mutableStateOf(false) }
+    var creer by remember { mutableStateOf(false) }
+    var ranger by remember { mutableStateOf(false) }
     // certificats de vos postes : ceux qui ne sont pas encore ici (et pourquoi), synchronisation automatique
     var distantes by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
     LaunchedEffect(Unit) {
@@ -79,13 +85,21 @@ fun SectionSignatureNumerique(etat: EtatLecteur, choisi: () -> Unit) {
                     if (e.autosigne) ctx.getString(R.string.sig_autosigne) else e.emetteur.takeIf { it.isNotEmpty() }).joinToString(" · "),
                     fontSize = 11.sp, color = Color.Gray)
             }
-            IconButton(onClick = { Identites.retirer(ctx, e.id); liste = Identites.liste(ctx) }) {
-                Icon(Icones.get("supprimer", Color(0xFF888888)), stringResource(R.string.supprimer))
+            if (ranger) {
+                val i = liste.indexOf(e)
+                TextButton(onClick = { Identites.deplacer(ctx, e.id, -1); liste = Identites.liste(ctx) }, enabled = i > 0,
+                    contentPadding = PaddingValues(4.dp)) { Text("↑") }
+                TextButton(onClick = { Identites.deplacer(ctx, e.id, 1); liste = Identites.liste(ctx) }, enabled = i < liste.size - 1,
+                    contentPadding = PaddingValues(4.dp)) { Text("↓") }
+                IconButton(onClick = { Identites.retirer(ctx, e.id); liste = Identites.liste(ctx) }) {
+                    Icon(Icones.get("supprimer", Color(0xFF888888)), stringResource(R.string.supprimer))
+                }
             }
         }
     }
     val ici = liste.map { it.id }.toSet() + liste.map { it.empreinte }.filter { it.isNotEmpty() }
-    val absentes = distantes.filter { it.optString("id") !in ici && it.optString("empreinte").uppercase() !in ici }
+    val retirees = Identites.retirees(ctx)
+    val absentes = distantes.filter { it.optString("id") !in ici && it.optString("id") !in retirees && it.optString("empreinte").uppercase() !in ici }
     absentes.forEach { d ->
         val windows = d.optBoolean("windows")
         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp).background(Color(0xFFF5F5F5), RoundedCornerShape(8.dp))
@@ -101,8 +115,12 @@ fun SectionSignatureNumerique(etat: EtatLecteur, choisi: () -> Unit) {
     }
     if (liste.isEmpty() && absentes.isEmpty()) Text(stringResource(R.string.sig_aucune), fontSize = 12.sp, color = Color.Gray)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        OutlinedButton(onClick = { creer = true }) { Text(stringResource(R.string.sig_creer), fontSize = 13.sp) }
         OutlinedButton(onClick = { choisirPfx.launch(arrayOf("application/x-pkcs12", "application/octet-stream", "*/*")) }) {
             Text(stringResource(R.string.sig_importer), fontSize = 13.sp)
+        }
+        if (liste.size > 0) OutlinedButton(onClick = { ranger = !ranger }) {
+            Text(stringResource(if (ranger) R.string.sig_ranger_fini else R.string.sig_ranger), fontSize = 13.sp)
         }
         OutlinedButton(onClick = { recuperer = true }, enabled = Nuage.synchro(ctx) != null) {
             Text(stringResource(R.string.sig_recuperer), fontSize = 13.sp)
@@ -112,6 +130,68 @@ fun SectionSignatureNumerique(etat: EtatLecteur, choisi: () -> Unit) {
     importer?.let { o -> DialogueImporterPfx(o, { importer = null }) { liste = Identites.liste(ctx) } }
     if (recuperer) DialogueRecuperer({ recuperer = false }) { liste = Identites.liste(ctx); portee.launch { distantes = Identites.distantes(ctx) } }
     if (verifier) DialogueVerifier(etat) { verifier = false }
+    if (creer) DialogueCreerCertificat({ creer = false }) { liste = Identites.liste(ctx) }
+}
+
+/** Creer un certificat personnel sur le telephone (comme PhilPDF Windows) : nom, e-mail, organisation, mot de passe. */
+@Composable
+private fun DialogueCreerCertificat(fermer: () -> Unit, fait: () -> Unit) {
+    val ctx = LocalContext.current
+    val portee = rememberCoroutineScope()
+    var nom by remember { mutableStateOf(Nuage.synchro(ctx)?.nom(ctx).orEmpty()) }
+    var email by remember { mutableStateOf(Nuage.synchro(ctx)?.email(ctx).orEmpty()) }
+    var organisation by remember { mutableStateOf("") }
+    var service by remember { mutableStateOf("") }
+    var pays by remember { mutableStateOf("FR") }
+    var annees by remember { mutableStateOf(5) }
+    var mdp by remember { mutableStateOf("") }
+    var mdp2 by remember { mutableStateOf("") }
+    var occupe by remember { mutableStateOf(false) }
+    var erreur by remember { mutableStateOf<String?>(null) }
+    val pareils = mdp == mdp2
+    val ok = nom.isNotBlank() && mdp.length >= 6 && pareils && !occupe
+    Fenetre({ if (!occupe) fermer() }) {
+        Surface(Modifier.fillMaxWidth(0.94f).widthIn(max = 560.dp).heightIn(max = 640.dp), shape = RoundedCornerShape(16.dp)) {
+            Column(Modifier.padding(16.dp)) {
+                Text(stringResource(R.string.sig_creer_titre), fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
+                Spacer(Modifier.height(6.dp))
+                Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                    Text(stringResource(R.string.sig_creer_aide), fontSize = 12.sp, color = Color.Gray)
+                    OutlinedTextField(nom, { nom = it }, label = { Text(stringResource(R.string.sig_creer_nom)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(email, { email = it }, label = { Text(stringResource(R.string.sig_creer_email)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(organisation, { organisation = it }, label = { Text(stringResource(R.string.sig_creer_organisation)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(service, { service = it }, label = { Text(stringResource(R.string.sig_creer_service)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(pays, { pays = it.take(2).uppercase() }, label = { Text(stringResource(R.string.sig_creer_pays)) },
+                            singleLine = true, modifier = Modifier.width(90.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Text(stringResource(R.string.sig_creer_duree), fontSize = 13.sp)
+                        TextButton(onClick = { if (annees > 1) annees-- }, contentPadding = PaddingValues(4.dp)) { Text("−") }
+                        Text(stringResource(R.string.sig_creer_ans, annees), fontSize = 13.sp)
+                        TextButton(onClick = { if (annees < 30) annees++ }, contentPadding = PaddingValues(4.dp)) { Text("+") }
+                    }
+                    ChampMotDePasse(mdp, { mdp = it }, stringResource(R.string.sig_creer_mdp))
+                    ChampMotDePasse(mdp2, { mdp2 = it }, stringResource(R.string.sig_creer_mdp2))
+                    if (mdp2.isNotEmpty() && !pareils) Text(stringResource(R.string.sig_creer_differents), color = ROUGE, fontSize = 12.sp)
+                    if (occupe) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
+                    erreur?.let { Text(it, color = ROUGE, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
+                }
+                // boutons fixes, toujours visibles
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = fermer, enabled = !occupe) { Text(stringResource(R.string.annuler)) }
+                    TextButton(onClick = {
+                        occupe = true; erreur = null
+                        portee.launch {
+                            try {
+                                Identites.creer(ctx, nom, mdp, organisation, service, email, pays, annees)
+                                fait(); fermer()
+                            } catch (x: Exception) { erreur = x.message ?: x.toString() } finally { occupe = false }
+                        }
+                    }, enabled = ok) { Text(stringResource(R.string.sig_creer_bouton)) }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -199,6 +279,7 @@ fun DialogueSigner(etat: EtatLecteur, page: Int, rect: com.artifex.mupdf.fitz.Re
     var erreur by remember { mutableStateOf<String?>(null) }
     var occupe by remember { mutableStateOf(false) }
     var signe by remember { mutableStateOf<java.io.File?>(null) }
+    var travail by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val autreNom = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { u: Uri? ->
         val f = signe
         if (u != null && f != null) portee.launch {
@@ -210,8 +291,13 @@ fun DialogueSigner(etat: EtatLecteur, page: Int, rect: com.artifex.mupdf.fitz.Re
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 // plusieurs certificats : on choisit ici
                 if (toutes.size > 1 && signe == null) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    toutes.forEach { x -> FilterChip(x.id == ident.id, { e = x; etat.signerAvec = x },
-                        label = { Text(x.nom.ifEmpty { x.email }, fontSize = 12.sp) }) }
+                    toutes.forEach { x ->
+                        val n = x.nom.ifEmpty { x.email }
+                        val pareil = toutes.count { it.nom.ifEmpty { it.email } == n } > 1
+                        FilterChip(x.id == ident.id, { e = x; etat.signerAvec = x },
+                            label = { Text(if (pareil) "$n (" + (x.email.takeIf { it.isNotEmpty() && it != n } ?: x.fin.ifEmpty { x.id.take(4) }) + ")" else n,
+                                fontSize = 12.sp) })
+                    }
                 } else Text(stringResource(R.string.sig_avec, ident.nom.ifEmpty { ident.email }), fontSize = 13.sp)
                 Spacer(Modifier.height(6.dp))
                 if (signe == null) {
@@ -230,7 +316,7 @@ fun DialogueSigner(etat: EtatLecteur, page: Int, rect: com.artifex.mupdf.fitz.Re
         confirmButton = {
             if (signe == null) TextButton(onClick = {
                 occupe = true; erreur = null
-                portee.launch {
+                travail = portee.launch {
                     try {
                         val o = Identites.octets(ctx, ident.id) ?: throw ErreurCertificat(ctx.getString(R.string.sig_illisible))
                         val (clef, chaine) = withContext(Dispatchers.IO) { Identites.ouvrir(o, mdp) }
@@ -257,7 +343,8 @@ fun DialogueSigner(etat: EtatLecteur, page: Int, rect: com.artifex.mupdf.fitz.Re
                 }
             }
         },
-        dismissButton = { TextButton(onClick = fermer, enabled = !occupe) { Text(stringResource(R.string.annuler)) } })
+        // Annuler reste possible pendant la signature (horodatage lent, reseau coupe...)
+        dismissButton = { TextButton(onClick = { travail?.cancel(); occupe = false; fermer() }) { Text(stringResource(R.string.annuler)) } })
 }
 
 /** Le fichier signe est copie tel quel (une reecriture casserait la signature), puis renvoye a son compte si besoin. */

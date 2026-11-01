@@ -511,6 +511,49 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
         return lien
     }
 
+    /** Ecrit (ou remplace) PhilPDF/<dossier>/<nom> dans le compte synchronise. */
+    suspend fun deposer(ctx: Context, dossier: String, nom: String, octets: ByteArray) {
+        val f = fournisseur(ctx)
+        if (ids[""] == null && !trouverRacine(ctx)) throw ErreurCompte("${f.nom} : dossier PhilPDF introuvable.")
+        val racine = ids[""]!!
+        val type = mapOf("Content-Type" to "application/octet-stream")
+        val (code, b, _) = when (f.cle) {
+            "gdrive" -> {
+                val d = gEnfant(ctx, racine, dossier)?.getString("id")
+                    ?: json(ctx, "POST", "$GOOGLE/files?fields=id", JSONObject().put("name", dossier)
+                        .put("mimeType", "application/vnd.google-apps.folder").put("parents", JSONArray().put(racine)))?.getString("id")
+                    ?: throw ErreurCompte("${f.nom} : dossier $dossier impossible à créer.")
+                val existant = gEnfant(ctx, d, nom)?.getString("id")
+                if (existant != null) appel(ctx, "PATCH", "$GOOGLE_ENVOI/files/$existant?uploadType=media", octets, type)
+                else {
+                    val bord = "PhilPDF" + java.util.UUID.randomUUID().toString().replace("-", "")
+                    val meta = JSONObject().put("name", nom).put("parents", JSONArray().put(d)).toString()
+                    val corps = ("--$bord\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n$meta\r\n" +
+                        "--$bord\r\nContent-Type: application/octet-stream\r\n\r\n").toByteArray() + octets + "\r\n--$bord--\r\n".toByteArray()
+                    appel(ctx, "POST", "$GOOGLE_ENVOI/files?uploadType=multipart&fields=id", corps, mapOf("Content-Type" to "multipart/related; boundary=$bord"))
+                }
+            }
+            "onedrive" -> appel(ctx, "PUT", "$GRAPH/me/drive/items/$racine:/${enc(dossier)}/${enc(nom)}:/content?@microsoft.graph.conflictBehavior=replace", octets, type)
+            "dropbox" -> appel(ctx, "POST", "$DBX_CONTENU/files/upload", octets, mapOf("Content-Type" to "application/octet-stream",
+                "Dropbox-API-Arg" to ascii(JSONObject().put("path", "$racine/$dossier/$nom").put("mode", "overwrite").put("mute", true).toString())))
+            "box" -> {
+                val d = bEnfant(ctx, racine, dossier)
+                    ?: json(ctx, "POST", "$BOX/folders", JSONObject().put("name", dossier).put("parent", JSONObject().put("id", racine)))?.optString("id")
+                    ?: throw ErreurCompte("Box : dossier $dossier impossible à créer.")
+                val existant = bEnfant(ctx, d, nom)
+                val bord = "PhilPDF" + java.util.UUID.randomUUID().toString().replace("-", "")
+                val attr = if (existant != null) "{}" else JSONObject().put("name", nom).put("parent", JSONObject().put("id", d)).toString()
+                val corps = ("--$bord\r\nContent-Disposition: form-data; name=\"attributes\"\r\n\r\n$attr\r\n" +
+                    "--$bord\r\nContent-Disposition: form-data; name=\"file\"; filename=\"${nom.replace("\"", "")}\"\r\n" +
+                    "Content-Type: application/octet-stream\r\n\r\n").toByteArray() + octets + "\r\n--$bord--\r\n".toByteArray()
+                appel(ctx, "POST", if (existant != null) "$BOX_ENVOI/files/$existant/content" else "$BOX_ENVOI/files/content", corps,
+                    mapOf("Content-Type" to "multipart/form-data; boundary=$bord"))
+            }
+            else -> Triple(0, ByteArray(0), null)
+        }
+        if (code !in 200..299) throw ErreurCompte("${f.nom} : dépôt de $nom refusé ($code) ${String(b).take(160)}")
+    }
+
     // ------------------------------------------------------------ dossier PhilPDF (synchronisation) et lecture de ses fichiers
     /** Trouve le dossier PhilPDF (a la racine d'abord, sinon ailleurs) ; renvoie false s'il n'existe pas. */
     suspend fun trouverRacine(ctx: Context): Boolean {

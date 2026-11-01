@@ -11,6 +11,7 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url = uri("https://maven.ghostscript.com/") }     // MuPDF (Artifex), meme moteur que PyMuPDF
+        maven { url = uri("https://jitpack.io") }                  // Tesseract4Android (OCR)
     }
 }
 rootProject.name = "PhilPDF"

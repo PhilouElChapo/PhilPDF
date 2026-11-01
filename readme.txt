@@ -10,6 +10,18 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.8.0
+- Signature avec un certificat : l'application ne bloque plus (la lecture du document a signer tournait sans fin).
+  « Annuler » reste possible pendant la signature.
+- Creer un certificat sur le telephone (Signer > Signature numerique > Creer un certificat) : nom, e-mail,
+  organisation, duree, mot de passe. Il est depose dans le dossier PhilPDF synchronise : vos postes Windows le
+  reprennent (PhilPDF Windows 0.9.53 ou plus).
+- Certificats : « Ranger » pour les mettre dans l'ordre voulu (fleches) ou en retirer un ; un certificat retire
+  n'est plus remis par la synchronisation. Deux certificats du meme nom se distinguent (e-mail ou date).
+- Reconnaissance du texte (OCR) des pages scannees, sur le telephone : proposee quand on touche une page sans texte
+  avec « Modifier le texte », ou par Plus > Reconnaitre le texte. Le texte est pose invisible sous l'image : on peut
+  chercher, copier, et le modifier (les lettres de l'image sont alors effacees sous la ligne).
+
 1.7.3
 - Certificats (identites numeriques) crees ou ajoutes dans PhilPDF Windows : repris tout seuls depuis le dossier
   PhilPDF synchronise, sans phrase secrete (il faut PhilPDF Windows 0.9.52 ou plus) ; leur mot de passe reste
@@ -186,6 +198,10 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.53
+- Certificats crees sur le telephone (PhilPDF Android 1.8.0) : repris tout seuls depuis le dossier PhilPDF
+  synchronise.
 
 0.9.52
 - Identites numeriques (.pfx) : deposees dans le dossier PhilPDF synchronise (sous-dossier « identites ») ; vos

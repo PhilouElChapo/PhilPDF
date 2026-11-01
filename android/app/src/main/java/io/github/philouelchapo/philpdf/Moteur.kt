@@ -915,6 +915,54 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         }
     }
 
+    // ---------------------------------------------------------------- reconnaissance du texte (OCR)
+    /** Vrai si la page n'a aucun texte (page scannee : une image). */
+    suspend fun pageSansTexte(n: Int): Boolean = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val pg = doc.loadPage(n)
+            try { val st = pg.toStructuredText(); try { st.asText().isBlank() } finally { st.destroy() } }
+            catch (_: Exception) { false } finally { pg.destroy() }
+        }
+    }
+
+    /** Reconnait le texte des pages (null : toutes) qui n'en ont pas, et le pose invisible sur l'image (une seule
+     *  etape d'annulation). Renvoie le nombre de pages reconnues. avance(fait, total) pour la barre de progression. */
+    suspend fun reconnaitre(ctx: Context, pages: List<Int>?, avance: (Int, Int) -> Unit): Int {
+        if (pdf == null) return 0
+        val liste = pages ?: (0 until verrou.withLock { withContext(Dispatchers.IO) { doc.countPages() } }).toList()
+        val resultats = LinkedHashMap<Int, List<Ocr.Mot>>()
+        for ((i, n) in liste.withIndex()) {
+            avance(i, liste.size)
+            if (!pageSansTexte(n)) continue
+            val z = 200f / 72f                                   // 200 points par pouce : bon pour Tesseract, memoire raisonnable
+            val bm = verrou.withLock {
+                withContext(Dispatchers.IO) {
+                    val pg = doc.loadPage(n)
+                    try {
+                        val b = pg.bounds
+                        val w = ((b.x1 - b.x0) * z).toInt().coerceIn(1, 4000); val h = ((b.y1 - b.y0) * z).toInt().coerceIn(1, 5600)
+                        val bm = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                        bm.eraseColor(Color.WHITE)
+                        val dev = AndroidDrawDevice(bm, 0, 0)
+                        try { pg.run(dev, Matrix(z, z), null as Cookie?); dev.close() } finally { dev.destroy() }
+                        bm
+                    } finally { pg.destroy() }
+                }
+            }
+            val mots = try { withContext(Dispatchers.Default) { Ocr.mots(ctx, bm) } } finally { bm.recycle() }
+            resultats[n] = mots.map { m -> Ocr.Mot(m.texte, m.x0 / z, m.y0 / z, m.x1 / z, m.y1 / z) }
+            Journal.ecrire("ocr", "$nom, page ${n + 1} : ${mots.size} mots reconnus")
+        }
+        avance(liste.size, liste.size)
+        val utiles = resultats.filterValues { it.isNotEmpty() }
+        if (utiles.isEmpty()) return 0
+        operation("Reconnaître le texte") { d ->
+            for ((n, m) in utiles) { val pg = d.loadPage(n) as PDFPage; try { Ocr.poser(d, pg, m) } finally { pg.destroy() } }
+            true
+        }
+        return utiles.size
+    }
+
     /** Image de la page n a la largeur demandee (en pixels). */
     suspend fun rendre(n: Int, largeurPx: Int): Bitmap = verrou.withLock {
         withContext(Dispatchers.IO) { rendreSansVerrou(n, largeurPx) }

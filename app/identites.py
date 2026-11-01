@@ -151,7 +151,7 @@ def publier(params):
     retires = set(params.get("identites_supprimees") or [])
     if os.path.isdir(dd):
         for f in os.listdir(dd):
-            if f.endswith(".pfx") and f[:-4] in retires:
+            if (f.endswith(".pfx") and f[:-4] in retires) or (f.endswith(".json") and f[:-5] in retires):
                 try:
                     os.remove(os.path.join(dd, f))
                 except OSError:
@@ -179,6 +179,34 @@ def reprendre_publiees(params):
                 n += 1
             except OSError:
                 pass
+    # certificats crees sur le telephone (PhilPDF Android) : un .pfx et sa fiche .json, inconnus de vos postes
+    import json
+    connus = {e["id"] for e in params.get("identites", []) or []} | set(params.get("identites_supprimees") or [])
+    empreintes = {e.get("empreinte", "").upper() for e in params.get("identites", []) or []}
+    nouvelles = []
+    for f in sorted(os.listdir(dd)):
+        ident = f[:-5]
+        if not f.endswith(".json") or ident in connus or not os.path.exists(os.path.join(dd, ident + ".pfx")):
+            continue
+        try:
+            with open(os.path.join(dd, f), encoding="utf-8") as h:
+                fiche = json.load(h)
+            if (fiche.get("empreinte") or "").upper() in empreintes - {""}:
+                continue
+            with open(os.path.join(dd, ident + ".pfx"), "rb") as h, open(_fichier(ident), "wb") as g:
+                g.write(h.read())
+        except (OSError, ValueError):
+            continue
+        nouvelles.append({"id": ident, "origine": fiche.get("origine") or "android",
+                          "ajoute": _iso(_dt.datetime.now().astimezone()),
+                          **{k: fiche.get(k, "") for k in ("nom", "email", "organisation", "emetteur", "empreinte", "fin")},
+                          "autosigne": bool(fiche.get("autosigne"))})
+    if nouvelles:
+        l = [dict(e) for e in params.get("identites", []) or []]
+        if not any(x.get("defaut") for x in l):
+            nouvelles[0]["defaut"] = True
+        _enregistrer_liste(params, l + nouvelles)
+        n += len(nouvelles)
     return n
 
 
