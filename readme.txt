@@ -10,6 +10,12 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.7.3
+- Certificats (identites numeriques) crees ou ajoutes dans PhilPDF Windows : repris tout seuls depuis le dossier
+  PhilPDF synchronise, sans phrase secrete (il faut PhilPDF Windows 0.9.52 ou plus) ; leur mot de passe reste
+  demande a chaque signature. La phrase secrete est aussi essayee sans espace autour et sous ses deux formes d'accents.
+- Plantage : sa cause est notee dans le journal (Accueil > Aide > Journal) pour pouvoir le corriger.
+
 1.7.2
 - Mots de passe (certificat, phrase secrete, PDF protege, nouveau mot de passe) : un oeil a droite du champ montre
   ou cache ce qui est tape.
@@ -180,6 +186,11 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.52
+- Identites numeriques (.pfx) : deposees dans le dossier PhilPDF synchronise (sous-dossier « identites ») ; vos
+  autres postes et PhilPDF Android les reprennent sans phrase secrete. Chaque .pfx reste protege par son propre mot
+  de passe, demande a chaque signature ; une identite retiree est effacee du dossier.
 
 0.9.51
 - E-mail : le mot de passe de l'adresse d'envoi (et celui d'ouverture du PDF envoye) a lui aussi son oeil pour

@@ -181,10 +181,24 @@ object Identites {
 
     /** Synchronisation : avec la phrase retenue, les certificats ajoutes sur vos postes arrivent ici sans rien demander. */
     suspend fun synchroAuto(ctx: Context): Int {
-        val phrase = phraseRetenue(ctx) ?: return 0
         val ici = liste(ctx).map { it.id }.toSet()
-        if (distantes(ctx).none { it.optString("id") !in ici && !it.optBoolean("windows") }) return 0
-        return try { recupererWindows(ctx, phrase) } catch (e: Exception) { Journal.ecrire("certificat", "synchronisation : $e"); 0 }
+        val manquantes = distantes(ctx).filter { it.optString("id") !in ici }
+        if (manquantes.isEmpty()) return 0
+        // 1. les .pfx que vos postes deposent dans PhilPDF/identites (proteges par leur propre mot de passe)
+        var k = 0
+        val n = Nuage.synchro(ctx)
+        for (d in manquantes) {
+            val id = d.optString("id").filter { it.isLetterOrDigit() }
+            if (id.isEmpty()) continue
+            val o = try { n?.lire(ctx, "identites/$id.pfx") } catch (_: Exception) { null } ?: continue
+            ajouterBrut(ctx, id, o, d); k++
+        }
+        if (k > 0) Journal.ecrire("certificat", "$k identité(s) reprise(s) du dossier PhilPDF de vos postes")
+        // 2. sinon, avec la phrase retenue : le fichier chiffre des mots de passe partages
+        val phrase = phraseRetenue(ctx)
+        if (phrase != null && liste(ctx).size < ici.size + manquantes.size)
+            k += try { recupererWindows(ctx, phrase) } catch (e: Exception) { Journal.ecrire("certificat", "synchronisation : $e"); 0 }
+        return k
     }
 
     /** Recupere les identites (.pfx) et certificats approuves de vos postes. Renvoie le nombre d'identites. */
@@ -194,7 +208,14 @@ object Identites {
             ?: throw ErreurCertificat("Aucun mot de passe partagé par vos postes (sous Windows : Préférences, « Partager les mots de passe »).")
         val doc = Document.openDocument(chiffre, "application/pdf") as PDFDocument
         val json = try {
-            if (doc.needsPassword() && !doc.authenticatePassword(phrase)) throw ErreurCertificat("Phrase secrète incorrecte.")
+            // la phrase telle que tapee, sans espace autour, et sous ses deux formes Unicode (accents)
+            val essais = listOf(phrase, phrase.trim(), java.text.Normalizer.normalize(phrase.trim(), java.text.Normalizer.Form.NFC),
+                java.text.Normalizer.normalize(phrase.trim(), java.text.Normalizer.Form.NFD)).distinct()
+            if (doc.needsPassword() && essais.none { doc.authenticatePassword(it) }) {
+                Journal.ecrire("certificat", "secrets.philpdf : ${chiffre.size} octets, phrase refusée (${phrase.length} caractères)")
+                throw ErreurCertificat("Phrase secrète refusée par le fichier de vos postes. Le certificat peut aussi arriver sans phrase : " +
+                    "ouvrez PhilPDF Windows une fois (version 0.9.52 ou plus), il le dépose dans le dossier PhilPDF.")
+            }
             fichierJoint(doc, "preferences.json") ?: throw ErreurCertificat("Fichier de vos postes illisible.")
         } finally { doc.destroy() }
         val secrets = JSONObject(String(json, Charsets.UTF_8)).optJSONObject("secrets") ?: JSONObject()

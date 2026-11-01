@@ -27,6 +27,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Journal.demarrer(this)
+        // plantage : la cause est notee dans le journal (Accueil > Aide > Journal) avant que l'application se ferme
+        val avant = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            try { Journal.ecrire("plantage", e.stackTraceToString().take(3000)) } catch (_: Exception) {}
+            avant?.uncaughtException(t, e)
+        }
         DocumentPdf.nettoyerCache(this)
         recu.value = uriDe(intent)
         setContent {

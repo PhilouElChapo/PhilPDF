@@ -77,6 +77,7 @@ def ajouter_pfx(params, octets, mot_de_passe, origine="fichier"):
         approuver(params, S.exporter_cer(octets, mot_de_passe), soi=True)   # vos propres signatures sont approuvees
     except S.ErreurSignature:
         pass
+    publier(params)                                       # vos autres postes et Android le recoivent
     return next(x for x in liste(params) if x["id"] == e["id"])
 
 
@@ -118,6 +119,69 @@ def lire(e):
     return None
 
 
+def publier(params):
+    """Copie les .pfx de ce poste dans le dossier PhilPDF synchronise (sous-dossier « identites ») : vos autres postes
+    et PhilPDF Android les retrouvent sans phrase secrete. Le .pfx reste protege par SON mot de passe (demande a chaque
+    signature) ; ceux retires sont effaces. Renvoie le nombre de fichiers ecrits."""
+    try:
+        from .bibliotheque import dossier_philpdf_drive
+        d = dossier_philpdf_drive(params)
+    except Exception:                                     # noqa: BLE001
+        d = None
+    if not d:
+        return 0
+    dd = os.path.join(d, "identites")
+    n = 0
+    for e in params.get("identites", []) or []:
+        b = lire(e)
+        if not b:
+            continue                                      # magasin de Windows, ou .pfx d'un autre poste : rien a copier
+        p = os.path.join(dd, e["id"] + ".pfx")
+        try:
+            if os.path.exists(p):
+                with open(p, "rb") as f:
+                    if f.read() == b:
+                        continue
+            os.makedirs(dd, exist_ok=True)
+            with open(p, "wb") as f:
+                f.write(b)
+            n += 1
+        except OSError:
+            pass
+    retires = set(params.get("identites_supprimees") or [])
+    if os.path.isdir(dd):
+        for f in os.listdir(dd):
+            if f.endswith(".pfx") and f[:-4] in retires:
+                try:
+                    os.remove(os.path.join(dd, f))
+                except OSError:
+                    pass
+    return n
+
+
+def reprendre_publiees(params):
+    """.pfx d'un autre poste trouve dans le dossier synchronise : repris ici (sans phrase secrete)."""
+    try:
+        from .bibliotheque import dossier_philpdf_drive
+        d = dossier_philpdf_drive(params)
+    except Exception:                                     # noqa: BLE001
+        return 0
+    dd = os.path.join(d, "identites") if d else None
+    if not dd or not os.path.isdir(dd):
+        return 0
+    n = 0
+    for e in params.get("identites", []) or []:
+        src = os.path.join(dd, e["id"] + ".pfx")
+        if lire(e) is None and os.path.exists(src):
+            try:
+                with open(src, "rb") as f, open(_fichier(e["id"]), "wb") as g:
+                    g.write(f.read())
+                n += 1
+            except OSError:
+                pass
+    return n
+
+
 def regler(params, ident, **valeurs):
     """Indice du mot de passe, apparence par defaut (« nom », « manuscrite » + id, « texte ») : suivent sur vos postes."""
     l = [dict(e) for e in params.get("identites", []) or []]
@@ -137,6 +201,7 @@ def supprimer(params, ident):
     except OSError:
         pass
     _enregistrer_liste(params, l)
+    publier(params)
 
 
 def definir_defaut(params, ident):
@@ -148,6 +213,7 @@ def changer_mot_de_passe(params, e, ancien, nouveau):
     octets = S.changer_mot_de_passe(lire(e), ancien, nouveau)
     with open(_fichier(e["id"]), "wb") as f:
         f.write(octets)
+    publier(params)
 
 
 # ------------------------------------------------------------------ certificats approuves

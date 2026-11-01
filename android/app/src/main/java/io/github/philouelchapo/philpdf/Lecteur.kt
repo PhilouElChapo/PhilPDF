@@ -681,7 +681,10 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                         c.consume()
                     }
                     trace = emptyList()
-                    portee.launch { if (d.supprimerAnnotationsSur(n, pts) == 0) etat.message = ctx.getString(R.string.gomme_rien) }
+                    portee.launch {
+                        try { if (d.supprimerAnnotationsSur(n, pts) == 0) etat.message = ctx.getString(R.string.gomme_rien) }
+                        catch (e: Exception) { Journal.ecrire("gomme", e.toString()) }
+                    }
                 }
                 else -> detectDragGestures(
                     onDragStart = { o -> trace = listOf(o) },

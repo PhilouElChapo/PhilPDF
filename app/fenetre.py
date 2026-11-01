@@ -2642,6 +2642,12 @@ class Fenetre(MixinCoteACote, QMainWindow):
     def communs_au_demarrage(self, manuel=False, ouvrir=False):
         """Rien n'est repris en silence : si un autre poste a change des reglages (ou ajoute des mots de passe),
         une bulle le signale et une fenetre montre chaque changement, a cocher ou non."""
+        try:                                         # identites (.pfx) : partagees par le dossier synchronise
+            from . import identites as _ID
+            if _ID.reprendre_publiees(self.params) + _ID.publier(self.params):
+                self.synchro_miroir()
+        except Exception:                            # noqa: BLE001
+            pass
         try:
             ch = reglages.changements_communs(self.params)
         except Exception:
