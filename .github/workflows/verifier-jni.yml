@@ -1,0 +1,21 @@
+name: Verifier JNI MuPDF
+on: workflow_dispatch
+jobs:
+  jni:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Methodes natives declarees mais absentes de libmupdf_java.so
+        run: |
+          curl -sSLo fitz.aar https://maven.ghostscript.com/com/artifex/mupdf/fitz/1.28.5/fitz-1.28.5.aar
+          mkdir a && cd a && unzip -q ../fitz.aar && mkdir c && cd c && unzip -q ../classes.jar && cd ..
+          so=$(find . -path "*arm64-v8a*" -name "*.so" | head -1); echo "bibliotheque : $so"
+          nm -D --defined-only "$so" | awk '{print $3}' | grep '^Java_' | sed 's/__.*//' | sort -u > presents.txt
+          for f in $(cd c && find . -name "*.class" | sed 's|^\./||;s|\.class$||' | grep -v '\$'); do
+            cls=$(echo "$f" | tr '/' '.')
+            javap -p -cp c "$cls" 2>/dev/null | grep ' native ' | sed -E 's/.* ([A-Za-z0-9_]+)\(.*/\1/' | sort -u | while read m; do
+              echo "Java_$(echo "$f" | sed 's/_/_1/g; s|/|_|g')_$(echo "$m" | sed 's/_/_1/g')"
+            done
+          done | sort -u > declares.txt
+          echo "declarees : $(wc -l < declares.txt), presentes : $(wc -l < presents.txt)"
+          comm -23 declares.txt presents.txt | tee absentes.txt
+          echo "::notice title=JNI absentes::$(wc -l < absentes.txt) methode(s)"
