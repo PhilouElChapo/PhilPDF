@@ -22,6 +22,8 @@ ANDROID
 - Remplir : ce qui est attendu est dit sous la saisie, clavier adapte (chiffres, e-mail), « Aujourd'hui » /
   « Maintenant » pour les dates ; saisie refusee expliquee (« IBAN incorrect »...) ; montants mis en forme
   (1.234,50 €) ; calculs, listes dependantes et champs affiches mis a jour aussitot.
+- Mes tampons : rangez-les comme vous voulez (« Ranger » : fleches, modifier le texte et la categorie, supprimer),
+  favoris (etoile) en premier, categories repliables ; un tampon personnalise se garde dans la liste.
 
 1.6.0
 - Volet Modifier regroupe : Lire, Modifier le texte, Annoter (surligner, souligner, barrer, note, dessin,

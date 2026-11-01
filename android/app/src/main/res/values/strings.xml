@@ -363,4 +363,10 @@
     <string name="attendu_pourcentage">Pourcentage</string>
     <string name="attendu_masque">Format : %1$s</string>
     <string name="maintenant">Maintenant</string>
+    <string name="bouton_aujourdhui">Aujourd\'hui</string>
+    <string name="mes_tampons">Mes tampons (touchez pour poser)</string>
+    <string name="tampon_garder">Garder dans mes tampons</string>
+    <string name="tampon_modifier">Modifier le tampon</string>
+    <string name="tampon_texte">Texte du tampon</string>
+    <string name="categorie">Catégorie</string>
 </resources>

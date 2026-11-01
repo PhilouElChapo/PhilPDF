@@ -124,6 +124,97 @@ fun texteTampon(t: String, h: Horodatage): String {
     return if (t.endsWith(" LE") || t.endsWith(" le")) "$t $d" else "$t\n$d"
 }
 
+/** Mes tampons (texte) : ceux tout prets au depart, puis les votres ; ordre, favoris, categories, propres au telephone. */
+data class MonTampon(val texte: String, val categorie: String, val favori: Boolean)
+
+object MesTampons {
+    val version = mutableIntStateOf(0)
+    private fun prefs(ctx: Context) = ctx.getSharedPreferences("mes_tampons", Context.MODE_PRIVATE)
+    fun liste(ctx: Context): List<MonTampon> = try {
+        val t = prefs(ctx).getString("liste", null)
+        if (t == null) TAMPONS.map { MonTampon(it, "", false) }
+        else JSONArray(t).let { a -> (0 until a.length()).map { a.getJSONObject(it) }
+            .map { MonTampon(it.optString("texte"), it.optString("categorie"), it.optBoolean("favori")) } }
+    } catch (_: Exception) { TAMPONS.map { MonTampon(it, "", false) } }
+    fun ecrire(ctx: Context, l: List<MonTampon>) {
+        val a = JSONArray()
+        l.forEach { a.put(JSONObject().put("texte", it.texte).put("categorie", it.categorie).put("favori", it.favori)) }
+        prefs(ctx).edit().putString("liste", a.toString()).apply()
+        version.intValue++
+    }
+    fun ajouter(ctx: Context, t: String) { if (t.isNotBlank() && liste(ctx).none { it.texte == t }) ecrire(ctx, liste(ctx) + MonTampon(t, "", false)) }
+}
+
+/** Liste de mes tampons : favoris en premier, categories repliables ; « Ranger » : fleches, modifier, supprimer. */
+@Composable
+fun MesTamponsListe(couleur: Color, horo: Horodatage, poser: (String) -> Unit) {
+    val ctx = LocalContext.current
+    val v = MesTampons.version.intValue
+    val l = remember(v) { MesTampons.liste(ctx) }
+    var ranger by remember { mutableStateOf(false) }
+    var edite by remember { mutableStateOf<MonTampon?>(null) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.mes_tampons), Modifier.weight(1f), fontSize = 13.sp, color = Color.Gray)
+        TextButton(onClick = { ranger = !ranger }) { Text(stringResource(if (ranger) R.string.termine else R.string.ranger), fontSize = 12.sp) }
+    }
+    val groupes = LinkedHashMap<String, List<MonTampon>>()
+    l.filter { it.favori }.takeIf { it.isNotEmpty() }?.let { groupes["★"] = it }
+    l.groupBy { it.categorie }.toSortedMap(compareBy({ it.isEmpty() }, { it.lowercase() })).forEach { (c, x) -> groupes[c] = x }
+    groupes.forEach { (cat, items) ->
+        val cle = "tampons/$cat"
+        var replie by remember(cle, v) { mutableStateOf(BiblioPerso.replie(ctx, cle)) }
+        if (groupes.size > 1 || cat.isNotEmpty()) Row(Modifier.fillMaxWidth().clickable { replie = !replie; BiblioPerso.replier(ctx, cle, replie) }
+            .padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(if (replie) "▸" else "▾", color = Color.Gray)
+            Spacer(Modifier.width(6.dp))
+            Text((if (cat == "★") stringResource(R.string.favoris) else cat.ifEmpty { stringResource(R.string.sans_categorie) }) + "  (${items.size})",
+                fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF555555))
+        }
+        if (!replie) items.forEach { t ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                // apercu tel qu'il sera pose : texte et cadre de la couleur, centre, fond transparent
+                Text(texteTampon(t.texte, horo), Modifier.weight(1f).border(2.dp, couleur, RoundedCornerShape(4.dp))
+                    .clickable { poser(t.texte) }.padding(8.dp),
+                    color = couleur, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                if (ranger && cat != "★") {
+                    val i = l.indexOf(t)
+                    // monter / descendre dans toute la liste (l'ordre vaut aussi dans la categorie)
+                    TextButton(onClick = { if (i > 0) MesTampons.ecrire(ctx, l.toMutableList().apply { add(i - 1, removeAt(i)) }) },
+                        enabled = i > 0, contentPadding = PaddingValues(4.dp)) { Text("↑") }
+                    TextButton(onClick = { if (i < l.size - 1) MesTampons.ecrire(ctx, l.toMutableList().apply { add(i + 1, removeAt(i)) }) },
+                        enabled = i < l.size - 1, contentPadding = PaddingValues(4.dp)) { Text("↓") }
+                    TextButton(onClick = { edite = t }, contentPadding = PaddingValues(4.dp)) { Text("✎") }
+                }
+                IconButton(onClick = { MesTampons.ecrire(ctx, l.map { if (it == t) it.copy(favori = !it.favori) else it }) }) {
+                    Icon(Icones.get("etoile", if (t.favori) Color(0xFFF5A623) else Color(0xFFBBBBBB)), stringResource(R.string.favoris))
+                }
+            }
+        }
+    }
+    edite?.let { t ->
+        var texte by remember(t) { mutableStateOf(t.texte) }
+        var cat by remember(t) { mutableStateOf(t.categorie) }
+        val cats = l.map { it.categorie }.filter { it.isNotEmpty() }.distinct()
+        AlertDialog(onDismissRequest = { edite = null }, title = { Text(stringResource(R.string.tampon_modifier)) },
+            text = {
+                Column {
+                    OutlinedTextField(texte, { texte = it }, label = { Text(stringResource(R.string.tampon_texte)) }, singleLine = true)
+                    OutlinedTextField(cat, { cat = it }, label = { Text(stringResource(R.string.categorie)) }, singleLine = true)
+                    if (cats.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        cats.forEach { c -> AssistChip(onClick = { cat = c }, label = { Text(c, fontSize = 12.sp) }) }
+                    }
+                    TextButton(onClick = { MesTampons.ecrire(ctx, l.filter { it != t }); edite = null }) {
+                        Text(stringResource(R.string.supprimer), color = ROUGE)
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = {
+                MesTampons.ecrire(ctx, l.map { if (it == t) it.copy(texte = texte.trim().ifEmpty { it.texte }, categorie = cat.trim()) else it }); edite = null
+            }) { Text(stringResource(R.string.appliquer)) } },
+            dismissButton = { TextButton(onClick = { edite = null }) { Text(stringResource(R.string.annuler)) } })
+    }
+}
+
 /** Favoris, ordre et categories repliees des elements de vos postes (propres a ce telephone). */
 object BiblioPerso {
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("biblio_perso", Context.MODE_PRIVATE)
@@ -301,14 +392,7 @@ fun PanneauSigner(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choisi: 
             }
         }
         Spacer(Modifier.height(6.dp))
-        TAMPONS.forEach { t ->
-            val final = texteTampon(t, horo)
-            // apercu tel qu'il sera pose : texte et cadre de la couleur, fond transparent
-            Text(final, Modifier.fillMaxWidth().padding(vertical = 3.dp)
-                .border(2.dp, couleurTampon, RoundedCornerShape(4.dp))
-                .clickable { poser(APoser.Tampon(texteTampon(t, horo), couleurTampon, 14f)) }.padding(8.dp),
-                color = couleurTampon, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-        }
+        MesTamponsListe(couleurTampon, horo) { t -> poser(APoser.Tampon(texteTampon(t, horo), couleurTampon, 14f)) }
         Spacer(Modifier.height(6.dp))
         OutlinedTextField(perso, { perso = it }, Modifier.fillMaxWidth(), singleLine = true,
             label = { Text(stringResource(R.string.tampon_perso)) })
@@ -324,6 +408,10 @@ fun PanneauSigner(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choisi: 
                 .border(2.dp, couleurTampon, RoundedCornerShape(4.dp))
                 .clickable { poser(APoser.Tampon(texteTampon(perso, horo), couleurTampon, 14f)) }.padding(8.dp),
                 color = couleurTampon, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            // le garder dans « Mes tampons » (on le retrouve, on le range, on le met en favori)
+            OutlinedButton(onClick = { MesTampons.ajouter(ctx, perso.trim()); perso = ""; MesTampons.version.intValue++ }) {
+                Text(stringResource(R.string.tampon_garder), fontSize = 13.sp)
+            }
         }
         // signature numerique (certificat), comme PhilPDF Windows
         SectionSignatureNumerique(etat, choisi)
@@ -432,7 +520,7 @@ fun SaisieChamp(etat: EtatLecteur, c: InfoChamp, fermer: () -> Unit) {
                         supportingText = attendu?.let { a -> { Text(a, fontSize = 12.sp) } })
                     if (genre == "date" || genre == "heure") TextButton(onClick = {
                         t = Regles.ecrireDate(if (genre == "date") fmt!!.optString("date", "dd/mm/yyyy") else fmt!!.optString("heure", "HH:MM"))
-                    }) { Text(stringResource(if (genre == "date") R.string.aujourdhui else R.string.maintenant)) }
+                    }) { Text(stringResource(if (genre == "date") R.string.bouton_aujourdhui else R.string.maintenant)) }
                 }
                 erreur?.let { Text(it, color = ROUGE, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
             }
