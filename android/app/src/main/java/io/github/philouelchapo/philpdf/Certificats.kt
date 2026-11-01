@@ -433,6 +433,8 @@ class Signataire(private val clef: PrivateKey, private val chaine: List<X509Cert
 /** Verifie les signatures du PDF : empreinte (le document n'a pas change) et certificat (approuve ou non). */
 class Verifieur(private val approuves: List<ByteArray>) : PKCS7Verifier() {
     private val bc = BouncyCastleProvider()
+    /** Nom du signataire, lu dans le certificat lors de checkCertificate. */
+    var signataire: String? = null
 
     override fun checkDigest(stream: FitzInputStream, signature: ByteArray): Int = try {
         val cms = CMSSignedData(CMSProcessableByteArray(lireFlux(stream)), signature)
@@ -447,6 +449,10 @@ class Verifieur(private val approuves: List<ByteArray>) : PKCS7Verifier() {
         val si = cms.signerInfos.signers.first()
         @Suppress("UNCHECKED_CAST")
         val cert = (cms.certificates.getMatches(si.sid as org.bouncycastle.util.Selector<X509CertificateHolder>) as Collection<X509CertificateHolder>).first()
+        signataire = try {
+            fun v(oid: ASN1ObjectIdentifier) = cert.subject.getRDNs(oid).firstOrNull()?.first?.value?.toString()?.takeIf { it.isNotBlank() }
+            v(BCStyle.CN) ?: v(BCStyle.EmailAddress) ?: v(BCStyle.O)
+        } catch (_: Exception) { null }
         when {
             approuves.any { it.contentEquals(cert.encoded) } -> PKCS7Verifier.PKCS7VerifierOK
             cert.subject == cert.issuer -> PKCS7Verifier.PKCS7VerifierSelfSigned

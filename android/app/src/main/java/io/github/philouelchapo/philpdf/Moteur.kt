@@ -683,27 +683,31 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                     nd.put("P", po)
                     val ref = objetIndirect(d, nd)
                     neuf.push(ref); refs[nom(a)] = ref; change = true
-                } else neuf.push(a)
+                } else if (a.isIndirect || a.isDictionary) neuf.push(a)
+                else change = true                               // debris (texte, null...) laisse par une version precedente
             }
             if (change) po.put("Annots", neuf)
         }
-        if (refs.isEmpty()) return
         // liste du formulaire : les copies en ligne remplacees par les champs de la page (une seule fois chacun)
         val af = d.getTrailer().get("Root").get("AcroForm")
         if (!af.isNull) {
             val f = af.get("Fields")
             val neuf = d.newArray()
             val places = HashSet<String>()
+            var change = refs.isNotEmpty()
             if (f.isArray) for (i in 0 until f.size()) {
                 val c = f.get(i)
-                val r = if (!c.isIndirect && c.isDictionary) refs[nom(c)] else null
+                val enLigne = !c.isIndirect && c.isDictionary
+                val r = if (enLigne) refs[nom(c)] else null
                 when {
-                    r == null -> neuf.push(c)
-                    places.add(nom(c)) -> neuf.push(r)
+                    r != null -> if (places.add(nom(c))) neuf.push(r)
+                    // copie en ligne d'un champ qui n'est plus sur aucune page : retiree
+                    enLigne && c.get("Subtype").asName() == "Widget" -> change = true
+                    else -> neuf.push(c)
                 }
             }
             refs.forEach { (k, r) -> if (k !in places) neuf.push(r) }
-            af.put("Fields", neuf)
+            if (change) af.put("Fields", neuf)
         }
         // controle : sinon la signature irait encore dans une copie invisible
         for (n in 0 until d.countPages()) {
@@ -712,7 +716,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                 if (!a.isIndirect && a.isDictionary && a.get("Subtype").asName() == "Widget")
                     throw ErreurCertificat("Champ de signature illisible dans ce PDF : tracez un nouveau cadre de signature.") }
         }
-        Journal.ecrire("certificat", "${refs.size} champ(s) du formulaire remis en objet unique avant de signer")
+        if (refs.isNotEmpty()) Journal.ecrire("certificat", "${refs.size} champ(s) du formulaire remis en objet unique avant de signer")
     }
 
     /** Signatures numeriques du document, verifiees (empreinte, certificat approuve, modifications apres). */
@@ -732,8 +736,11 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                                 out += InfoSignature(n, "?", false, false, false, true, ""); return@forEach
                             }
                             val dig = try { w.checkDigest(v) } catch (_: Exception) { -1 }
+                            v.signataire = null
                             val cer = try { w.checkCertificate(v) } catch (_: Exception) { -1 }
-                            val nomS = try { w.getSignatory(v) } catch (_: Exception) { null } ?: try { w.getDistinguishedName(v)?.cn } catch (_: Exception) { null } ?: "?"
+                            // jamais w.getSignatory / w.getDistinguishedName : avec un verificateur Java, MuPDF appelle une
+                            // fonction absente et l'appli plante (le nom est lu ici dans le certificat de la signature)
+                            val nomS = v.signataire ?: "?"
                             val apres = try { w.incrementalChangesSinceSigning() } catch (_: Exception) { false }
                             out += InfoSignature(n, nomS, dig == PKCS7Verifier.PKCS7VerifierOK, cer == PKCS7Verifier.PKCS7VerifierOK,
                                 cer == PKCS7Verifier.PKCS7VerifierSelfSigned, apres, "")

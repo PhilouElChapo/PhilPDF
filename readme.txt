@@ -10,6 +10,12 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.8.6
+- Plantage a l'ouverture d'un PDF signe (donc juste apres « Enregistrer » une signature) : corrige. Le nom du
+  signataire est lu directement dans le certificat (la fonction du moteur PDF prevue pour cela plantait).
+- Avant de signer, les restes laisses dans le PDF par les versions precedentes (copie d'un ancien champ, debris) sont
+  retires.
+
 1.8.5
 - Champs de formulaire et de signature poses sur le telephone : ils etaient enregistres en double dans le PDF (defaut
   du moteur PDF utilise, contourne). Ils sont maintenant ecrits une seule fois ; ceux deja poses sont repares au moment
