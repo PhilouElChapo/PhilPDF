@@ -10,6 +10,19 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.7.0
+- Regles des champs de formulaire, comme PhilPDF Windows (et compatibles Acrobat : meme JavaScript) :
+  type devine d'apres le libelle a la creation (Date, Montant, Quantite, Telephone, Code postal, E-mail,
+  N° Secu, IBAN, SIRET, RPPS, Nom en majuscules ; « Signature » devient un champ de signature).
+- Appui long sur un champ > « Proprietes » : format (date, heure, nombre, montant, pourcentage, telephone, code
+  postal, masque), majuscules, controle (e-mail, N° Secu, IBAN, SIRET, RPPS), valeur automatique (date ou heure au
+  toucher), plage permise, calcul (somme, produit, moyenne, min, max, formule, copie, age, ecart en jours,
+  date + jours), choix et liste dependante d'un autre champ, afficher d'autres champs selon une case ou une
+  valeur, messages d'aide.
+- Remplir : ce qui est attendu est dit sous la saisie, clavier adapte (chiffres, e-mail), « Aujourd'hui » /
+  « Maintenant » pour les dates ; saisie refusee expliquee (« IBAN incorrect »...) ; montants mis en forme
+  (1.234,50 €) ; calculs, listes dependantes et champs affiches mis a jour aussitot.
+
 1.6.0
 - Volet Modifier regroupe : Lire, Modifier le texte, Annoter (surligner, souligner, barrer, note, dessin,
   rectangle, ellipse, fleche), Effacer, Formulaire ; les outils d'un groupe s'affichent sous son bouton.

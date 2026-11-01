@@ -618,6 +618,10 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                                 c == null || c.lectureSeule -> auToucher?.invoke()
                                 c.genre == com.artifex.mupdf.fitz.PDFWidget.TYPE_CHECKBOX ||
                                     c.genre == com.artifex.mupdf.fitz.PDFWidget.TYPE_RADIOBUTTON -> d.remplir(c, null)
+                                // champ vide qui se remplit seul (date ou heure du moment) : rempli d'un toucher
+                                c.genre == com.artifex.mupdf.fitz.PDFWidget.TYPE_TEXT && c.valeur.isEmpty() &&
+                                    (try { org.json.JSONObject(c.regles).optString("auto") } catch (_: Exception) { "" }).let { it.isNotEmpty() && it != "null" } ->
+                                    d.valeurAuto(c)
                                 c.genre == com.artifex.mupdf.fitz.PDFWidget.TYPE_TEXT || c.options.isNotEmpty() -> etat.champ = c
                                 // champ de signature : vide -> signer avec un certificat ; signe -> verifier
                                 c.genre == com.artifex.mupdf.fitz.PDFWidget.TYPE_SIGNATURE -> {

@@ -432,7 +432,8 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                     if (a.x in r.x0..r.x1 && a.y in r.y0..r.y1) {
                         trouve = InfoChamp(n, i, w.fieldType, try { w.value ?: "" } catch (_: Exception) { "" },
                             try { w.options?.toList() ?: emptyList() } catch (_: Exception) { emptyList() },
-                            try { w.isReadOnly } catch (_: Exception) { false }, try { w.name ?: "" } catch (_: Exception) { "" })
+                            try { w.isReadOnly } catch (_: Exception) { false }, try { w.name ?: "" } catch (_: Exception) { "" },
+                            try { Regles.lire(w.getObject()).toString() } catch (_: Exception) { "" })
                         break
                     }
                 }
@@ -443,21 +444,174 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         }
     }
 
-    /** Remplit un champ : texte, choix dans une liste ; case a cocher / bouton radio : bascule. */
-    suspend fun remplir(c: InfoChamp, valeur: String?): Boolean = operation("Remplir") { p ->
-        surPage(p, c.page) { page ->
-            val w = page.widgets?.getOrNull(c.index)
-            if (w == null) false else {
-                val ok = when (c.genre) {
-                    PDFWidget.TYPE_TEXT -> w.setTextValue(valeur ?: "")
-                    PDFWidget.TYPE_COMBOBOX, PDFWidget.TYPE_LISTBOX -> w.setChoiceValue(valeur ?: "")
-                    PDFWidget.TYPE_CHECKBOX, PDFWidget.TYPE_RADIOBUTTON -> w.toggle()
+    /** Remplit un champ (texte, choix ; case a cocher / bouton radio : bascule), avec les regles du champ comme sous
+     *  Windows : format, controle, plage ; puis listes dependantes, champs montres / caches, calculs.
+     *  Renvoie null si c'est fait, sinon le message a montrer (saisie refusee). */
+    suspend fun remplir(c: InfoChamp, valeur: String?): String? {
+        var erreur: String? = null
+        operation("Remplir") { p ->
+            var nom = ""
+            val ok = surPage(p, c.page) { page ->
+                val w = page.widgets?.getOrNull(c.index) ?: return@surPage false
+                nom = w.name ?: ""
+                when (c.genre) {
+                    PDFWidget.TYPE_TEXT -> {
+                        val regles = Regles.lire(w.getObject())
+                        val (v, err) = Regles.saisie(regles, valeur ?: "")
+                        if (err != null || v == null) { erreur = messageSaisie(err ?: "", regles, valeur ?: ""); false }
+                        else { ecrireValeur(p, w, v, regles); true }
+                    }
+                    PDFWidget.TYPE_COMBOBOX, PDFWidget.TYPE_LISTBOX -> w.setChoiceValue(valeur ?: "").also { w.update() }
+                    PDFWidget.TYPE_CHECKBOX, PDFWidget.TYPE_RADIOBUTTON -> w.toggle().also { w.update() }
                     else -> false
                 }
-                w.update()
-                ok
+            }
+            if (ok) apresValeur(p, nom)
+            ok
+        }
+        return erreur
+    }
+
+    /** Date ou heure du moment dans un champ vide qui le demande (comme Acrobat a l'entree du champ). */
+    suspend fun valeurAuto(c: InfoChamp): Boolean = operation("Remplir") { p ->
+        var nom = ""
+        val ok = surPage(p, c.page) { page ->
+            val w = page.widgets?.getOrNull(c.index) ?: return@surPage false
+            nom = w.name ?: ""
+            val r = Regles.lire(w.getObject())
+            val auto = r.optString("auto").takeIf { !r.isNull("auto") && it.isNotEmpty() } ?: return@surPage false
+            val fmt = Regles.format(r)
+            val f = when {
+                fmt.optString("genre") == "date" -> fmt.optString("date")
+                fmt.optString("genre") == "heure" -> fmt.optString("heure")
+                else -> mapOf("date_clic" to "dd/mm/yyyy", "heure_clic" to "HH:MM")[auto] ?: "dd/mm/yyyy HH:MM"
+            }
+            ecrireValeur(p, w, Regles.ecrireDate(f), r); true
+        }
+        if (ok) apresValeur(p, nom)
+        ok
+    }
+
+    private fun messageSaisie(err: String, r: org.json.JSONObject, valeur: String): String {
+        val fmt = Regles.format(r)
+        return when (err) {
+            "nombre" -> "« $valeur » n'est pas un nombre."
+            "date" -> "Date attendue au format " + fmt.optString("date", "dd/mm/yyyy").replace("yyyy", "aaaa").replace("dd", "jj") + "."
+            "heure" -> "Heure attendue au format " + fmt.optString("heure", "HH:MM") + "."
+            "masque" -> "Saisie attendue : " + fmt.optString("masque")
+            "plage" -> r.optJSONObject("plage")?.let { pl ->
+                val a = if (pl.isNull("min")) null else Regles.valeurBrute(pl.optDouble("min"))
+                val b = if (pl.isNull("max")) null else Regles.valeurBrute(pl.optDouble("max"))
+                when { a != null && b != null -> "La valeur doit être comprise entre $a et $b."; a != null -> "La valeur doit être au moins $a."
+                    else -> "La valeur doit être au plus $b." }
+            } ?: "Valeur hors limites."
+            "controle" -> Regles.MESSAGES_CONTROLE[r.optString("controle")] ?: "Valeur incorrecte."
+            else -> "Valeur incorrecte."
+        }
+    }
+
+    /** Valeur gardee = brute (comme Acrobat) ; apparence = texte formate (1.234,50 €). */
+    private fun ecrireValeur(p: PDFDocument, w: PDFWidget, brut: String, regles: org.json.JSONObject) {
+        val aff = Regles.formater(regles, brut)
+        w.setTextValue(aff)
+        w.update()
+        if (aff != brut || brut.isEmpty()) {
+            val ch = Regles.champDe(w.getObject())
+            if (brut.isEmpty()) ch.delete("V") else ch.put("V", p.newString(brut))
+        }
+    }
+
+    /** Valeurs de tous les champs (texte brut, choix, « Off » / etat des cases). */
+    private fun valeurs(p: PDFDocument): Map<String, String> {
+        val out = HashMap<String, String>()
+        for (n in 0 until p.countPages()) {
+            val pg = p.loadPage(n) as PDFPage
+            try { pg.widgets?.forEach { w -> out.putIfAbsent(w.name ?: "", try { w.value ?: "" } catch (_: Exception) { "" }) } } finally { pg.destroy() }
+        }
+        return out
+    }
+
+    /** Une valeur a change : listes dependantes, champs montres / caches, puis calculs (comme Windows). */
+    private fun apresValeur(p: PDFDocument, nom: String) {
+        if (nom.isEmpty()) return
+        val v = valeurs(p)[nom] ?: ""
+        for (n in 0 until p.countPages()) surPage(p, n) { page ->
+            page.widgets?.forEach { x ->
+                val r = try { Regles.lire(x.getObject()) } catch (_: Exception) { return@forEach }
+                val dep = r.optJSONObject("depend")
+                if (dep != null && dep.optString("parent") == nom) {
+                    val l = dep.optJSONObject("listes")?.optJSONArray(v)
+                    val items = (0 until (l?.length() ?: 0)).map { l!!.getString(it) }
+                    val ch = Regles.champDe(x.getObject())
+                    val opt = p.newArray(); items.forEach { opt.push(p.newString(it)) }
+                    ch.put("Opt", opt)
+                    if ((x.value ?: "") !in items) ch.delete("V")
+                    x.update()
+                }
+                if ((x.name ?: "") == nom) r.optJSONObject("affiche")?.let { a ->
+                    val vis = if (a.optString("quand") == "coche") v !in listOf("", "Off") else v == a.optString("valeur")
+                    val cibles = a.optJSONArray("cibles") ?: return@let
+                    val noms = (0 until cibles.length()).map { cibles.getString(it) }.toSet()
+                    for (m in 0 until p.countPages()) surPage(p, m) { pg ->
+                        pg.widgets?.forEach { y -> if ((y.name ?: "") in noms) { Regles.afficher(y, vis); y.update() } }
+                        true
+                    }
+                }
+            }
+            true
+        }
+        recalculer(p)
+    }
+
+    /** Champs calcules, dans l'ordre de calcul (somme, produit, moyenne, min, max, formule, dates). */
+    private fun recalculer(p: PDFDocument) {
+        val calc = LinkedHashMap<String, org.json.JSONObject>()
+        val formats = HashMap<String, String?>()
+        for (ch in Regles.tous(p)) {
+            val r = try { Regles.lire(ch.obj) } catch (_: Exception) { continue }
+            val f = Regles.format(r)
+            formats.putIfAbsent(ch.nom, if (f.optString("genre") == "date") f.optString("date") else null)
+            if (r.optJSONObject("calcul") != null && ch.nom !in calc) calc[ch.nom] = r
+        }
+        if (calc.isEmpty()) return
+        val deps = calc.mapValues { Regles.sources(it.value.optJSONObject("calcul")).toSet() intersect calc.keys }
+        val ordre = ArrayList<String>(); val vus = HashSet<String>()
+        fun visiter(n: String, pile: Set<String>) { if (n in vus || n in pile) return; deps[n]?.forEach { visiter(it, pile + n) }; vus += n; ordre += n }
+        calc.keys.forEach { visiter(it, emptySet()) }
+        for (nm in ordre) {
+            val r = calc[nm]!!
+            val v = Regles.calculer(r, valeurs(p), formats) ?: continue
+            for (n in 0 until p.countPages()) surPage(p, n) { page ->
+                page.widgets?.filter { (it.name ?: "") == nm }?.forEach { w -> if ((w.value ?: "") != v) ecrireValeur(p, w, v, r) }
+                true
             }
         }
+    }
+
+    // ---------------------------------------------------------------- proprietes d'un champ (regles)
+    /** Regles du champ, et noms de tous les champs du document (pour calculs, listes dependantes, affichage). */
+    suspend fun reglesChamp(c: InfoChamp): Pair<org.json.JSONObject, List<String>> = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val p = pdf ?: return@withContext Regles.vide() to emptyList()
+            val page = p.loadPage(c.page) as PDFPage
+            val r = try { page.widgets?.getOrNull(c.index)?.let { Regles.lire(it.getObject()) } ?: Regles.vide() } finally { page.destroy() }
+            r to Regles.tous(p).map { it.nom }.distinct().filter { it.isNotEmpty() && it != c.nom }
+        }
+    }
+
+    /** Enregistre les regles du champ (et ses choix pour une liste), puis refait le JavaScript du formulaire. */
+    suspend fun ecrireReglesChamp(c: InfoChamp, regles: org.json.JSONObject, choix: List<String>?): Boolean = operation("Propriétés du champ") { p ->
+        val ok = surPage(p, c.page) { page ->
+            val w = page.widgets?.getOrNull(c.index) ?: return@surPage false
+            Regles.ecrire(p, w.getObject(), regles)
+            if (choix != null) {
+                val opt = p.newArray(); choix.forEach { opt.push(p.newString(it)) }
+                Regles.champDe(w.getObject()).put("Opt", opt)
+            }
+            w.update(); true
+        }
+        if (ok) try { Regles.genererJs(p) } catch (e: Exception) { Journal.ecrire("formulaire", "JavaScript : $e") }
+        ok
     }
 
     // ---------------------------------------------------------------- signature numerique (certificat)
@@ -548,7 +702,21 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
             l.filter { it.nom.isBlank() }.forEach { it.nom = Formulaire.nomAuto(page, it.rect, it.genre == "case") }
         }
         Formulaire.nomsUniques(p, champs)
-        for ((n, l) in champs.groupBy { it.page }) surPage(p, n) { page -> l.forEach { Formulaire.creer(p, page, it) } }
+        // « Signature » : champ de signature ; « Date », « Montant », « Téléphone »... : regles devinees (comme Windows)
+        val prets = champs.map { c -> if (c.genre == "texte" && Regles.deviner(c.nom)?.first == "signature") c.copy(genre = "signature") else c }
+        for ((n, l) in prets.groupBy { it.page }) surPage(p, n) { page -> l.forEach { Formulaire.creer(p, page, it) } }
+        var regles = false
+        for ((n, l) in prets.filter { it.genre == "texte" }.groupBy { it.page }) surPage(p, n) { page ->
+            val noms = l.associateBy { it.nom }
+            page.widgets?.forEach { w -> noms[w.name ?: ""]?.let { c ->
+                Regles.deviner(c.nom)?.second?.let { r ->
+                    val tout = Regles.vide(); for (k in r.keys()) tout.put(k, r.get(k))
+                    Regles.ecrire(p, w.getObject(), tout); regles = true
+                }
+            } }
+            true
+        }
+        if (regles) try { Regles.genererJs(p) } catch (e: Exception) { Journal.ecrire("formulaire", "JavaScript : $e") }
         // apparence des nouveaux champs (la page relue les connait)
         for (n in champs.map { it.page }.distinct()) surPage(p, n) { page ->
             val noms = champs.filter { it.page == n }.map { it.nom }.toSet()
@@ -897,4 +1065,4 @@ data class InfoAnnot(val page: Int, val index: Int, val genre: Int, val couleur:
     val objet: Boolean get() = genre == PDFAnnotation.TYPE_STAMP || genre == PDFAnnotation.TYPE_FREE_TEXT || genre == PDFAnnotation.TYPE_INK
 }
 data class InfoChamp(val page: Int, val index: Int, val genre: Int, val valeur: String, val options: List<String>,
-                     val lectureSeule: Boolean, val nom: String = "")
+                     val lectureSeule: Boolean, val nom: String = "", val regles: String = "")

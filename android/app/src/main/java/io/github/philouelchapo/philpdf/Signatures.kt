@@ -393,25 +393,52 @@ fun PadSignature(genre: String, fermer: () -> Unit, valider: (Trace) -> Unit) {
     }
 }
 
-/** Champ de formulaire touche : saisie du texte ou choix dans la liste (cases a cocher : basculees directement). */
+/** Champ de formulaire touche : saisie du texte (avec son format : date, montant, telephone...) ou choix dans la liste. */
 @Composable
 fun SaisieChamp(etat: EtatLecteur, c: InfoChamp, fermer: () -> Unit) {
     val portee = rememberCoroutineScope()
     var t by remember(c) { mutableStateOf(c.valeur) }
+    var erreur by remember { mutableStateOf<String?>(null) }
+    val r = remember(c) { try { JSONObject(c.regles) } catch (_: Exception) { JSONObject() } }
+    val fmt = r.optJSONObject("format")
+    val genre = fmt?.optString("genre") ?: "aucun"
+    // ce qui est attendu, dit avant de taper (comme les formats d'Acrobat)
+    val attendu = when (genre) {
+        "date" -> stringResource(R.string.attendu_date, fmt!!.optString("date", "dd/mm/yyyy").replace("yyyy", "aaaa").replace("dd", "jj"))
+        "heure" -> stringResource(R.string.attendu_heure, fmt!!.optString("heure", "HH:MM"))
+        "nombre" -> stringResource(R.string.attendu_nombre) + fmt!!.optString("symbole").let { if (it.isNotBlank()) " ($it)" else "" }
+        "pourcentage" -> stringResource(R.string.attendu_pourcentage)
+        "masque" -> stringResource(R.string.attendu_masque, fmt!!.optString("masque"))
+        else -> null
+    }
+    val clavier = when (genre) {
+        "nombre", "pourcentage" -> androidx.compose.ui.text.input.KeyboardType.Decimal
+        "masque" -> if (fmt!!.optString("masque").all { it == '9' || !it.isLetterOrDigit() }) androidx.compose.ui.text.input.KeyboardType.Number
+            else androidx.compose.ui.text.input.KeyboardType.Text
+        else -> if (r.optString("controle") == "email") androidx.compose.ui.text.input.KeyboardType.Email else androidx.compose.ui.text.input.KeyboardType.Text
+    }
+    fun valider(v: String) = portee.launch { val e = etat.doc.remplir(c, v); if (e == null) fermer() else erreur = e }
     AlertDialog(onDismissRequest = fermer,
-        title = { Text(stringResource(R.string.champ)) },
+        title = { Text(c.nom.ifEmpty { stringResource(R.string.champ) }) },
         text = {
-            if (c.options.isNotEmpty()) Column(Modifier.verticalScroll(rememberScrollState())) {
-                c.options.forEach { o ->
-                    Text(o, Modifier.fillMaxWidth().clickable { portee.launch { etat.doc.remplir(c, o); fermer() } }
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                r.optJSONObject("aide")?.optString("entree")?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, color = Color(0xFF0F6CBD)) }
+                if (c.options.isNotEmpty()) c.options.forEach { o ->
+                    Text(o, Modifier.fillMaxWidth().clickable { valider(o) }
                         .padding(vertical = 10.dp), fontWeight = if (o == c.valeur) FontWeight.Bold else FontWeight.Normal)
+                } else {
+                    OutlinedTextField(t, { t = it; erreur = null }, Modifier.fillMaxWidth(), singleLine = genre != "aucun",
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = clavier),
+                        supportingText = attendu?.let { a -> { Text(a, fontSize = 12.sp) } })
+                    if (genre == "date" || genre == "heure") TextButton(onClick = {
+                        t = Regles.ecrireDate(if (genre == "date") fmt!!.optString("date", "dd/mm/yyyy") else fmt!!.optString("heure", "HH:MM"))
+                    }) { Text(stringResource(if (genre == "date") R.string.aujourdhui else R.string.maintenant)) }
                 }
-            } else OutlinedTextField(t, { t = it }, Modifier.fillMaxWidth())
+                erreur?.let { Text(it, color = ROUGE, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
+            }
         },
         confirmButton = {
-            if (c.options.isEmpty()) TextButton(onClick = { portee.launch { etat.doc.remplir(c, t); fermer() } }) {
-                Text(stringResource(R.string.ok))
-            }
+            if (c.options.isEmpty()) TextButton(onClick = { valider(t) }) { Text(stringResource(R.string.ok)) }
         },
         dismissButton = { TextButton(onClick = fermer) { Text(stringResource(R.string.annuler)) } })
 }
