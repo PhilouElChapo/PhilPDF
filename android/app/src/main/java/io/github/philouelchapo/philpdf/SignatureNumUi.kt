@@ -115,10 +115,7 @@ fun SectionSignatureNumerique(etat: EtatLecteur, choisi: () -> Unit) {
 }
 
 @Composable
-private fun ChampMotDePasse(v: String, changer: (String) -> Unit, libelle: String) {
-    OutlinedTextField(v, changer, label = { Text(libelle) }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
-}
+private fun ChampMotDePasse(v: String, changer: (String) -> Unit, libelle: String) = ChampSecret(v, changer, libelle)
 
 @Composable
 private fun DialogueImporterPfx(octets: ByteArray, fermer: () -> Unit, fait: () -> Unit) {

@@ -8,6 +8,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -35,4 +39,22 @@ fun Fenetre(fermer: () -> Unit, alignement: Alignment = Alignment.Center, conten
             Box(Modifier.clickable(remember { MutableInteractionSource() }, null) {}) { contenu() }
         }
     }
+}
+
+/** Champ de mot de passe (ou de tout texte cache) : un oeil a droite montre ou cache ce qui est tape. Partout. */
+@Composable
+fun ChampSecret(valeur: String, changer: (String) -> Unit, libelle: String, modifier: Modifier = Modifier.fillMaxWidth(),
+                erreur: Boolean = false, aide: (@Composable () -> Unit)? = null) {
+    var voir by remember { mutableStateOf(false) }
+    androidx.compose.material3.OutlinedTextField(valeur, changer, modifier,
+        label = { androidx.compose.material3.Text(libelle) }, singleLine = true, isError = erreur, supportingText = aide,
+        visualTransformation = if (voir) androidx.compose.ui.text.input.VisualTransformation.None
+            else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
+        trailingIcon = {
+            androidx.compose.material3.IconButton(onClick = { voir = !voir }) {
+                androidx.compose.material3.Icon(Icones.get(if (voir) "oeil_barre" else "oeil", androidx.compose.ui.graphics.Color(0xFF555555)),
+                    androidx.compose.ui.res.stringResource(if (voir) R.string.mdp_cacher else R.string.mdp_voir))
+            }
+        })
 }

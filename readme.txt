@@ -10,6 +10,10 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.7.2
+- Mots de passe (certificat, phrase secrete, PDF protege, nouveau mot de passe) : un oeil a droite du champ montre
+  ou cache ce qui est tape.
+
 1.7.1
 - Certificats de signature (identites numeriques) de vos postes : ceux qui ne sont pas encore sur le telephone
   sont montres dans le volet Signer (et pourquoi : a recuperer, ou ranges dans le magasin de Windows) ; la
@@ -176,6 +180,10 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.51
+- E-mail : le mot de passe de l'adresse d'envoi (et celui d'ouverture du PDF envoye) a lui aussi son oeil pour
+  voir ce qui est tape, comme les autres mots de passe de PhilPDF.
 
 0.9.50
 - Fermeture : plus d'« APPCRASH pyside6.abi3.dll » dans le Moniteur de fiabilite de Windows (Qt ecrivait encore

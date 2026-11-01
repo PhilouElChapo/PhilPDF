@@ -347,15 +347,8 @@ private fun DialogueMotDePasse(d: DocumentPdf, fermer: () -> Unit) {
             Column {
                 Text(stringResource(R.string.mdp_texte), fontSize = 14.sp)
                 Spacer(Modifier.height(8.dp))
-                val vt = if (voir) VisualTransformation.None else PasswordVisualTransformation()
-                OutlinedTextField(m1, { m1 = it }, label = { Text(stringResource(R.string.mdp_nouveau)) }, singleLine = true,
-                    visualTransformation = vt, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
-                OutlinedTextField(m2, { m2 = it }, label = { Text(stringResource(R.string.mdp_confirmer)) }, singleLine = true,
-                    visualTransformation = vt, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(voir, { voir = it })
-                    Text(stringResource(R.string.mdp_voir), fontSize = 14.sp)
-                }
+                ChampSecret(m1, { m1 = it }, stringResource(R.string.mdp_nouveau))
+                ChampSecret(m2, { m2 = it }, stringResource(R.string.mdp_confirmer))
                 erreur?.let { Text(it, color = ROUGE, fontSize = 13.sp) }
                 if (protege) TextButton(onClick = {
                     d.motDePasseNouveau = ""

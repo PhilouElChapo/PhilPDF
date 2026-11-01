@@ -222,7 +222,7 @@
     <string name="mdp_texte">Le mot de passe sera demandé pour ouvrir le PDF (chiffrement AES 256). Il s\'applique à l\'enregistrement : gardez-le, il ne peut pas être retrouvé.</string>
     <string name="mdp_nouveau">Mot de passe</string>
     <string name="mdp_confirmer">Confirmer le mot de passe</string>
-    <string name="mdp_voir">Afficher</string>
+    <string name="mdp_voir">Afficher le mot de passe</string>
     <string name="mdp_differents">Les deux mots de passe sont différents.</string>
     <string name="mdp_virgule">La virgule n\'est pas acceptée dans un mot de passe.</string>
     <string name="mdp_retirer">Retirer le mot de passe du PDF</string>
@@ -373,4 +373,5 @@
     <string name="sig_magasin_windows">Rangé dans le magasin de certificats de Windows : il ne quitte pas ce PC. Sous Windows, ajoutez-le à PhilPDF depuis son fichier .pfx pour le retrouver ici.</string>
     <string name="sig_retenir_phrase">Retenir la phrase sur ce téléphone (les certificats suivront tout seuls)</string>
     <string name="sig_rien_recupere">Aucun certificat transférable : sous Windows, vérifiez « Partager les mots de passe » et que vos certificats sont des fichiers .pfx (pas seulement dans le magasin de Windows).</string>
+    <string name="mdp_cacher">Cacher le mot de passe</string>
 </resources>

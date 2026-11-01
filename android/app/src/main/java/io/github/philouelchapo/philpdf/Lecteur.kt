@@ -947,9 +947,8 @@ private fun DemandeMotDePasse(doc: DocumentPdf, ok: () -> Unit, annuler: () -> U
             Column {
                 Text(stringResource(R.string.protege, doc.nom))
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(mdp, { mdp = it; faux = false }, singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(), isError = faux,
-                    supportingText = { if (faux) Text(stringResource(R.string.mdp_faux)) })
+                ChampSecret(mdp, { mdp = it; faux = false }, stringResource(R.string.mot_de_passe), erreur = faux,
+                    aide = if (faux) { { Text(stringResource(R.string.mdp_faux)) } } else null)
             }
         },
         confirmButton = { TextButton(onClick = { if (doc.motDePasse(mdp)) ok() else faux = true }) { Text(stringResource(R.string.ok)) } },

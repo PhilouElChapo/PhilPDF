@@ -74,8 +74,8 @@ class DialogueCompteMail(QDialog):
         self.aide.setWordWrap(True)
         self.aide.setStyleSheet("color:#555")
         f.addRow("", self.aide)
-        self.mdp = QLineEdit(C.mot_de_passe(self.compte) if compte else "")
-        self.mdp.setEchoMode(QLineEdit.Password)
+        from .dialogues import oeil
+        self.mdp = oeil(QLineEdit(C.mot_de_passe(self.compte) if compte else ""))   # oeil : voir ce qui est tape
         f.addRow(_("Mot de passe"), self.mdp)
         v.addLayout(f)
         self.avance = QGroupBox(_("Serveur d'envoi (rempli tout seul)"))
@@ -873,9 +873,9 @@ class PanneauEnvoyer(QWidget):
             if signe and k != "tel_quel":
                 rb.setEnabled(False)
                 rb.setToolTip(_("Document signé : il part tel quel pour que les signatures restent valides."))
-        self.mdp = QLineEdit()
+        from .dialogues import oeil
+        self.mdp = oeil(QLineEdit())
         self.mdp.setPlaceholderText(_("Mot de passe d'ouverture"))
-        self.mdp.setEchoMode(QLineEdit.Password)
         v.addWidget(self.mdp)
         self.l_aide_version = QLabel()
         self.l_aide_version.setWordWrap(True)
@@ -1130,9 +1130,8 @@ class PanneauEnvoyer(QWidget):
     def _mdp(self, c):
         mdp = C.mot_de_passe(c)
         if not mdp:
-            from PySide6.QtWidgets import QInputDialog
-            mdp, ok = QInputDialog.getText(self, _("Envoyer par e-mail"),
-                                           _("Mot de passe de {a} sur ce poste :", a=c["adresse"]), QLineEdit.Password)
+            from .dialogues import demander_secret
+            mdp, ok = demander_secret(self, _("Envoyer par e-mail"), _("Mot de passe de {a} sur ce poste :", a=c["adresse"]))
             if not ok or not mdp:
                 return None
             coffre.enregistrer(C.ident_coffre(c), mdp)
