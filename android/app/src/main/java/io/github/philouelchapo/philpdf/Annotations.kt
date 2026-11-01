@@ -34,15 +34,32 @@ enum class Outil(val icone: String, val texte: Int) {
     RECTANGLE("tout", R.string.outil_rectangle),
     ELLIPSE("aucun", R.string.outil_ellipse),
     FLECHE("suivante", R.string.outil_fleche),
-    GOMME("supprimer", R.string.outil_gomme),
+    GOMME("supprimer", R.string.outil_gomme),               // effacer des annotations (toucher ou frotter)
+    EFFACER_ZONE("biffer", R.string.outil_effacer_zone),     // effacer le contenu de la page dans une zone
     CHAMP_TEXTE("formulaire", R.string.outil_champ_texte),   // creer un formulaire : zone de texte dessinee
     CHAMP_CASE("valide", R.string.outil_champ_case),         // creer un formulaire : case a cocher
+    CHAMP_LISTE("liste_fichiers", R.string.outil_champ_liste), // creer un formulaire : liste deroulante
+    CHAMP_SIGNATURE("champ_signature", R.string.outil_champ_signature), // champ de signature vide
     SIGNER_NUM("certificat", R.string.outil_signer_num),     // signature numerique : tracer le cadre
     POSER("signer", R.string.outil_poser);          // signature, paraphe ou tampon a poser d'un toucher
 
     val texteSurligne: Boolean get() = this == SURLIGNER || this == SOULIGNER || this == BARRER
     val forme: Boolean get() = this == RECTANGLE || this == ELLIPSE || this == FLECHE
-    val champ: Boolean get() = this == CHAMP_TEXTE || this == CHAMP_CASE
+    val champ: Boolean get() = this == CHAMP_TEXTE || this == CHAMP_CASE || this == CHAMP_LISTE || this == CHAMP_SIGNATURE
+    /** Outils qui se tracent comme un cadre (rectangle du doigt). */
+    val cadre: Boolean get() = champ || this == EFFACER_ZONE || this == SIGNER_NUM
+}
+
+/** Groupes du volet Modifier : un bouton par groupe, ses outils s'affichent dessous (rien n'est noye). */
+enum class GroupeOutils(val icone: String, val texte: Int, val outils: List<Outil>) {
+    LIRE("oeil", R.string.outil_lire, listOf(Outil.MAIN)),
+    TEXTE("modifier", R.string.outil_texte, listOf(Outil.TEXTE)),
+    ANNOTER("surligner", R.string.groupe_annoter, listOf(Outil.SURLIGNER, Outil.SOULIGNER, Outil.BARRER, Outil.NOTE,
+        Outil.DESSIN, Outil.RECTANGLE, Outil.ELLIPSE, Outil.FLECHE)),
+    EFFACER("supprimer", R.string.groupe_effacer, listOf(Outil.GOMME, Outil.EFFACER_ZONE)),
+    FORMULAIRE("formulaire", R.string.groupe_formulaire, listOf(Outil.CHAMP_TEXTE, Outil.CHAMP_CASE, Outil.CHAMP_LISTE, Outil.CHAMP_SIGNATURE));
+
+    companion object { fun de(o: Outil) = entries.firstOrNull { o in it.outils } ?: LIRE }
 }
 
 /** Couleurs proposees (memes teintes par defaut que PhilPDF Windows). */
@@ -87,26 +104,53 @@ fun PanneauAnnoter(etat: EtatLecteur, choisi: () -> Unit = {}) {
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(12.dp)) {
         Text(stringResource(R.string.annoter_titre), fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
+        // 1. les groupes (Lire, Modifier le texte, Annoter, Effacer, Formulaire)
+        var ouvert by remember { mutableStateOf(GroupeOutils.de(r.outil)) }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Outil.entries.filter { it != Outil.POSER && it != Outil.SIGNER_NUM }.forEach { o ->
-                val actif = r.outil == o
+            GroupeOutils.entries.forEach { g ->
+                val actif = ouvert == g
+                val plusieurs = g.outils.size > 1
                 Column(Modifier.width(76.dp).background(if (actif) Color(0xFFFCEBEC) else Color.White, RoundedCornerShape(8.dp))
                     .border(1.dp, if (actif) ROUGE else Color(0xFFE2E2E2), RoundedCornerShape(8.dp))
-                    .clickable { r.outil = o; choisi() }.padding(vertical = 8.dp),
+                    .clickable {
+                        ouvert = g
+                        if (!plusieurs) { r.outil = g.outils[0]; choisi() }
+                    }.padding(vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icones.get(o.icone, if (actif) ROUGE else Color(0xFF444444)), null)
-                    Text(stringResource(o.texte), fontSize = 11.sp, maxLines = 2)
+                    // groupe a plusieurs outils : l'icone de l'outil en cours, et une fleche
+                    val ic = if (plusieurs && r.outil in g.outils) r.outil.icone else g.icone
+                    Icon(Icones.get(ic, if (actif) ROUGE else Color(0xFF444444)), null)
+                    TexteAjuste(stringResource(g.texte) + if (plusieurs) " ▾" else "", 11.sp)
+                }
+            }
+        }
+        // 2. les outils du groupe ouvert
+        if (ouvert.outils.size > 1) {
+            Spacer(Modifier.height(8.dp))
+            FlowRow(Modifier.fillMaxWidth().background(Color(0xFFF0F0F0), RoundedCornerShape(8.dp)).padding(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                ouvert.outils.forEach { o ->
+                    val actif = r.outil == o
+                    Column(Modifier.width(72.dp).background(if (actif) Color(0xFFFCEBEC) else Color.White, RoundedCornerShape(8.dp))
+                        .border(1.dp, if (actif) ROUGE else Color(0xFFE2E2E2), RoundedCornerShape(8.dp))
+                        .clickable { r.outil = o; choisi() }.padding(vertical = 6.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icones.get(o.icone, if (actif) ROUGE else Color(0xFF444444)), null)
+                        Text(stringResource(o.texte), fontSize = 10.sp, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    }
                 }
             }
         }
         // creer un formulaire : reperer les zones a remplir de tout le document
-        Spacer(Modifier.height(12.dp))
+        if (ouvert == GroupeOutils.FORMULAIRE) {
+        Spacer(Modifier.height(10.dp))
         OutlinedButton(onClick = { etat.detecter = true; choisi() }, Modifier.fillMaxWidth()) {
             Icon(Icones.get("formulaire", ROUGE), null)
             Spacer(Modifier.width(8.dp))
             TexteAjuste(stringResource(R.string.detecter_champs), 14.sp)
         }
-        if (r.outil != Outil.MAIN && r.outil != Outil.GOMME && r.outil != Outil.POSER && r.outil != Outil.TEXTE && !r.outil.champ) {
+        }
+        if (r.outil != Outil.MAIN && r.outil != Outil.GOMME && r.outil != Outil.POSER && r.outil != Outil.TEXTE && !r.outil.cadre) {
             Spacer(Modifier.height(14.dp))
             Text(stringResource(R.string.couleur), fontSize = 13.sp)
             Palette(r.couleur()) { r.choisirCouleur(it) }
@@ -134,6 +178,7 @@ fun aideOutil(o: Outil): Int = when {
     o == Outil.POSER -> R.string.aide_poser
     o == Outil.TEXTE -> R.string.aide_texte_modif
     o.champ -> R.string.aide_champ
+    o == Outil.EFFACER_ZONE -> R.string.aide_effacer_zone
     o == Outil.SIGNER_NUM -> R.string.aide_signer_num
     else -> R.string.aide_dessin
 }

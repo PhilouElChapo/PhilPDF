@@ -97,6 +97,8 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var signerAvec by mutableStateOf<Identite?>(null)       // signature numerique : certificat choisi
     var cadreSignature by mutableStateOf<Pair<Int, com.artifex.mupdf.fitz.Rect>?>(null)
     var verifierSignatures by mutableStateOf(false)
+    var champSignature by mutableStateOf<String?>(null)     // champ de signature vide touche : signer dedans
+    var nouvelleListe by mutableStateOf<Pair<Int, com.artifex.mupdf.fitz.Rect>?>(null)   // liste deroulante a remplir
     /** Portee du lecteur : une pose lancee ici va au bout meme quand l'apercu disparait de l'ecran. */
     var portee: kotlinx.coroutines.CoroutineScope? = null
     val page: Int get() = liste.firstVisibleItemIndex
@@ -168,7 +170,9 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
     etat.paragraphe?.let { p -> EditeurTexte(etat, p) { etat.paragraphe = null } }
     if (etat.choixPartage) ChoixPartage(etat) { etat.choixPartage = false }
     if (etat.detecter) DetectionChamps(etat) { etat.detecter = false }
-    etat.cadreSignature?.let { (n, r) -> DialogueSigner(etat, n, r) { etat.cadreSignature = null; etat.annot.outil = Outil.MAIN } }
+    etat.cadreSignature?.let { (n, r) -> DialogueSigner(etat, n, r, etat.champSignature) {
+        etat.cadreSignature = null; etat.champSignature = null; etat.annot.outil = Outil.MAIN } }
+    etat.nouvelleListe?.let { (n, r) -> DialogueListe(etat, n, r) { etat.nouvelleListe = null } }
     if (etat.verifierSignatures) DialogueVerifier(etat) { etat.verifierSignatures = false }
     // PDF signe : on le dit a l'ouverture (valide, approuvee, modifie depuis...)
     LaunchedEffect(doc, deverrouille) {
@@ -576,6 +580,7 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                       auToucher: (() -> Unit)? = null) {
     val d = etat.doc
     val portee = rememberCoroutineScope()
+    val ctx = LocalContext.current
     val image by produceState<Bitmap?>(null, d, n, largeurPx, d.version) {
         value = try { d.rendre(n, largeurPx) } catch (_: Exception) { value }
     }
@@ -614,6 +619,21 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                                 c.genre == com.artifex.mupdf.fitz.PDFWidget.TYPE_CHECKBOX ||
                                     c.genre == com.artifex.mupdf.fitz.PDFWidget.TYPE_RADIOBUTTON -> d.remplir(c, null)
                                 c.genre == com.artifex.mupdf.fitz.PDFWidget.TYPE_TEXT || c.options.isNotEmpty() -> etat.champ = c
+                                // champ de signature : vide -> signer avec un certificat ; signe -> verifier
+                                c.genre == com.artifex.mupdf.fitz.PDFWidget.TYPE_SIGNATURE -> {
+                                    val signe = d.zonesChamps(n).any { z -> z.second == c.genre && z.third &&
+                                        k(o).let { p -> p.x in z.first[0]..z.first[2] && p.y in z.first[1]..z.first[3] } }
+                                    if (signe) etat.verifierSignatures = true
+                                    else {
+                                        val ids = Identites.liste(ctx)
+                                        if (ids.isEmpty()) etat.message = ctx.getString(R.string.sig_aucune)
+                                        else {
+                                            if (etat.signerAvec == null) etat.signerAvec = ids.first()
+                                            etat.champSignature = c.nom
+                                            etat.cadreSignature = n to com.artifex.mupdf.fitz.Rect()
+                                        }
+                                    }
+                                }
                                 else -> auToucher?.invoke()
                             }
                         }
@@ -644,9 +664,21 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                         c.consume()
                     }
                 }
-                Outil.GOMME -> detectTapGestures(onTap = { o ->
-                    portee.launch { d.annotationA(n, k(o))?.let { d.supprimerAnnotation(it) } }
-                })
+                // gomme : toucher une annotation, ou frotter dessus, l'efface (le contenu de la page : « Effacer une zone »)
+                Outil.GOMME -> awaitEachGesture {
+                    val bas = awaitFirstDown()
+                    val pts = arrayListOf(k(bas.position))
+                    trace = listOf(bas.position)
+                    while (true) {
+                        val ev = awaitPointerEvent()
+                        val c = ev.changes.firstOrNull() ?: break
+                        if (!c.pressed) break
+                        pts += k(c.position); trace = trace + c.position
+                        c.consume()
+                    }
+                    trace = emptyList()
+                    portee.launch { if (d.supprimerAnnotationsSur(n, pts) == 0) etat.message = ctx.getString(R.string.gomme_rien) }
+                }
                 else -> detectDragGestures(
                     onDragStart = { o -> trace = listOf(o) },
                     onDrag = { ch, _ -> trace = trace + ch.position },
@@ -665,6 +697,21 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                                 Outil.RECTANGLE -> d.forme(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_SQUARE, pts.first(), pts.last(), c, r.epaisseur, 1f)
                                 Outil.ELLIPSE -> d.forme(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_CIRCLE, pts.first(), pts.last(), c, r.epaisseur, 1f)
                                 Outil.FLECHE -> d.forme(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_LINE, pts.first(), pts.last(), c, r.epaisseur, 1f)
+                                Outil.EFFACER_ZONE -> d.effacerZone(n, com.artifex.mupdf.fitz.Rect(minOf(pts.first().x, pts.last().x),
+                                    minOf(pts.first().y, pts.last().y), maxOf(pts.first().x, pts.last().x), maxOf(pts.first().y, pts.last().y)))
+                                Outil.CHAMP_LISTE -> {
+                                    val a = pts.first(); val b = pts.last()
+                                    etat.nouvelleListe = n to com.artifex.mupdf.fitz.Rect(minOf(a.x, b.x), minOf(a.y, b.y),
+                                        maxOf(a.x, b.x).coerceAtLeast(minOf(a.x, b.x) + 60f), maxOf(a.y, b.y).coerceAtLeast(minOf(a.y, b.y) + 14f))
+                                    true
+                                }
+                                Outil.CHAMP_SIGNATURE -> {
+                                    val a = pts.first(); val b = pts.last()
+                                    val petit = kotlin.math.abs(b.x - a.x) < 40 || kotlin.math.abs(b.y - a.y) < 15
+                                    val rect = if (petit) com.artifex.mupdf.fitz.Rect(a.x, a.y, a.x + 180f, a.y + 55f)
+                                        else com.artifex.mupdf.fitz.Rect(minOf(a.x, b.x), minOf(a.y, b.y), maxOf(a.x, b.x), maxOf(a.y, b.y))
+                                    d.creerChamps(listOf(ChampDetecte(n, "signature", rect, ctx.getString(R.string.champ_signature_nom))))
+                                }
                                 Outil.SIGNER_NUM -> {
                                     val a = pts.first(); val b = pts.last()
                                     val petit = kotlin.math.abs(b.x - a.x) < 40 || kotlin.math.abs(b.y - a.y) < 15
@@ -690,6 +737,23 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
             }
         })) {
         image?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize()) }
+        if (marques) {
+            val champs by produceState(emptyList<Triple<FloatArray, Int, Boolean>>(), d, n, d.version) { value = try { d.zonesChamps(n) } catch (_: Exception) { value } }
+            if (champs.isNotEmpty()) Canvas(Modifier.fillMaxSize()) {   // champs en bleu clair (a l'ecran seulement)
+                val kk = size.width / w
+                champs.forEach { (r, genre, signe) ->
+                    val o = Offset(r[0] * kk, r[1] * kk); val t = Size((r[2] - r[0]) * kk, (r[3] - r[1]) * kk)
+                    if (genre == com.artifex.mupdf.fitz.PDFWidget.TYPE_SIGNATURE && !signe) {
+                        drawRect(Color(0x22F5A623), o, t)
+                        drawRect(Color(0xFFF5A623), o, t, style = androidx.compose.ui.graphics.drawscope.Stroke(2f,
+                            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 6f))))
+                    } else if (genre != com.artifex.mupdf.fitz.PDFWidget.TYPE_SIGNATURE) {
+                        drawRect(Color(0x260F6CBD), o, t)
+                        drawRect(Color(0x660F6CBD), o, t, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+                    }
+                }
+            }
+        }
         val zones = if (marques) etat.trouves.firstOrNull { it.page == n }?.zones else null
         if (!zones.isNullOrEmpty()) {
             Canvas(Modifier.fillMaxSize()) {           // resultats de la recherche surlignes
@@ -712,7 +776,10 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                     Outil.ELLIPSE -> drawOval(c, Offset(minOf(a.x, b.x), minOf(a.y, b.y)), Size(kotlin.math.abs(b.x - a.x), kotlin.math.abs(b.y - a.y)),
                         style = androidx.compose.ui.graphics.drawscope.Stroke(ep))
                     Outil.FLECHE -> drawLine(c, a, b, ep)
-                    Outil.SIGNER_NUM, Outil.CHAMP_TEXTE, Outil.CHAMP_CASE -> drawRect(Color(0xFF0F6CBD), Offset(minOf(a.x, b.x), minOf(a.y, b.y)),
+                    Outil.EFFACER_ZONE -> drawRect(Color(0x55D32F2F), Offset(minOf(a.x, b.x), minOf(a.y, b.y)),
+                        Size(kotlin.math.abs(b.x - a.x), kotlin.math.abs(b.y - a.y)))
+                    Outil.GOMME -> for (i in 1 until trace.size) drawLine(Color(0x88D32F2F), trace[i - 1], trace[i], 18f)
+                    Outil.SIGNER_NUM, Outil.CHAMP_TEXTE, Outil.CHAMP_CASE, Outil.CHAMP_LISTE, Outil.CHAMP_SIGNATURE -> drawRect(Color(0xFF0F6CBD), Offset(minOf(a.x, b.x), minOf(a.y, b.y)),
                         Size(kotlin.math.abs(b.x - a.x), kotlin.math.abs(b.y - a.y)), style = androidx.compose.ui.graphics.drawscope.Stroke(3f))
                     else -> drawRect(c.copy(alpha = 0.35f), Offset(minOf(a.x, b.x), minOf(a.y, b.y)),   // zone de texte choisie
                         Size(kotlin.math.abs(b.x - a.x).coerceAtLeast(4f), kotlin.math.abs(b.y - a.y).coerceAtLeast(24f)))

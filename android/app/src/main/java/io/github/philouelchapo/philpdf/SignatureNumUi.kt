@@ -159,10 +159,12 @@ private fun DialogueRecuperer(fermer: () -> Unit, fait: () -> Unit) {
 
 /** Apres le cadre trace : mot de passe du certificat, raison, lieu, image, puis enregistrer le PDF signe. */
 @Composable
-fun DialogueSigner(etat: EtatLecteur, page: Int, rect: com.artifex.mupdf.fitz.Rect, fermer: () -> Unit) {
+fun DialogueSigner(etat: EtatLecteur, page: Int, rect: com.artifex.mupdf.fitz.Rect, champ: String? = null, fermer: () -> Unit) {
     val ctx = LocalContext.current
     val portee = rememberCoroutineScope()
-    val e = etat.signerAvec ?: return fermer()
+    val toutes = remember { Identites.liste(ctx) }
+    var e by remember { mutableStateOf(etat.signerAvec ?: toutes.firstOrNull()) }
+    val ident = e ?: return fermer()
     var mdp by remember { mutableStateOf("") }
     var raison by remember { mutableStateOf("") }
     var lieu by remember { mutableStateOf("") }
@@ -180,7 +182,11 @@ fun DialogueSigner(etat: EtatLecteur, page: Int, rect: com.artifex.mupdf.fitz.Re
     AlertDialog(onDismissRequest = { if (!occupe) fermer() }, title = { Text(stringResource(R.string.sig_signer_titre)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text(stringResource(R.string.sig_avec, e.nom.ifEmpty { e.email }), fontSize = 13.sp)
+                // plusieurs certificats : on choisit ici
+                if (toutes.size > 1 && signe == null) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    toutes.forEach { x -> FilterChip(x.id == ident.id, { e = x; etat.signerAvec = x },
+                        label = { Text(x.nom.ifEmpty { x.email }, fontSize = 12.sp) }) }
+                } else Text(stringResource(R.string.sig_avec, ident.nom.ifEmpty { ident.email }), fontSize = 13.sp)
                 Spacer(Modifier.height(6.dp))
                 if (signe == null) {
                     ChampMotDePasse(mdp, { mdp = it }, stringResource(R.string.sig_mdp_certificat))
@@ -200,14 +206,14 @@ fun DialogueSigner(etat: EtatLecteur, page: Int, rect: com.artifex.mupdf.fitz.Re
                 occupe = true; erreur = null
                 portee.launch {
                     try {
-                        val o = Identites.octets(ctx, e.id) ?: throw ErreurCertificat(ctx.getString(R.string.sig_illisible))
+                        val o = Identites.octets(ctx, ident.id) ?: throw ErreurCertificat(ctx.getString(R.string.sig_illisible))
                         val (clef, chaine) = withContext(Dispatchers.IO) { Identites.ouvrir(o, mdp) }
                         // identite venue de Windows : infos completes une fois le mot de passe connu
-                        if (e.empreinte.isEmpty()) try { Identites.ajouter(ctx, o, mdp, e.id) } catch (_: Exception) {}
+                        if (ident.empreinte.isEmpty()) try { Identites.ajouter(ctx, o, mdp, ident.id) } catch (_: Exception) {}
                         val sig = Signataire(clef, chaine)
                         val img = if (avecImage) images.firstOrNull()?.let { Bibliotheque.apercu(ctx, it) }?.takeIf { it.exists() }?.readBytes() else null
-                        signe = etat.doc.signerNumerique(ctx, page, rect, sig, raison, lieu, img)
-                        Journal.ecrire("certificat", "${etat.doc.nom} : signé par ${e.nom}" + if (sig.horodatee) " (horodaté)" else "")
+                        signe = etat.doc.signerNumerique(ctx, page, rect, sig, raison, lieu, img, champ)
+                        Journal.ecrire("certificat", "${etat.doc.nom} : signé par ${ident.nom}" + if (sig.horodatee) " (horodaté)" else "")
                     } catch (x: Exception) { erreur = x.message ?: x.toString() } finally { occupe = false }
                 }
             }, enabled = mdp.isNotEmpty() && !occupe) { Text(stringResource(R.string.sig_signer)) }
@@ -268,4 +274,40 @@ fun etatSignature(ctx: android.content.Context, s: InfoSignature): Pair<String, 
     s.approuvee -> ctx.getString(R.string.sig_ok) to Color(0xFF2E7D32)
     s.autosignee -> ctx.getString(R.string.sig_ok_autosigne) to Color(0xFF9A5B00)
     else -> ctx.getString(R.string.sig_ok_inconnu) to Color(0xFF9A5B00)
+}
+
+/** Liste deroulante dessinee : son nom et ses choix (un par ligne), ou une liste toute prete. */
+@Composable
+fun DialogueListe(etat: EtatLecteur, page: Int, rect: com.artifex.mupdf.fitz.Rect, fermer: () -> Unit) {
+    val ctx = LocalContext.current
+    val portee = rememberCoroutineScope()
+    var nom by remember { mutableStateOf("") }
+    var choix by remember { mutableStateOf("") }
+    val pretes = listOf(R.string.liste_oui_non to "Oui\nNon", R.string.liste_civilite to "Madame\nMonsieur",
+        R.string.liste_mois to "Janvier\nFévrier\nMars\nAvril\nMai\nJuin\nJuillet\nAoût\nSeptembre\nOctobre\nNovembre\nDécembre",
+        R.string.liste_jours to "Lundi\nMardi\nMercredi\nJeudi\nVendredi\nSamedi\nDimanche")
+    AlertDialog(onDismissRequest = fermer, title = { Text(stringResource(R.string.outil_champ_liste)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                OutlinedTextField(nom, { nom = it }, label = { Text(stringResource(R.string.nom_champ)) }, singleLine = true,
+                    placeholder = { Text(stringResource(R.string.nom_auto)) }, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(choix, { choix = it }, label = { Text(stringResource(R.string.liste_choix)) }, minLines = 3, maxLines = 8,
+                    modifier = Modifier.fillMaxWidth())
+                Text(stringResource(R.string.liste_pretes), fontSize = 12.sp, color = Color.Gray)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    pretes.forEach { (t, v) -> AssistChip(onClick = { choix = v }, label = { Text(stringResource(t), fontSize = 12.sp) }) }
+                }
+            }
+        },
+        confirmButton = {
+            val l = choix.lines().map { it.trim() }.filter { it.isNotEmpty() }
+            TextButton(onClick = {
+                portee.launch {
+                    etat.doc.creerChamps(listOf(ChampDetecte(page, "liste", rect, nom.trim(), choix = l)))
+                    fermer()
+                }
+            }, enabled = l.isNotEmpty()) { Text(stringResource(R.string.appliquer)) }
+        },
+        dismissButton = { TextButton(onClick = fermer) { Text(stringResource(R.string.annuler)) } })
 }

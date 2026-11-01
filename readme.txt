@@ -10,6 +10,18 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.6.0
+- Volet Modifier regroupe : Lire, Modifier le texte, Annoter (surligner, souligner, barrer, note, dessin,
+  rectangle, ellipse, fleche), Effacer, Formulaire ; les outils d'un groupe s'affichent sous son bouton.
+- Effacer : « Gomme » efface les annotations touchees ou frottees ; « Effacer une zone de la page » retire le
+  texte, les images et les traits de la zone tracee (comme la retouche de Windows).
+- Formulaire : liste deroulante (choix un par ligne, ou listes toutes pretes : Oui/Non, Madame/Monsieur, mois,
+  jours) ; champ de signature vide, a signer ensuite avec un certificat en le touchant. Les champs sont
+  montres en bleu clair a l'ecran (comme Acrobat), les champs de signature vides en pointilles orange.
+- Signature numerique : choix du certificat dans la fenetre de signature ; un champ de signature touche est signe.
+- Signer : tampons, signatures et paraphes de vos postes avec favoris (etoile), categories repliables et
+  « Ranger » (changer l'ordre) ; paraphe de vos postes sur toutes les pages ; tampons centres (« VALIDE » seul).
+
 1.5.0
 - Signature numerique (volet Signer) : signer avec un certificat (.pfx), reconnue par Acrobat comme sous Windows ;
   on trace le cadre sur la page, on tape le mot de passe du certificat (raison, lieu, image de signature au choix) ;

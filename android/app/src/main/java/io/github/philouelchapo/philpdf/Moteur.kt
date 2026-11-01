@@ -464,7 +464,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
     /** Signe une copie du document (cadre « rect », en points de la page) et renvoie le fichier signe, a enregistrer
      *  tel quel : toute reecriture ulterieure casserait la signature. Le document ouvert n'est pas touche. */
     suspend fun signerNumerique(ctx: Context, n: Int, rect: Rect, signataire: Signataire, raison: String, lieu: String,
-                                image: ByteArray?): File {
+                                image: ByteArray?, champ: String? = null): File {
         val dest = File(ctx.cacheDir, "ouverts/signature/" + nom.replace('/', '_'))
         dest.parentFile?.mkdirs()
         // sans modification : le fichier d'origine, octet pour octet (les signatures deja presentes restent valides)
@@ -476,8 +476,9 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                     if (d2.needsPassword()) motDePasseOuverture?.let { d2.authenticatePassword(it) }
                     val page = d2.loadPage(n) as PDFPage
                     try {
-                        val w = page.createSignature()
-                        w.setRect(rect)
+                        // champ de signature deja pose (vide) : on signe dedans ; sinon un nouveau cadre
+                        val w = champ?.let { nm -> page.widgets?.firstOrNull { it.fieldType == PDFWidget.TYPE_SIGNATURE && it.name == nm } }
+                            ?: page.createSignature().also { it.setRect(rect) }
                         val img = image?.let { com.artifex.mupdf.fitz.Image(it) }
                         val drapeaux = if (img != null) PDFWidget.SIGNATURE_SHOW_LABELS or PDFWidget.SIGNATURE_SHOW_TEXT_NAME or PDFWidget.SIGNATURE_SHOW_DATE
                             else PDFWidget.SIGNATURE_DEFAULT_APPEARANCE
@@ -614,6 +615,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                 an.setRect(Rect(centre.x - l / 2, centre.y - h / 2, centre.x + l / 2, centre.y + h / 2))
                 an.setContents(texte)
                 an.setDefaultAppearance("Helv", taille, couleur)   // texte de la couleur choisie
+                try { an.setQuadding(1) } catch (_: Exception) {}  // centre (« VALIDE » seul ou avec sa date)
                 an.setColor(floatArrayOf())                        // fond transparent (pas de cadre plein)
                 an.setBorderWidth(2f)                              // cadre fin, de la couleur du texte
                 an.update()
@@ -633,6 +635,64 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                 true
             }
         }
+
+    /** Paraphe de vos postes (image) en bas a droite de chaque page, en une seule etape d'annulation. */
+    suspend fun imageToutesPages(largeur: Float, ratio: Float, png: ByteArray, tailles: List<Pair<Float, Float>>): Boolean =
+        operation("Parapher") { p ->
+            val img = com.artifex.mupdf.fitz.Image(png)
+            val h = largeur / ratio.coerceAtLeast(0.05f)
+            for (n in tailles.indices) surPage(p, n) { page ->
+                val (w, hp) = tailles[n]
+                val an = page.createAnnotation(PDFAnnotation.TYPE_STAMP)
+                an.setRect(Rect(w - 30f - largeur, hp - 30f - h, w - 30f, hp - 30f))
+                an.setStampImage(img)
+                an.update()
+            }
+            tailles.isNotEmpty()
+        }
+
+    /** Gomme : retire les annotations touchees par le doigt (un toucher ou un trait), en une etape. */
+    suspend fun supprimerAnnotationsSur(n: Int, pts: List<Point>): Int {
+        var k = 0
+        operation("Gomme") { p ->
+            surPage(p, n) { page ->
+                val l = page.annotations ?: emptyArray()
+                val touchees = l.filter { an ->
+                    val t = an.type
+                    t != PDFAnnotation.TYPE_LINK && t != PDFAnnotation.TYPE_WIDGET && t != PDFAnnotation.TYPE_POPUP &&
+                        an.bounds.let { r -> pts.any { a -> a.x >= r.x0 - 6 && a.x <= r.x1 + 6 && a.y >= r.y0 - 6 && a.y <= r.y1 + 6 } }
+                }
+                touchees.forEach { page.deleteAnnotation(it) }
+                k = touchees.size
+                k > 0
+            }
+        }
+        return k
+    }
+
+    /** Effacer le contenu de la page dans la zone (texte, images, traits), comme la retouche « effacer » de Windows. */
+    suspend fun effacerZone(n: Int, r: Rect): Boolean = operation("Effacer") { p ->
+        surPage(p, n) { page ->
+            val an = page.createAnnotation(PDFAnnotation.TYPE_REDACT)
+            an.setRect(r)
+            an.update()
+            page.applyRedactions(false, PDFPage.REDACT_IMAGE_PIXELS, PDFPage.REDACT_LINE_ART_REMOVE_IF_COVERED, PDFPage.REDACT_TEXT_REMOVE)
+        }
+    }
+
+    /** Champs de la page (pour les montrer en bleu clair, comme Acrobat) : rectangle, genre, signe ou non. */
+    suspend fun zonesChamps(n: Int): List<Triple<FloatArray, Int, Boolean>> = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val page = doc.loadPage(n) as? PDFPage ?: return@withContext emptyList()
+            try {
+                (page.widgets ?: emptyArray()).map { w ->
+                    val r = w.bounds
+                    Triple(floatArrayOf(r.x0, r.y0, r.x1, r.y1), w.fieldType,
+                        w.fieldType == PDFWidget.TYPE_SIGNATURE && (try { w.isSigned } catch (_: Exception) { false }))
+                }
+            } catch (_: Exception) { emptyList() } finally { page.destroy() }
+        }
+    }
 
     /** Etat actuel du document ecrit dans un fichier (pour enregistrer, partager, imprimer). */
     suspend fun ecrire(dest: File): File = verrou.withLock {

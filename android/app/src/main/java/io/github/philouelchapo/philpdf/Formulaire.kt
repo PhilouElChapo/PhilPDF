@@ -21,7 +21,7 @@ import com.artifex.mupdf.fitz.Text
 
 /** Un champ trouve (ou dessine) : genre « texte » ou « case », rectangle en points de la page (y vers le bas). */
 data class ChampDetecte(val page: Int, val genre: String, val rect: Rect, var nom: String, val lignes: Boolean = false,
-                        var garder: Boolean = true)
+                        var garder: Boolean = true, val choix: List<String> = emptyList())
 
 /** Appareil qui ne dessine rien : base des appareils de mesure (images, traits). */
 open class DeviceMuet : Device() {
@@ -246,7 +246,14 @@ object Formulaire {
         a.put("T", pdf.newString(c.nom)); a.put("TU", pdf.newString(c.nom))
         a.put("P", page.getObject())
         val mk = pdf.newDictionary()
-        if (c.genre == "case") {
+        if (c.genre == "signature") {
+            a.put("FT", pdf.newName("Sig"))                        // champ de signature vide (a signer avec un certificat)
+        } else if (c.genre == "liste") {
+            a.put("FT", pdf.newName("Ch")); a.put("Ff", 131072)    // liste deroulante
+            val opt = pdf.newArray(); c.choix.forEach { opt.push(pdf.newString(it)) }
+            a.put("Opt", opt)
+            a.put("DA", pdf.newString("/Helv 0 Tf 0 g"))
+        } else if (c.genre == "case") {
             a.put("FT", pdf.newName("Btn")); a.put("V", pdf.newName("Off")); a.put("AS", pdf.newName("Off"))
             a.put("DA", pdf.newString("/ZaDb 0 Tf 0 g"))
             mk.put("CA", pdf.newString("4"))                  // coche

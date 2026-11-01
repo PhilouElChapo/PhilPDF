@@ -55,7 +55,7 @@
     <string name="outil_rectangle">Rectangle</string>
     <string name="outil_ellipse">Ellipse</string>
     <string name="outil_fleche">Flèche</string>
-    <string name="outil_gomme">Gomme</string>
+    <string name="outil_gomme">Gomme (annotations)</string>
     <string name="non_modifiable">Ce document ne peut pas être annoté (ce n\'est pas un PDF modifiable).</string>
     <string name="couleur">Couleur</string>
     <string name="epaisseur">Épaisseur : %1$d</string>
@@ -63,7 +63,7 @@
     <string name="aide_main">Faites défiler et zoomez. Appui long sur une annotation : changer sa couleur, son trait, son texte, ou la supprimer.</string>
     <string name="aide_texte">Glissez le doigt sur le texte à marquer, du premier mot au dernier.</string>
     <string name="aide_note">Touchez la page à l\'endroit de la note, puis tapez son texte.</string>
-    <string name="aide_gomme">Touchez une annotation pour l\'effacer (Annuler la remet).</string>
+    <string name="aide_gomme">Touchez une annotation (surlignage, dessin, note, tampon…) ou frottez dessus pour l\'effacer. Pour effacer le texte ou les images de la page : « Effacer une zone de la page ».</string>
     <string name="aide_dessin">Glissez le doigt sur la page. Pendant qu\'un outil est choisi, la page ne défile plus : « Terminé » pour revenir à la lecture.</string>
         <string name="texte_note">Texte (note, commentaire)</string>
     <string name="supprimer">Supprimer</string>
@@ -287,4 +287,23 @@
     <string name="sig_ok">Signature valide, certificat approuvé.</string>
     <string name="sig_ok_autosigne">Signature valide ; certificat autosigné non approuvé (ajoutez-le aux certificats approuvés s\'il est de confiance).</string>
     <string name="sig_ok_inconnu">Signature valide ; certificat non approuvé sur ce téléphone.</string>
+    <string name="outil_effacer_zone">Effacer une zone de la page</string>
+    <string name="outil_champ_liste">Liste déroulante</string>
+    <string name="outil_champ_signature">Champ de signature</string>
+    <string name="groupe_annoter">Annoter</string>
+    <string name="groupe_effacer">Effacer</string>
+    <string name="groupe_formulaire">Formulaire</string>
+    <string name="aide_effacer_zone">Tracez la zone à effacer : le texte, les images et les traits de la page y sont retirés (comme la retouche « effacer » de Windows). « Annuler » les remet.</string>
+    <string name="gomme_rien">Aucune annotation à cet endroit. Pour effacer le contenu de la page : Effacer > « Effacer une zone de la page ».</string>
+    <string name="champ_signature_nom">Signature</string>
+    <string name="nom_auto">vide = nom pris dans le texte voisin</string>
+    <string name="liste_choix">Choix (un par ligne)</string>
+    <string name="liste_pretes">Listes toutes prêtes :</string>
+    <string name="liste_oui_non">Oui / Non</string>
+    <string name="liste_civilite">Madame / Monsieur</string>
+    <string name="liste_mois">Mois</string>
+    <string name="liste_jours">Jours</string>
+    <string name="ranger">Ranger</string>
+    <string name="favoris">Favoris</string>
+    <string name="sans_categorie">Sans catégorie</string>
 </resources>

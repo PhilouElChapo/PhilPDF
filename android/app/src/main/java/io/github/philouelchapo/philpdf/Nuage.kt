@@ -739,7 +739,8 @@ object Coffre {
 data class Poste(val nom: String, val activite: String, val fichiers: Int, val reglagesPar: Boolean)
 
 data class ElementBiblio(val id: String, val genre: String, val nom: String, val ext: String, val hash: String,
-                         val maj: String, val categorie: String, val ratio: Float, val rendu: Int = 1)
+                         val maj: String, val categorie: String, val ratio: Float, val rendu: Int = 1,
+                         val favori: Boolean = false, val ordre: Int = 10000)
 
 /** Version de la fabrication des apercus : 2 = fond blanc rendu transparent. Plus ancien : refait a la recuperation. */
 private const val RENDU = 2
@@ -760,7 +761,7 @@ object Bibliotheque {
 
     private fun versElement(o: JSONObject) = ElementBiblio(o.optString("id"), o.optString("genre"), o.optString("nom"),
         o.optString("ext", ".pdf").ifEmpty { ".pdf" }, o.optString("hash"), o.optString("maj"), o.optString("categorie"),
-        o.optDouble("ratio", 3.0).toFloat(), o.optInt("rendu", 1))
+        o.optDouble("ratio", 3.0).toFloat(), o.optInt("rendu", 1), o.optBoolean("favori"), o.optInt("ordre", 10000))
 
     /** Elements deja recuperes sur ce telephone (utilisables sans reseau). */
     fun locaux(ctx: Context): List<ElementBiblio> = try {
@@ -829,7 +830,8 @@ object Bibliotheque {
         val a = JSONArray()
         gardes.forEach { e ->
             a.put(JSONObject().put("id", e.id).put("genre", e.genre).put("nom", e.nom).put("ext", e.ext).put("hash", e.hash)
-                .put("maj", e.maj).put("categorie", e.categorie).put("ratio", e.ratio.toDouble()).put("rendu", e.rendu))
+                .put("maj", e.maj).put("categorie", e.categorie).put("ratio", e.ratio.toDouble()).put("rendu", e.rendu)
+                .put("favori", e.favori).put("ordre", e.ordre))
         }
         index(ctx).parentFile?.mkdirs()
         index(ctx).writeText(JSONObject().put("elements", a).toString())

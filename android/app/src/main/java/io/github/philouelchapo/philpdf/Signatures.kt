@@ -124,6 +124,78 @@ fun texteTampon(t: String, h: Horodatage): String {
     return if (t.endsWith(" LE") || t.endsWith(" le")) "$t $d" else "$t\n$d"
 }
 
+/** Favoris, ordre et categories repliees des elements de vos postes (propres a ce telephone). */
+object BiblioPerso {
+    private fun prefs(ctx: Context) = ctx.getSharedPreferences("biblio_perso", Context.MODE_PRIVATE)
+    fun favori(ctx: Context, e: ElementBiblio): Boolean =
+        if (prefs(ctx).contains("fav_" + e.id)) prefs(ctx).getBoolean("fav_" + e.id, false) else e.favori
+    fun basculer(ctx: Context, e: ElementBiblio) = prefs(ctx).edit().putBoolean("fav_" + e.id, !favori(ctx, e)).apply()
+    fun ordre(ctx: Context, e: ElementBiblio): Int = prefs(ctx).getInt("ordre_" + e.id, e.ordre)
+    fun ranger(ctx: Context, l: List<ElementBiblio>) = prefs(ctx).edit().apply { l.forEachIndexed { i, e -> putInt("ordre_" + e.id, i) } }.apply()
+    fun replie(ctx: Context, cle: String) = prefs(ctx).getBoolean("replie_$cle", false)
+    fun replier(ctx: Context, cle: String, oui: Boolean) = prefs(ctx).edit().putBoolean("replie_$cle", oui).apply()
+}
+
+/** Tampons, signatures, paraphes de vos postes : favoris d'abord, puis par categorie (repliable), dans votre ordre.
+ *  « Ranger » : fleches pour changer l'ordre ; etoile : favori. */
+@Composable
+fun BiblioVosPostes(genre: String, liste: List<ElementBiblio>, poser: (ElementBiblio) -> Unit, toutesPages: ((ElementBiblio) -> Unit)?) {
+    val ctx = LocalContext.current
+    var version by remember { mutableIntStateOf(0) }
+    var ranger by remember { mutableStateOf(false) }
+    val tries = remember(version, liste) {
+        liste.sortedWith(compareBy({ BiblioPerso.ordre(ctx, it) }, { it.nom.lowercase() }))
+    }
+    Spacer(Modifier.height(12.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.de_vos_postes, Bibliotheque.nomGenre(genre)), Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+        TextButton(onClick = { ranger = !ranger }) { Text(stringResource(if (ranger) R.string.termine else R.string.ranger), fontSize = 12.sp) }
+    }
+    val favoris = tries.filter { BiblioPerso.favori(ctx, it) }
+    val groupes = LinkedHashMap<String, List<ElementBiblio>>()
+    if (favoris.isNotEmpty()) groupes["★"] = favoris
+    tries.groupBy { it.categorie.ifBlank { "" } }.toSortedMap(compareBy({ it.isEmpty() }, { it.lowercase() })).forEach { (c, l) -> groupes[c] = l }
+    key(version) {
+        groupes.forEach { (cat, l) ->
+            val cle = "$genre/$cat"
+            var replie by remember(cle) { mutableStateOf(BiblioPerso.replie(ctx, cle)) }
+            if (groupes.size > 1 || cat.isNotEmpty()) Row(Modifier.fillMaxWidth().clickable { replie = !replie; BiblioPerso.replier(ctx, cle, replie) }
+                .padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (replie) "▸" else "▾", color = Color.Gray)
+                Spacer(Modifier.width(6.dp))
+                Text((if (cat == "★") stringResource(R.string.favoris) else cat.ifEmpty { stringResource(R.string.sans_categorie) }) + "  (${l.size})",
+                    fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF555555))
+            }
+            if (!replie) l.forEach { e ->
+                val img = remember(e.id) { Bibliotheque.image(ctx, e)?.asImageBitmap() }
+                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp).background(Color.White, RoundedCornerShape(6.dp))
+                    .border(1.dp, Color(0xFFE2E2E2), RoundedCornerShape(6.dp))
+                    .clickable { poser(e) }.padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (img != null) Image(img, null, Modifier.weight(1f).height(52.dp), contentScale = ContentScale.Fit)
+                    else Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.width(6.dp))
+                    Text(e.nom, Modifier.weight(1f), fontSize = 12.sp, color = Color.DarkGray, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (ranger && cat != "★") {
+                        val i = l.indexOf(e)
+                        TextButton(onClick = {
+                            if (i > 0) { val m = l.toMutableList(); m.add(i - 1, m.removeAt(i)); BiblioPerso.ranger(ctx, m); version++ }
+                        }, enabled = i > 0, contentPadding = PaddingValues(4.dp)) { Text("↑") }
+                        TextButton(onClick = {
+                            if (i < l.size - 1) { val m = l.toMutableList(); m.add(i + 1, m.removeAt(i)); BiblioPerso.ranger(ctx, m); version++ }
+                        }, enabled = i < l.size - 1, contentPadding = PaddingValues(4.dp)) { Text("↓") }
+                    }
+                    toutesPages?.let { f -> TextButton(onClick = { f(e) }, contentPadding = PaddingValues(4.dp)) {
+                        Text(stringResource(R.string.toutes_pages), fontSize = 11.sp) } }
+                    IconButton(onClick = { BiblioPerso.basculer(ctx, e); version++ }) {
+                        Icon(Icones.get("etoile", if (BiblioPerso.favori(ctx, e)) Color(0xFFF5A623) else Color(0xFFBBBBBB)),
+                            stringResource(R.string.favoris))
+                    }
+                }
+            }
+        }
+    }
+}
+
 /** Volet / tiroir « Signer » : formulaires (toucher un champ), signatures, paraphes, tampons. */
 @Composable
 fun PanneauSigner(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choisi: () -> Unit = {}) {
@@ -184,20 +256,14 @@ fun PanneauSigner(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choisi: 
                 fontSize = 12.sp, color = Color.Gray)
         }
         biblio.groupBy { it.genre }.forEach { (genre, liste) ->
-            Spacer(Modifier.height(12.dp))
-            Text(stringResource(R.string.de_vos_postes, Bibliotheque.nomGenre(genre)), fontWeight = FontWeight.SemiBold)
-            liste.forEach { e ->
-                val img = remember(e.id) { Bibliotheque.image(ctx, e)?.asImageBitmap() }
-                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).background(Color.White, RoundedCornerShape(6.dp))
-                    .border(1.dp, Color(0xFFE2E2E2), RoundedCornerShape(6.dp))
-                    .clickable { poser(APoser.Image(Bibliotheque.apercu(ctx, e), e.ratio, if (genre == "paraphes") tailleSig / 3 else tailleSig)) }
-                    .padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (img != null) Image(img, null, Modifier.weight(1f).height(56.dp), contentScale = ContentScale.Fit)
-                    else Spacer(Modifier.weight(1f))
-                    Spacer(Modifier.width(8.dp))
-                    Text(e.nom, Modifier.weight(1f), fontSize = 12.sp, color = Color.DarkGray, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            BiblioVosPostes(genre, liste, poser = { e ->
+                poser(APoser.Image(Bibliotheque.apercu(ctx, e), e.ratio, if (genre == "paraphes") tailleSig / 3 else tailleSig))
+            }, toutesPages = if (genre != "paraphes") null else { e ->
+                portee.launch {
+                    val f = Bibliotheque.apercu(ctx, e)
+                    if (f.exists()) etat.doc.imageToutesPages(tailleSig / 3, e.ratio, f.readBytes(), tailles)
                 }
-            }
+            })
         }
         for (genre in listOf("signature", "paraphe")) {
             Spacer(Modifier.height(12.dp))
@@ -241,7 +307,7 @@ fun PanneauSigner(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choisi: 
             Text(final, Modifier.fillMaxWidth().padding(vertical = 3.dp)
                 .border(2.dp, couleurTampon, RoundedCornerShape(4.dp))
                 .clickable { poser(APoser.Tampon(texteTampon(t, horo), couleurTampon, 14f)) }.padding(8.dp),
-                color = couleurTampon, fontWeight = FontWeight.Bold)
+                color = couleurTampon, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
         Spacer(Modifier.height(6.dp))
         OutlinedTextField(perso, { perso = it }, Modifier.fillMaxWidth(), singleLine = true,
@@ -257,7 +323,7 @@ fun PanneauSigner(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choisi: 
             Text(texteTampon(perso, horo), Modifier.fillMaxWidth().padding(vertical = 3.dp)
                 .border(2.dp, couleurTampon, RoundedCornerShape(4.dp))
                 .clickable { poser(APoser.Tampon(texteTampon(perso, horo), couleurTampon, 14f)) }.padding(8.dp),
-                color = couleurTampon, fontWeight = FontWeight.Bold)
+                color = couleurTampon, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
         // signature numerique (certificat), comme PhilPDF Windows
         SectionSignatureNumerique(etat, choisi)
