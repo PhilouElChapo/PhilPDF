@@ -399,4 +399,9 @@
     <string name="ocr_fini">Texte reconnu sur %1$d page(s). Pensez à enregistrer.</string>
     <string name="ocr_rien">Aucun texte reconnu (pages déjà lisibles, ou image trop floue).</string>
     <string name="ocr_erreur">Reconnaissance impossible : %1$s</string>
+    <string name="ocr_langues">Langue(s) du document</string>
+    <string name="ocr_langues_aide">Plusieurs langues possibles pour un document mixte. ↓ : téléchargée une seule fois (projet Tesseract), puis gardée sur le téléphone.</string>
+    <string name="ocr_a_telecharger">A télécharger : %1$s (environ %2$s Mo).</string>
+    <string name="ocr_telechargement">Téléchargement de la langue : %1$s…</string>
+    <string name="ocr_telechargement_impossible">%1$s : téléchargement impossible (%2$s). Vérifiez la connexion.</string>
 </resources>

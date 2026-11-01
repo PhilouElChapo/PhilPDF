@@ -54,6 +54,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -1020,7 +1024,9 @@ fun TexteAjuste(texte: String, taille: androidx.compose.ui.unit.TextUnit, minimu
 }
 
 /** Reconnaissance du texte (OCR) d'une page scannee ou de tout le document : le texte est pose invisible sous l'image
- *  (recherche, copie, « Modifier le texte »). Tout se fait sur le telephone. */
+ *  (recherche, copie, « Modifier le texte »). Tout se fait sur le telephone ; les langues autres que le francais sont
+ *  telechargees une fois, a la demande (plusieurs langues possibles pour un document mixte). */
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun DialogueOcr(etat: EtatLecteur, page: Int, fermer: () -> Unit) {
     val ctx = LocalContext.current
@@ -1028,32 +1034,59 @@ private fun DialogueOcr(etat: EtatLecteur, page: Int, fermer: () -> Unit) {
     var occupe by remember { mutableStateOf(false) }
     var fait by remember { mutableStateOf(0) }
     var total by remember { mutableStateOf(0) }
+    var telecharge by remember { mutableStateOf<String?>(null) }
+    var erreur by remember { mutableStateOf<String?>(null) }
+    var langues by remember { mutableStateOf(Ocr.choisies(ctx)) }
     var travail by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val aTelecharger = Ocr.LANGUES.filter { it.code in langues && !Ocr.disponible(ctx, it.code) }
     fun lancer(pages: List<Int>?) {
-        occupe = true
+        occupe = true; erreur = null
         travail = portee.launch {
             try {
-                val k = etat.doc.reconnaitre(ctx, pages) { a, b -> fait = a; total = b }
+                for (l in aTelecharger) {
+                    telecharge = l.nom
+                    try { withContext(Dispatchers.IO) { Ocr.telecharger(ctx, l.code) } }
+                    catch (x: Exception) { throw IllegalStateException(ctx.getString(R.string.ocr_telechargement_impossible, l.nom, x.message ?: x.toString())) }
+                }
+                telecharge = null
+                Ocr.retenir(ctx, langues)
+                val k = etat.doc.reconnaitre(ctx, pages, langues.joinToString("+")) { a, b -> fait = a; total = b }
                 etat.message = if (k > 0) ctx.getString(R.string.ocr_fini, k) else ctx.getString(R.string.ocr_rien)
                 fermer()
             } catch (x: kotlinx.coroutines.CancellationException) { throw x
             } catch (x: Throwable) {
                 Journal.ecrire("ocr", "reconnaissance impossible : $x")
-                etat.message = ctx.getString(R.string.ocr_erreur, x.message ?: x.toString()); fermer()
+                erreur = x.message ?: x.toString(); occupe = false; telecharge = null
             }
         }
     }
     AlertDialog(onDismissRequest = { if (!occupe) fermer() }, title = { Text(stringResource(R.string.ocr_titre)) },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(stringResource(R.string.ocr_aide), fontSize = 14.sp)
+                Spacer(Modifier.height(8.dp))
+                Text(stringResource(R.string.ocr_langues), fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Ocr.LANGUES.forEach { l ->
+                        val oui = l.code in langues
+                        FilterChip(oui, enabled = !occupe, onClick = {
+                            langues = if (oui) (langues - l.code).ifEmpty { listOf("fra") } else langues + l.code
+                        }, label = { Text(l.nom + if (!Ocr.disponible(ctx, l.code)) " ↓" else "", fontSize = 12.sp) })
+                    }
+                }
+                Text(stringResource(R.string.ocr_langues_aide), fontSize = 11.sp, color = Color.Gray)
+                if (aTelecharger.isNotEmpty() && !occupe) Text(stringResource(R.string.ocr_a_telecharger,
+                    aTelecharger.joinToString(", ") { it.nom }, "%.1f".format(aTelecharger.sumOf { it.mo.toDouble() })),
+                    fontSize = 12.sp, color = Color(0xFF0F6CBD))
                 if (occupe) {
                     Spacer(Modifier.height(10.dp))
-                    if (total > 1) LinearProgressIndicator({ fait.toFloat() / total }, Modifier.fillMaxWidth())
+                    if (telecharge == null && total > 1) LinearProgressIndicator({ fait.toFloat() / total }, Modifier.fillMaxWidth())
                     else LinearProgressIndicator(Modifier.fillMaxWidth())
-                    Text(stringResource(R.string.ocr_en_cours, (fait + 1).coerceAtMost(total.coerceAtLeast(1)), total.coerceAtLeast(1)),
+                    Text(telecharge?.let { stringResource(R.string.ocr_telechargement, it) }
+                        ?: stringResource(R.string.ocr_en_cours, (fait + 1).coerceAtMost(total.coerceAtLeast(1)), total.coerceAtLeast(1)),
                         fontSize = 12.sp, color = Color.Gray)
                 }
+                erreur?.let { Text(it, color = Color(0xFFC62828), fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
             }
         },
         confirmButton = {

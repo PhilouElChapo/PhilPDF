@@ -10,6 +10,13 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.8.1
+- Certificats : ceux qu'on ne peut pas utiliser (retires sur vos postes, ou ancien doublon d'un autre, affiches
+  « Certificat » sans nom) ne sont plus repris de Windows, et ceux deja la sont retires tout seuls.
+- Reconnaissance du texte : choix de la langue du document (francais, anglais, espagnol, italien, allemand,
+  portugais, neerlandais), plusieurs a la fois pour un document mixte. Le francais est livre avec l'appli ; les autres
+  sont telechargees une seule fois (1 a 4 Mo), a la premiere utilisation. Au depart : francais et langue du telephone.
+
 1.8.0
 - Signature avec un certificat : l'application ne bloque plus (la lecture du document a signer tournait sans fin).
   « Annuler » reste possible pendant la signature.

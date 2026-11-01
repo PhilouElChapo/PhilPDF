@@ -927,7 +927,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
 
     /** Reconnait le texte des pages (null : toutes) qui n'en ont pas, et le pose invisible sur l'image (une seule
      *  etape d'annulation). Renvoie le nombre de pages reconnues. avance(fait, total) pour la barre de progression. */
-    suspend fun reconnaitre(ctx: Context, pages: List<Int>?, avance: (Int, Int) -> Unit): Int {
+    suspend fun reconnaitre(ctx: Context, pages: List<Int>?, langues: String = "fra", avance: (Int, Int) -> Unit): Int {
         if (pdf == null) return 0
         val liste = pages ?: (0 until verrou.withLock { withContext(Dispatchers.IO) { doc.countPages() } }).toList()
         val resultats = LinkedHashMap<Int, List<Ocr.Mot>>()
@@ -949,7 +949,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                     } finally { pg.destroy() }
                 }
             }
-            val mots = try { withContext(Dispatchers.Default) { Ocr.mots(ctx, bm) } } finally { bm.recycle() }
+            val mots = try { withContext(Dispatchers.Default) { Ocr.mots(ctx, bm, langues) } } finally { bm.recycle() }
             resultats[n] = mots.map { m -> Ocr.Mot(m.texte, m.x0 / z, m.y0 / z, m.x1 / z, m.y1 / z) }
             Journal.ecrire("ocr", "$nom, page ${n + 1} : ${mots.size} mots reconnus")
         }

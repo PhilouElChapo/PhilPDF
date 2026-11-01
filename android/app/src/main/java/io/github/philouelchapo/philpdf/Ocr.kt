@@ -20,21 +20,66 @@ object Ocr {
 
     data class Mot(val texte: String, val x0: Float, val y0: Float, val x1: Float, val y1: Float)
 
+    /** Langues proposees (code Tesseract, nom, taille approximative a telecharger). Le francais est livre avec l'appli. */
+    data class Langue(val code: String, val nom: String, val mo: Float, val iso: String)
+    val LANGUES = listOf(
+        Langue("fra", "Français", 1.1f, "fr"), Langue("eng", "Anglais", 4.0f, "en"), Langue("spa", "Espagnol", 2.2f, "es"),
+        Langue("ita", "Italien", 2.4f, "it"), Langue("deu", "Allemand", 1.5f, "de"), Langue("por", "Portugais", 1.9f, "pt"),
+        Langue("nld", "Néerlandais", 1.8f, "nl"))
+
+    private fun dossier(ctx: Context) = File(ctx.filesDir, "tesseract")
+    private fun fichier(ctx: Context, code: String) = File(dossier(ctx), "tessdata/$code.traineddata")
+
+    fun disponible(ctx: Context, code: String) = code == "fra" || fichier(ctx, code).let { it.exists() && it.length() > 0 }
+
+    /** Langues choisies la derniere fois ; au depart : le francais, et la langue du telephone si elle est proposee. */
+    fun choisies(ctx: Context): List<String> {
+        ctx.getSharedPreferences("ocr", Context.MODE_PRIVATE).getString("langues", null)?.split("+")?.filter { c -> LANGUES.any { it.code == c } }
+            ?.takeIf { it.isNotEmpty() }?.let { return it }
+        val tel = java.util.Locale.getDefault().language
+        return (listOf("fra") + listOfNotNull(LANGUES.firstOrNull { it.iso == tel }?.code)).distinct()
+    }
+    fun retenir(ctx: Context, codes: List<String>) =
+        ctx.getSharedPreferences("ocr", Context.MODE_PRIVATE).edit().putString("langues", codes.joinToString("+")).apply()
+
+    /** Telecharge le modele d'une langue (projet Tesseract, version rapide) ; une seule fois, garde ensuite. */
+    fun telecharger(ctx: Context, code: String) {
+        if (disponible(ctx, code)) return
+        val f = fichier(ctx, code); f.parentFile?.mkdirs()
+        val tmp = File(f.parentFile, "$code.part")
+        var url = java.net.URL("https://github.com/tesseract-ocr/tessdata_fast/raw/main/$code.traineddata")
+        repeat(5) {                                          // github -> raw.githubusercontent.com (redirections)
+            val c = url.openConnection() as java.net.HttpURLConnection
+            c.instanceFollowRedirects = false; c.connectTimeout = 10000; c.readTimeout = 30000
+            when (c.responseCode) {
+                in 300..399 -> { url = java.net.URL(url, c.getHeaderField("Location")); c.disconnect() }
+                200 -> {
+                    c.inputStream.use { e -> tmp.outputStream().use { e.copyTo(it) } }
+                    if (tmp.length() < 100_000) { tmp.delete(); throw IllegalStateException("fichier de langue incomplet") }
+                    tmp.renameTo(f)
+                    Journal.ecrire("ocr", "langue $code téléchargée (${f.length() / 1024} Ko)")
+                    return
+                }
+                else -> throw IllegalStateException("téléchargement refusé (${c.responseCode})")
+            }
+        }
+        throw IllegalStateException("téléchargement impossible")
+    }
+
     private fun donnees(ctx: Context): String {
-        val d = File(ctx.filesDir, "tesseract")
-        val f = File(d, "tessdata/fra.traineddata")
+        val f = fichier(ctx, "fra")
         if (!f.exists() || f.length() == 0L) {
             f.parentFile?.mkdirs()
             ctx.assets.open("tessdata/fra.traineddata").use { e -> f.outputStream().use { e.copyTo(it) } }
         }
-        return d.absolutePath
+        return dossier(ctx).absolutePath
     }
 
-    /** Mots reconnus dans l'image (coordonnees en pixels de l'image). */
-    fun mots(ctx: Context, bm: Bitmap): List<Mot> {
+    /** Mots reconnus dans l'image (coordonnees en pixels de l'image) ; langues : « fra+spa ». */
+    fun mots(ctx: Context, bm: Bitmap, langues: String = "fra"): List<Mot> {
         val t = TessBaseAPI()
         try {
-            if (!t.init(donnees(ctx), "fra")) throw IllegalStateException("Tesseract : langue introuvable")
+            if (!t.init(donnees(ctx), langues)) throw IllegalStateException("Tesseract : langue introuvable ($langues)")
             t.pageSegMode = TessBaseAPI.PageSegMode.PSM_AUTO
             t.setImage(bm)
             t.getUTF8Text()                                  // lance la reconnaissance

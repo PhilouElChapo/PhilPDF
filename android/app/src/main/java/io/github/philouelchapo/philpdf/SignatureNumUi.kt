@@ -54,6 +54,7 @@ fun SectionSignatureNumerique(etat: EtatLecteur, choisi: () -> Unit) {
     LaunchedEffect(Unit) {
         if (Identites.synchroAuto(ctx) > 0) liste = Identites.liste(ctx)
         distantes = Identites.distantes(ctx)
+        if (Identites.nettoyer(ctx, distantes)) liste = Identites.liste(ctx)
     }
     val choisirPfx = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u: Uri? ->
         if (u != null) portee.launch {

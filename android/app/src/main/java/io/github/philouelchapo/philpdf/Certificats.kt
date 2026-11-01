@@ -245,6 +245,20 @@ object Identites {
         (0 until (a?.length() ?: 0)).mapNotNull { a!!.optJSONObject(it) }.filter { it.optString("id") !in supprimees && !it.optBoolean("orpheline") }
     } catch (_: Exception) { emptyList() }
 
+    /** Retire de ce telephone les identites reprises de vos postes et jamais ouvertes (sans empreinte) que vos postes
+     *  ne listent plus (retirees, ou doublon d'une autre) : on ne pourrait pas signer avec. distantes vide : rien. */
+    fun nettoyer(ctx: Context, distantes: List<JSONObject>): Boolean {
+        if (distantes.isEmpty()) return false
+        val connus = HashSet<String>()
+        distantes.forEach { e -> connus += e.optString("id"); e.optJSONArray("alias")?.let { a -> for (i in 0 until a.length()) connus += a.optString(i) } }
+        val l = liste(ctx)
+        val garder = l.filter { it.empreinte.isNotEmpty() || (it.id in connus && it.nom != "Certificat") }
+        if (garder.size == l.size) return false
+        (l - garder.toSet()).forEach { fichier(ctx, it.id).delete(); Journal.ecrire("certificat", "identité inutilisable retirée (${it.nom}, ${it.id})") }
+        ecrireListe(ctx, garder)
+        return true
+    }
+
     /** Phrase secrete retenue sur ce telephone (chiffree par sa clef) : les certificats suivent tout seuls. */
     fun phraseRetenue(ctx: Context): String? =
         ctx.getSharedPreferences("identites", Context.MODE_PRIVATE).getString("phrase", null)?.let { Coffre.dechiffrer(it) }
@@ -297,10 +311,20 @@ object Identites {
         val infos = HashMap<String, JSONObject>()
         communs?.optJSONArray("identites")?.let { a -> for (i in 0 until a.length()) a.optJSONObject(i)?.let { infos[it.optString("id")] = it } }
         var k = 0
+        // seulement les identites que vos postes listent (ni retirees, ni orphelines) ; un ancien numero (alias) d'une
+        // identite deja reprise n'est pas repris une seconde fois : sinon des « Certificat » sans nom, inutilisables
+        val supprimees = communs?.optJSONArray("identites_supprimees")?.let { x -> (0 until x.length()).map { x.optString(it) }.toSet() } ?: emptySet()
+        val alias = HashMap<String, String>()
+        infos.values.forEach { e -> e.optJSONArray("alias")?.let { a -> for (i in 0 until a.length()) alias[a.optString(i)] = e.optString("id") } }
+        val faits = HashSet<String>()
         for (cle in secrets.keys()) {
             if (!cle.startsWith("identite:")) continue
-            val id = cle.removePrefix("identite:").filter { it.isLetterOrDigit() }
-            if (id.isEmpty()) continue
+            val brut = cle.removePrefix("identite:").filter { it.isLetterOrDigit() }
+            val id = alias[brut] ?: brut
+            if (id.isEmpty() || id in supprimees || id in faits) continue
+            val info = infos[id]
+            if (info == null || info.optBoolean("orpheline") || info.optString("nom").isEmpty()) continue
+            faits += id
             ajouterBrut(ctx, id, Base64.decode(secrets.getString(cle), Base64.DEFAULT), infos[id])
             k++
         }
