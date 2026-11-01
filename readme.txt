@@ -10,6 +10,11 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.8.7
+- Plantage a la reouverture d'un PDF signe : corrige (une autre fonction du moteur PDF, « modifie depuis la
+  signature », est absente de la bibliotheque livree ; PhilPDF le calcule lui-meme).
+- Tampons et signatures en favori : etoile jaune pleine (elle restait grise).
+
 1.8.6
 - Plantage a l'ouverture d'un PDF signe (donc juste apres « Enregistrer » une signature) : corrige. Le nom du
   signataire est lu directement dans le certificat (la fonction du moteur PDF prevue pour cela plantait).

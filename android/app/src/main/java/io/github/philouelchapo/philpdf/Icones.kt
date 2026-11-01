@@ -12,6 +12,9 @@ import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.dp
 
 object Icones {
+    /** Etoile des favoris : jaune pleine si favori, grise vide sinon. */
+    fun etoile(favori: Boolean) = if (favori) get("etoile", Color(0xFFE0A800), Color(0xFFFFC928)) else get("etoile", Color(0xFFBBBBBB))
+
     val TRAITS: Map<String, List<String>> = mapOf(
         "ouvrir" to listOf("M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"),
         "creer" to listOf("M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z", "M14 2v6h6", "M12 18v-6M9 15h6"),
@@ -98,11 +101,12 @@ object Icones {
     private val cache = HashMap<String, ImageVector>()
 
     /** Icone au trait (24 x 24, trait 1,8, extremites arrondies), comme sous Windows. */
-    fun get(nom: String, couleur: Color = Color(0xFF333333)): ImageVector = cache.getOrPut(nom + couleur.value) {
+    fun get(nom: String, couleur: Color = Color(0xFF333333), remplir: Color? = null): ImageVector =
+        cache.getOrPut(nom + couleur.value + "/" + remplir?.value) {
         val b = ImageVector.Builder(name = nom, defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
         for (d in TRAITS[nom] ?: TRAITS.getValue("creer")) {
-            b.addPath(PathParser().parsePathString(d).toNodes(), stroke = SolidColor(couleur), strokeLineWidth = 1.8f,
-                strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round)
+            b.addPath(PathParser().parsePathString(d).toNodes(), fill = remplir?.let { SolidColor(it) },
+                stroke = SolidColor(couleur), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round)
         }
         b.build()
     }

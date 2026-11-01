@@ -735,13 +735,18 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                             if (!w.getObject().isIndirect) {
                                 out += InfoSignature(n, "?", false, false, false, true, ""); return@forEach
                             }
-                            val dig = try { w.checkDigest(v) } catch (_: Exception) { -1 }
+                            val dig = try { w.checkDigest(v) } catch (_: Throwable) { -1 }
                             v.signataire = null
-                            val cer = try { w.checkCertificate(v) } catch (_: Exception) { -1 }
+                            val cer = try { w.checkCertificate(v) } catch (_: Throwable) { -1 }
                             // jamais w.getSignatory / w.getDistinguishedName : avec un verificateur Java, MuPDF appelle une
                             // fonction absente et l'appli plante (le nom est lu ici dans le certificat de la signature)
                             val nomS = v.signataire ?: "?"
-                            val apres = try { w.incrementalChangesSinceSigning() } catch (_: Exception) { false }
+                            // jamais w.incrementalChangesSinceSigning : absente de la bibliotheque MuPDF livree (plantage).
+                            // Modifie apres la signature : le fichier continue au-dela de la partie signee (ByteRange).
+                            val apres = try {
+                                val br = w.getObject().get("V").get("ByteRange")
+                                fichier.length() > br.get(2).asInteger().toLong() + br.get(3).asInteger().toLong()
+                            } catch (_: Throwable) { false }
                             out += InfoSignature(n, nomS, dig == PKCS7Verifier.PKCS7VerifierOK, cer == PKCS7Verifier.PKCS7VerifierOK,
                                 cer == PKCS7Verifier.PKCS7VerifierSelfSigned, apres, "")
                         }

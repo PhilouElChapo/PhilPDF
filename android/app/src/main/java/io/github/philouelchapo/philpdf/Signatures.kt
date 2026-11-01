@@ -186,7 +186,7 @@ fun MesTamponsListe(couleur: Color, horo: Horodatage, poser: (String) -> Unit) {
                     TextButton(onClick = { edite = t }, contentPadding = PaddingValues(4.dp)) { Text("✎") }
                 }
                 IconButton(onClick = { MesTampons.ecrire(ctx, l.map { if (it == t) it.copy(favori = !it.favori) else it }) }) {
-                    Icon(Icones.get("etoile", if (t.favori) Color(0xFFF5A623) else Color(0xFFBBBBBB)), stringResource(R.string.favoris))
+                    Icon(Icones.etoile(t.favori), stringResource(R.string.favoris), tint = Color.Unspecified)
                 }
             }
         }
@@ -278,8 +278,8 @@ fun BiblioVosPostes(genre: String, liste: List<ElementBiblio>, poser: (ElementBi
                     toutesPages?.let { f -> TextButton(onClick = { f(e) }, contentPadding = PaddingValues(4.dp)) {
                         Text(stringResource(R.string.toutes_pages), fontSize = 11.sp) } }
                     IconButton(onClick = { BiblioPerso.basculer(ctx, e); version++ }) {
-                        Icon(Icones.get("etoile", if (BiblioPerso.favori(ctx, e)) Color(0xFFF5A623) else Color(0xFFBBBBBB)),
-                            stringResource(R.string.favoris))
+                        Icon(Icones.etoile(BiblioPerso.favori(ctx, e)),
+                            stringResource(R.string.favoris), tint = Color.Unspecified)
                     }
                 }
             }
