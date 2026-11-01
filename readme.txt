@@ -10,6 +10,16 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.5.0
+- Signature numerique (volet Signer) : signer avec un certificat (.pfx), reconnue par Acrobat comme sous Windows ;
+  on trace le cadre sur la page, on tape le mot de passe du certificat (raison, lieu, image de signature au choix) ;
+  horodatage gratuit si Internet ; le PDF signe est enregistre tel quel (meme fichier ou autre nom) puis rouvert.
+- Certificats : importer un fichier .pfx / .p12, ou « Recuperer ceux de vos postes » (certificats de PhilPDF Windows,
+  lus dans le fichier chiffre des mots de passe partages, avec votre phrase secrete) ; gardes chiffres sur le
+  telephone, mot de passe demande a chaque signature.
+- Verifier les signatures (Plus, ou a l'ouverture d'un PDF signe) : intacte ou non, modifiee depuis, certificat
+  approuve (les votres et ceux approuves sous Windows) ou non.
+
 1.4.0
 - Creer un formulaire (volet Modifier) : « Detecter les champs du formulaire » repere les zones a remplir de tout
   le document (pointilles, soulignes, traits, cases, cadres vides), comme PhilPDF Windows ; chaque champ prend le

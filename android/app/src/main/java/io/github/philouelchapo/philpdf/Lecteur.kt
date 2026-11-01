@@ -94,6 +94,9 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var choixPartage by mutableStateOf(false)               // envoyer le fichier ou un lien
     var detecter by mutableStateOf(false)                   // creer un formulaire : champs reperes a choisir
     var champOptions by mutableStateOf<InfoChamp?>(null)    // appui long sur un champ : renommer, supprimer
+    var signerAvec by mutableStateOf<Identite?>(null)       // signature numerique : certificat choisi
+    var cadreSignature by mutableStateOf<Pair<Int, com.artifex.mupdf.fitz.Rect>?>(null)
+    var verifierSignatures by mutableStateOf(false)
     /** Portee du lecteur : une pose lancee ici va au bout meme quand l'apercu disparait de l'ecran. */
     var portee: kotlinx.coroutines.CoroutineScope? = null
     val page: Int get() = liste.firstVisibleItemIndex
@@ -165,6 +168,15 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
     etat.paragraphe?.let { p -> EditeurTexte(etat, p) { etat.paragraphe = null } }
     if (etat.choixPartage) ChoixPartage(etat) { etat.choixPartage = false }
     if (etat.detecter) DetectionChamps(etat) { etat.detecter = false }
+    etat.cadreSignature?.let { (n, r) -> DialogueSigner(etat, n, r) { etat.cadreSignature = null; etat.annot.outil = Outil.MAIN } }
+    if (etat.verifierSignatures) DialogueVerifier(etat) { etat.verifierSignatures = false }
+    // PDF signe : on le dit a l'ouverture (valide, approuvee, modifie depuis...)
+    LaunchedEffect(doc, deverrouille) {
+        if (deverrouille) try {
+            val l = doc.signatures(ctx)
+            if (l.isNotEmpty()) etat.message = l.joinToString("\n") { s -> ctx.getString(R.string.sig_signe_par, s.nom) + " : " + etatSignature(ctx, s).first }
+        } catch (_: Exception) {}
+    }
     etat.champOptions?.let { c -> OptionsChamp(etat, c) { etat.champOptions = null } }
     if (etat.organiser && t != null) OrganiserPages(etat, t) { etat.organiser = false }
     etat.message?.let { m ->
@@ -400,6 +412,7 @@ private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, 
                     LigneAction("liste_fichiers", stringResource(R.string.signets)) { signets = true }
                     LigneAction("commentaire", stringResource(R.string.commentaires)) { comms = true }
                     if (etat.doc.modifiable) LigneAction("organiser", stringResource(R.string.organiser_pages)) { etat.organiser = true }
+                    LigneAction("certificat", stringResource(R.string.sig_verifier)) { etat.verifierSignatures = true }
                     LigneAction("enregistrer", stringResource(R.string.enregistrer)) { etat.demandeEnregistrer = true }
                     LigneAction("courriel", stringResource(R.string.partager)) { etat.choixPartage = true }
                     LigneAction("imprimer", stringResource(R.string.imprimer)) { portee.launch { imprimer(ctx, etat.doc) } }
@@ -652,6 +665,13 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                                 Outil.RECTANGLE -> d.forme(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_SQUARE, pts.first(), pts.last(), c, r.epaisseur, 1f)
                                 Outil.ELLIPSE -> d.forme(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_CIRCLE, pts.first(), pts.last(), c, r.epaisseur, 1f)
                                 Outil.FLECHE -> d.forme(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_LINE, pts.first(), pts.last(), c, r.epaisseur, 1f)
+                                Outil.SIGNER_NUM -> {
+                                    val a = pts.first(); val b = pts.last()
+                                    val petit = kotlin.math.abs(b.x - a.x) < 40 || kotlin.math.abs(b.y - a.y) < 15
+                                    etat.cadreSignature = n to (if (petit) com.artifex.mupdf.fitz.Rect(a.x, a.y, a.x + 180f, a.y + 55f)
+                                        else com.artifex.mupdf.fitz.Rect(minOf(a.x, b.x), minOf(a.y, b.y), maxOf(a.x, b.x), maxOf(a.y, b.y)))
+                                    true
+                                }
                                 Outil.CHAMP_TEXTE, Outil.CHAMP_CASE -> {
                                     val a = pts.first(); val b = pts.last()
                                     val case = r.outil == Outil.CHAMP_CASE
@@ -692,7 +712,7 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                     Outil.ELLIPSE -> drawOval(c, Offset(minOf(a.x, b.x), minOf(a.y, b.y)), Size(kotlin.math.abs(b.x - a.x), kotlin.math.abs(b.y - a.y)),
                         style = androidx.compose.ui.graphics.drawscope.Stroke(ep))
                     Outil.FLECHE -> drawLine(c, a, b, ep)
-                    Outil.CHAMP_TEXTE, Outil.CHAMP_CASE -> drawRect(Color(0xFF0F6CBD), Offset(minOf(a.x, b.x), minOf(a.y, b.y)),
+                    Outil.SIGNER_NUM, Outil.CHAMP_TEXTE, Outil.CHAMP_CASE -> drawRect(Color(0xFF0F6CBD), Offset(minOf(a.x, b.x), minOf(a.y, b.y)),
                         Size(kotlin.math.abs(b.x - a.x), kotlin.math.abs(b.y - a.y)), style = androidx.compose.ui.graphics.drawscope.Stroke(3f))
                     else -> drawRect(c.copy(alpha = 0.35f), Offset(minOf(a.x, b.x), minOf(a.y, b.y)),   // zone de texte choisie
                         Size(kotlin.math.abs(b.x - a.x).coerceAtLeast(4f), kotlin.math.abs(b.y - a.y).coerceAtLeast(24f)))

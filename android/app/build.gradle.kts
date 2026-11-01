@@ -65,6 +65,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    packaging {
+        resources { excludes += setOf("META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/DEPENDENCIES") }
+    }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -91,6 +94,8 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // signature numerique : CMS (PKCS#7), lecture des .pfx, horodatage (meme principe que pyHanko sous Windows)
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
 }
 
 // Nouveautes (readme.txt du depot) livrees dans l'APK : Accueil > Aide > Nouveautes

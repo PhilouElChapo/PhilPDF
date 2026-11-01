@@ -95,6 +95,9 @@ fun Application(recu: MutableState<Uri?>) {
     LaunchedEffect(recu.value) {
         recu.value?.let { ouvrir(it); recu.value = null }
     }
+    LaunchedEffect(Ouvrir.demande.value) {                   // PDF signe : rouvert a la place de l'autre
+        Ouvrir.demande.value?.let { ouvrir(it); Ouvrir.demande.value = null }
+    }
 
     val d = doc
     if (d == null) {

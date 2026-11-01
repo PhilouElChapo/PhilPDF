@@ -37,6 +37,7 @@ enum class Outil(val icone: String, val texte: Int) {
     GOMME("supprimer", R.string.outil_gomme),
     CHAMP_TEXTE("formulaire", R.string.outil_champ_texte),   // creer un formulaire : zone de texte dessinee
     CHAMP_CASE("valide", R.string.outil_champ_case),         // creer un formulaire : case a cocher
+    SIGNER_NUM("certificat", R.string.outil_signer_num),     // signature numerique : tracer le cadre
     POSER("signer", R.string.outil_poser);          // signature, paraphe ou tampon a poser d'un toucher
 
     val texteSurligne: Boolean get() = this == SURLIGNER || this == SOULIGNER || this == BARRER
@@ -87,7 +88,7 @@ fun PanneauAnnoter(etat: EtatLecteur, choisi: () -> Unit = {}) {
         Text(stringResource(R.string.annoter_titre), fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Outil.entries.filter { it != Outil.POSER }.forEach { o ->
+            Outil.entries.filter { it != Outil.POSER && it != Outil.SIGNER_NUM }.forEach { o ->
                 val actif = r.outil == o
                 Column(Modifier.width(76.dp).background(if (actif) Color(0xFFFCEBEC) else Color.White, RoundedCornerShape(8.dp))
                     .border(1.dp, if (actif) ROUGE else Color(0xFFE2E2E2), RoundedCornerShape(8.dp))
@@ -133,6 +134,7 @@ fun aideOutil(o: Outil): Int = when {
     o == Outil.POSER -> R.string.aide_poser
     o == Outil.TEXTE -> R.string.aide_texte_modif
     o.champ -> R.string.aide_champ
+    o == Outil.SIGNER_NUM -> R.string.aide_signer_num
     else -> R.string.aide_dessin
 }
 

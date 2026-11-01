@@ -259,6 +259,8 @@ fun PanneauSigner(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choisi: 
                 .clickable { poser(APoser.Tampon(texteTampon(perso, horo), couleurTampon, 14f)) }.padding(8.dp),
                 color = couleurTampon, fontWeight = FontWeight.Bold)
         }
+        // signature numerique (certificat), comme PhilPDF Windows
+        SectionSignatureNumerique(etat, choisi)
     }
     dessiner?.let { g ->
         PadSignature(g, { dessiner = null }) { t -> Signatures.ajouter(ctx, t); traces = Signatures.liste(ctx); dessiner = null }

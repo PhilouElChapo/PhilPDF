@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Horodatage des signatures numeriques : ces serveurs publics repondent en http (le jeton est signe, rien de secret) -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">timestamp.digicert.com</domain>
+        <domain includeSubdomains="false">timestamp.sectigo.com</domain>
+    </domain-config>
+</network-security-config>

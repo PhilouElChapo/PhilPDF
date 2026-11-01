@@ -13,6 +13,7 @@ import com.artifex.mupdf.fitz.PDFAnnotation
 import com.artifex.mupdf.fitz.PDFDocument
 import com.artifex.mupdf.fitz.PDFPage
 import com.artifex.mupdf.fitz.PDFWidget
+import com.artifex.mupdf.fitz.PKCS7Verifier
 import com.artifex.mupdf.fitz.Point
 import com.artifex.mupdf.fitz.Quad
 import com.artifex.mupdf.fitz.Rect
@@ -456,6 +457,71 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                 w.update()
                 ok
             }
+        }
+    }
+
+    // ---------------------------------------------------------------- signature numerique (certificat)
+    /** Signe une copie du document (cadre « rect », en points de la page) et renvoie le fichier signe, a enregistrer
+     *  tel quel : toute reecriture ulterieure casserait la signature. Le document ouvert n'est pas touche. */
+    suspend fun signerNumerique(ctx: Context, n: Int, rect: Rect, signataire: Signataire, raison: String, lieu: String,
+                                image: ByteArray?): File {
+        val dest = File(ctx.cacheDir, "ouverts/signature/" + nom.replace('/', '_'))
+        dest.parentFile?.mkdirs()
+        // sans modification : le fichier d'origine, octet pour octet (les signatures deja presentes restent valides)
+        if (modifie) ecrire(dest) else withContext(Dispatchers.IO) { fichier.copyTo(dest, overwrite = true) }
+        return verrou.withLock {
+            withContext(Dispatchers.IO) {
+                val d2 = Document.openDocument(dest.absolutePath) as? PDFDocument ?: throw ErreurCertificat("PDF non modifiable")
+                try {
+                    if (d2.needsPassword()) motDePasseOuverture?.let { d2.authenticatePassword(it) }
+                    val page = d2.loadPage(n) as PDFPage
+                    try {
+                        val w = page.createSignature()
+                        w.setRect(rect)
+                        val img = image?.let { com.artifex.mupdf.fitz.Image(it) }
+                        val drapeaux = if (img != null) PDFWidget.SIGNATURE_SHOW_LABELS or PDFWidget.SIGNATURE_SHOW_TEXT_NAME or PDFWidget.SIGNATURE_SHOW_DATE
+                            else PDFWidget.SIGNATURE_DEFAULT_APPEARANCE
+                        if (!w.sign(signataire, drapeaux, img, raison.ifBlank { null }, lieu.ifBlank { null }))
+                            throw ErreurCertificat("Signature refusée par le moteur PDF.")
+                        page.update()
+                    } finally { page.destroy() }
+                    // ajout a la fin du fichier (les signatures precedentes restent valides) ; sinon fichier reecrit
+                    try { d2.save(dest.absolutePath, "incremental=yes") }
+                    catch (e: Exception) {
+                        Journal.ecrire("certificat", "enregistrement incrémental impossible ($e) : fichier réécrit")
+                        val autre = File(dest.parentFile, "complet-" + dest.name)
+                        d2.save(autre.absolutePath, "")
+                        autre.copyTo(dest, overwrite = true); autre.delete()
+                    }
+                } finally { d2.destroy() }
+                dest
+            }
+        }
+    }
+
+    /** Signatures numeriques du document, verifiees (empreinte, certificat approuve, modifications apres). */
+    suspend fun signatures(ctx: Context): List<InfoSignature> = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val p = pdf ?: return@withContext emptyList()
+            val v = Verifieur(Identites.approuvesDer(ctx))
+            val out = ArrayList<InfoSignature>()
+            try {
+                for (n in 0 until p.countPages()) {
+                    val page = p.loadPage(n) as PDFPage
+                    try {
+                        page.widgets?.forEach { w ->
+                            if (w.fieldType != PDFWidget.TYPE_SIGNATURE || !w.isSigned) return@forEach
+                            val dig = try { w.checkDigest(v) } catch (_: Exception) { -1 }
+                            val cer = try { w.checkCertificate(v) } catch (_: Exception) { -1 }
+                            val nomS = try { w.getSignatory(v) } catch (_: Exception) { null } ?: try { w.getDistinguishedName(v)?.cn } catch (_: Exception) { null } ?: "?"
+                            val apres = try { w.incrementalChangesSinceSigning() } catch (_: Exception) { false }
+                            out += InfoSignature(n, nomS, dig == PKCS7Verifier.PKCS7VerifierOK, cer == PKCS7Verifier.PKCS7VerifierOK,
+                                cer == PKCS7Verifier.PKCS7VerifierSelfSigned, apres, "")
+                        }
+                    } finally { page.destroy() }
+                }
+            } finally { v.destroy() }
+            out
         }
     }
 
