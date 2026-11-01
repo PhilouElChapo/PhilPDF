@@ -628,6 +628,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                 val d2 = Document.openDocument(dest.absolutePath) as? PDFDocument ?: throw ErreurCertificat("PDF non modifiable")
                 try {
                     if (d2.needsPassword()) motDePasseOuverture?.let { d2.authenticatePassword(it) }
+                    champsIndirects(d2)
                     val page = d2.loadPage(n) as PDFPage
                     try {
                         // champ de signature deja pose (vide) : on signe dedans ; sinon un nouveau cadre
@@ -641,7 +642,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                         page.update()
                     } finally { page.destroy() }
                     // ajout a la fin du fichier (les signatures precedentes restent valides) ; sinon fichier reecrit
-                    try { d2.save(dest.absolutePath, "incremental=yes") }
+                    try { d2.save(dest.absolutePath, "incremental=yes,compress=yes,compress-images=yes") }
                     catch (e: Exception) {
                         Journal.ecrire("certificat", "enregistrement incrémental impossible ($e) : fichier réécrit")
                         val autre = File(dest.parentFile, "complet-" + dest.name)
@@ -652,6 +653,36 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                 dest
             }
         }
+    }
+
+    /** Champs ecrits « en ligne » dans la page (et recopies a part dans la liste du formulaire) : le moteur signait une
+     *  copie, la page en affichait une autre, restee vide. Chaque champ devient un objet unique, partage par la page et
+     *  par le formulaire. */
+    private fun champsIndirects(d: PDFDocument) {
+        val af = d.getTrailer().get("Root").get("AcroForm")
+        val champs = if (af.isNull) null else af.get("Fields").takeIf { it.isArray }
+        var k = 0
+        for (n in 0 until d.countPages()) {
+            val an = d.findPage(n).get("Annots")
+            if (!an.isArray) continue
+            for (i in 0 until an.size()) {
+                val a = an.get(i)
+                if (a.isIndirect || !a.isDictionary || a.get("Subtype").asName() != "Widget") continue
+                val ref = d.addObject(a)
+                an.put(i, ref); k++
+                if (champs == null) continue
+                val nom = try { a.get("T").asString() } catch (_: Exception) { "" }
+                var place = false
+                for (j in 0 until champs.size()) {
+                    val c = champs.get(j)
+                    if (!c.isIndirect && c.isDictionary && (try { c.get("T").asString() } catch (_: Exception) { "" }) == nom) {
+                        if (!place) { champs.put(j, ref); place = true }
+                    }
+                }
+                if (!place) champs.push(ref)
+            }
+        }
+        if (k > 0) Journal.ecrire("certificat", "$k champ(s) du formulaire remis en objet unique avant de signer")
     }
 
     /** Signatures numeriques du document, verifiees (empreinte, certificat approuve, modifications apres). */

@@ -10,6 +10,12 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.8.3
+- Signature avec un certificat dans un champ de signature deja pose : le document restait « non signe » (le champ
+  existait en deux exemplaires dans le PDF, la signature allait dans celui qu'on ne voit pas). Le champ est remis en un
+  seul exemplaire avant de signer.
+- PDF signe plus leger (l'image de signature est compressee).
+
 1.8.2
 - Mise a jour automatique : telecharge l'APK fait pour ce telephone (environ 30 Mo) au lieu de la version universelle
   (environ 80 Mo, qui contient les trois types de processeur).
