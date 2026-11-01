@@ -404,4 +404,10 @@
     <string name="ocr_a_telecharger">A télécharger : %1$s (environ %2$s Mo).</string>
     <string name="ocr_telechargement">Téléchargement de la langue : %1$s…</string>
     <string name="ocr_telechargement_impossible">%1$s : téléchargement impossible (%2$s). Vérifiez la connexion.</string>
+    <string name="maj_titre">MISE A JOUR DE PHILPDF</string>
+    <string name="maj_installee">Version installée : %1$s</string>
+    <string name="maj_rechercher">Rechercher une mise à jour</string>
+    <string name="maj_a_jour">PhilPDF est à jour.</string>
+    <string name="maj_play">Installé par Google Play : les mises à jour passent par le Play Store.</string>
+    <string name="maj_ouvrir_play">Ouvrir le Play Store</string>
 </resources>

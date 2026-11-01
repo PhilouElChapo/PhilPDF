@@ -5,6 +5,7 @@ package io.github.philouelchapo.philpdf
 import android.accounts.AccountManager
 import android.app.Activity
 import android.graphics.BitmapFactory
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -272,6 +273,7 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
                         }
                         TextButton(onClick = { lireSynchro() }, enabled = occupe == null) { Text(stringResource(R.string.actualiser)) }
                     }
+                    SectionMiseAJour()
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = fermer) { Text(stringResource(R.string.fermer)) }
@@ -383,4 +385,47 @@ fun taille(o: Long): String = when {
     o >= 1_000_000 -> String.format(Locale.FRANCE, "%.1f Mo", o / 1_000_000.0)
     o >= 1_000 -> "${o / 1_000} Ko"
     else -> "$o o"
+}
+
+/** Version installee et recherche d'une mise a jour a la demande (sans attendre le prochain demarrage). */
+@Composable
+private fun SectionMiseAJour() {
+    val ctx = LocalContext.current
+    val portee = rememberCoroutineScope()
+    var cherche by remember { mutableStateOf(false) }
+    var resultat by remember { mutableStateOf<String?>(null) }
+    var trouvee by remember { mutableStateOf<NouvelleVersion?>(null) }
+    Spacer(Modifier.height(16.dp))
+    HorizontalDivider()
+    Spacer(Modifier.height(8.dp))
+    Text(stringResource(R.string.maj_titre), fontWeight = FontWeight.SemiBold)
+    Text(stringResource(R.string.maj_installee, BuildConfig.VERSION_NAME), fontSize = 13.sp, color = Color.Gray)
+    if (BuildConfig.PLAY_STORE) {
+        Text(stringResource(R.string.maj_play), fontSize = 12.sp, color = Color.Gray)
+        TextButton(onClick = {
+            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + ctx.packageName)))
+        }) { Text(stringResource(R.string.maj_ouvrir_play)) }
+        return
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        OutlinedButton(onClick = {
+            cherche = true; resultat = null; trouvee = null
+            portee.launch {
+                Journal.ecrire("mise à jour", "recherche demandée depuis l'écran des comptes")
+                val v = MiseAJour.chercher(BuildConfig.VERSION_NAME)
+                trouvee = v
+                resultat = if (v == null) ctx.getString(R.string.maj_a_jour) else null
+                cherche = false
+            }
+        }, enabled = !cherche) { Text(stringResource(R.string.maj_rechercher)) }
+        if (cherche) { Spacer(Modifier.width(10.dp)); CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
+    }
+    resultat?.let { Text(it, fontSize = 13.sp, color = Color(0xFF2E7D32)) }
+    trouvee?.let { v ->
+        Text(stringResource(R.string.maj_dispo, v.version, BuildConfig.VERSION_NAME), fontSize = 13.sp)
+        TextButton(onClick = {
+            Journal.ecrire("mise à jour", "${v.version} : téléchargement demandé (${v.lien})")
+            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(v.lien)))
+        }) { Text(stringResource(R.string.telecharger)) }
+    }
 }

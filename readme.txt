@@ -10,6 +10,10 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.8.8
+- Ecran des comptes (pastille en haut de l'accueil) : version installee et bouton « Rechercher une mise a jour »,
+  sans attendre le prochain demarrage.
+
 1.8.7
 - Plantage a la reouverture d'un PDF signe : corrige (une autre fonction du moteur PDF, « modifie depuis la
   signature », est absente de la bibliotheque livree ; PhilPDF le calcule lui-meme).
