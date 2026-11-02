@@ -301,7 +301,11 @@ object TexteModif {
         // 1. retirer seulement les lettres des anciennes lignes (fond, cadres, images gardes)
         // page scannee dont le texte a ete reconnu (OCR) : les lettres visibles sont dans l'image, on efface aussi ses
         // pixels sous la ligne (sinon l'ancien texte resterait visible sous le nouveau)
-        val ocr = try { page.getObject().get("PhilPDF_OCR").let { !it.isNull && it.asBoolean() } } catch (_: Exception) { false }
+        val pageOcr = try { page.getObject().get("PhilPDF_OCR").let { !it.isNull && it.asBoolean() } } catch (_: Exception) { false }
+        // texte reconnu : police « PhilOCR » (ou Helvetica sur une page reconnue par les versions 1.8.0 a 1.8.9) ;
+        // le vrai texte d'une page qui a aussi des images n'efface pas l'image dessous
+        val ocr = par.lignes.any { l -> (l.polices + l.police).any { it.contains("PhilOCR") } } ||
+            (pageOcr && par.lignes.all { l -> l.police.substringAfter('+').startsWith("Helvetica") })
         val annot = page.createAnnotation(com.artifex.mupdf.fitz.PDFAnnotation.TYPE_REDACT)
         annot.setQuadPoints(par.lignes.map { l ->
             val marge = if (ocr) -(l.bas - l.haut) * 0.08f else (l.bas - l.haut) * 0.15f

@@ -18,7 +18,14 @@ object Ocr {
     /** Nom de la police du texte reconnu : « Modifier le texte » la reconnait (lettres de l'image a effacer aussi). */
     const val POLICE = "PhilOCR"
 
-    data class Mot(val texte: String, val x0: Float, val y0: Float, val x1: Float, val y1: Float)
+    /** Mot reconnu, dans le repere de la page (ou de l'image avant mise a l'echelle) : boite droite (x0..y1), et pour
+     *  le placer : debut de la ligne de base (ox, oy), sens d'ecriture (dx, dy), vers le haut des lettres (ux, uy),
+     *  longueur et hauteur. Un mot tourne (livret plie, texte vertical) a un sens autre que (1, 0). */
+    data class Mot(val texte: String, val x0: Float, val y0: Float, val x1: Float, val y1: Float,
+                   val ox: Float, val oy: Float, val dx: Float, val dy: Float, val ux: Float, val uy: Float,
+                   val l: Float, val h: Float, val confiance: Float) {
+        fun echelle(k: Float) = Mot(texte, x0 * k, y0 * k, x1 * k, y1 * k, ox * k, oy * k, dx, dy, ux, uy, l * k, h * k, confiance)
+    }
 
     /** Langues proposees (code Tesseract, nom, taille approximative a telecharger). Le francais est livre avec l'appli. */
     data class Langue(val code: String, val nom: String, val mo: Float, val iso: String)
@@ -39,6 +46,9 @@ object Ocr {
         val tel = java.util.Locale.getDefault().language
         return (listOf("fra") + listOfNotNull(LANGUES.firstOrNull { it.iso == tel }?.code)).distinct()
     }
+    /** Chercher aussi le texte couche ou a l'envers (livret plie, texte vertical) : plus lent. */
+    fun tourne(ctx: Context) = ctx.getSharedPreferences("ocr", Context.MODE_PRIVATE).getBoolean("tourne", false)
+    fun retenirTourne(ctx: Context, oui: Boolean) = ctx.getSharedPreferences("ocr", Context.MODE_PRIVATE).edit().putBoolean("tourne", oui).apply()
     fun retenir(ctx: Context, codes: List<String>) =
         ctx.getSharedPreferences("ocr", Context.MODE_PRIVATE).edit().putString("langues", codes.joinToString("+")).apply()
 
@@ -75,27 +85,47 @@ object Ocr {
         return dossier(ctx).absolutePath
     }
 
-    /** Mots reconnus dans l'image (coordonnees en pixels de l'image) ; langues : « fra+spa ». */
-    fun mots(ctx: Context, bm: Bitmap, langues: String = "fra"): List<Mot> {
+    /** Mots reconnus dans l'image, lue tournee de « rotation » degres (0, 90, 180, 270 : texte couche ou a l'envers).
+     *  Les positions sont rendues dans le repere de l'image d'origine. */
+    fun mots(ctx: Context, bm: Bitmap, langues: String = "fra", rotation: Int = 0): List<Mot> {
+        val w = bm.width.toFloat(); val hh = bm.height.toFloat()
+        val img = if (rotation == 0) bm
+            else Bitmap.createBitmap(bm, 0, 0, bm.width, bm.height, android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }, true)
+        // point de l'image tournee -> point de l'image d'origine
+        fun orig(u: Float, v: Float): Pair<Float, Float> = when (rotation) {
+            90 -> v to hh - u
+            180 -> w - u to hh - v
+            270 -> w - v to u
+            else -> u to v
+        }
         val t = TessBaseAPI()
         try {
             if (!t.init(donnees(ctx), langues)) throw IllegalStateException("Tesseract : langue introuvable ($langues)")
             t.pageSegMode = TessBaseAPI.PageSegMode.PSM_AUTO
-            t.setImage(bm)
+            t.setImage(img)
             t.getUTF8Text()                                  // lance la reconnaissance
             val out = ArrayList<Mot>()
             val it = t.resultIterator ?: return out
             try {
                 it.begin()
                 do {
-                    val w = it.getUTF8Text(TessBaseAPI.PageIteratorLevel.RIL_WORD)?.trim() ?: continue
-                    if (w.isEmpty() || it.confidence(TessBaseAPI.PageIteratorLevel.RIL_WORD) < 25f) continue
+                    val texte = it.getUTF8Text(TessBaseAPI.PageIteratorLevel.RIL_WORD)?.trim() ?: continue
+                    if (texte.none { c -> c.isLetterOrDigit() }) continue
+                    val conf = it.confidence(TessBaseAPI.PageIteratorLevel.RIL_WORD)
                     val r = it.getBoundingRect(TessBaseAPI.PageIteratorLevel.RIL_WORD)
-                    out += Mot(w, r.left.toFloat(), r.top.toFloat(), r.right.toFloat(), r.bottom.toFloat())
+                    val h = (r.bottom - r.top).toFloat().coerceAtLeast(1f); val l = (r.right - r.left).toFloat().coerceAtLeast(1f)
+                    val base = r.bottom - h * 0.18f
+                    val (sx, sy) = orig(r.left.toFloat(), base)
+                    val (ex, ey) = orig(r.right.toFloat(), base)
+                    val (tx, ty) = orig(r.left.toFloat(), base - h)
+                    val coins = listOf(orig(r.left.toFloat(), r.top.toFloat()), orig(r.right.toFloat(), r.top.toFloat()),
+                        orig(r.left.toFloat(), r.bottom.toFloat()), orig(r.right.toFloat(), r.bottom.toFloat()))
+                    out += Mot(texte, coins.minOf { it.first }, coins.minOf { it.second }, coins.maxOf { it.first }, coins.maxOf { it.second },
+                        sx, sy, (ex - sx) / l, (ey - sy) / l, (tx - sx) / h, (ty - sy) / h, l, h, conf)
                 } while (it.next(TessBaseAPI.PageIteratorLevel.RIL_WORD))
             } finally { it.delete() }
             return out
-        } finally { t.recycle() }
+        } finally { t.recycle(); if (img !== bm) img.recycle() }
     }
 
     /** Pose le texte reconnu, invisible, sur la page (mots en points de la page, y vers le bas). */
@@ -109,20 +139,24 @@ object Ocr {
         var nom = POLICE; var i = 1
         while (!fonts.get(nom).isNull) nom = POLICE + (i++)
         val police = Font("Helvetica")
-        fonts.put(nom, pdf.addSimpleFont(police, Font.SIMPLE_ENCODING_LATIN))
+        val fobj = pdf.addSimpleFont(police, Font.SIMPLE_ENCODING_LATIN)
+        fobj.put("BaseFont", pdf.newName("PhilOCR-Helvetica"))   // « Modifier le texte » reconnait ainsi le texte reconnu
+        fonts.put(nom, fobj)
         val cp = java.nio.charset.Charset.forName("windows-1252")
         val inv = page.getTransform().invert()
         val flux = StringBuilder("q BT 3 Tr\n")             // 3 Tr : texte invisible (l'image reste ce qu'on voit)
+        // vecteur de la page (y vers le bas) -> repere PDF (y vers le haut)
+        fun vec(x: Float, y: Float): Pair<Float, Float> = (x * inv.a + y * inv.c) to (x * inv.b + y * inv.d)
         for (m in mots) {
-            val h = (m.y1 - m.y0).coerceAtLeast(1f)
-            val taille = h * 0.95f
+            val taille = m.h * 0.95f
             val naturel = m.texte.sumOf { c -> police.advanceGlyph(police.encodeCharacter(c.code), false).toDouble() }.toFloat() * taille
-            val tz = if (naturel > 0) (100f * (m.x1 - m.x0) / naturel).coerceIn(20f, 400f) else 100f
-            val base = m.y1 - h * 0.18f
-            val ox = m.x0 * inv.a + base * inv.c + inv.e
-            val oy = m.x0 * inv.b + base * inv.d + inv.f
+            val tz = if (naturel > 0) (100f * m.l / naturel).coerceIn(20f, 400f) else 100f
+            val (ax, ay) = vec(m.dx, m.dy)
+            val (bx, by) = vec(m.ux, m.uy)
+            val ox = m.ox * inv.a + m.oy * inv.c + inv.e
+            val oy = m.ox * inv.b + m.oy * inv.d + inv.f
             val hex = m.texte.toByteArray(cp).joinToString("") { "%02X".format(it.toInt() and 255) }
-            flux.append("/$nom ${f(taille)} Tf ${f(tz)} Tz ${f(inv.a)} ${f(inv.b)} ${f(-inv.c)} ${f(-inv.d)} ${f(ox)} ${f(oy)} Tm <$hex> Tj\n")
+            flux.append("/$nom ${f(taille)} Tf ${f(tz)} Tz ${f(ax)} ${f(ay)} ${f(bx)} ${f(by)} ${f(ox)} ${f(oy)} Tm <$hex> Tj\n")
         }
         flux.append("ET Q\n")
         val contenu = pobj.get("Contents")

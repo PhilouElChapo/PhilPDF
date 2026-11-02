@@ -660,7 +660,7 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                     portee.launch {
                         val p = d.paragrapheA(n, k(o))
                         // page scannee (aucun texte) : on propose la reconnaissance du texte
-                        if (p == null) { if (etat.doc.modifiable && d.pageSansTexte(n)) etat.ocr = n else etat.message = "aucun_texte" }
+                        if (p == null) { if (etat.doc.modifiable && d.ocrPossible(n, k(o))) etat.ocr = n else etat.message = "aucun_texte" }
                         else etat.paragraphe = p
                     }
                 })
@@ -1037,6 +1037,7 @@ private fun DialogueOcr(etat: EtatLecteur, page: Int, fermer: () -> Unit) {
     var telecharge by remember { mutableStateOf<String?>(null) }
     var erreur by remember { mutableStateOf<String?>(null) }
     var langues by remember { mutableStateOf(Ocr.choisies(ctx)) }
+    var tourne by remember { mutableStateOf(Ocr.tourne(ctx)) }
     var travail by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val aTelecharger = Ocr.LANGUES.filter { it.code in langues && !Ocr.disponible(ctx, it.code) }
     fun lancer(pages: List<Int>?) {
@@ -1049,9 +1050,14 @@ private fun DialogueOcr(etat: EtatLecteur, page: Int, fermer: () -> Unit) {
                     catch (x: Exception) { throw IllegalStateException(ctx.getString(R.string.ocr_telechargement_impossible, l.nom, x.message ?: x.toString())) }
                 }
                 telecharge = null
-                Ocr.retenir(ctx, langues)
-                val k = etat.doc.reconnaitre(ctx, pages, langues.joinToString("+")) { a, b -> fait = a; total = b }
-                etat.message = if (k > 0) ctx.getString(R.string.ocr_fini, k) else ctx.getString(R.string.ocr_rien)
+                Ocr.retenir(ctx, langues); Ocr.retenirTourne(ctx, tourne)
+                val r = etat.doc.reconnaitre(ctx, pages, langues.joinToString("+"), tourne) { a, b -> fait = a; total = b }
+                etat.message = when {
+                    r.mots > 0 -> ctx.getString(R.string.ocr_fini, r.mots, r.pages)
+                    r.ignorees > 0 && r.ignorees == (pages?.size ?: r.ignorees) -> ctx.getString(R.string.ocr_deja_texte)
+                    tourne -> ctx.getString(R.string.ocr_rien)
+                    else -> ctx.getString(R.string.ocr_rien_tourne)
+                }
                 fermer()
             } catch (x: kotlinx.coroutines.CancellationException) { throw x
             } catch (x: Throwable) {
@@ -1075,6 +1081,10 @@ private fun DialogueOcr(etat: EtatLecteur, page: Int, fermer: () -> Unit) {
                     }
                 }
                 Text(stringResource(R.string.ocr_langues_aide), fontSize = 11.sp, color = Color.Gray)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(tourne, { tourne = it }, enabled = !occupe)
+                    Text(stringResource(R.string.ocr_tourne), fontSize = 13.sp)
+                }
                 if (aTelecharger.isNotEmpty() && !occupe) Text(stringResource(R.string.ocr_a_telecharger,
                     aTelecharger.joinToString(", ") { it.nom }, "%.1f".format(aTelecharger.sumOf { it.mo.toDouble() })),
                     fontSize = 12.sp, color = Color(0xFF0F6CBD))

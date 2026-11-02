@@ -392,12 +392,12 @@
     <string name="sig_ranger_fini">Terminé</string>
     <string name="ocr_titre_menu">Reconnaître le texte (OCR)</string>
     <string name="ocr_titre">RECONNAITRE LE TEXTE</string>
-    <string name="ocr_aide">Cette page est une image (scan) : PhilPDF peut y reconnaître le texte. Il est posé invisible sous l\'image : la page garde son aspect, et on peut chercher, copier et modifier le texte. Tout se fait sur ce téléphone, rien n\'est envoyé. Les pages qui ont déjà du texte ne sont pas touchées.</string>
+    <string name="ocr_aide">PhilPDF lit le texte des pages scannées et des images (photos, affiches, logos). Il est posé invisible sous l\'image : la page garde son aspect, et on peut chercher, copier et modifier le texte. Le texte déjà présent n\'est pas doublé. Tout se fait sur ce téléphone, rien n\'est envoyé.</string>
     <string name="ocr_cette_page">Page %1$d</string>
     <string name="ocr_tout">Tout le document</string>
     <string name="ocr_en_cours">Page %1$d sur %2$d…</string>
-    <string name="ocr_fini">Texte reconnu sur %1$d page(s). Pensez à enregistrer.</string>
-    <string name="ocr_rien">Aucun texte reconnu (pages déjà lisibles, ou image trop floue).</string>
+    <string name="ocr_fini">%1$d mot(s) reconnu(s) sur %2$d page(s). Pensez à enregistrer.</string>
+    <string name="ocr_rien">Aucun texte reconnu dans les images (texte trop petit, trop flou ou trop décoré).</string>
     <string name="ocr_erreur">Reconnaissance impossible : %1$s</string>
     <string name="ocr_langues">Langue(s) du document</string>
     <string name="ocr_langues_aide">Plusieurs langues possibles pour un document mixte. ↓ : téléchargée une seule fois (projet Tesseract), puis gardée sur le téléphone.</string>
@@ -410,4 +410,7 @@
     <string name="maj_a_jour">PhilPDF est à jour.</string>
     <string name="maj_play">Installé par Google Play : les mises à jour passent par le Play Store.</string>
     <string name="maj_ouvrir_play">Ouvrir le Play Store</string>
+    <string name="ocr_tourne">Chercher aussi le texte couché ou à l\'envers (livret plié, texte vertical) : plus lent</string>
+    <string name="ocr_rien_tourne">Aucun texte reconnu. S\'il est écrit à l\'envers ou couché, cochez « Chercher aussi le texte couché ou à l\'envers ».</string>
+    <string name="ocr_deja_texte">Cette page a déjà du texte et pas d\'image à lire : rien à reconnaître.</string>
 </resources>

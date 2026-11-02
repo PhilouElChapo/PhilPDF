@@ -1002,18 +1002,64 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         }
     }
 
-    /** Reconnait le texte des pages (null : toutes) qui n'en ont pas, et le pose invisible sur l'image (une seule
-     *  etape d'annulation). Renvoie le nombre de pages reconnues. avance(fait, total) pour la barre de progression. */
-    suspend fun reconnaitre(ctx: Context, pages: List<Int>?, langues: String = "fra", avance: (Int, Int) -> Unit): Int {
-        if (pdf == null) return 0
+    /** Images et lignes de texte de la page (repere de la page) : pour savoir ou chercher du texte dans les images. */
+    data class ContenuPage(val images: List<Rect>, val lignes: List<Rect>)
+
+    private fun contenuSansVerrou(n: Int): ContenuPage {
+        val images = ArrayList<Rect>(); val lignes = ArrayList<Rect>()
+        val pg = doc.loadPage(n)
+        try {
+            val st = pg.toStructuredText("preserve-images")
+            try {
+                st.walk(object : com.artifex.mupdf.fitz.StructuredTextWalker {
+                    override fun onImageBlock(bbox: Rect?, transform: Matrix?, image: com.artifex.mupdf.fitz.Image?) { bbox?.let { images += Rect(it) } }
+                    override fun beginTextBlock(bbox: Rect?, flags: Int) {}
+                    override fun endTextBlock() {}
+                    override fun beginLine(bbox: Rect?, wmode: Int, dir: Point?) { bbox?.let { lignes += Rect(it) } }
+                    override fun endLine() {}
+                    override fun onChar(c: Int, origin: Point?, font: com.artifex.mupdf.fitz.Font?, size: Float, q: com.artifex.mupdf.fitz.Quad?, argb: Int, flags: Int, bidi: Int) {}
+                    override fun beginStruct(standard: String?, raw: String?, index: Int) {}
+                    override fun endStruct() {}
+                    override fun onVector(bbox: Rect?, info: com.artifex.mupdf.fitz.StructuredTextWalker.VectorInfo?, argb: Int) {}
+                })
+            } finally { st.destroy() }
+        } catch (e: Exception) { Journal.ecrire("ocr", "lecture de la page ${n + 1} : $e") } finally { pg.destroy() }
+        return ContenuPage(images, lignes)
+    }
+
+    /** Vrai si le texte peut etre reconnu ici : page sans texte, ou point sur une image. */
+    suspend fun ocrPossible(n: Int, a: Point): Boolean = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val c = contenuSansVerrou(n)
+            c.lignes.isEmpty() || c.images.any { a.x >= it.x0 && a.x <= it.x1 && a.y >= it.y0 && a.y <= it.y1 }
+        }
+    }
+
+    /** Resultat d'une reconnaissance : pages traitees, mots poses, pages laissees (sans image a lire). */
+    data class ResultatOcr(val pages: Int, val mots: Int, val ignorees: Int)
+
+    /** Reconnait le texte des pages (null : toutes) : pages scannees entieres, ou texte dans les images d'une page qui a
+     *  deja du texte (sans doubler celui-ci). tourne : cherche aussi le texte couche ou a l'envers (plus lent). Le texte
+     *  est pose invisible (une seule etape d'annulation). avance(fait, total) pour la barre de progression. */
+    suspend fun reconnaitre(ctx: Context, pages: List<Int>?, langues: String = "fra", tourne: Boolean = false,
+                            avance: (Int, Int) -> Unit): ResultatOcr {
+        if (pdf == null) return ResultatOcr(0, 0, 0)
         val liste = pages ?: (0 until verrou.withLock { withContext(Dispatchers.IO) { doc.countPages() } }).toList()
         val resultats = LinkedHashMap<Int, List<Ocr.Mot>>()
+        var ignorees = 0
+        fun aire(x0: Float, y0: Float, x1: Float, y1: Float) = ((x1 - x0).coerceAtLeast(0f)) * ((y1 - y0).coerceAtLeast(0f))
+        fun recouvre(m: Ocr.Mot, x0: Float, y0: Float, x1: Float, y1: Float): Boolean {
+            val i = aire(maxOf(m.x0, x0), maxOf(m.y0, y0), minOf(m.x1, x1), minOf(m.y1, y1))
+            return i > 0.3f * aire(m.x0, m.y0, m.x1, m.y1).coerceAtLeast(0.01f)
+        }
+        val passes = if (tourne) listOf(0, 180, 90, 270) else listOf(0)
         for ((i, n) in liste.withIndex()) {
             avance(i, liste.size)
-            if (!pageSansTexte(n)) continue
             val z = 200f / 72f                                   // 200 points par pouce : bon pour Tesseract, memoire raisonnable
-            val bm = verrou.withLock {
+            val (contenu, bm) = verrou.withLock {
                 withContext(Dispatchers.IO) {
+                    val c = contenuSansVerrou(n)
+                    if (c.lignes.isNotEmpty() && c.images.isEmpty()) return@withContext c to null   // deja du texte, aucune image
                     val pg = doc.loadPage(n)
                     try {
                         val b = pg.bounds
@@ -1022,22 +1068,39 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                         bm.eraseColor(Color.WHITE)
                         val dev = AndroidDrawDevice(bm, 0, 0)
                         try { pg.run(dev, Matrix(z, z), null as Cookie?); dev.close() } finally { dev.destroy() }
-                        bm
+                        c to bm
                     } finally { pg.destroy() }
                 }
             }
-            val mots = try { withContext(Dispatchers.Default) { Ocr.mots(ctx, bm, langues) } } finally { bm.recycle() }
-            resultats[n] = mots.map { m -> Ocr.Mot(m.texte, m.x0 / z, m.y0 / z, m.x1 / z, m.y1 / z) }
-            Journal.ecrire("ocr", "$nom, page ${n + 1} : ${mots.size} mots reconnus")
+            if (bm == null) { ignorees++; continue }
+            val scan = contenu.lignes.isEmpty()                  // page entierement scannee
+            val gardes = ArrayList<Ocr.Mot>()
+            try {
+                for (r in passes) {
+                    val trouves = withContext(Dispatchers.Default) { Ocr.mots(ctx, bm, langues, r) }.map { it.echelle(1f / z) }
+                    val seuil = if (r != 0) 70f else if (scan) 25f else 50f   // a l'envers : seulement les mots surs
+                    for (m in trouves) {
+                        if (m.confiance < seuil) continue
+                        if (!scan) {
+                            val cx = (m.x0 + m.x1) / 2; val cy = (m.y0 + m.y1) / 2
+                            if (contenu.images.none { cx >= it.x0 && cx <= it.x1 && cy >= it.y0 && cy <= it.y1 }) continue
+                            if (contenu.lignes.any { recouvre(m, it.x0, it.y0, it.x1, it.y1) }) continue   // deja du vrai texte
+                        }
+                        if (gardes.any { g -> recouvre(m, g.x0, g.y0, g.x1, g.y1) }) continue              // lu par une autre passe
+                        gardes += m
+                    }
+                }
+            } finally { bm.recycle() }
+            resultats[n] = gardes
+            Journal.ecrire("ocr", "$nom, page ${n + 1} : ${gardes.size} mots reconnus" + if (tourne) " (texte tourné cherché)" else "")
         }
         avance(liste.size, liste.size)
         val utiles = resultats.filterValues { it.isNotEmpty() }
-        if (utiles.isEmpty()) return 0
-        operation("Reconnaître le texte") { d ->
+        if (utiles.isNotEmpty()) operation("Reconnaître le texte") { d ->
             for ((n, m) in utiles) { val pg = d.loadPage(n) as PDFPage; try { Ocr.poser(d, pg, m) } finally { pg.destroy() } }
             true
         }
-        return utiles.size
+        return ResultatOcr(utiles.size, utiles.values.sumOf { it.size }, ignorees)
     }
 
     /** Image de la page n a la largeur demandee (en pixels). */

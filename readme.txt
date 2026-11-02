@@ -10,6 +10,15 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.9.0
+- Reconnaissance du texte (OCR) dans les images d'une page qui a deja du texte (affiche, livret, photo avec
+  legende) : seules les images sont lues, le texte deja present n'est pas double. Proposee aussi quand on touche une
+  image avec « Modifier le texte ».
+- Option « Chercher aussi le texte couche ou a l'envers » (livret plie, texte vertical) : la page est lue dans les
+  quatre sens (plus lent) ; le texte reconnu est pose dans le bon sens.
+- Message clair quand rien n'est reconnu (page deja lisible, texte trop petit ou decore, texte a l'envers).
+- « Modifier le texte » sur une page avec images : l'image n'est effacee sous la ligne que pour le texte reconnu.
+
 1.8.9
 - Icones en couleur : volet ouvert et outil choisi en rouge, disquette rouge quand il y a des modifications a
   enregistrer, annuler / retablir grises quand il n'y a rien a annuler (elles restaient toutes noires).
