@@ -123,7 +123,8 @@ fun OrganiserPages(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, fermer:
                 }
                 HorizontalDivider(color = Color(0xFFE2E2E2))
                 Box(Modifier.weight(1f).fillMaxWidth()) {
-                    Grille(etat, tailles, choix, { n -> choix = if (n in choix) choix - n else choix + n }) { de, vers ->
+                    Grille(etat, tailles, choix, { n -> choix = if (n in choix) choix - n else choix + n },
+                        { n -> fermer(); portee.launch { etat.liste.scrollToItem(n) } }) { de, vers ->
                         // deplacer : la selection entiere si la page tenue en fait partie, sinon cette page seule
                         val bloc = if (de in choix) tries else listOf(de)
                         if (vers in bloc) return@Grille
@@ -192,7 +193,7 @@ fun OrganiserPages(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, fermer:
 /** Grille des vignettes. choisir(n) : toucher ; deplacer(de, vers) : appui long puis glisser sur une autre page. */
 @Composable
 private fun Grille(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choix: Set<Int>, choisir: (Int) -> Unit,
-                   deplacer: (Int, Int) -> Unit) {
+                   allerA: (Int) -> Unit, deplacer: (Int, Int) -> Unit) {
     val grille = rememberLazyGridState()
     var tenue by remember { mutableStateOf<Int?>(null) }
     var glisse by remember { mutableStateOf(Offset.Zero) }
@@ -229,7 +230,7 @@ private fun Grille(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choix: 
                 }
                 // toucher : choisir la page ; toucher deux fois : y aller (retour a la lecture)
                 .combinedClickable(onClick = { choisir(n) },
-                    onDoubleClick = { fermer(); portee.launch { etat.liste.scrollToItem(n) } }),
+                    onDoubleClick = { allerA(n) }),
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Box {
                     Vignette(etat.doc, n, largeurPx, w, h, Modifier.fillMaxWidth()
