@@ -77,7 +77,7 @@ fun SectionSignatureNumerique(etat: EtatLecteur, choisi: () -> Unit) {
                 etat.annot.outil = Outil.SIGNER_NUM
                 choisi()
             }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icones.get("certificat", if (choisie) ROUGE else Color(0xFF444444)), null)
+            Icon(Icones.get("certificat", if (choisie) ROUGE else Color(0xFF444444)), null, tint = Color.Unspecified)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(e.nom.ifEmpty { e.email }, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
@@ -93,7 +93,7 @@ fun SectionSignatureNumerique(etat: EtatLecteur, choisi: () -> Unit) {
                 TextButton(onClick = { Identites.deplacer(ctx, e.id, 1); liste = Identites.liste(ctx) }, enabled = i < liste.size - 1,
                     contentPadding = PaddingValues(4.dp)) { Text("↓") }
                 IconButton(onClick = { Identites.retirer(ctx, e.id); liste = Identites.liste(ctx) }) {
-                    Icon(Icones.get("supprimer", Color(0xFF888888)), stringResource(R.string.supprimer))
+                    Icon(Icones.get("supprimer", Color(0xFF888888)), stringResource(R.string.supprimer), tint = Color.Unspecified)
                 }
             }
         }
@@ -105,7 +105,7 @@ fun SectionSignatureNumerique(etat: EtatLecteur, choisi: () -> Unit) {
         val windows = d.optBoolean("windows")
         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp).background(Color(0xFFF5F5F5), RoundedCornerShape(8.dp))
             .clickable(enabled = !windows) { recuperer = true }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icones.get("certificat", Color(0xFFAAAAAA)), null)
+            Icon(Icones.get("certificat", Color(0xFFAAAAAA)), null, tint = Color.Unspecified)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(d.optString("nom").ifEmpty { d.optString("email") }, fontSize = 14.sp, color = Color.Gray)

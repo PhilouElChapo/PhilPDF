@@ -354,7 +354,7 @@ fun EcranFichiers(n: Nuage, fermer: () -> Unit, ouvrir: (Uri) -> Unit) {
                                         occupe = null
                                     }
                                 }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icones.get(if (e.dossier) "ouvrir" else "creer", if (e.dossier) Color(0xFFE0A100) else ROUGE), null, Modifier.size(26.dp))
+                                    Icon(Icones.get(if (e.dossier) "ouvrir" else "creer", if (e.dossier) Color(0xFFE0A100) else ROUGE), null, Modifier.size(26.dp), tint = Color.Unspecified)
                                     Spacer(Modifier.width(12.dp))
                                     Column(Modifier.weight(1f)) {
                                         Text(e.nom, maxLines = 2, overflow = TextOverflow.Ellipsis)

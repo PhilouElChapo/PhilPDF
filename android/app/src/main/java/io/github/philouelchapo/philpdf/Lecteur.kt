@@ -236,13 +236,13 @@ internal fun BoutonsEdition(etat: EtatLecteur) {
     val portee = rememberCoroutineScope()
     val d = etat.doc
     IconButton(onClick = { portee.launch { d.annuler() } }, enabled = d.peutAnnuler) {
-        Icon(Icones.get("annuler", if (d.peutAnnuler) Color(0xFF333333) else Color(0xFFBBBBBB)), stringResource(R.string.annuler_action))
+        Icon(Icones.get("annuler", if (d.peutAnnuler) Color(0xFF333333) else Color(0xFFBBBBBB)), stringResource(R.string.annuler_action), tint = Color.Unspecified)
     }
     IconButton(onClick = { portee.launch { d.retablir() } }, enabled = d.peutRetablir) {
-        Icon(Icones.get("retablir", if (d.peutRetablir) Color(0xFF333333) else Color(0xFFBBBBBB)), stringResource(R.string.retablir))
+        Icon(Icones.get("retablir", if (d.peutRetablir) Color(0xFF333333) else Color(0xFFBBBBBB)), stringResource(R.string.retablir), tint = Color.Unspecified)
     }
     IconButton(onClick = { etat.demandeEnregistrer = true }, enabled = d.modifie) {
-        Icon(Icones.get("enregistrer", if (d.modifie) ROUGE else Color(0xFFBBBBBB)), stringResource(R.string.enregistrer))
+        Icon(Icones.get("enregistrer", if (d.modifie) ROUGE else Color(0xFFBBBBBB)), stringResource(R.string.enregistrer), tint = Color.Unspecified)
     }
 }
 
@@ -310,7 +310,7 @@ private fun Rail(elements: List<Pair<Volet, String>>, actif: Volet?, choisir: (V
         elements.forEach { (v, icone) ->
             val oui = v == actif
             IconButton(onClick = { choisir(v) }, modifier = Modifier.background(if (oui) Color(0xFFFCEBEC) else Color.Transparent, RoundedCornerShape(8.dp))) {
-                Icon(Icones.get(icone, if (oui) ROUGE else Color(0xFF444444)), libelleVolet(v))
+                Icon(Icones.get(icone, if (oui) ROUGE else Color(0xFF444444)), libelleVolet(v), tint = Color.Unspecified)
             }
             Spacer(Modifier.height(4.dp))
         }
@@ -365,7 +365,7 @@ private fun DispositionTelephone(etat: EtatLecteur, tailles: List<Pair<Float, Fl
             Row(Modifier.align(Alignment.TopCenter).padding(top = if (barres) 56.dp else 8.dp)
                 .background(Color(0xEE2B2B2B), RoundedCornerShape(20.dp)).padding(horizontal = 10.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icones.get(etat.annot.outil.icone, Color.White), null)
+                Icon(Icones.get(etat.annot.outil.icone, Color.White), null, tint = Color.Unspecified)
                 Spacer(Modifier.width(6.dp))
                 Text(stringResource(etat.annot.outil.texte), color = Color.White, fontSize = 13.sp)
                 TextButton(onClick = { tiroir = Volet.ANNOTER }) { Text(stringResource(R.string.reglages), color = Color(0xFF9CC3FF)) }
@@ -378,7 +378,7 @@ private fun DispositionTelephone(etat: EtatLecteur, tailles: List<Pair<Float, Fl
                 listOf(Volet.VIGNETTES to "organiser", Volet.RECHERCHE to "rechercher", Volet.ANNOTER to "surligner",
                     Volet.SIGNER to "signer", Volet.PLUS to "plus").forEach { (v, icone) ->
                     NavigationBarItem(selected = tiroir == v, onClick = { tiroir = v },
-                        icon = { Icon(Icones.get(icone, if (tiroir == v) ROUGE else Color(0xFF444444)), null) },
+                        icon = { Icon(Icones.get(icone, if (tiroir == v) ROUGE else Color(0xFF444444)), null, tint = Color.Unspecified) },
                         label = { TexteAjuste(libelleVolet(v), 11.sp) })
                 }
             }
@@ -453,7 +453,7 @@ private fun Bientot(titre: String, texte: String, icones: List<String>) {
     Column(Modifier.padding(16.dp)) {
         Text(titre, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(10.dp))
-        Row { icones.forEach { Icon(Icones.get(it, Color(0xFFAAAAAA)), null, Modifier.padding(end = 12.dp)) } }
+        Row { icones.forEach { Icon(Icones.get(it, Color(0xFFAAAAAA)), null, Modifier.padding(end = 12.dp), tint = Color.Unspecified) } }
         Spacer(Modifier.height(10.dp))
         Text(texte, fontSize = 13.sp, color = Color.Gray)
     }
@@ -467,7 +467,7 @@ private fun Vignettes(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, alle
         horizontalAlignment = Alignment.CenterHorizontally) {
         if (etat.doc.modifiable) item {
             OutlinedButton(onClick = { etat.organiser = true }, Modifier.fillMaxWidth()) {
-                Icon(Icones.get("organiser", ROUGE), null)
+                Icon(Icones.get("organiser", ROUGE), null, tint = Color.Unspecified)
                 Spacer(Modifier.width(8.dp))
                 TexteAjuste(stringResource(R.string.organiser_pages), 14.sp)
             }

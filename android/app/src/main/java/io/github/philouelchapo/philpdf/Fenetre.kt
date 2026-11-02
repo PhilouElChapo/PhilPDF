@@ -54,7 +54,7 @@ fun ChampSecret(valeur: String, changer: (String) -> Unit, libelle: String, modi
         trailingIcon = {
             androidx.compose.material3.IconButton(onClick = { voir = !voir }) {
                 androidx.compose.material3.Icon(Icones.get(if (voir) "oeil_barre" else "oeil", androidx.compose.ui.graphics.Color(0xFF555555)),
-                    androidx.compose.ui.res.stringResource(if (voir) R.string.mdp_cacher else R.string.mdp_voir))
+                    androidx.compose.ui.res.stringResource(if (voir) R.string.mdp_cacher else R.string.mdp_voir), tint = androidx.compose.ui.graphics.Color.Unspecified)
             }
         })
 }

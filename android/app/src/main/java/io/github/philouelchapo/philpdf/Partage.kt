@@ -68,7 +68,7 @@ fun ChoixPartage(etat: EtatLecteur, fermer: () -> Unit) {
 private fun Ligne(icone: String, titre: String, aide: String, actif: Boolean, faire: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(enabled = actif, onClick = faire).padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icones.get(icone, if (actif) ROUGE else Color(0xFFBBBBBB)), null)
+        Icon(Icones.get(icone, if (actif) ROUGE else Color(0xFFBBBBBB)), null, tint = Color.Unspecified)
         Spacer(Modifier.width(12.dp))
         Column {
             Text(titre, fontWeight = FontWeight.SemiBold, color = if (actif) Color.Unspecified else Color.Gray)

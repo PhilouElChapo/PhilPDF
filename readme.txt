@@ -10,6 +10,10 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.8.9
+- Icones en couleur : volet ouvert et outil choisi en rouge, disquette rouge quand il y a des modifications a
+  enregistrer, annuler / retablir grises quand il n'y a rien a annuler (elles restaient toutes noires).
+
 1.8.8
 - Ecran des comptes (pastille en haut de l'accueil) : version installee et bouton « Rechercher une mise a jour »,
   sans attendre le prochain demarrage.

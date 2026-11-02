@@ -258,7 +258,7 @@ private fun Action(icone: String, texte: String, actif: Boolean = true, miroir: 
     Column(Modifier.width(76.dp).clickable(enabled = actif, onClick = faire).padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(Icones.get(icone, if (actif) Color(0xFF333333) else Color(0xFFBBBBBB)), null,
-            Modifier.then(if (miroir) Modifier.scale(scaleX = -1f, scaleY = 1f) else Modifier))
+            Modifier.then(if (miroir) Modifier.scale(scaleX = -1f, scaleY = 1f) else Modifier), tint = Color.Unspecified)
         TexteAjuste(texte, 11.sp)
     }
 }

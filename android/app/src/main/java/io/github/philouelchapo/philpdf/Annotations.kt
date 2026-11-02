@@ -119,7 +119,7 @@ fun PanneauAnnoter(etat: EtatLecteur, choisi: () -> Unit = {}) {
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     // groupe a plusieurs outils : l'icone de l'outil en cours, et une fleche
                     val ic = if (plusieurs && r.outil in g.outils) r.outil.icone else g.icone
-                    Icon(Icones.get(ic, if (actif) ROUGE else Color(0xFF444444)), null)
+                    Icon(Icones.get(ic, if (actif) ROUGE else Color(0xFF444444)), null, tint = Color.Unspecified)
                     TexteAjuste(stringResource(g.texte) + if (plusieurs) " ▾" else "", 11.sp)
                 }
             }
@@ -135,7 +135,7 @@ fun PanneauAnnoter(etat: EtatLecteur, choisi: () -> Unit = {}) {
                         .border(1.dp, if (actif) ROUGE else Color(0xFFE2E2E2), RoundedCornerShape(8.dp))
                         .clickable { r.outil = o; choisi() }.padding(vertical = 6.dp),
                         horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icones.get(o.icone, if (actif) ROUGE else Color(0xFF444444)), null)
+                        Icon(Icones.get(o.icone, if (actif) ROUGE else Color(0xFF444444)), null, tint = Color.Unspecified)
                         Text(stringResource(o.texte), fontSize = 10.sp, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     }
                 }
@@ -145,7 +145,7 @@ fun PanneauAnnoter(etat: EtatLecteur, choisi: () -> Unit = {}) {
         if (ouvert == GroupeOutils.FORMULAIRE) {
         Spacer(Modifier.height(10.dp))
         OutlinedButton(onClick = { etat.detecter = true; choisi() }, Modifier.fillMaxWidth()) {
-            Icon(Icones.get("formulaire", ROUGE), null)
+            Icon(Icones.get("formulaire", ROUGE), null, tint = Color.Unspecified)
             Spacer(Modifier.width(8.dp))
             TexteAjuste(stringResource(R.string.detecter_champs), 14.sp)
         }
@@ -234,7 +234,7 @@ fun FeuilleAnnotation(etat: EtatLecteur, info: InfoAnnot, fermer: () -> Unit) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(nomGenre(info.genre)), Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
                 OutlinedButton(onClick = { portee.launch { etat.doc.supprimerAnnotation(info); fermer() } }) {
-                    Icon(Icones.get("supprimer", Color(0xFFC62828)), null)
+                    Icon(Icones.get("supprimer", Color(0xFFC62828)), null, tint = Color.Unspecified)
                     Spacer(Modifier.width(6.dp))
                     Text(stringResource(R.string.supprimer), color = Color(0xFFC62828))
                 }
