@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Bibliotheque MuPDF Java (fitz) : methodes declarees en Java mais absentes de libmupdf_java.so (appel = plantage).
 # Echec si PhilPDF Android en appelle une. Usage : verifier-jni.sh <version, ex. 1.28.5>
-set -euo pipefail
+set -u   # (pas -e : grep ne trouvant rien dans une classe sans methode native n est pas une erreur)
 v="$1"
 t=$(mktemp -d)
-curl -sSLfo "$t/fitz.aar" "https://maven.ghostscript.com/com/artifex/mupdf/fitz/$v/fitz-$v.aar"
+curl -sSLfo "$t/fitz.aar" "https://maven.ghostscript.com/com/artifex/mupdf/fitz/$v/fitz-$v.aar" || { echo "::error title=MuPDF Java::version $v introuvable"; exit 1; }
 cd "$t" && mkdir a && cd a && unzip -q ../fitz.aar && mkdir c && (cd c && unzip -q ../classes.jar)
 so=$(find . -path "*arm64-v8a*" -name "*.so" | grep -i mupdf | head -1)
 nm -D --defined-only "$so" | awk '{print $3}' | grep '^Java_' | sed 's/__.*//' | sort -u > presents.txt
