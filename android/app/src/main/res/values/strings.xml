@@ -467,4 +467,5 @@
     <string name="outil_champ_bouton">Bouton</string>
     <string name="ordre_tabulation">Ordre de tabulation</string>
     <string name="reinitialiser_question">Effacer tout le formulaire (valeurs par défaut remises) ?</string>
+    <string name="saisie_autre">Autre valeur (à taper)</string>
 </resources>

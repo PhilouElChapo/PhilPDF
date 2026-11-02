@@ -10,6 +10,13 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.10.2
+- Reconnaissance du texte a l'envers (livret plie) : le texte lu a l'endroit (du charabia, « NOISSIN ») prenait la
+  place du bon (« MISSION ») ; chaque mot garde maintenant la lecture la plus sure. Plus besoin de retourner la page.
+- Liste deroulante a saisie libre : en la remplissant, une zone « Autre valeur » permet de taper la sienne.
+- Essais automatiques sur un telephone simule a chaque fabrication (champs, OCR, texte modifie, signature) : une
+  version qui en rate un n'est pas publiee.
+
 1.10.1
 - Texte reconnu (OCR), texte modifie, champs ajoutes : ils pouvaient disparaitre a l'enregistrement, remplaces par un
   debris (« <00000000B0EC00> ») ; c'est pourquoi le texte du livret ne se selectionnait pas. Cause : une fonction du

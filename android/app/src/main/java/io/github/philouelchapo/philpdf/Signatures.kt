@@ -485,7 +485,8 @@ fun PadSignature(genre: String, fermer: () -> Unit, valider: (Trace) -> Unit) {
 @Composable
 fun SaisieChamp(etat: EtatLecteur, c: InfoChamp, fermer: () -> Unit) {
     val portee = rememberCoroutineScope()
-    var t by remember(c) { mutableStateOf(c.valeur) }
+    // liste a saisie libre : la zone a taper part vide si la valeur actuelle est un des choix
+    var t by remember(c) { mutableStateOf(if (c.options.isNotEmpty() && c.valeur in c.options) "" else c.valeur) }
     var erreur by remember { mutableStateOf<String?>(null) }
     val r = remember(c) { try { JSONObject(c.regles) } catch (_: Exception) { JSONObject() } }
     val fmt = r.optJSONObject("format")
@@ -511,9 +512,14 @@ fun SaisieChamp(etat: EtatLecteur, c: InfoChamp, fermer: () -> Unit) {
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 r.optJSONObject("aide")?.optString("entree")?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, color = Color(0xFF0F6CBD)) }
-                if (c.options.isNotEmpty()) c.options.forEach { o ->
-                    Text(o, Modifier.fillMaxWidth().clickable { valider(o) }
-                        .padding(vertical = 10.dp), fontWeight = if (o == c.valeur) FontWeight.Bold else FontWeight.Normal)
+                if (c.options.isNotEmpty()) {
+                    c.options.forEach { o ->
+                        Text(o, Modifier.fillMaxWidth().clickable { valider(o) }
+                            .padding(vertical = 10.dp), fontWeight = if (o == c.valeur) FontWeight.Bold else FontWeight.Normal)
+                    }
+                    // saisie libre autorisee : on peut aussi taper sa propre valeur
+                    if (c.libre) OutlinedTextField(t, { t = it; erreur = null }, Modifier.fillMaxWidth(),
+                        singleLine = true, label = { Text(stringResource(R.string.saisie_autre)) })
                 } else {
                     OutlinedTextField(t, { t = it; erreur = null }, Modifier.fillMaxWidth(), singleLine = genre != "aucun",
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = clavier),
@@ -526,7 +532,7 @@ fun SaisieChamp(etat: EtatLecteur, c: InfoChamp, fermer: () -> Unit) {
             }
         },
         confirmButton = {
-            if (c.options.isEmpty()) TextButton(onClick = { valider(t) }) { Text(stringResource(R.string.ok)) }
+            if (c.options.isEmpty() || (c.libre && t.isNotBlank() && t !in c.options)) TextButton(onClick = { valider(t.trim()) }) { Text(stringResource(R.string.ok)) }
         },
         dismissButton = { TextButton(onClick = fermer) { Text(stringResource(R.string.annuler)) } })
 }

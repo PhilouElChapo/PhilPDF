@@ -434,7 +434,8 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                         trouve = InfoChamp(n, i, w.fieldType, try { w.value ?: "" } catch (_: Exception) { "" },
                             try { w.options?.toList() ?: emptyList() } catch (_: Exception) { emptyList() },
                             try { w.isReadOnly } catch (_: Exception) { false }, try { w.name ?: "" } catch (_: Exception) { "" },
-                            try { Regles.lire(w.getObject()).toString() } catch (_: Exception) { "" })
+                            try { Regles.lire(w.getObject()).toString() } catch (_: Exception) { "" },
+                            try { Regles.champDe(w.getObject()).get("Ff").let { !it.isNull && it.asInteger() and ChampsPdf.FF_LIBRE != 0 } } catch (_: Exception) { false })
                         break
                     }
                 }
@@ -1140,9 +1141,12 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
             val scan = contenu.lignes.isEmpty()                  // page entierement scannee
             val gardes = ArrayList<Ocr.Mot>()
             try {
+                // toutes les lectures (a l'endroit, a l'envers, couchees), puis, a chaque endroit, la plus sure : un
+                // texte a l'envers lu a l'endroit donne du charabia peu sur (« NOISSIN »), lu tourne il est net
+                val candidats = ArrayList<Ocr.Mot>()
                 for (r in passes) {
                     val trouves = withContext(Dispatchers.Default) { Ocr.mots(ctx, bm, langues, r) }.map { it.echelle(1f / z) }
-                    val seuil = if (r != 0) 70f else if (scan) 25f else 50f   // a l'envers : seulement les mots surs
+                    val seuil = if (r != 0) 70f else if (scan) 25f else 50f   // tourne : seulement les mots surs
                     for (m in trouves) {
                         if (m.confiance < seuil) continue
                         if (!scan) {
@@ -1150,9 +1154,12 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                             if (contenu.images.none { cx >= it.x0 && cx <= it.x1 && cy >= it.y0 && cy <= it.y1 }) continue
                             if (contenu.lignes.any { recouvre(m, it.x0, it.y0, it.x1, it.y1) }) continue   // deja du vrai texte
                         }
-                        if (gardes.any { g -> recouvre(m, g.x0, g.y0, g.x1, g.y1) }) continue              // lu par une autre passe
-                        gardes += m
+                        candidats += m
                     }
+                }
+                for (m in candidats.sortedByDescending { it.confiance }) {
+                    if (gardes.any { g -> recouvre(m, g.x0, g.y0, g.x1, g.y1) || recouvre(g, m.x0, m.y0, m.x1, m.y1) }) continue
+                    gardes += m
                 }
             } finally { bm.recycle() }
             resultats[n] = gardes
@@ -1317,4 +1324,6 @@ data class InfoAnnot(val page: Int, val index: Int, val genre: Int, val couleur:
     val objet: Boolean get() = genre == PDFAnnotation.TYPE_STAMP || genre == PDFAnnotation.TYPE_FREE_TEXT || genre == PDFAnnotation.TYPE_INK
 }
 data class InfoChamp(val page: Int, val index: Int, val genre: Int, val valeur: String, val options: List<String>,
-                     val lectureSeule: Boolean, val nom: String = "", val regles: String = "")
+                     val lectureSeule: Boolean, val nom: String = "", val regles: String = "",
+                     /** liste deroulante ou l'on peut aussi taper sa propre valeur (« saisie libre ») */
+                     val libre: Boolean = false)
