@@ -1,5 +1,7 @@
-# Veille des moteurs : chaque lundi, regarde si PyMuPDF (moteur PDF) ou Tesseract (OCR) ont une nouvelle version.
-# Si oui : numero de version de PhilPDF +1 (correctif), note dans moteurs.json, puis fabrication complete.
+# Veille des moteurs : chaque lundi, regarde si PyMuPDF (moteur PDF), Tesseract (OCR) ou la bibliotheque MuPDF Java
+# d'Android (com.artifex.mupdf:fitz) ont une nouvelle version.
+# Si oui : numero de version de PhilPDF +1 (correctif : app/config.py pour Windows et Linux, android/version.txt pour
+# Android), note dans moteurs.json, puis fabrication de ce qui est concerne.
 # La fabrication passe tous les tests avant de publier : si le nouveau moteur casse quelque chose,
 # rien n'est publie et vos postes gardent la version precedente.
 name: Veille des moteurs
@@ -38,6 +40,17 @@ jobs:
               nouveau["tesseract"] = re.search(r"<d:Version>([^<]+)", x).group(1)
           except Exception as e:
               print("::warning::Tesseract illisible :", e)
+          try:   # bibliotheque MuPDF Java d'Android : derniere version stable publiee par Artifex
+              x = lire("https://maven.ghostscript.com/com/artifex/mupdf/fitz/maven-metadata.xml")
+              vs = [v for v in re.findall(r"<version>([^<]+)</version>", x) if re.fullmatch(r"[\d.]+", v)]
+              vs.sort(key=lambda v: [int(p) for p in v.split(".")])
+              if vs:
+                  nouveau["mupdf_java"] = vs[-1]
+          except Exception as e:
+              print("::warning::MuPDF Java illisible :", e)
+          if not connu.get("mupdf_java"):           # reference : la version que PhilPDF Android utilise deja
+              g = open("android/app/build.gradle.kts", encoding="utf-8").read()
+              connu["mupdf_java"] = re.search(r"com\.artifex\.mupdf:fitz:([\d.]+)", g).group(1)
           # premier passage (rien de connu) : on note les versions sans refabriquer
           change = [k for k in nouveau if nouveau[k] and connu.get(k) and nouveau[k] != connu[k]]
           for k in change:
@@ -45,8 +58,16 @@ jobs:
           if not change:
               print("::notice title=Veille::moteurs a jour", nouveau)
           json.dump(nouveau, open("moteurs.json", "w"), indent=1)
+          bureau = any(k in ("pymupdf", "tesseract") for k in change)
+          android = "mupdf_java" in change
+          cible = "tout" if bureau and android else "android" if android else "bureau"
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write("change=" + ("oui" if change else "non") + "\n")
+              f.write("bureau=" + ("oui" if bureau else "non") + "\n")
+              f.write("android=" + ("oui" if android else "non") + "\n")
+              f.write("cible=" + cible + "\n")
+              f.write("ancien_mupdf=" + str(connu.get("mupdf_java", "")) + "\n")
+              f.write("mupdf=" + str(nouveau.get("mupdf_java", "")) + "\n")
               f.write("quoi=" + ", ".join(f"{k} {nouveau[k]}" for k in change) + "\n")
 
       - name: Premier passage (versions notees)
@@ -56,8 +77,29 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git diff --quiet moteurs.json || (git commit -am "Veille des moteurs : versions de reference" && git push)
 
+      - name: Nouvelle version de PhilPDF Android (bibliotheque MuPDF Java)
+        if: steps.v.outputs.android == 'oui'
+        shell: python
+        run: |
+          import re
+          a, n = "${{ steps.v.outputs.ancien_mupdf }}", "${{ steps.v.outputs.mupdf }}"
+          g = open("android/app/build.gradle.kts", encoding="utf-8").read()
+          open("android/app/build.gradle.kts", "w", encoding="utf-8").write(
+              re.sub(r"com\.artifex\.mupdf:fitz:[\d.]+", "com.artifex.mupdf:fitz:" + n, g))
+          v = open("android/version.txt").read().strip().split(".")
+          neuf = f"{v[0]}.{v[1]}.{int(v[2]) + 1}"
+          open("android/version.txt", "w").write(neuf + "\n")
+          r = open("readme.txt", encoding="utf-8").read()
+          r = r.replace("ANDROID\n-------\n\n", f"ANDROID\n-------\n\n{neuf}\n- Moteur PDF (MuPDF) mis a jour : {a} -> {n}.\n\n", 1)
+          open("readme.txt", "w", encoding="utf-8").write(r)
+          print(f"::notice title=Android::{neuf} avec MuPDF {n}")
+
+      - name: Bibliotheque MuPDF Java (fonctions absentes non utilisees)
+        if: steps.v.outputs.android == 'oui'
+        run: bash .github/verifier-jni.sh "${{ steps.v.outputs.mupdf }}"
+
       - name: Nouvelle version de PhilPDF
-        if: steps.v.outputs.change == 'oui'
+        if: steps.v.outputs.bureau == 'oui'
         shell: python
         run: |
           import re
@@ -76,4 +118,4 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git commit -am "Moteurs mis a jour : ${{ steps.v.outputs.quoi }}"
           git push
-          gh workflow run fabriquer.yml --ref main
+          gh workflow run fabriquer.yml --ref main -f cible=${{ steps.v.outputs.cible }}

@@ -11,6 +11,11 @@ on:
     branches: [main]
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      cible:
+        description: "Quoi fabriquer : tout, android ou bureau"
+        required: false
+        default: "tout"
 
 permissions:
   contents: write
@@ -32,6 +37,13 @@ jobs:
         shell: bash
         run: |
           avant="${{ github.event.before }}"
+          cible="${{ github.event.inputs.cible }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "$cible" ] && [ "$cible" != "tout" ]; then
+            [ "$cible" = "android" ] && b=false || b=true
+            [ "$cible" = "bureau" ] && a=false || a=true
+            echo "bureau=$b" >> "$GITHUB_OUTPUT"; echo "android=$a" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Fabrication::lancement manuel : $cible"; exit 0
+          fi
           if [ "${{ github.event_name }}" != "push" ] || [ -z "$avant" ] || [ "$avant" = "0000000000000000000000000000000000000000" ] \
              || ! git cat-file -e "$avant" 2>/dev/null || [[ "$GITHUB_REF" == refs/tags/* ]]; then
             echo "bureau=true" >> "$GITHUB_OUTPUT"; echo "android=true" >> "$GITHUB_OUTPUT"
@@ -417,6 +429,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.11.1"
+      - name: Bibliotheque MuPDF Java (fonctions absentes non utilisees)
+        shell: bash
+        run: |
+          v=$(grep -oE 'com\.artifex\.mupdf:fitz:[0-9.]+' android/app/build.gradle.kts | cut -d: -f3)
+          bash .github/verifier-jni.sh "$v"
       - name: Clef de signature (secrets du depot)
         env:
           ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
@@ -466,8 +483,47 @@ jobs:
             PhilPDF*.apk
             PhilPDF-GooglePlay-*.aab
 
+  # ---------------------------------------------------------------- essais sur un telephone simule
+  # Ce que PhilPDF ecrit dans un PDF (champs, OCR, texte modifie, signature) est relu apres enregistrement :
+  # un defaut de la bibliotheque MuPDF Java (objet libere deux fois, fonction absente...) bloque la publication.
+  essais-android:
+    needs: changements
+    if: needs.changements.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Acceleration de l'emulateur (KVM)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Essais sur Android 14 (x86_64)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          working-directory: android
+          script: bash ../.github/essais-android.sh
+      - if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: essais-android
+          path: android/app/build/reports/androidTests/
+          if-no-files-found: ignore
+
   publier-android:
-    needs: [android]
+    needs: [android, essais-android]
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:

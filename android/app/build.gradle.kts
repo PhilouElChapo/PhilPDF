@@ -20,6 +20,8 @@ android {
         targetSdk = 36              // Android 16 : exige par Google Play pour une nouvelle application
         versionCode = versionCodePhilpdf
         versionName = versionPhilpdf
+        // essais sur telephone (simule par GitHub a chaque fabrication) : app/src/androidTest
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // PHILPDF_PLAY=1 : paquet pour Google Play (les mises a jour passent par le Play Store, pas par GitHub)
         buildConfigField("boolean", "PLAY_STORE", if (System.getenv("PHILPDF_PLAY") == "1") "true" else "false")
         // meme identifiant Google que PhilPDF Windows : il voit le dossier PhilPDF que Windows a cree (drive.file)
@@ -86,7 +88,9 @@ androidComponents {
 }
 
 dependencies {
-    implementation("com.artifex.mupdf:fitz:1.28.5")
+    implementation("com.artifex.mupdf:fitz:1.28.5")   // version suivie par .github/workflows/mupdf.yml
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
     implementation(platform("androidx.compose:compose-bom:2024.10.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
