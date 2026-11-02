@@ -300,6 +300,15 @@ object Regles {
         return "if (event.target.value == \"\") event.target.value = util.printd(${jsstr(f)}, new Date());"
     }
 
+    /** Bouton : reinitialiser, imprimer, envoyer par e-mail, aller a une page (comme Windows _js_action). */
+    fun jsAction(a: JSONObject?): String = when (a?.optString("genre")) {
+        "reinitialiser" -> "if (app.alert({cMsg: \"Effacer tout le formulaire ?\", nIcon: 2, nType: 2}) == 4) this.resetForm();"
+        "imprimer" -> "this.print({bUI: true});"
+        "email" -> "this.mailDoc({bUI: true, cTo: ${jsstr(a.optString("email"))}, cSubject: ${jsstr(a.optString("sujet"))}});"
+        "page" -> "this.pageNum = ${maxOf(0, a.optInt("page", 1) - 1)};"
+        else -> ""
+    }
+
     private fun remplacerBloc(ancien: String, bloc: String): String {
         val a = ancien.replace(Regex(Regex.escape(DEBUT) + ".*?" + Regex.escape(FIN), RegexOption.DOT_MATCHES_ALL), "").trim()
         if (bloc.isEmpty()) return a
@@ -393,6 +402,7 @@ object Regles {
             var jfo = jsAuto(if (phil) r.txt("auto") else null, fmt)
             aide?.txt("entree")?.let { jfo = (jfo + "\n" + "app.alert({cMsg: ${jsstr(it)}, nIcon: 3, cTitle: \"Aide\"});").trim() }
             val jbl = aide?.txt("vide")?.let { "if (event.target.value == \"\" || event.target.value == \"Off\") app.alert({cMsg: ${jsstr(it)}, nIcon: 1});" } ?: ""
+            if (phil) jsAction(r.obj("action")).takeIf { it.isNotEmpty() }?.let { ja = (ja + "\n" + it).trim() }
             for (ww in l) for ((cle, texte) in listOf("Fo" to jfo, "Bl" to jbl, "U" to ja))
                 poserJs(pdf, ww.obj.resolve(), cle, remplacerBloc(js(ww.obj.resolve(), cle), if (cle in seul) "" else texte))
         }

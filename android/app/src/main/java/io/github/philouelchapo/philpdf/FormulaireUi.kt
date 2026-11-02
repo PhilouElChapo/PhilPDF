@@ -117,7 +117,15 @@ fun OptionsChamp(etat: EtatLecteur, c: InfoChamp, fermer: () -> Unit) {
 fun DialogueProprietes(etat: EtatLecteur, c: InfoChamp, fermer: () -> Unit) {
     val portee = rememberCoroutineScope()
     var charge by remember { mutableStateOf<Pair<org.json.JSONObject, List<String>>?>(null) }
-    LaunchedEffect(c) { charge = etat.doc.reglesChamp(c) }
+    var reglages by remember { mutableStateOf<Pair<ChampsPdf.Proprietes, Map<String, Pair<String, String>>>?>(null) }
+    var nbPages by remember { mutableIntStateOf(1) }
+    LaunchedEffect(c) {
+        reglages = etat.doc.proprietesChamp(c) ?: (ChampsPdf.Proprietes() to emptyMap())
+        nbPages = etat.doc.nombrePages()
+        charge = etat.doc.reglesChamp(c)
+    }
+    val (prop, js) = reglages ?: (ChampsPdf.Proprietes() to emptyMap())
+    val perso = remember(js) { js.mapValues { it.value.second }.toMutableMap() }
     val (r0, noms) = charge ?: run {
         Fenetre(fermer) { Surface(shape = RoundedCornerShape(16.dp)) { CircularProgressIndicator(Modifier.padding(24.dp)) } }
         return
@@ -135,6 +143,7 @@ fun DialogueProprietes(etat: EtatLecteur, c: InfoChamp, fermer: () -> Unit) {
                 Text(stringResource(R.string.proprietes_champ, c.nom), fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
                 key(v) { Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                     fun noeud(k: String): org.json.JSONObject = r.optJSONObject(k) ?: org.json.JSONObject().also { r.put(k, it) }
+                    SectionsReglages(c, prop, r, choix, nbPages) { f -> maj(f) }
                     if (estTexte) {
                         // ---- format
                         Titre(R.string.prop_format)
@@ -264,6 +273,7 @@ fun DialogueProprietes(etat: EtatLecteur, c: InfoChamp, fermer: () -> Unit) {
                     Titre(R.string.prop_aide)
                     Champ(r.optJSONObject("aide")?.optString("entree") ?: "", stringResource(R.string.aide_entree)) { noeud("aide").put("entree", it) }
                     Champ(r.optJSONObject("aide")?.optString("vide") ?: "", stringResource(R.string.aide_vide)) { noeud("aide").put("vide", it) }
+                    SectionJavaScript(js, perso, r) { f -> maj(f) }
                 } }
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -271,7 +281,9 @@ fun DialogueProprietes(etat: EtatLecteur, c: InfoChamp, fermer: () -> Unit) {
                     Button(onClick = {
                         r.remove("_philpdf")
                         portee.launch {
-                            etat.doc.ecrireReglesChamp(c, r, if (estListe) choix.lines().map { it.trim() }.filter { it.isNotEmpty() } else null)
+                            val avant = js.mapValues { it.value.second }
+                            etat.doc.ecrireReglesChamp(c, r, if (estListe) choix.lines().map { it.trim() }.filter { it.isNotEmpty() } else null,
+                                prop, perso.filter { (k, v) -> v != (avant[k] ?: "") })
                             fermer()
                         }
                     }, colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) { Text(stringResource(R.string.appliquer)) }
@@ -282,18 +294,18 @@ fun DialogueProprietes(etat: EtatLecteur, c: InfoChamp, fermer: () -> Unit) {
 }
 
 @Composable
-private fun Titre(t: Int) { Spacer(Modifier.height(12.dp)); Text(stringResource(t), fontWeight = FontWeight.SemiBold, fontSize = 14.sp) }
+internal fun Titre(t: Int) { Spacer(Modifier.height(12.dp)); Text(stringResource(t), fontWeight = FontWeight.SemiBold, fontSize = 14.sp) }
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun Puces(options: List<Pair<String, String>>, actuel: String, choisir: (String) -> Unit) {
+internal fun Puces(options: List<Pair<String, String>>, actuel: String, choisir: (String) -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         options.forEach { (k, t) -> FilterChip(actuel == k, { choisir(k) }, label = { Text(t, fontSize = 12.sp) }) }
     }
 }
 
 @Composable
-private fun Champ(valeur: String, libelle: String, changer: (String) -> Unit) {
+internal fun Champ(valeur: String, libelle: String, changer: (String) -> Unit) {
     var t by remember { mutableStateOf(valeur) }
     OutlinedTextField(t, { t = it; changer(it) }, label = { Text(libelle) }, singleLine = true, modifier = Modifier.fillMaxWidth())
 }

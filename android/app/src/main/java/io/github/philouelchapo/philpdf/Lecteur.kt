@@ -103,6 +103,9 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var cadreSignature by mutableStateOf<Pair<Int, com.artifex.mupdf.fitz.Rect>?>(null)
     var verifierSignatures by mutableStateOf(false)
     var champSignature by mutableStateOf<String?>(null)     // champ de signature vide touche : signer dedans
+    var nouveauBouton by mutableStateOf<Pair<Int, com.artifex.mupdf.fitz.Rect>?>(null)     // bouton d'action a regler
+    var ordreTab by mutableStateOf<Int?>(null)
+    var reinitialiser by mutableStateOf(false)                 // bouton « Reinitialiser » : confirmation                // ordre de tabulation de cette page
     var nouvelleListe by mutableStateOf<Pair<Int, com.artifex.mupdf.fitz.Rect>?>(null)   // liste deroulante a remplir
     /** Portee du lecteur : une pose lancee ici va au bout meme quand l'apercu disparait de l'ecran. */
     var portee: kotlinx.coroutines.CoroutineScope? = null
@@ -178,6 +181,12 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
     etat.cadreSignature?.let { (n, r) -> DialogueSigner(etat, n, r, etat.champSignature) {
         etat.cadreSignature = null; etat.champSignature = null; etat.annot.outil = Outil.MAIN } }
     etat.nouvelleListe?.let { (n, r) -> DialogueListe(etat, n, r) { etat.nouvelleListe = null } }
+    etat.nouveauBouton?.let { (n, r) -> DialogueBouton(etat, n, r, tailles?.size ?: 1) { etat.nouveauBouton = null } }
+    etat.ordreTab?.let { n -> DialogueOrdre(etat, n) { etat.ordreTab = null } }
+    if (etat.reinitialiser) AlertDialog(onDismissRequest = { etat.reinitialiser = false },
+        text = { Text(stringResource(R.string.reinitialiser_question)) },
+        confirmButton = { TextButton(onClick = { etat.reinitialiser = false; portee.launch { doc.reinitialiserFormulaire() } }) { Text(stringResource(R.string.action_reinitialiser)) } },
+        dismissButton = { TextButton(onClick = { etat.reinitialiser = false }) { Text(stringResource(R.string.annuler)) } })
     if (etat.verifierSignatures) DialogueVerifier(etat) { etat.verifierSignatures = false }
     // PDF signe : on le dit a l'ouverture (valide, approuvee, modifie depuis...)
     LaunchedEffect(doc, deverrouille) {
@@ -623,6 +632,17 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                             val c = d.champA(n, k(o))
                             when {
                                 c == null || c.lectureSeule -> auToucher?.invoke()
+                                // bouton d'action : ce qu'il fait aussi dans Acrobat
+                                c.genre == com.artifex.mupdf.fitz.PDFWidget.TYPE_BUTTON -> {
+                                    val a = try { org.json.JSONObject(c.regles).optJSONObject("action") } catch (_: Exception) { null }
+                                    when (a?.optString("genre")) {
+                                        "page" -> etat.liste.scrollToItem((a.optInt("page", 1) - 1).coerceAtLeast(0))
+                                        "imprimer" -> imprimer(ctx, etat.doc)
+                                        "email" -> etat.choixPartage = true
+                                        "reinitialiser" -> etat.reinitialiser = true
+                                        else -> auToucher?.invoke()
+                                    }
+                                }
                                 c.genre == com.artifex.mupdf.fitz.PDFWidget.TYPE_CHECKBOX ||
                                     c.genre == com.artifex.mupdf.fitz.PDFWidget.TYPE_RADIOBUTTON -> d.remplir(c, null)
                                 // champ vide qui se remplit seul (date ou heure du moment) : rempli d'un toucher
@@ -721,6 +741,11 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                                         maxOf(a.x, b.x).coerceAtLeast(minOf(a.x, b.x) + 60f), maxOf(a.y, b.y).coerceAtLeast(minOf(a.y, b.y) + 14f))
                                     true
                                 }
+                                Outil.CHAMP_BOUTON -> {
+                                    val a = pts.first(); val b = pts.last()
+                                    etat.nouveauBouton = n to com.artifex.mupdf.fitz.Rect(minOf(a.x, b.x), minOf(a.y, b.y), maxOf(a.x, b.x), maxOf(a.y, b.y))
+                                    true
+                                }
                                 Outil.CHAMP_SIGNATURE -> {
                                     val a = pts.first(); val b = pts.last()
                                     val petit = kotlin.math.abs(b.x - a.x) < 40 || kotlin.math.abs(b.y - a.y) < 15
@@ -795,7 +820,7 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                     Outil.EFFACER_ZONE -> drawRect(Color(0x55D32F2F), Offset(minOf(a.x, b.x), minOf(a.y, b.y)),
                         Size(kotlin.math.abs(b.x - a.x), kotlin.math.abs(b.y - a.y)))
                     Outil.GOMME -> for (i in 1 until trace.size) drawLine(Color(0x88D32F2F), trace[i - 1], trace[i], 18f)
-                    Outil.SIGNER_NUM, Outil.CHAMP_TEXTE, Outil.CHAMP_CASE, Outil.CHAMP_LISTE, Outil.CHAMP_SIGNATURE -> drawRect(Color(0xFF0F6CBD), Offset(minOf(a.x, b.x), minOf(a.y, b.y)),
+                    Outil.SIGNER_NUM, Outil.CHAMP_TEXTE, Outil.CHAMP_CASE, Outil.CHAMP_LISTE, Outil.CHAMP_SIGNATURE, Outil.CHAMP_BOUTON -> drawRect(Color(0xFF0F6CBD), Offset(minOf(a.x, b.x), minOf(a.y, b.y)),
                         Size(kotlin.math.abs(b.x - a.x), kotlin.math.abs(b.y - a.y)), style = androidx.compose.ui.graphics.drawscope.Stroke(3f))
                     else -> drawRect(c.copy(alpha = 0.35f), Offset(minOf(a.x, b.x), minOf(a.y, b.y)),   // zone de texte choisie
                         Size(kotlin.math.abs(b.x - a.x).coerceAtLeast(4f), kotlin.math.abs(b.y - a.y).coerceAtLeast(24f)))

@@ -25,7 +25,9 @@ import com.artifex.mupdf.fitz.StructuredTextWalker
 /** Une ligne de texte de la page (coordonnees de la page en points, y vers le bas). */
 data class LigneTexte(val texte: String, val x0: Float, val x1: Float, val base: Float, val haut: Float, val bas: Float,
                       val taille: Float, val argb: Int, val police: String, val gras: Boolean, val italique: Boolean,
-                      val serif: Boolean, val mono: Boolean, val polices: Set<String> = emptySet())
+                      val serif: Boolean, val mono: Boolean, val polices: Set<String> = emptySet(),
+                      /** police de chaque lettre du texte (gras et normal melanges dans une ligne) */
+                      val fontes: List<String> = emptyList())
 
 /** Codes d'une police du PDF : lettre -> code (1 ou 2 octets), largeurs (1/1000 de la taille). */
 class TablePolice(val nomRessource: String, val objet: PDFObject, val octets: Int, val codes: Map<Char, Int>,
@@ -54,7 +56,9 @@ class TablePolice(val nomRessource: String, val objet: PDFObject, val octets: In
 }
 
 /** Un paragraphe (bloc) touche sur la page, et la police d'origine retrouvee (ou null : secours). */
-data class Paragraphe(val page: Int, val lignes: List<LigneTexte>, val table: TablePolice?) {
+data class Paragraphe(val page: Int, val lignes: List<LigneTexte>, val table: TablePolice?,
+                      /** table de chaque police du paragraphe (par nom), pour garder gras et normal la ou ils etaient */
+                      val tables: Map<String, TablePolice> = emptyMap()) {
     val texte: String get() = lignes.joinToString("\n") { it.texte }
 }
 
@@ -73,25 +77,29 @@ object TexteModif {
         var taille = 0f; var argb = 0; var police: Font? = null
         var premier = true
         var noms = HashSet<String>()
+        var fontes = ArrayList<String>()
         st.walk(object : StructuredTextWalker {
             override fun onImageBlock(bbox: Rect?, transform: Matrix?, image: Image?) {}
             override fun beginTextBlock(bbox: Rect?, flags: Int) { bloc = ArrayList<LigneTexte>().also { blocs += it } }
             override fun endTextBlock() { bloc = null }
             override fun beginLine(bbox: Rect?, wmode: Int, dir: Point?) {
-                ligne = StringBuilder(); premier = true; noms = HashSet()
+                ligne = StringBuilder(); premier = true; noms = HashSet(); fontes = ArrayList()
                 haut = bbox?.y0 ?: 0f; bas = bbox?.y1 ?: 0f; x1 = bbox?.x1 ?: 0f
             }
             override fun endLine() {
                 val f = police
-                if (ligne.isNotBlank() && f != null) bloc?.add(LigneTexte(ligne.toString().trimEnd(), x0, x1, base, haut, bas,
-                    taille, argb, f.name ?: "", f.isBold, f.isItalic, f.isSerif, f.isMono, noms))
+                val t = ligne.toString().trimEnd()
+                if (ligne.isNotBlank() && f != null) bloc?.add(LigneTexte(t, x0, x1, base, haut, bas,
+                    taille, argb, f.name ?: "", f.isBold, f.isItalic, f.isSerif, f.isMono, noms, fontes.take(t.length)))
             }
             override fun onChar(c: Int, origin: Point?, font: Font?, size: Float, q: Quad?, argb_: Int, flags: Int, bidi: Int) {
                 if (premier && origin != null) {
                     x0 = origin.x; base = origin.y; taille = size; argb = argb_; police = font; premier = false
                 }
+                val avant = ligne.length
                 ligne.appendCodePoint(c)
                 font?.name?.let { noms.add(it) }
+                repeat(ligne.length - avant) { fontes += font?.name ?: "" }
             }
             override fun beginStruct(standard: String?, raw: String?, index: Int) {}
             override fun endStruct() {}
@@ -107,7 +115,18 @@ object TexteModif {
         while (a > 0 && kotlin.math.abs(choisi[a - 1].taille - t0) < 0.6f && choisi[a].haut - choisi[a - 1].bas < t0 * 0.9f) a--
         while (b < choisi.size - 1 && kotlin.math.abs(choisi[b + 1].taille - t0) < 0.6f && choisi[b + 1].haut - choisi[b].bas < t0 * 0.9f) b++
         val lignes = choisi.subList(a, b + 1).toList()
-        return Paragraphe(n, lignes, trouverPolice(page, lignes, familles(blocs.flatten())))
+        // plusieurs polices dans le paragraphe (« Mode de paiement : » en gras, la suite normale) : la table de chacune
+        val noms = lignes.flatMap { it.fontes }.filter { it.isNotEmpty() }.toSet()
+        val tables = HashMap<String, TablePolice>()
+        if (noms.size > 1 && noms.none { TYPE3.containsMatchIn(it) }) {
+            val toutes = polices(page).mapNotNull { (nom, obj) -> try { table(nom, obj) } catch (_: Exception) { null } }
+            for (nf in noms) {
+                val court = nf.substringAfter('+')
+                toutes.firstOrNull { t -> t.nomBase.substringAfter('+').let { b -> b == court || (court.length >= 24 && b.startsWith(court)) } }
+                    ?.let { tables[nf] = it }
+            }
+        }
+        return Paragraphe(n, lignes, trouverPolice(page, lignes, familles(blocs.flatten())), tables)
     }
 
     // ------------------------------------------------------------ polices du PDF
@@ -321,6 +340,11 @@ object TexteModif {
         if (res.isNull) { res = pobj.getInheritable("Resources"); if (res.isNull) res = pdf.newDictionary(); pobj.put("Resources", res) }
         var fonts = res.get("Font")
         if (fonts.isNull) { fonts = pdf.newDictionary(); res.put("Font", fonts) }
+        // gras et normal melanges dans le paragraphe, style non change par l'utilisateur : chaque lettre garde la police
+        // qu'elle avait (le texte tape prend celle du texte qu'il remplace)
+        val nomsFontes = par.lignes.flatMap { it.fontes }.filter { it.isNotEmpty() }.toSet()
+        if (!styleChange && nomsFontes.size > 1 && par.tables.isNotEmpty())
+            return ecrireMixte(pdf, page, par, nouvelles, taille, argb, droite, fonts)
         val nomPolice: String
         val nomAffiche: String
         val coder: (String) -> String
@@ -390,6 +414,98 @@ object TexteModif {
         tableau.push(pdf.addStream(flux.toString()))
         pobj.put("Contents", tableau)
         return ResultatTexte(true, originale, nomAffiche)
+    }
+
+    /** Police de chaque lettre de la nouvelle ligne, d'apres l'ancienne : debut et fin inchanges gardent la leur ; le
+     *  texte change prend la police du texte qu'il remplace (ou de la lettre d'avant, pour un ajout). */
+    private fun styler(ancien: String, fa: List<String>, nouveau: String, defaut: String): List<String> {
+        if (fa.size != ancien.length || fa.isEmpty()) return List(nouveau.length) { fa.lastOrNull() ?: defaut }
+        var p = 0
+        while (p < ancien.length && p < nouveau.length && ancien[p] == nouveau[p]) p++
+        var q = 0
+        while (q < ancien.length - p && q < nouveau.length - p && ancien[ancien.length - 1 - q] == nouveau[nouveau.length - 1 - q]) q++
+        val milieu = if (p < ancien.length - q) fa[p] else if (p > 0) fa[p - 1] else fa[0]
+        return List(nouveau.length) { i ->
+            when {
+                i < p -> fa[i]
+                i >= nouveau.length - q -> fa[ancien.length - (nouveau.length - i)]
+                else -> milieu
+            }
+        }
+    }
+
+    private fun ecrireMixte(pdf: PDFDocument, page: PDFPage, par: Paragraphe, nouvelles: List<String>, taille: Float, argb: Int,
+                            droite: Boolean, fonts: PDFObject): ResultatTexte {
+        val l0 = par.lignes.first()
+        val noms = HashMap<PDFObject, String>()
+        // la police d'origine, rattachee aux ressources sous un nom sur (le caviardage peut les avoir reecrites)
+        fun nomDe(t: TablePolice): String = noms.getOrPut(t.objet) {
+            if (fonts.get(t.nomRessource).isNull || !fonts.get(t.nomRessource).resolve().equals(t.objet.resolve()))
+                nouveauNom(fonts, "PhilA").also { fonts.put(it, t.objet) }
+            else t.nomRessource
+        }
+        val secours = HashMap<String, String>()
+        val cp = java.nio.charset.Charset.forName("windows-1252")
+        var secoursUtilise = false
+        // police standard proche, pour une lettre absente de la police d'origine (sous-ensemble)
+        fun nomSecours(fonte: String): String {
+            val gras = fonte.contains("Bold", true) || fonte.contains("Black", true) || fonte.contains("Heavy", true)
+            val ital = fonte.contains("Italic", true) || fonte.contains("Oblique", true)
+            val std = policeSecours(l0.copy(police = fonte), gras, ital)
+            return secours.getOrPut(std) {
+                nouveauNom(fonts, "PhilB").also { fonts.put(it, pdf.addSimpleFont(Font(std), Font.SIMPLE_ENCODING_LATIN)) }
+            }
+        }
+        fun morceau(texte: String, fonte: String): Pair<String, Float> {
+            val t = par.tables[fonte]
+            return if (t != null && t.peutEcrire(texte)) {
+                val sb = StringBuilder(); var cour: TablePolice? = null
+                for (c in texte) {
+                    val src = t.source(c)!!
+                    if (src !== cour) { if (cour != null) sb.append("> Tj "); sb.append("/${nomDe(src)} ${f(taille)} Tf <"); cour = src }
+                    sb.append("%0${src.octets * 2}X".format(t.code(c)!!))
+                }
+                sb.append("> Tj ").toString() to (t.largeur(texte, taille) ?: 0f)
+            } else {
+                secoursUtilise = true
+                val nom = nomSecours(fonte)
+                val fm = try { Font(policeSecours(l0.copy(police = fonte), fonte.contains("Bold", true), fonte.contains("Italic", true))) } catch (_: Exception) { null }
+                val larg = fm?.let { m -> texte.sumOf { c -> m.advanceGlyph(m.encodeCharacter(c.code), false).toDouble() }.toFloat() * taille } ?: 0f
+                "/$nom ${f(taille)} Tf <" + texte.toByteArray(cp).joinToString("") { "%02X".format(it.toInt() and 255) } + "> Tj " to larg
+            }
+        }
+        val inv = page.getTransform().invert()
+        val pas = if (par.lignes.size > 1) (par.lignes.last().base - par.lignes.first().base) / (par.lignes.size - 1) else taille * 1.2f
+        val r = ((argb shr 16) and 255) / 255f; val g = ((argb shr 8) and 255) / 255f; val b = (argb and 255) / 255f
+        val flux = StringBuilder("q BT ${f(r)} ${f(g)} ${f(b)} rg\n")
+        val derniere = par.lignes.last().fontes.lastOrNull { it.isNotEmpty() } ?: l0.police
+        nouvelles.forEachIndexed { i, s ->
+            val ref = par.lignes.getOrNull(i)
+            val fs = if (ref != null) styler(ref.texte, ref.fontes, s, derniere) else List(s.length) { derniere }
+            // morceaux de meme police
+            val morceaux = ArrayList<Pair<String, Float>>()
+            var debut = 0
+            for (k in 1..s.length) if (k == s.length || fs[k] != fs[debut]) { morceaux += morceau(s.substring(debut, k), fs[debut]); debut = k }
+            val base = ref?.base ?: (par.lignes.last().base + pas * (i - par.lignes.size + 1))
+            var x = ref?.x0 ?: l0.x0
+            if (droite) x = (ref?.x1 ?: l0.x1) - morceaux.sumOf { it.second.toDouble() }.toFloat()
+            val ox = x * inv.a + base * inv.c + inv.e
+            val oy = x * inv.b + base * inv.d + inv.f
+            flux.append("${f(inv.a)} ${f(inv.b)} ${f(-inv.c)} ${f(-inv.d)} ${f(ox)} ${f(oy)} Tm ")
+            morceaux.forEach { flux.append(it.first) }
+            flux.append("\n")
+        }
+        flux.append("ET Q\n")
+        val pobj = page.getObject()
+        val contenu = pobj.get("Contents")
+        val tableau = pdf.newArray()
+        tableau.push(pdf.addStream("q\n"))
+        if (contenu.isArray) for (k in 0 until contenu.size()) tableau.push(contenu.get(k)) else if (!contenu.isNull) tableau.push(contenu)
+        tableau.push(pdf.addStream("Q\n"))
+        tableau.push(pdf.addStream(flux.toString()))
+        pobj.put("Contents", tableau)
+        val affiche = par.tables.values.map { it.nomBase.substringAfter('+') }.distinct().joinToString(" + ")
+        return ResultatTexte(true, !secoursUtilise, affiche)
     }
 
     private fun f(v: Float) = String.format(java.util.Locale.US, "%.3f", v)

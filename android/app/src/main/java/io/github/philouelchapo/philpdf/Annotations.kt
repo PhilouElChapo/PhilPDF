@@ -40,12 +40,13 @@ enum class Outil(val icone: String, val texte: Int) {
     CHAMP_CASE("valide", R.string.outil_champ_case),         // creer un formulaire : case a cocher
     CHAMP_LISTE("liste_fichiers", R.string.outil_champ_liste), // creer un formulaire : liste deroulante
     CHAMP_SIGNATURE("champ_signature", R.string.outil_champ_signature), // champ de signature vide
+    CHAMP_BOUTON("tout", R.string.outil_champ_bouton),        // bouton d'action (reinitialiser, imprimer, e-mail, page)
     SIGNER_NUM("certificat", R.string.outil_signer_num),     // signature numerique : tracer le cadre
     POSER("signer", R.string.outil_poser);          // signature, paraphe ou tampon a poser d'un toucher
 
     val texteSurligne: Boolean get() = this == SURLIGNER || this == SOULIGNER || this == BARRER
     val forme: Boolean get() = this == RECTANGLE || this == ELLIPSE || this == FLECHE
-    val champ: Boolean get() = this == CHAMP_TEXTE || this == CHAMP_CASE || this == CHAMP_LISTE || this == CHAMP_SIGNATURE
+    val champ: Boolean get() = this == CHAMP_TEXTE || this == CHAMP_CASE || this == CHAMP_LISTE || this == CHAMP_SIGNATURE || this == CHAMP_BOUTON
     /** Outils qui se tracent comme un cadre (rectangle du doigt). */
     val cadre: Boolean get() = champ || this == EFFACER_ZONE || this == SIGNER_NUM
 }
@@ -57,7 +58,7 @@ enum class GroupeOutils(val icone: String, val texte: Int, val outils: List<Outi
     ANNOTER("surligner", R.string.groupe_annoter, listOf(Outil.SURLIGNER, Outil.SOULIGNER, Outil.BARRER, Outil.NOTE,
         Outil.DESSIN, Outil.RECTANGLE, Outil.ELLIPSE, Outil.FLECHE)),
     EFFACER("supprimer", R.string.groupe_effacer, listOf(Outil.GOMME, Outil.EFFACER_ZONE)),
-    FORMULAIRE("formulaire", R.string.groupe_formulaire, listOf(Outil.CHAMP_TEXTE, Outil.CHAMP_CASE, Outil.CHAMP_LISTE, Outil.CHAMP_SIGNATURE));
+    FORMULAIRE("formulaire", R.string.groupe_formulaire, listOf(Outil.CHAMP_TEXTE, Outil.CHAMP_CASE, Outil.CHAMP_LISTE, Outil.CHAMP_SIGNATURE, Outil.CHAMP_BOUTON));
 
     companion object { fun de(o: Outil) = entries.firstOrNull { o in it.outils } ?: LIRE }
 }
@@ -148,6 +149,11 @@ fun PanneauAnnoter(etat: EtatLecteur, choisi: () -> Unit = {}) {
             Icon(Icones.get("formulaire", ROUGE), null, tint = Color.Unspecified)
             Spacer(Modifier.width(8.dp))
             TexteAjuste(stringResource(R.string.detecter_champs), 14.sp)
+        }
+        OutlinedButton(onClick = { etat.ordreTab = etat.page; choisi() }, Modifier.fillMaxWidth()) {
+            Icon(Icones.get("organiser", ROUGE), null, tint = Color.Unspecified)
+            Spacer(Modifier.width(8.dp))
+            TexteAjuste(stringResource(R.string.ordre_tabulation), 14.sp)
         }
         }
         if (r.outil != Outil.MAIN && r.outil != Outil.GOMME && r.outil != Outil.POSER && r.outil != Outil.TEXTE && !r.outil.cadre) {

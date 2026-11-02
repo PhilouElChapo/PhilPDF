@@ -601,7 +601,9 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
     }
 
     /** Enregistre les regles du champ (et ses choix pour une liste), puis refait le JavaScript du formulaire. */
-    suspend fun ecrireReglesChamp(c: InfoChamp, regles: org.json.JSONObject, choix: List<String>?): Boolean = operation("Propriétés du champ") { p ->
+    suspend fun ecrireReglesChamp(c: InfoChamp, regles: org.json.JSONObject, choix: List<String>?,
+                                  prop: ChampsPdf.Proprietes? = null, jsPerso: Map<String, String>? = null): Boolean =
+        operation("Propriétés du champ") { p ->
         val ok = surPage(p, c.page) { page ->
             val w = page.widgets?.getOrNull(c.index) ?: return@surPage false
             Regles.ecrire(p, w.getObject(), regles)
@@ -609,10 +611,72 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                 val opt = p.newArray(); choix.forEach { opt.push(p.newString(it)) }
                 Regles.champDe(w.getObject()).put("Opt", opt)
             }
-            w.update(); true
+            if (prop != null) ChampsPdf.ecrire(p, w, prop) else w.update()
+            if (jsPerso != null) ChampsPdf.poserJsPerso(p, listOf(w), jsPerso)
+            true
         }
         if (ok) try { Regles.genererJs(p) } catch (e: Exception) { Journal.ecrire("formulaire", "JavaScript : $e") }
         ok
+    }
+
+    /** Reglages du champ (info-bulle, police, case, liste...) et son JavaScript, pour la fenetre des proprietes. */
+    suspend fun proprietesChamp(c: InfoChamp): Pair<ChampsPdf.Proprietes, Map<String, Pair<String, String>>>? = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val p = pdf ?: return@withContext null
+            val page = p.loadPage(c.page) as PDFPage
+            try {
+                val w = page.widgets?.getOrNull(c.index) ?: return@withContext null
+                ChampsPdf.lire(p, w) to ChampsPdf.js(w)
+            } catch (e: Exception) { Journal.ecrire("formulaire", "lecture des réglages : $e"); null } finally { page.destroy() }
+        }
+    }
+
+    /** Bouton d'action (reinitialiser, imprimer, e-mail, aller a une page), comme sous Windows. */
+    suspend fun creerBouton(n: Int, rect: Rect, legende: String, action: org.json.JSONObject): Boolean = operation("Bouton") { p ->
+        val pris = Regles.tous(p).map { it.nom }.toSet()
+        var k = 1
+        while ("Bouton$k" in pris) k++
+        val r = if (rect.x1 - rect.x0 < 40 || rect.y1 - rect.y0 < 14) Rect(rect.x0, rect.y0, rect.x0 + maxOf(rect.x1 - rect.x0, 110f),
+            rect.y0 + maxOf(rect.y1 - rect.y0, 22f)) else rect
+        surPage(p, n) { page -> ChampsPdf.creerBouton(p, page, r, "Bouton$k", legende, action) }
+        try { Regles.genererJs(p) } catch (e: Exception) { Journal.ecrire("formulaire", "JavaScript : $e") }
+        true
+    }.also { if (it) pagesVersion++ }
+
+    suspend fun nombrePages(): Int = verrou.withLock { withContext(Dispatchers.IO) { doc.countPages() } }
+
+    /** Champs de la page dans l'ordre de tabulation : (index, nom, cadre). */
+    suspend fun ordreChamps(n: Int): List<Triple<Int, String, Rect>> = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val page = doc.loadPage(n) as? PDFPage ?: return@withContext emptyList()
+            try { ChampsPdf.ordre(page) } finally { page.destroy() }
+        }
+    }
+
+    suspend fun poserOrdre(n: Int, indices: List<Int>): Boolean = operation("Ordre de tabulation") { p ->
+        surPage(p, n) { page -> ChampsPdf.poserOrdre(p, page, indices) }; true
+    }
+
+    /** « Reinitialiser » d'un bouton : chaque champ reprend sa valeur par defaut (/DV), sinon vide. */
+    suspend fun reinitialiserFormulaire(): Boolean = operation("Réinitialiser le formulaire") { p ->
+        for (n in 0 until p.countPages()) surPage(p, n) { page ->
+            page.widgets?.forEach { w ->
+                try {
+                    val o = w.getObject(); val ch = Regles.champDe(o); val dv = ch.get("DV")
+                    when (w.fieldType) {
+                        PDFWidget.TYPE_CHECKBOX, PDFWidget.TYPE_RADIOBUTTON -> {
+                            val e = if (dv.isName) dv.asName() else "Off"
+                            ch.put("V", p.newName(e)); o.resolve().put("AS", p.newName(if (o.resolve().get("AP").get("N").get(e).isNull) "Off" else e))
+                        }
+                        PDFWidget.TYPE_TEXT, PDFWidget.TYPE_COMBOBOX, PDFWidget.TYPE_LISTBOX -> {
+                            if (dv.isString) ch.put("V", p.newString(dv.asString())) else ch.delete("V")
+                            w.update()
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+        true
     }
 
     // ---------------------------------------------------------------- signature numerique (certificat)

@@ -236,7 +236,7 @@ object Formulaire {
     }
 
     /** Pose un vrai champ PDF (texte ou case a cocher), sans bordure ni fond, comme sous Windows. */
-    fun creer(pdf: PDFDocument, page: PDFPage, c: ChampDetecte) {
+    fun creer(pdf: PDFDocument, page: PDFPage, c: ChampDetecte): PDFObject {
         val af = formulaire(pdf)
         val pr = Rect(c.rect).transform(page.getTransform().invert())   // repere de la page -> repere PDF
         val a = pdf.newDictionary()
@@ -253,6 +253,9 @@ object Formulaire {
             val opt = pdf.newArray(); c.choix.forEach { opt.push(pdf.newString(it)) }
             a.put("Opt", opt)
             a.put("DA", pdf.newString("/Helv 0 Tf 0 g"))
+        } else if (c.genre == "bouton") {
+            a.put("FT", pdf.newName("Btn")); a.put("Ff", ChampsPdf.FF_POUSSOIR)   // bouton-poussoir, pas une case
+            a.delete("TU")
         } else if (c.genre == "case") {
             a.put("FT", pdf.newName("Btn")); a.put("V", pdf.newName("Off")); a.put("AS", pdf.newName("Off"))
             a.put("DA", pdf.newString("/ZaDb 0 Tf 0 g"))
@@ -269,6 +272,7 @@ object Formulaire {
         if (annots.isNull) { annots = pdf.newArray(); po.put("Annots", annots) }
         annots.push(ref)
         af.get("Fields").push(ref)
+        return ref
     }
 
     /** Retire un champ (de la page et de la liste du formulaire). */

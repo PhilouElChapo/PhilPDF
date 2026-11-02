@@ -10,6 +10,20 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.10.0
+- Proprietes d'un champ, comme sous Windows : info-bulle, obligatoire, lecture seule, affichage (visible, masque,
+  non imprime, masque mais imprime) ; texte : plusieurs lignes, longueur maximale, alignement, valeur par defaut ;
+  police, taille et couleur du texte.
+- Listes deroulantes : tri par ordre alphabetique, choix montre par defaut (le 3e par exemple), saisie libre.
+- Cases a cocher : signe (coche, croix, rond, carre, losange, etoile), couleur, valeur quand c'est coche, cochee par
+  defaut ; le caractere ZapfDingbats d'Acrobat est garde pour les autres lecteurs.
+- Boutons d'action (outil « Bouton » du groupe Formulaire) : reinitialiser le formulaire, imprimer, envoyer par
+  e-mail, aller a une page ; ils marchent dans PhilPDF et dans Acrobat.
+- Ordre de tabulation de la page (groupe Formulaire) : fleches pour ranger les champs, ou ordre automatique.
+- JavaScript du champ, evenement par evenement : le code produit par PhilPDF, et le votre.
+- Modifier le texte : un paragraphe qui melange gras et normal (« Mode de paiement : » en gras, la suite normale)
+  garde ses styles ; le texte tape prend le style du texte qu'il remplace.
+
 1.9.0
 - Reconnaissance du texte (OCR) dans les images d'une page qui a deja du texte (affiche, livret, photo avec
   legende) : seules les images sont lues, le texte deja present n'est pas double. Proposee aussi quand on touche une
