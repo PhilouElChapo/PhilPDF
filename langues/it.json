@@ -2705,5 +2705,14 @@
  "Contacts regroupés par la première lettre de la colonne de gauche (glissez un en-tête pour changer l'ordre des colonnes). Un clic sur un groupe le replie ou le déplie.": "",
  "Toutes ces adresses": "",
  "{n} adresses : laquelle utiliser vous sera demandé": "",
- "Supprimer {n} adresse(s) du carnet ?": ""
+ "Supprimer {n} adresse(s) du carnet ?": "",
+ "Ordre des tampons prêts à l'emploi": "Ordine dei timbri pronti all'uso",
+ "Glissez les tampons dans l'ordre voulu (le volet les montre dans cet ordre) :": "Trascinate i timbri nell'ordine voluto (il pannello li mostra in quest'ordine):",
+ "Ordre d'origine": "Ordine originale",
+ "En premier": "In cima",
+ "Monter": "Su",
+ "Descendre": "Giù",
+ "En dernier": "In fondo",
+ "Ordre des tampons prêts à l'emploi...": "Ordine dei timbri pronti all'uso...",
+ "Reçu, Validé, Payé… : dans l'ordre que vous voulez dans le volet (aussi par clic droit dans le volet)": "Ricevuto, Validato, Pagato…: nell'ordine che volete nel pannello (anche con clic destro nel pannello)"
 }

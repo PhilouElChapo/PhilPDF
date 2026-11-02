@@ -2705,5 +2705,14 @@
  "Contacts regroupés par la première lettre de la colonne de gauche (glissez un en-tête pour changer l'ordre des colonnes). Un clic sur un groupe le replie ou le déplie.": "",
  "Toutes ces adresses": "",
  "{n} adresses : laquelle utiliser vous sera demandé": "",
- "Supprimer {n} adresse(s) du carnet ?": ""
+ "Supprimer {n} adresse(s) du carnet ?": "",
+ "Ordre des tampons prêts à l'emploi": "Orden de los sellos listos para usar",
+ "Glissez les tampons dans l'ordre voulu (le volet les montre dans cet ordre) :": "Arrastre los sellos en el orden deseado (el panel los muestra en este orden):",
+ "Ordre d'origine": "Orden original",
+ "En premier": "Al principio",
+ "Monter": "Subir",
+ "Descendre": "Bajar",
+ "En dernier": "Al final",
+ "Ordre des tampons prêts à l'emploi...": "Orden de los sellos listos para usar...",
+ "Reçu, Validé, Payé… : dans l'ordre que vous voulez dans le volet (aussi par clic droit dans le volet)": "Recibido, Validado, Pagado…: en el orden que quiera en el panel (también con clic derecho en el panel)"
 }

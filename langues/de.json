@@ -2705,5 +2705,14 @@
  "Contacts regroupés par la première lettre de la colonne de gauche (glissez un en-tête pour changer l'ordre des colonnes). Un clic sur un groupe le replie ou le déplie.": "",
  "Toutes ces adresses": "",
  "{n} adresses : laquelle utiliser vous sera demandé": "",
- "Supprimer {n} adresse(s) du carnet ?": ""
+ "Supprimer {n} adresse(s) du carnet ?": "",
+ "Ordre des tampons prêts à l'emploi": "Reihenfolge der fertigen Stempel",
+ "Glissez les tampons dans l'ordre voulu (le volet les montre dans cet ordre) :": "Ziehen Sie die Stempel in die gewünschte Reihenfolge (das Seitenfenster zeigt sie so an):",
+ "Ordre d'origine": "Ursprüngliche Reihenfolge",
+ "En premier": "Ganz nach oben",
+ "Monter": "Nach oben",
+ "Descendre": "Nach unten",
+ "En dernier": "Ganz nach unten",
+ "Ordre des tampons prêts à l'emploi...": "Reihenfolge der fertigen Stempel...",
+ "Reçu, Validé, Payé… : dans l'ordre que vous voulez dans le volet (aussi par clic droit dans le volet)": "Erhalten, Genehmigt, Bezahlt…: in der gewünschten Reihenfolge im Seitenfenster (auch per Rechtsklick)"
 }

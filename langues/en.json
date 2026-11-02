@@ -2714,5 +2714,14 @@
  "Contacts regroupés par la première lettre de la colonne de gauche (glissez un en-tête pour changer l'ordre des colonnes). Un clic sur un groupe le replie ou le déplie.": "Contacts grouped by the first letter of the left column (drag a header to reorder columns). Click a group to collapse or expand it.",
  "Toutes ces adresses": "All these addresses",
  "{n} adresses : laquelle utiliser vous sera demandé": "{n} addresses: you will be asked which one to use",
- "Supprimer {n} adresse(s) du carnet ?": "Delete {n} address(es) from the address book?"
+ "Supprimer {n} adresse(s) du carnet ?": "Delete {n} address(es) from the address book?",
+ "Ordre des tampons prêts à l'emploi": "Order of ready-made stamps",
+ "Glissez les tampons dans l'ordre voulu (le volet les montre dans cet ordre) :": "Drag the stamps into the order you want (the panel shows them in this order):",
+ "Ordre d'origine": "Original order",
+ "En premier": "First",
+ "Monter": "Move up",
+ "Descendre": "Move down",
+ "En dernier": "Last",
+ "Ordre des tampons prêts à l'emploi...": "Order of ready-made stamps...",
+ "Reçu, Validé, Payé… : dans l'ordre que vous voulez dans le volet (aussi par clic droit dans le volet)": "Received, Approved, Paid…: in the order you want in the panel (also by right-click in the panel)"
 }
