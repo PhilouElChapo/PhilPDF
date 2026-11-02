@@ -110,6 +110,17 @@ class TestsMoteur {
         } finally { d.destroy() }
     }
 
+    /** Le dessin d'origine de la page est toujours la (images, texte) : rien n'est perdu a l'enregistrement. */
+    private fun contenuGarde(f: File, attendu: String) {
+        val d = Document.openDocument(f.absolutePath) as PDFDocument
+        try {
+            val c = d.findPage(0).get("Contents")
+            val flux = if (c.isArray) (0 until c.size()).map { c.get(it) } else listOf(c)
+            val tout = flux.joinToString("\n") { x -> try { String(x.readStream(), Charsets.ISO_8859_1) } catch (_: Exception) { "" } }
+            assertTrue("contenu d'origine perdu (« $attendu » absent)", tout.contains(attendu))
+        } finally { d.destroy() }
+    }
+
     // ------------------------------------------------------------------ bibliotheque MuPDF Java
     @Test fun ajoutAUnTableauSansDebris() {
         val pdf = PDFDocument()
@@ -179,8 +190,10 @@ class TestsMoteur {
             assertTrue(d.ecrireReglesChamp(nom, Regles.vide(), null, p0))
             val ville = d.champA(0, Point(400f, 180f))!!
             val (p1, _) = d.proprietesChamp(ville)!!
-            p1.trier = true; p1.defaut = "Cannes"
+            p1.trier = true; p1.defaut = "Cannes"; p1.libre = true
             assertTrue(d.ecrireReglesChamp(ville, Regles.vide(), listOf("Nice", "Cannes", "Antibes"), p1))
+            assertTrue("saisie libre vue au remplissage", d.champA(0, Point(400f, 180f))!!.libre)
+            assertTrue(d.remplir(d.champA(0, Point(400f, 180f))!!, "Grasse") == null)
             val accord = d.champA(0, Point(307f, 147f))!!
             val (p2, _) = d.proprietesChamp(accord)!!
             p2.style = "etoile"; p2.valeurCochee = "OK"; p2.cocheeDefaut = true
@@ -202,6 +215,7 @@ class TestsMoteur {
                 val ville = w.getValue("Ville")
                 assertEquals(listOf("Antibes", "Cannes", "Nice"), ville.options.toList())
                 assertEquals("Cannes", ChampsPdf.lire(p, ville).defaut)
+                assertEquals("valeur tapee librement", "Grasse", ville.value)
                 val accord = ChampsPdf.lire(p, w.getValue("Accord"))
                 assertEquals("etoile", accord.style); assertEquals("OK", accord.valeurCochee); assertTrue(accord.cocheeDefaut)
                 val bouton = pg.widgets.first { it.fieldType == com.artifex.mupdf.fitz.PDFWidget.TYPE_BUTTON }
@@ -248,6 +262,29 @@ class TestsMoteur {
             assertFalse("« Prelevement » normal : ${polices["P"]}", polices["P"]!!.contains("Bold"))
         } finally { doc.destroy() }
         assertTrue(texte(f).contains("Prelevement"))
+        assertTrue("l'autre ligne est toujours la", texte(f).contains("73 boulevard"))
+    }
+
+    @Test fun texteALEnversModifiable() {
+        val pdf = PDFDocument()
+        val res = pdf.newDictionary(); val fonts = pdf.newDictionary()
+        fonts.put("F1", police(pdf, "Helvetica")); res.put("Font", fonts)
+        val page = pdf.addPage(Rect(0f, 0f, 595f, 842f), 0, res,
+            "BT /F1 14 Tf -1 0 0 -1 400 600 Tm (ENVERS) Tj ET\nBT /F1 12 Tf 72 100 Td (Bas de page) Tj ET")
+        pdf.insertPage(-1, page)
+        val src = File(dossier, "envers-texte.pdf"); pdf.save(src.absolutePath, ""); pdf.destroy()
+        val d = ouvrir(src)
+        val r = runBlocking {
+            // « ENVERS » ecrit a l'envers : il s'etend vers la gauche du point (400, 600) du PDF, soit y = 242 sur la page
+            val par = d.paragrapheA(0, Point(370f, 842f - 600f + 5f))
+            assertNotNull("texte a l'envers trouve sous le doigt", par)
+            d.reecrireTexte(par!!, listOf("ENDROIT"), par.lignes[0].taille, 0, par.lignes[0].gras, par.lignes[0].italique, false)
+        }
+        assertTrue(r.message, r.ok)
+        val f = enregistrer(d, "envers-texte-ecrit.pdf")
+        sansDebris(f)
+        assertTrue(texte(f).contains("ENDROIT"))
+        assertTrue(texte(f).contains("Bas de page"))
     }
 
     // ------------------------------------------------------------------ reconnaissance du texte
@@ -259,6 +296,7 @@ class TestsMoteur {
         val f = enregistrer(d, "scan-ocr.pdf")
         sansDebris(f)
         assertTrue("texte relu : ${texte(f)}", texte(f).uppercase().contains("PHILPDF"))
+        contenuGarde(f, "/Im0 Do")
     }
 
     @Test fun ocrTexteALEnvers() {
@@ -268,6 +306,8 @@ class TestsMoteur {
         val f = enregistrer(d, "envers-ocr.pdf")
         sansDebris(f)
         assertTrue("texte relu : ${texte(f)}", texte(f).uppercase().contains("PASSPORT"))
+        assertFalse("charabia du texte lu a l'endroit : ${texte(f)}", texte(f).uppercase().contains("NOISSIN"))
+        contenuGarde(f, "/Im0 Do")
     }
 
     // ------------------------------------------------------------------ signature numerique

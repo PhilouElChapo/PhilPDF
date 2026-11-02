@@ -27,7 +27,9 @@ data class LigneTexte(val texte: String, val x0: Float, val x1: Float, val base:
                       val taille: Float, val argb: Int, val police: String, val gras: Boolean, val italique: Boolean,
                       val serif: Boolean, val mono: Boolean, val polices: Set<String> = emptySet(),
                       /** police de chaque lettre du texte (gras et normal melanges dans une ligne) */
-                      val fontes: List<String> = emptyList())
+                      val fontes: List<String> = emptyList(),
+                      /** bord gauche de la ligne, et sens d'ecriture (1, 0) ; (-1, 0) : texte a l'envers (livret plie) */
+                      val gauche: Float = x0, val dx: Float = 1f, val dy: Float = 0f)
 
 /** Codes d'une police du PDF : lettre -> code (1 ou 2 octets), largeurs (1/1000 de la taille). */
 class TablePolice(val nomRessource: String, val objet: PDFObject, val octets: Int, val codes: Map<Char, Int>,
@@ -73,7 +75,7 @@ object TexteModif {
         val blocs = ArrayList<MutableList<LigneTexte>>()
         var bloc: MutableList<LigneTexte>? = null
         var ligne = StringBuilder()
-        var x0 = 0f; var x1 = 0f; var base = 0f; var haut = 0f; var bas = 0f
+        var x0 = 0f; var x1 = 0f; var base = 0f; var haut = 0f; var bas = 0f; var gauche = 0f; var sens = Point(1f, 0f)
         var taille = 0f; var argb = 0; var police: Font? = null
         var premier = true
         var noms = HashSet<String>()
@@ -84,13 +86,13 @@ object TexteModif {
             override fun endTextBlock() { bloc = null }
             override fun beginLine(bbox: Rect?, wmode: Int, dir: Point?) {
                 ligne = StringBuilder(); premier = true; noms = HashSet(); fontes = ArrayList()
-                haut = bbox?.y0 ?: 0f; bas = bbox?.y1 ?: 0f; x1 = bbox?.x1 ?: 0f
+                haut = bbox?.y0 ?: 0f; bas = bbox?.y1 ?: 0f; x1 = bbox?.x1 ?: 0f; gauche = bbox?.x0 ?: 0f; sens = dir ?: Point(1f, 0f)
             }
             override fun endLine() {
                 val f = police
                 val t = ligne.toString().trimEnd()
                 if (ligne.isNotBlank() && f != null) bloc?.add(LigneTexte(t, x0, x1, base, haut, bas,
-                    taille, argb, f.name ?: "", f.isBold, f.isItalic, f.isSerif, f.isMono, noms, fontes.take(t.length)))
+                    taille, argb, f.name ?: "", f.isBold, f.isItalic, f.isSerif, f.isMono, noms, fontes.take(t.length), gauche, sens.x, sens.y))
             }
             override fun onChar(c: Int, origin: Point?, font: Font?, size: Float, q: Quad?, argb_: Int, flags: Int, bidi: Int) {
                 if (premier && origin != null) {
@@ -106,7 +108,7 @@ object TexteModif {
             override fun onVector(bbox: Rect?, info: StructuredTextWalker.VectorInfo?, argb_: Int) {}
         })
         st.destroy()
-        val choisi = blocs.firstOrNull { b -> b.any { l -> pt.x >= l.x0 - 4 && pt.x <= l.x1 + 4 && pt.y >= l.haut - 2 && pt.y <= l.bas + 2 } }
+        val choisi = blocs.firstOrNull { b -> b.any { l -> pt.x >= l.gauche - 4 && pt.x <= l.x1 + 4 && pt.y >= l.haut - 2 && pt.y <= l.bas + 2 } }
             ?: return null
         // la ligne touchee et ses voisines de meme taille (un vrai paragraphe), pas tout le bloc (tableaux)
         val i = choisi.indexOfFirst { l -> pt.y >= l.haut - 2 && pt.y <= l.bas + 2 }.coerceAtLeast(0)
@@ -329,7 +331,7 @@ object TexteModif {
         annot.setQuadPoints(par.lignes.map { l ->
             val marge = if (ocr) -(l.bas - l.haut) * 0.08f else (l.bas - l.haut) * 0.15f
             val y0 = l.haut + marge; val y1 = l.bas - marge
-            Quad(l.x0, y0, l.x1, y0, l.x0, y1, l.x1, y1)
+            Quad(l.gauche, y0, l.x1, y0, l.gauche, y1, l.x1, y1)
         }.toTypedArray())
         annot.update()
         page.applyRedactions(false, if (ocr) PDFPage.REDACT_IMAGE_PIXELS else PDFPage.REDACT_IMAGE_NONE,
@@ -402,14 +404,16 @@ object TexteModif {
             // repere de la page -> repere PDF : axe des x (a,b), axe des y vers le haut (-c,-d)
             val ox = x * inv.a + base * inv.c + inv.e
             val oy = x * inv.b + base * inv.d + inv.f
-            flux.append("${f(inv.a)} ${f(inv.b)} ${f(-inv.c)} ${f(-inv.d)} ${f(ox)} ${f(oy)} Tm ${coder(s)} Tj\n")
+            flux.append("${axes(inv, ref ?: l0)} ${f(ox)} ${f(oy)} Tm ${coder(s)} Tj\n")
         }
         flux.append("ET Q\n")
         // contenu existant entre q ... Q (ses changements de repere ne touchent pas notre texte), puis le notre
         val contenu = pobj.get("Contents")
         val tableau = pdf.newArray()
         tableau.ajouter(pdf.addStream("q\n"))
-        if (contenu.isArray) for (k in 0 until contenu.size()) contenu.get(k).takeIf { it.isIndirect }?.let { tableau.ajouter(it) }   // debris d'une version precedente : laisses else if (!contenu.isNull) tableau.ajouter(contenu)
+        // contenu d'origine (un flux ou une liste de flux) ; debris laisses par une version precedente : ecartes
+        if (contenu.isArray) { for (k in 0 until contenu.size()) contenu.get(k).takeIf { it.isIndirect }?.let { tableau.ajouter(it) } }
+        else if (!contenu.isNull) tableau.ajouter(contenu)
         tableau.ajouter(pdf.addStream("Q\n"))
         tableau.ajouter(pdf.addStream(flux.toString()))
         pobj.put("Contents", tableau)
@@ -491,7 +495,7 @@ object TexteModif {
             if (droite) x = (ref?.x1 ?: l0.x1) - morceaux.sumOf { it.second.toDouble() }.toFloat()
             val ox = x * inv.a + base * inv.c + inv.e
             val oy = x * inv.b + base * inv.d + inv.f
-            flux.append("${f(inv.a)} ${f(inv.b)} ${f(-inv.c)} ${f(-inv.d)} ${f(ox)} ${f(oy)} Tm ")
+            flux.append("${axes(inv, ref ?: l0)} ${f(ox)} ${f(oy)} Tm ")
             morceaux.forEach { flux.append(it.first) }
             flux.append("\n")
         }
@@ -500,12 +504,22 @@ object TexteModif {
         val contenu = pobj.get("Contents")
         val tableau = pdf.newArray()
         tableau.ajouter(pdf.addStream("q\n"))
-        if (contenu.isArray) for (k in 0 until contenu.size()) contenu.get(k).takeIf { it.isIndirect }?.let { tableau.ajouter(it) }   // debris d'une version precedente : laisses else if (!contenu.isNull) tableau.ajouter(contenu)
+        // contenu d'origine (un flux ou une liste de flux) ; debris laisses par une version precedente : ecartes
+        if (contenu.isArray) { for (k in 0 until contenu.size()) contenu.get(k).takeIf { it.isIndirect }?.let { tableau.ajouter(it) } }
+        else if (!contenu.isNull) tableau.ajouter(contenu)
         tableau.ajouter(pdf.addStream("Q\n"))
         tableau.ajouter(pdf.addStream(flux.toString()))
         pobj.put("Contents", tableau)
         val affiche = par.tables.values.map { it.nomBase.substringAfter('+') }.distinct().joinToString(" + ")
         return ResultatTexte(true, !secoursUtilise, affiche)
+    }
+
+    /** Axes du texte (debut de Tm) dans le sens de la ligne d'origine : a l'endroit, ou a l'envers (livret plie). */
+    private fun axes(inv: Matrix, l: LigneTexte): String {
+        val n = kotlin.math.sqrt(l.dx * l.dx + l.dy * l.dy).takeIf { it > 0.01f } ?: 1f
+        val dx = l.dx / n; val dy = l.dy / n
+        val ux = dy; val uy = -dx                         // vers le haut des lettres (repere de la page, y vers le bas)
+        return "${f(dx * inv.a + dy * inv.c)} ${f(dx * inv.b + dy * inv.d)} ${f(ux * inv.a + uy * inv.c)} ${f(ux * inv.b + uy * inv.d)}"
     }
 
     private fun f(v: Float) = String.format(java.util.Locale.US, "%.3f", v)

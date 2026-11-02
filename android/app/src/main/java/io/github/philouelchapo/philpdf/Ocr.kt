@@ -162,7 +162,9 @@ object Ocr {
         val contenu = pobj.get("Contents")
         val tableau = pdf.newArray()
         tableau.ajouter(pdf.addStream("q\n"))
-        if (contenu.isArray) for (k in 0 until contenu.size()) contenu.get(k).takeIf { it.isIndirect }?.let { tableau.ajouter(it) }   // debris d'une version precedente : laisses else if (!contenu.isNull) tableau.ajouter(contenu)
+        // contenu d'origine (un flux ou une liste de flux) ; debris laisses par une version precedente : ecartes
+        if (contenu.isArray) { for (k in 0 until contenu.size()) contenu.get(k).takeIf { it.isIndirect }?.let { tableau.ajouter(it) } }
+        else if (!contenu.isNull) tableau.ajouter(contenu)
         tableau.ajouter(pdf.addStream("Q\n"))
         tableau.ajouter(pdf.addStream(flux.toString()))
         pobj.put("Contents", tableau)

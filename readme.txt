@@ -10,6 +10,14 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.10.3
+- Correction urgente : depuis la 1.10.1, reconnaitre ou modifier le texte d'une page faite d'un seul bloc de contenu
+  effacait tout le dessin de la page (images, texte) a l'enregistrement. Repartez du fichier d'origine.
+- Modifier le texte a l'envers (livret plie, texte reconnu tourne) : il est trouve sous le doigt et reecrit dans le
+  meme sens.
+- Nouveaux essais automatiques : la page garde ses images et son texte apres OCR ou modification ; texte a l'envers
+  modifiable ; valeur tapee dans une liste a saisie libre.
+
 1.10.2
 - Reconnaissance du texte a l'envers (livret plie) : le texte lu a l'endroit (du charabia, « NOISSIN ») prenait la
   place du bon (« MISSION ») ; chaque mot garde maintenant la lecture la plus sure. Plus besoin de retourner la page.
