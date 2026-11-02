@@ -250,7 +250,7 @@ object Formulaire {
             a.put("FT", pdf.newName("Sig"))                        // champ de signature vide (a signer avec un certificat)
         } else if (c.genre == "liste") {
             a.put("FT", pdf.newName("Ch")); a.put("Ff", 131072)    // liste deroulante
-            val opt = pdf.newArray(); c.choix.forEach { opt.push(pdf.newString(it)) }
+            val opt = pdf.newArray(); c.choix.forEach { opt.push(it) }
             a.put("Opt", opt)
             a.put("DA", pdf.newString("/Helv 0 Tf 0 g"))
         } else if (c.genre == "bouton") {
@@ -270,8 +270,8 @@ object Formulaire {
         val po = page.getObject()
         var annots = po.get("Annots")
         if (annots.isNull) { annots = pdf.newArray(); po.put("Annots", annots) }
-        annots.push(ref)
-        af.get("Fields").push(ref)
+        annots.ajouter(ref)
+        af.get("Fields").ajouter(ref)
         return ref
     }
 
@@ -301,3 +301,8 @@ internal fun objetIndirect(pdf: com.artifex.mupdf.fitz.PDFDocument, o: com.artif
     ref.writeObject(o)
     return ref
 }
+
+/** Ajoute un objet a la fin d'un tableau du PDF. Ne pas utiliser PDFObject.push(PDFObject) de MuPDF Java : il libere
+ *  une reference qui ne lui appartient pas (l'objet, libere deux fois, devenait un debris : « <00000000B0EC00> » a la
+ *  place du texte de l'OCR ou d'un champ). put(taille, objet) ajoute sans rien liberer. */
+internal fun com.artifex.mupdf.fitz.PDFObject.ajouter(o: com.artifex.mupdf.fitz.PDFObject) = put(size(), o)

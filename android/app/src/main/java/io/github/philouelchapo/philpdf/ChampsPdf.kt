@@ -200,7 +200,7 @@ object ChampsPdf {
         val l = (0 until opt.size()).map { opt.get(it) }
         fun cle(o: PDFObject) = (if (o.isArray) o.get(1) else o).let { if (it.isString) it.asString() else "" }.lowercase(Locale.FRENCH)
         val tri = pdf.newArray()
-        l.sortedBy { cle(it) }.forEach { tri.push(it) }
+        l.sortedBy { cle(it) }.forEach { tri.ajouter(it) }
         ch.put("Opt", tri)
     }
 
@@ -358,7 +358,7 @@ object ChampsPdf {
         if (places.size != objs.size) return
         val neuf = pdf.newArray()
         var k = 0
-        for (i in l.indices) neuf.push(if (i in places) objs[k++] else l[i])
+        for (i in l.indices) neuf.ajouter(if (i in places) objs[k++] else l[i])
         po.put("Annots", neuf)
         po.delete("Tabs")
     }

@@ -10,6 +10,12 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.10.1
+- Texte reconnu (OCR), texte modifie, champs ajoutes : ils pouvaient disparaitre a l'enregistrement, remplaces par un
+  debris (« <00000000B0EC00> ») ; c'est pourquoi le texte du livret ne se selectionnait pas. Cause : une fonction du
+  moteur PDF (ajout a une liste) liberait deux fois l'objet ajoute. PhilPDF ne s'en sert plus. Les debris laisses dans
+  un PDF par les versions precedentes sont retires a la modification suivante de la page.
+
 1.10.0
 - Proprietes d'un champ, comme sous Windows : info-bulle, obligatoire, lecture seule, affichage (visible, masque,
   non imprime, masque mais imprime) ; texte : plusieurs lignes, longueur maximale, alignement, valeur par defaut ;
@@ -267,6 +273,10 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.55
+- Langue : en automatique, PhilPDF prend la langue du systeme s'il la connait (francais, anglais, espagnol, italien,
+  allemand), sinon l'anglais. L'installateur fait de meme (francais ou anglais).
 
 0.9.54
 - Tampons prets a l'emploi (Recu, Valide, Paye...) : rangez-les dans l'ordre voulu, par clic droit dans le volet

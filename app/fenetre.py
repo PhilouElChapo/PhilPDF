@@ -2251,7 +2251,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
         f.addRow(_('Votre nom'), auteur)
         from .langue import disponibles, LANGUE
         langue = QComboBox()
-        langue.addItem(_("Automatique (langue du système)"), "auto")
+        langue.addItem(_("Automatique (langue du système, sinon anglais)"), "auto")
         for code, nom in disponibles():
             langue.addItem(nom, code)
         langue.setCurrentIndex(max(0, langue.findData(self.params.get("langue", "auto"))))

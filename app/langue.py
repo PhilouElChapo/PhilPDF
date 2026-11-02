@@ -6,7 +6,7 @@ Une traduction vide ou absente laisse le francais. Pour ajouter une langue : cop
 le renommer (es.json, de.json...), traduire les valeurs, et c'est tout.
 
 Langue : variable PHILPDF_LANGUE, sinon le reglage "langue" des Preferences, sinon la langue du
-systeme si un fichier existe pour elle, sinon le francais. Le choix est fait une fois, au demarrage
+systeme si un fichier existe pour elle, sinon l'anglais (le francais si le choix est explicite et inconnu). Le choix est fait une fois, au demarrage
 (avant la creation des menus et des tables d'outils) ; changer de langue demande de relancer PhilPDF.
 """
 import json, locale, os, re, sys
@@ -60,7 +60,10 @@ def choisir():
     codes = {c for c, _x in disponibles()}
     voulu = os.environ.get("PHILPDF_LANGUE") or _reglage()
     if voulu in (None, "", "auto"):
+        # langue du systeme si PhilPDF la parle ; sinon l'anglais (plus compris que le francais dans le monde)
         voulu = langue_systeme()
+        if voulu != SOURCE and voulu not in codes:
+            voulu = "en"
     return voulu if voulu in codes else SOURCE
 
 

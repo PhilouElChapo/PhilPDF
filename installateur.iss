@@ -19,15 +19,24 @@ UninstallDisplayIcon={app}\PhilPDF.exe
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+ShowLanguageDialog=auto
 DisableProgramGroupPage=yes
 CloseApplications=yes
 RestartApplications=yes
 
 [Languages]
+; langue de Windows si l'installateur la connait (francais, anglais) ; sinon l'anglais, la premiere de la liste
+Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
 
+[CustomMessages]
+en.Bureau=Create a desktop icon
+fr.Bureau=Créer une icône sur le Bureau
+en.Lancer=Launch PhilPDF
+fr.Lancer=Lancer PhilPDF
+
 [Tasks]
-Name: "bureau"; Description: "Créer une icône sur le Bureau"; Flags: unchecked
+Name: "bureau"; Description: "{cm:Bureau}"; Flags: unchecked
 
 [Files]
 Source: "dist\PhilPDF\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
@@ -39,4 +48,4 @@ Name: "{group}\PhilPDF"; Filename: "{app}\PhilPDF.exe"
 Name: "{userdesktop}\PhilPDF"; Filename: "{app}\PhilPDF.exe"; Tasks: bureau
 
 [Run]
-Filename: "{app}\PhilPDF.exe"; Description: "Lancer PhilPDF"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\PhilPDF.exe"; Description: "{cm:Lancer}"; Flags: nowait postinstall skipifsilent

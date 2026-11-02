@@ -544,7 +544,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                     val l = dep.optJSONObject("listes")?.optJSONArray(v)
                     val items = (0 until (l?.length() ?: 0)).map { l!!.getString(it) }
                     val ch = Regles.champDe(x.getObject())
-                    val opt = p.newArray(); items.forEach { opt.push(p.newString(it)) }
+                    val opt = p.newArray(); items.forEach { opt.push(it) }
                     ch.put("Opt", opt)
                     if ((x.value ?: "") !in items) ch.delete("V")
                     x.update()
@@ -608,7 +608,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
             val w = page.widgets?.getOrNull(c.index) ?: return@surPage false
             Regles.ecrire(p, w.getObject(), regles)
             if (choix != null) {
-                val opt = p.newArray(); choix.forEach { opt.push(p.newString(it)) }
+                val opt = p.newArray(); choix.forEach { opt.push(it) }
                 Regles.champDe(w.getObject()).put("Opt", opt)
             }
             if (prop != null) ChampsPdf.ecrire(p, w, prop) else w.update()
@@ -727,7 +727,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         // copie neuve d'un objet ecrit en ligne (les objets deja numerotes restent partages)
         fun copie(o: PDFObject): PDFObject = when {
             o.isIndirect -> o
-            o.isArray -> d.newArray().also { t -> for (i in 0 until o.size()) t.push(copie(o.get(i))) }
+            o.isArray -> d.newArray().also { t -> for (i in 0 until o.size()) t.ajouter(copie(o.get(i))) }
             o.isDictionary -> d.newDictionary().also { t -> for (cle in o) t.put(cle, copie(o.get(cle))) }
             else -> o
         }
@@ -746,8 +746,8 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                     for (cle in a) if (cle.asName() != "AP") nd.put(cle, copie(a.get(cle)))   // apparence refaite par le moteur
                     nd.put("P", po)
                     val ref = objetIndirect(d, nd)
-                    neuf.push(ref); refs[nom(a)] = ref; change = true
-                } else if (a.isIndirect || a.isDictionary) neuf.push(a)
+                    neuf.ajouter(ref); refs[nom(a)] = ref; change = true
+                } else if (a.isIndirect || a.isDictionary) neuf.ajouter(a)
                 else change = true                               // debris (texte, null...) laisse par une version precedente
             }
             if (change) po.put("Annots", neuf)
@@ -764,13 +764,13 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                 val enLigne = !c.isIndirect && c.isDictionary
                 val r = if (enLigne) refs[nom(c)] else null
                 when {
-                    r != null -> if (places.add(nom(c))) neuf.push(r)
+                    r != null -> if (places.add(nom(c))) neuf.ajouter(r)
                     // copie en ligne d'un champ qui n'est plus sur aucune page : retiree
                     enLigne && c.get("Subtype").asName() == "Widget" -> change = true
-                    else -> neuf.push(c)
+                    else -> neuf.ajouter(c)
                 }
             }
-            refs.forEach { (k, r) -> if (k !in places) neuf.push(r) }
+            refs.forEach { (k, r) -> if (k !in places) neuf.ajouter(r) }
             if (change) af.put("Fields", neuf)
         }
         // controle : sinon la signature irait encore dans une copie invisible

@@ -161,10 +161,10 @@ object Ocr {
         flux.append("ET Q\n")
         val contenu = pobj.get("Contents")
         val tableau = pdf.newArray()
-        tableau.push(pdf.addStream("q\n"))
-        if (contenu.isArray) for (k in 0 until contenu.size()) tableau.push(contenu.get(k)) else if (!contenu.isNull) tableau.push(contenu)
-        tableau.push(pdf.addStream("Q\n"))
-        tableau.push(pdf.addStream(flux.toString()))
+        tableau.ajouter(pdf.addStream("q\n"))
+        if (contenu.isArray) for (k in 0 until contenu.size()) contenu.get(k).takeIf { it.isIndirect }?.let { tableau.ajouter(it) }   // debris d'une version precedente : laisses else if (!contenu.isNull) tableau.ajouter(contenu)
+        tableau.ajouter(pdf.addStream("Q\n"))
+        tableau.ajouter(pdf.addStream(flux.toString()))
         pobj.put("Contents", tableau)
         pobj.put("PhilPDF_OCR", true)                     // « Modifier le texte » effacera aussi les lettres de l'image
     }

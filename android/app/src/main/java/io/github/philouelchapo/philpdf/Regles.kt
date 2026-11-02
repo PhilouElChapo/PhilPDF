@@ -422,7 +422,7 @@ object Regles {
         calcules.forEach { visiter(it, emptySet()) }
         if (ordre.isEmpty()) { af.delete("CO"); return }
         val co = pdf.newArray()
-        ordre.forEach { n -> parNom[n]?.firstOrNull()?.let { co.push(champDe(it.obj).let { c -> if (c.isIndirect) c else it.obj }) } }
+        ordre.forEach { n -> parNom[n]?.firstOrNull()?.let { co.ajouter(champDe(it.obj).let { c -> if (c.isIndirect) c else it.obj }) } }
         af.put("CO", co)
     }
 
