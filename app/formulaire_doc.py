@@ -282,16 +282,22 @@ class MixinFormulaire:
         elif g == "imprimer" and hasattr(fen, "imprimer"):
             fen.imprimer([self])
         elif g == "email":
+            # comme Acrobat, au choix : logiciel de messagerie (PDF deja joint, carnet d'adresses), adresse e-mail
+            # reglee dans PhilPDF, ou messagerie web : le volet « Envoyer par e-mail », pre-rempli par le bouton
+            if hasattr(self, "montrer_envoi"):
+                self.montrer_envoi(fen)
+                pe = self.panneau_envoi
+                if a.get("email"):
+                    pe.a.setText(a["email"])
+                if a.get("sujet"):
+                    pe.sujet.setText(a["sujet"])
+                    pe.sujet.setCursorPosition(0)
+                return
             if (self.modifie or not self.chemin) and hasattr(fen, "enregistrer") and not fen.enregistrer(self):
                 return
             from . import agenda
             agenda.ouvrir(agenda.lien_message(self.params.get("messagerie") or "gmail", a.get("sujet") or self.nom,
                                               _("Ci-joint : {f}", f=self.nom), a.get("email", "")))
-            try:
-                from .fenetre import montrer_dans_explorateur
-                montrer_dans_explorateur(self.chemin)
-            except Exception:                             # noqa: BLE001
-                pass
         elif g == "page":
             self.aller_a(max(0, min(len(self.doc) - 1, int(a.get("page", 1)) - 1)))
 

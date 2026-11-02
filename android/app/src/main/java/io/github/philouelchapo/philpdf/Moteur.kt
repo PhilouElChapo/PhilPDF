@@ -97,6 +97,40 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         return r
     }
 
+    /** Debris laisses par une version precedente de PhilPDF (jusqu'a 1.10.0) dans les listes Contents et Annots des
+     *  pages : MuPDF les ignore, mais Acrobat affichait alors la page vide. Retires (sauf document signe : la
+     *  signature serait cassee). Renvoie les numeros des pages reparees (a partir de 1). */
+    suspend fun reparerDebris(): List<Int> {
+        val p = pdf ?: return emptyList()
+        val pages = ArrayList<Int>()
+        val signe = verrou.withLock { withContext(Dispatchers.IO) {
+            try {
+                (0 until p.countPages()).any { n -> val an = p.findPage(n).get("Annots")
+                    an.isArray && (0 until an.size()).any { i -> val a = an.get(i)
+                        a.isDictionary && a.get("FT").asName() == "Sig" && !a.get("V").isNull } }
+            } catch (_: Exception) { true }
+        } }
+        if (signe) return emptyList()
+        operation("Réparation") { d ->
+            for (n in 0 until d.countPages()) {
+                val po = d.findPage(n)
+                for (cle in listOf("Contents", "Annots")) {
+                    val t = po.get(cle)
+                    if (!t.isArray) continue
+                    val garder = (0 until t.size()).map { t.get(it) }.filter { it.isIndirect || (cle == "Annots" && it.isDictionary) }
+                    if (garder.size == t.size()) continue
+                    val neuf = d.newArray()
+                    garder.forEach { neuf.ajouter(it) }
+                    po.put(cle, neuf)
+                    if (n + 1 !in pages) pages += n + 1
+                }
+            }
+            pages.isNotEmpty()
+        }
+        if (pages.isNotEmpty()) Journal.ecrire("ouverture", "débris d'une version précédente retirés, page(s) $pages")
+        return pages
+    }
+
     suspend fun annuler() {
         val p = pdf ?: return
         verrou.withLock { withContext(Dispatchers.IO) { if (p.canUndo()) p.undo() } }
@@ -614,6 +648,12 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
             }
             if (prop != null) ChampsPdf.ecrire(p, w, prop) else w.update()
             if (jsPerso != null) ChampsPdf.poserJsPerso(p, listOf(w), jsPerso)
+            // bouton-poussoir : le moteur vient de refaire son apparence a sa facon (bouton blanc) ; on remet la notre
+            val o = w.getObject()
+            if (o.get("FT").asName() == "Btn" && (o.get("Ff").asInteger() and ChampsPdf.FF_POUSSOIR) != 0) {
+                val legende = o.get("MK").get("CA").let { if (it.isString) it.asString() else "" }.ifBlank { w.name ?: "" }
+                ChampsPdf.dessinerBouton(p, o, legende)
+            }
             true
         }
         if (ok) try { Regles.genererJs(p) } catch (e: Exception) { Journal.ecrire("formulaire", "JavaScript : $e") }

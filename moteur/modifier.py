@@ -789,14 +789,37 @@ class Editeur:
                         round(math.degrees(math.atan2(t.b, t.a)), 2))
         raise ValueError("Image introuvable")
 
+    def _flux_image(self, num_page, xref):
+        """[(xref du flux, [noms])] ou l'image est placee : contenu de la page, ou sous-objet qui la contient s'il
+        n'est utilise qu'une fois (le modifier ne change alors rien ailleurs)."""
+        import re
+        page = self.doc[num_page]
+        out, page_noms = [], []
+        for im in page.get_images(full=True):
+            if im[0] != xref:
+                continue
+            if not im[9]:
+                page_noms.append(im[7])
+                continue
+            forme = im[9]
+            appels = [(n, x, nom) for n in range(len(self.doc)) for x, nom, _i, _b in self.doc[n].get_xobjects() if x == forme]
+            if len(appels) != 1:
+                continue
+            flux = "".join((self.doc.xref_stream(c) or b"").decode("latin-1") for c in page.get_contents())
+            if len(re.findall("/" + re.escape(appels[0][2]) + r"\s+Do", flux)) > 1:
+                continue
+            out.append((forme, [im[7]]))
+        if page_noms:
+            out = [(c, page_noms) for c in page.get_contents()] + out
+        return out
+
     def _placer(self, num_page, xref, centre, w, h, angle):
         """Change la place, la taille et l'angle d'une image sans la recopier : seule la matrice qui la place
         dans le contenu de la page est reecrite (image intacte, aucune recompression). False si introuvable."""
         import math, re
         page = self.doc[num_page]
-        noms = [im[7] for im in page.get_images(full=True) if im[0] == xref]
         info = next((i for i in page.get_image_info(xrefs=True) if i.get("xref") == xref), None)
-        if not noms or info is None:
+        if info is None:
             return False
         tpdf = fitz.Matrix(1, 0, 0, -1, 0, 1) * fitz.Matrix(info["transform"]) * ~page.transformation_matrix   # en PDF
         cp = centre * ~page.transformation_matrix
@@ -804,9 +827,9 @@ class Editeur:
         flip = 1 if (tpdf.a * tpdf.d - tpdf.b * tpdf.c) >= 0 else -1          # image retournee : elle le reste
         voulu = fitz.Matrix(w, 0, 0, h * flip, -w / 2, -h * flip / 2) * \
             fitz.Matrix(math.cos(a), math.sin(a), -math.sin(a), math.cos(a), 0, 0) * fitz.Matrix(1, 0, 0, 1, cp.x, cp.y)
-        motif = re.compile(r"([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+cm\s*/("
-                           + "|".join(re.escape(n) for n in noms) + r")\s+Do")
-        for cx in page.get_contents():
+        for cx, noms in self._flux_image(num_page, xref):
+            motif = re.compile(r"([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+cm\s*/("
+                               + "|".join(re.escape(n) for n in noms) + r")\s+Do")
             flux = self.doc.xref_stream(cx).decode("latin-1")
             m = list(motif.finditer(flux))
             if len(m) != 1:
@@ -831,20 +854,83 @@ class Editeur:
         else:
             k = nr.width / max(0.01, abs(w * math.cos(a)) + abs(h * math.sin(a)))
             nw, nh = w * k, h * k
-        if not self._placer(num_page, xref, fitz.Point((nr.x0 + nr.x1) / 2, (nr.y0 + nr.y1) / 2), nw, nh, angle):
-            src = self._pixmap_image(xref)                     # image dans un sous-objet : ancienne methode
-            page.delete_image(xref)
-            page.insert_image(nr, keep_proportion=False, **src)
+        centre = fitz.Point((nr.x0 + nr.x1) / 2, (nr.y0 + nr.y1) / 2)
+        if not self._placer(num_page, xref, centre, nw, nh, angle):
+            if self._deplier(num_page, xref) and self._placer(num_page, xref, centre, nw, nh, angle):
+                pass
+            else:
+                src = self._pixmap_image(xref)                 # image introuvable dans la page : ancienne methode
+                page.delete_image(xref)
+                page.insert_image(nr, keep_proportion=False, **src)
         self.journal.append("image déplacée")
+
+    def _deplier(self, num_page, xref):
+        """Image rangee dans un sous-objet de la page : le sous-objet est ramene dans la page (comme Acrobat)."""
+        from . import formes
+        try:
+            if formes.deplier_pour(self.doc, num_page, xref):
+                self.journal.append("sous-objet de la page ouvert (aspect inchangé)")
+                return True
+        except Exception:                                   # noqa: BLE001
+            pass
+        return False
 
     def tourner_image(self, num_page, xref, delta):
         """Tourne une image de la page autour de son centre (delta en degres, sens inverse des aiguilles)."""
         centre, w, h, angle = self.geometrie_image(num_page, xref)
         nouvel = (angle + delta) % 360
         if not self._placer(num_page, xref, centre, w, h, nouvel):
-            raise ValueError("Cette image est rangée dans un sous-objet de la page : rotation impossible ici")
+            if not (self._deplier(num_page, xref) and self._placer(num_page, xref, centre, w, h, nouvel)):
+                raise ValueError("Cette image est rangée dans un sous-objet de la page : rotation impossible ici")
         self.journal.append(f"image tournée ({nouvel:.0f}°)")
         return nouvel
+
+    def _matrice_image(self, num_page, xref, changer):
+        """Reecrit la matrice qui place l'image dans la page : changer(matrice) -> nouvelle matrice.
+        Faux si l'image n'est pas placee une seule fois, simplement, dans la page."""
+        import re
+        for cx, noms in self._flux_image(num_page, xref):
+            motif = re.compile(r"([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+cm\s*/("
+                               + "|".join(re.escape(n) for n in noms) + r")\s+Do")
+            flux = self.doc.xref_stream(cx).decode("latin-1")
+            m = list(motif.finditer(flux))
+            if len(m) != 1:
+                continue
+            nl = changer(fitz.Matrix(*[float(x) for x in m[0].groups()[:6]]))
+            nouveau = f"{nl.a:.5f} {nl.b:.5f} {nl.c:.5f} {nl.d:.5f} {nl.e:.4f} {nl.f:.4f} cm /{m[0].group(7)} Do"
+            self.doc.update_stream(cx, (flux[:m[0].start()] + nouveau + flux[m[0].end():]).encode("latin-1"))
+            return True
+        return False
+
+    def _changer_matrice(self, num_page, xref, changer):
+        if not self._matrice_image(num_page, xref, changer):
+            if not (self._deplier(num_page, xref) and self._matrice_image(num_page, xref, changer)):
+                raise ValueError("Cette image est placée plusieurs fois dans la page : modification impossible ici")
+
+    def retourner_image(self, num_page, xref, horizontal=True):
+        """Retourne l'image sur place, comme dans un miroir (gauche-droite, ou haut-bas)."""
+        # dans le carre unite de l'image : x -> 1 - x (miroir gauche-droite) ou y -> 1 - y (haut-bas)
+        f = fitz.Matrix(-1, 0, 0, 1, 1, 0) if horizontal else fitz.Matrix(1, 0, 0, -1, 0, 1)
+        self._changer_matrice(num_page, xref, lambda m: f * m)
+        self.journal.append("image retournée " + ("gauche-droite" if horizontal else "haut-bas"))
+
+    def recadrer_image(self, num_page, xref, zone, img):
+        """Garde seulement la partie `zone` (x0, y0, x1, y1 en pixels de l'image, haut-gauche) ; img = l'image
+        RGBA entiere (retouchee ou non). L'image restante ne bouge pas sur la page. Renvoie le nouveau xref."""
+        from . import retouche as R
+        h, w = img.shape[:2]
+        x0, y0, x1, y1 = [int(round(v)) for v in zone]
+        x0, x1 = max(0, min(x0, x1)), min(w, max(x0, x1))
+        y0, y1 = max(0, min(y0, y1)), min(h, max(y0, y1))
+        if x1 - x0 < 2 or y1 - y0 < 2:
+            raise ValueError("Zone trop petite")
+        # carre unite de l'image : (0, 0) en bas a gauche ; la partie gardee y est un petit rectangle
+        u0, u1, v0, v1 = x0 / w, x1 / w, 1 - y1 / h, 1 - y0 / h
+        c = fitz.Matrix(u1 - u0, 0, 0, v1 - v0, u0, v0)
+        self._changer_matrice(num_page, xref, lambda m: c * m)
+        nx = R.remplacer_dans_pdf(self.doc, num_page, xref, img[y0:y1, x0:x1].copy())
+        self.journal.append(f"image recadrée ({x1 - x0} x {y1 - y0} pixels)")
+        return nx
 
     def tourner_lignes(self, num_page, zones, delta, centre=None):
         """Tourne une ligne ou un bloc de lignes autour de son centre, chaque lettre gardant police, taille et couleur

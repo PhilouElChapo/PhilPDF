@@ -71,6 +71,18 @@ def image_de_page(d, p, dpi_defaut=300):
     return gris, dpi_defaut
 
 
+def en_couleur(p):
+    """Vrai si la page a de la couleur (photo, tampon, logo) : on garde alors son image telle quelle au lieu de la
+    remplacer par une image noir et blanc nettoyee."""
+    try:
+        pm = p.get_pixmap(dpi=30, colorspace=fitz.csRGB, alpha=False)
+        rgb = np.frombuffer(pm.samples, np.uint8).reshape(pm.height, pm.width, 3).astype(np.int16)
+        sat = rgb.max(axis=2) - rgb.min(axis=2)
+        return float((sat > 40).mean()) > 0.01
+    except Exception:
+        return False
+
+
 def a_du_texte(p):
     return len(p.get_text("text").strip()) > 30
 
@@ -127,20 +139,31 @@ def poser_couche_texte(page, mots, dpi, effacer=True):
     for m in mots:
         lignes.setdefault(m["ligne"], []).append(m)
     for ms in lignes.values():
-        y0 = min(m["y"] for m in ms) * k
-        y1 = max(m["y"] + m["h"] for m in ms) * k
-        taille = max(4.0, (y1 - y0) * 0.82)
-        base = y1 - (y1 - y0) * 0.18
+        rot = ms[0].get("rot", 0)
+        cote = rot in (90, 270)                        # texte couche : la hauteur des lettres est en x
+        a0 = min((m["x"] if cote else m["y"]) for m in ms) * k
+        a1 = max((m["x"] + m["l"] if cote else m["y"] + m["h"]) for m in ms) * k
+        taille = max(4.0, (a1 - a0) * 0.82)
         for m in ms:
             t = m["texte"].strip()
             if not t:
                 continue
-            x0, largeur = m["x"] * k, max(1.0, m["l"] * k)
-            lt = mesure.text_length(t, fontsize=taille) or largeur
-            mat = fitz.Matrix(largeur / lt, 1)
+            x0, y0, x1, y1 = m["x"] * k, m["y"] * k, (m["x"] + m["l"]) * k, (m["y"] + m["h"]) * k
+            longueur = max(1.0, (y1 - y0) if cote else (x1 - x0))
+            lt = mesure.text_length(t, fontsize=taille) or longueur
+            e = longueur / lt
+            # point de depart sur la ligne de base, sens de l'ecriture, etirement dans ce sens
+            if rot == 180:
+                pt, mat = fitz.Point(x1, a0 + (a1 - a0) * 0.18), fitz.Matrix(e, 1)
+            elif rot == 90:                            # se lit de bas en haut
+                pt, mat = fitz.Point(a1 - (a1 - a0) * 0.18, y1), fitz.Matrix(1, e)
+            elif rot == 270:                           # se lit de haut en bas
+                pt, mat = fitz.Point(a0 + (a1 - a0) * 0.18, y0), fitz.Matrix(1, e)
+            else:
+                pt, mat = fitz.Point(x0, a1 - (a1 - a0) * 0.18), fitz.Matrix(e, 1)
             try:
-                page.insert_text((x0, base), t, fontname=nom_police, fontsize=taille, render_mode=3,
-                                 morph=(fitz.Point(x0, base), mat))
+                page.insert_text(pt, t, fontname=nom_police, fontsize=taille, render_mode=3, rotate=rot,
+                                 morph=(pt, mat))
             except Exception:
                 pass                                   # caractere hors police : le mot reste sans texte
     try:
@@ -182,14 +205,17 @@ def versions_moteurs():
     return v
 
 
-def _tesseract(image, base, dpi, sorties, mots_perso=None):
+def _tesseract(image, base, dpi, sorties, mots_perso=None, parallele=False):
     cmd = [tesseract_exe() or "tesseract", image, base, "-l", "fra", "--dpi", str(dpi)]
     if mots_perso:
         liste = base + ".mots.txt"
         with open(liste, "w", encoding="utf-8") as f:
             f.write("\n".join(mots_perso) + "\n")
         cmd += ["--user-words", liste]
-    r = subprocess.run(cmd + sorties, env={**os.environ, "TESSDATA_PREFIX": TESS}, stdout=subprocess.DEVNULL,
+    env = {**os.environ, "TESSDATA_PREFIX": TESS}
+    if parallele:                                      # plusieurs lectures en meme temps : un coeur chacune
+        env["OMP_THREAD_LIMIT"] = "1"
+    r = subprocess.run(cmd + sorties, env=env, stdout=subprocess.DEVNULL,
                        stderr=subprocess.PIPE, creationflags=0x08000000 if sys.platform == "win32" else 0)
     if r.returncode != 0 or not os.path.exists(base + ".tsv"):
         raise RuntimeError("Tesseract : " + r.stderr.decode("utf-8", "replace")[-300:])
@@ -214,7 +240,10 @@ def page_scan(doc, tif, largeur_pt, hauteur_pt):
     w, h = r.size
     brut = b"".join(tif[o:o + c] for o, c in zip(r.tag_v2[273], r.tag_v2[279]))
     page = doc.new_page(width=largeur_pt, height=hauteur_pt)
-    x = page.insert_image(page.rect, pixmap=fitz.Pixmap(fitz.csGRAY, fitz.IRect(0, 0, 1, 1), False))
+    # keep_proportion=False : l'image provisoire (1 x 1) est carree ; sans cela la vraie image, posee ensuite a sa
+    # place, etait tassee dans un carre (page « aplatie » apres l'OCR)
+    x = page.insert_image(page.rect, pixmap=fitz.Pixmap(fitz.csGRAY, fitz.IRect(0, 0, 1, 1), False),
+                          keep_proportion=False)
     doc.update_stream(x, brut, compress=False)
     for cle, val in (("Filter", "/CCITTFaxDecode"), ("DecodeParms", f"<</K -1/Columns {w}/Rows {h}/BlackIs1 true>>"),
                      ("Width", str(w)), ("Height", str(h)), ("BitsPerComponent", "1"), ("ColorSpace", "/DeviceGray")):
@@ -222,12 +251,29 @@ def page_scan(doc, tif, largeur_pt, hauteur_pt):
     return page
 
 
-def _lire(image, base, dpi, mots_perso, echelle):
+def _lire(image, base, dpi, mots_perso, echelle, rotation=0, parallele=False):
+    """Mots de l'image, lue tournee de `rotation` degres (90, 180, 270 : texte couche ou a l'envers) ; positions
+    rendues dans le repere de l'image d'origine (a l'echelle 1), avec "rot" = sens du texte sur la page."""
+    h0, w0 = image.shape[:2]
+    if rotation:
+        image = cv2.rotate(image, {90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180,
+                                   270: cv2.ROTATE_90_COUNTERCLOCKWISE}[rotation])
     cv2.imwrite(base + ".png", image)
-    _tesseract(base + ".png", base, dpi, ["tsv"], mots_perso)
-    mots = lire_tsv(base + ".tsv")
-    if echelle != 1:
-        for m in mots:
+    _tesseract(base + ".png", base, dpi, ["tsv"], mots_perso, parallele)
+    # mot lu « debout » dans une ligne horizontale : Tesseract lit parfois aussi du texte vertical, mais sa boite
+    # n'est alors pas fiable (mot place ailleurs) ; ce texte-la est lu par la passe tournee qui le met a l'endroit
+    mots = [m for m in lire_tsv(base + ".tsv") if len(m["texte"]) < 3 or m["l"] >= m["h"] * 0.8]
+    for m in mots:
+        x, y, l, h = m["x"], m["y"], m["l"], m["h"]
+        if rotation == 90:                             # image tournee d'un quart a droite : (u, v) -> (v, h0 - u)
+            x, y, l, h = y, h0 - (x + l), h, l
+        elif rotation == 180:
+            x, y = w0 - (x + l), h0 - (y + h)
+        elif rotation == 270:
+            x, y, l, h = w0 - (y + h), x, h, l
+        m["x"], m["y"], m["l"], m["h"] = x, y, l, h
+        m["rot"] = rotation
+        if echelle != 1:
             for c in ("x", "y", "l", "h"):
                 m[c] = int(round(m[c] / echelle))
     return mots
@@ -235,27 +281,98 @@ def _lire(image, base, dpi, mots_perso, echelle):
 
 SEUIL_QUALITE = 60
 CONF_MINI = 25
+CONF_TOURNE = 60                                   # lectures tournees : seulement les mots surs
 DPI_LECTURE = 300
 
 
-def ocr_image(gris, dpi, base, mots_perso=None):
+def fusionner(lectures):
+    """Plusieurs lectures de la meme image -> une seule : a chaque endroit, le mot le plus sur est garde."""
+    cand = []
+    for k, ms in enumerate(lectures):
+        for m in ms:
+            m = dict(m)
+            m["ligne"] = (k,) + tuple(m["ligne"])
+            cand.append(m)
+    cand.sort(key=lambda m: -m["conf"] * min(len(m["texte"]), 6))
+
+    def commun(a, b):
+        x = min(a["x"] + a["l"], b["x"] + b["l"]) - max(a["x"], b["x"])
+        y = min(a["y"] + a["h"], b["y"] + b["h"]) - max(a["y"], b["y"])
+        return max(0, x) * max(0, y)
+    garde = []
+    for m in cand:
+        s = max(1, m["l"] * m["h"])
+        if all(commun(m, g) < 0.3 * min(s, max(1, g["l"] * g["h"])) for g in garde):
+            garde.append(m)
+    # ordre de lecture : par sens d'ecriture, puis par ligne (centres alignes), puis le long de la ligne
+    out, n = [], 0
+    for rot in (0, 90, 180, 270):
+        ms = [m for m in garde if m.get("rot", 0) == rot]
+        cote = rot in (90, 270)
+        travers = (lambda m: m["x"] + m["l"] / 2) if cote else (lambda m: m["y"] + m["h"] / 2)
+        epais = (lambda m: m["l"]) if cote else (lambda m: m["h"])
+        lignes = []
+        for m in sorted(ms, key=travers, reverse=rot in (180, 270)):
+            c = travers(m)
+            if lignes and abs(c - lignes[-1][0]) < 0.5 * max(epais(m), lignes[-1][1]):
+                lignes[-1][2].append(m)
+            else:
+                lignes.append([c, epais(m), [m]])
+        long = {0: lambda m: m["x"], 180: lambda m: -m["x"], 90: lambda m: -m["y"], 270: lambda m: m["y"]}[rot]
+        for _, _, l in lignes:
+            for m in sorted(l, key=long):
+                m["ligne"] = (n,)                      # une ligne visuelle = une ligne de texte (copier-coller)
+                out.append(m)
+            n += 1
+    return out
+
+
+def ocr_image(gris, dpi, base, mots_perso=None, tourne=True):
     """Nettoie, redresse et reconnait une image : (tiff G4 de la page, mots, angle, qualite).
-    Lecture a 300 dpi au plus (plus rapide, et Tesseract lit mieux). Si la lecture est peu sure (lettres fines
-    ou cassees : machine a ecrire, fax, photocopie pale), une seconde lecture se fait sur une copie aux traits
-    epaissis ; la meilleure est gardee. L'image du PDF reste l'image nettoyee, non epaissie."""
+    Plusieurs lectures, faites en meme temps (une par coeur du processeur) :
+    - l'image nettoyee, a 300 dpi au plus (plus rapide, et Tesseract lit mieux) ;
+    - l'image en gris non nettoyee : texte clair sur fond fonce ou en couleur, que le nettoyage efface ;
+    - un scan peu fin (fax, 200 dpi) agrandi a 300 dpi : les petites lettres se lisent mieux (les grandes, sans
+      agrandir : on garde les deux) ;
+    - si `tourne` : l'image tournee d'un demi-tour et d'un quart de tour dans chaque sens (texte a l'envers ou
+      couche : livret plie, page retournee) ; seuls les mots surs de ces lectures comptent.
+    Si le resultat est peu sur (lettres fines ou cassees : machine a ecrire, fax, photocopie pale), d'autres
+    lectures se font sur une copie aux traits epaissis. A chaque endroit, le mot le plus sur est garde.
+    L'image du PDF reste l'image nettoyee, non epaissie."""
+    from concurrent.futures import ThreadPoolExecutor
     a = angle_inclinaison(gris)
-    nb = nettoyer(redresser(gris, a) if abs(a) > 0.05 else gris)
+    droit = redresser(gris, a) if abs(a) > 0.05 else gris
+    nb = nettoyer(droit)
     echelle = min(1.0, DPI_LECTURE / dpi)
-    lecture = nb if echelle == 1 else cv2.resize(nb, None, fx=echelle, fy=echelle, interpolation=cv2.INTER_AREA)
     dpi_l = int(round(dpi * echelle))
-    mots = _lire(lecture, base, dpi_l, mots_perso, echelle)
+
+    def reduire(img):
+        return img if echelle == 1 else cv2.resize(img, None, fx=echelle, fy=echelle, interpolation=cv2.INTER_AREA)
+    lecture, gris_l = reduire(nb), reduire(droit)
+    taches = [(lecture, base, dpi_l, echelle, 0), (gris_l, f"{base}_g", dpi_l, echelle, 0)]
+    if dpi < DPI_LECTURE * 0.9:
+        kg = DPI_LECTURE / dpi
+        taches.append((cv2.resize(droit, None, fx=kg, fy=kg, interpolation=cv2.INTER_CUBIC), f"{base}_a",
+                       DPI_LECTURE, kg, 0))
+    if tourne:
+        taches += [(gris_l, f"{base}_r{r}", dpi_l, echelle, r) for r in (180, 90, 270)]
+
+    def lire(t):
+        img, b, d, e, r = t
+        ms = _lire(img, b, d, mots_perso, e, r, parallele=True)
+        if r:
+            ms = [m for m in ms if m["conf"] >= CONF_TOURNE and sum(c.isalnum() for c in m["texte"]) >= 2]
+        return ms
+    with ThreadPoolExecutor(max(1, min(len(taches), os.cpu_count() or 2))) as ex:
+        lectures = list(ex.map(lire, taches))
+    mots = fusionner(lectures)
     q = qualite(mots)
     for k in (2, 3):
         if q >= SEUIL_QUALITE:
             break
-        autres = _lire(cv2.erode(lecture, np.ones((k, k), np.uint8)), f"{base}_e{k}", dpi_l, mots_perso, echelle)
-        if qualite(autres) > q + 5:
-            mots, q = autres, qualite(autres)
+        lectures.append(_lire(cv2.erode(lecture, np.ones((k, k), np.uint8)), f"{base}_e{k}", dpi_l, mots_perso, echelle))
+        mots = fusionner(lectures)
+        q = qualite(mots)
     mots = [m for m in mots if m["conf"] >= CONF_MINI]
     return tiff_g4(nb, dpi), mots, a, q
 
@@ -278,8 +395,16 @@ def analyser(entree, progression=None, apprentissage=None):
         gris, dpi = image_de_page(d, p)
         tif, mots, angle, q = ocr_image(gris, dpi, os.path.join(tmp, f"p{i:03d}"), app.get("mots"))
         auto = appliquer_regles(mots, app.get("regles"))
+        couleur = p.rotation == 0 and en_couleur(p)
+        if couleur and abs(angle) > 0.05:              # image gardee non redressee : mots replaces sur l'image d'origine
+            h, w = gris.shape
+            M = cv2.getRotationMatrix2D((w / 2, h / 2), -angle, 1)
+            for m in mots:
+                cx, cy = m["x"] + m["l"] / 2, m["y"] + m["h"] / 2
+                nx, ny = M[0, 0] * cx + M[0, 1] * cy + M[0, 2], M[1, 0] * cx + M[1, 1] * cy + M[1, 2]
+                m["x"], m["y"] = int(round(nx - m["l"] / 2)), int(round(ny - m["h"] / 2))
         pages.append({"num": i, "garder": False, "tif": tif, "mots": mots, "dpi": dpi, "angle": angle, "qualite": q,
-                      "auto": auto, "taille": (p.rect.width, p.rect.height)})
+                      "auto": auto, "taille": (p.rect.width, p.rect.height), "couleur": couleur})
     if progression:
         progression(len(d), len(d))
     return {"doc": d, "pages": pages, "entree": entree}
@@ -294,8 +419,12 @@ def assembler(analyse, sortie):
             out.insert_pdf(d, from_page=pg["num"], to_page=pg["num"])
             rapport.append((pg["num"] + 1, 0.0, None))
             continue
-        page = page_scan(out, pg["tif"], *pg["taille"])
-        poser_couche_texte(page, pg["mots"], pg["dpi"], effacer=False)
+        if pg.get("couleur"):                          # page en couleur : son image reste, le texte s'y ajoute
+            out.insert_pdf(d, from_page=pg["num"], to_page=pg["num"])
+            poser_couche_texte(out[-1], pg["mots"], pg["dpi"], effacer=False)
+        else:
+            page = page_scan(out, pg["tif"], *pg["taille"])
+            poser_couche_texte(page, pg["mots"], pg["dpi"], effacer=False)
         rapport.append((pg["num"] + 1, pg["angle"], pg["dpi"]))
     out.set_metadata({"producer": "PhilPDF", "title": os.path.basename(analyse["entree"])})
     try:

@@ -281,7 +281,7 @@ class PageWidget(QWidget):
 
     def _poignee_rotation(self, r):
         obj = self.o.objet
-        if not obj or obj["page"] != self.num or obj["type"] not in ("annot", "image", "ligne"):
+        if not obj or obj["page"] != self.num or obj["type"] not in ("annot", "image", "ligne", "dessin"):
             return None
         if obj["type"] == "annot" and not obj.get("philpdf"):
             return None
@@ -1796,6 +1796,31 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         self.doc = doc
         self.nom = nom or os.path.basename(chemin or _('Sans titre.pdf'))
         self.modifie = chemin is None
+        # debris laisses par d'anciennes versions de PhilPDF Android : Acrobat afficherait la page vide. Repares
+        # (jamais sur un document signe : la signature serait cassee) ; l'utilisateur en est prevenu a l'ouverture.
+        self.reparations = []
+        if self.octets_signes is None and not doc.needs_pass and doc.is_pdf:
+            try:
+                from moteur.reparer import debris
+                self.reparations = debris(doc)
+            except Exception:
+                self.reparations = []
+            try:                                       # bouton cree sur Android, redessine en blanc par le moteur
+                from .formulaire_doc import dessiner_bouton
+                for pg in doc:
+                    for w in pg.widgets(types=[fitz.PDF_WIDGET_TYPE_BUTTON]):
+                        if (doc.xref_get_key(w.xref, "PhilPDF_Regles")[0] == "null"
+                                or not w.field_flags & fitz.PDF_BTN_FIELD_IS_PUSHBUTTON):
+                            continue
+                        t, ap = doc.xref_get_key(w.xref, "AP/N")
+                        flux = doc.xref_stream(int(ap.split()[0])) if t == "xref" else b""
+                        if b"0.165 0.42 0.69 rg" not in (flux or b""):
+                            dessiner_bouton(doc, w)
+                            self.reparations.append((pg.number, "bouton"))
+            except Exception:
+                pass
+            if self.reparations:
+                self.modifie = True
         self.zoom = params.get("zoom", 1.25)
         self.rotation_vue = {}
         self.selection = None
@@ -2228,8 +2253,8 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(16, 10, 16, 10)
-        t = QLabel(_("<b>Organiser les pages</b> — glissez pour réordonner, clic droit pour plus d'actions ; "
-                     "survolez une page pour la loupe, molette pour zoomer"))
+        t = QLabel(_("<b>Organiser les pages</b> — glissez pour réordonner, clic droit pour plus d'actions, "
+                     "double-clic pour aller à la page ; survolez une page pour la loupe, molette pour zoomer"))
         t.setWordWrap(True)
         v.addWidget(t)
         boutons = QWidget()
@@ -2255,6 +2280,8 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         self.grille.rendu = self._rendu_loupe
         self.grille.setContextMenuPolicy(Qt.CustomContextMenu)
         self.grille.customContextMenuRequested.connect(lambda p: self._menu_pages(self.grille, p))
+        # double-clic sur une page : on y va (retour a la lecture, comme Acrobat)
+        self.grille.itemDoubleClicked.connect(lambda it: (self.grille.loupe.hide(), self.aller_a(it.data(Qt.UserRole))))
         v.addWidget(self.grille, 1)
         return w
 
@@ -2507,6 +2534,22 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         aide.setWordWrap(True)
         aide.setStyleSheet("color:#555;font-size:12px")
         v.addWidget(aide)
+        # transformations simples, comme Acrobat : tourner, retourner, recadrer, remplacer, enregistrer
+        cadre_t = QWidget()
+        ft = FluxLayout(cadre_t, marge=0, espace=6)
+        for txt, aide_, fn in ((_("↺ 90°"), _("Tourner d'un quart de tour à gauche"), lambda: self.tourner_objet(90)),
+                               (_("↻ 90°"), _("Tourner d'un quart de tour à droite"), lambda: self.tourner_objet(-90)),
+                               (_("⇆ Miroir"), _("Retourner gauche-droite"), lambda: self.retourner_objet(True)),
+                               (_("⇅ Miroir"), _("Retourner haut-bas"), lambda: self.retourner_objet(False)),
+                               (_("Remplacer..."), _("Mettre une autre image à la même place"), self.remplacer_image),
+                               (_("Enregistrer..."), _("Enregistrer l'image dans un fichier (PNG ou JPEG)"),
+                                self.enregistrer_image)):
+            b = QPushButton(txt)
+            b.setToolTip(aide_)
+            b.setMinimumWidth(b.sizeHint().width())
+            b.clicked.connect(lambda _c=False, fn=fn: fn())
+            ft.addWidget(b)
+        v.addWidget(cadre_t)
         self.ret_auto = QCheckBox(_("Correction automatique"))
         self.ret_auto.setToolTip(_("Niveaux et couleurs corrigés automatiquement"))
         self.ret_auto.toggled.connect(lambda _c: self._maj_retouche())
@@ -2581,6 +2624,10 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             b.clicked.connect(lambda _c=False, m=mode: self.effacer_zone(m))
             hb.addWidget(b)
         v.addWidget(cadre_b)
+        b = QPushButton(_("Recadrer : garder seulement la zone"))
+        b.setToolTip(_("Choisissez la partie à garder (rectangle, lasso ou baguette), puis cliquez ici"))
+        b.clicked.connect(self.recadrer_image)
+        v.addWidget(b)
         b = QPushButton(_("Désélectionner la zone"))
         b.clicked.connect(lambda: (self.retouche and self.retouche.update(masque=None), self._maj_retouche()))
         v.addWidget(b)
@@ -2607,8 +2654,9 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         r.update(auto=self.ret_auto.isChecked(), noir_blanc=self.ret_nb.isChecked())
         return r
 
-    def ouvrir_retouche(self, obj):
-        """Image choisie (mode Modifier) : le volet de retouche s'ouvre, avec ses reglages a zero."""
+    def ouvrir_retouche(self, obj, recadrer=False):
+        """Image choisie (mode Modifier) : le volet de retouche s'ouvre, avec ses reglages a zero ; recadrer : l'outil
+        rectangle est pret (tracer la partie a garder, puis « Recadrer »)."""
         from moteur import retouche as R
         try:
             src = R.depuis_pdf(self.doc, obj["xref"])
@@ -2627,6 +2675,9 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             c.blockSignals(False)
         for b_ in (self.ret_b_baguette, self.ret_b_lasso, self.ret_b_cadre):
             b_.setChecked(False)
+        if recadrer:
+            self.ret_b_cadre.setChecked(True)
+            self.message(_("Tracez sur l'image la partie à garder, puis cliquez « Recadrer : garder seulement la zone »."))
         self.pile_volet.setCurrentIndex(3)
         self._montrer_volet()
         self._calcul_apercu()
@@ -3133,6 +3184,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         self.__dict__.setdefault("_cache_paras", {}).clear()
         self._cache_mots.clear()
         self._cache_images.clear()
+        self.__dict__.setdefault("_cache_dessins", {}).clear()
 
     def _vignette(self, n, taille=120):
         page = self.doc[n]
@@ -3247,6 +3299,17 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
                 self._cache_images[n] = []
         return self._cache_images[n]
 
+    def dessins_page(self, n):
+        """Dessins vectoriels de la page (illustrations, schemas) : choisis comme des objets en mode Modifier."""
+        cache = self.__dict__.setdefault("_cache_dessins", {})
+        if n not in cache:
+            try:
+                from moteur import dessins
+                cache[n] = dessins.groupes(self.doc[n])
+            except Exception:
+                cache[n] = []
+        return cache[n]
+
     def mots(self, n):
         if n not in self._cache_mots:
             self._cache_mots[n] = self.doc[n].get_text("words", sort=True)
@@ -3335,6 +3398,9 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             for xref, r in self.images_page(n):
                 if r.contains(pt):
                     return {"type": "image", "page": n, "xref": xref, "rect": fitz.Rect(r), "garder_proportions": True}
+            for r in sorted(self.dessins_page(n), key=lambda r: r.width * r.height):   # le plus petit d'abord
+                if r.contains(pt):
+                    return {"type": "dessin", "page": n, "rect": fitz.Rect(r), "garder_proportions": True}
         return None
 
     def choisir_objet(self, obj):
@@ -3380,6 +3446,10 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
                 ed = Editeur(self.doc)
                 ed.deplacer_image(n, obj["xref"], nouveau)
                 journal = ed.journal
+            elif obj["type"] == "dessin":
+                from moteur import dessins
+                nouveau = dessins.deplacer(self.doc[n], obj["rect"], nouveau)
+                journal = [_("Dessin déplacé.")]
         except Exception as e:
             (self.annulations.pop(), self.maj_historique())
             self.message(_('Déplacement impossible : {e}', e=e))
@@ -3407,6 +3477,8 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
                     delta = -objets.angle_objet(self.doc, obj["xref"])
                 elif obj["type"] == "image":
                     delta = -Editeur(self.doc).geometrie_image(n, obj["xref"])[3]
+                elif obj["type"] == "dessin":
+                    return                                # un dessin n'a pas d'angle propre
                 else:
                     import math
                     l = next((l for b in self.doc[n].get_text("dict")["blocks"] for l in b.get("lines", [])
@@ -3422,6 +3494,10 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
                 objets.tourner(self.doc, n, obj["xref"], delta)
                 obj["rect"] = objets.rect_objet(self.doc, n, obj["xref"])
                 journal = [_("Objet tourné.")]
+            elif obj["type"] == "dessin":
+                from moteur import dessins
+                obj["rect"] = dessins.tourner(self.doc[n], obj["rect"], delta)
+                journal = [_("Dessin tourné.")]
             elif obj["type"] == "image":
                 ed = Editeur(self.doc)
                 ed.tourner_image(n, obj["xref"], delta)
@@ -3448,6 +3524,87 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         self.objet = obj
         self.rafraichir_pages()
 
+    def retourner_objet(self, horizontal):
+        """Image choisie retournee comme dans un miroir (gauche-droite ou haut-bas), a la meme place."""
+        obj = self.objet
+        if not obj or obj["type"] not in ("image", "dessin"):
+            self.message(_("Sélectionnez d'abord une image (mode Modifier)."))
+            return
+        self.memoriser(_("Miroir"))
+        ed = Editeur(self.doc)
+        try:
+            if obj["type"] == "dessin":
+                from moteur import dessins
+                obj["rect"] = dessins.retourner(self.doc[obj["page"]], obj["rect"], horizontal)
+                ed.journal.append(_("Dessin retourné."))
+            else:
+                ed.retourner_image(obj["page"], obj["xref"], horizontal)
+        except Exception as e:
+            self.annulations.pop()
+            self.maj_historique()
+            self.message(_("Impossible de retourner l'image : {e}", e=e))
+            return
+        self.apres_modif(ed.journal)
+        self.objet = obj
+        if getattr(self, "retouche", None):
+            self.ouvrir_retouche(obj)
+        self.rafraichir_pages()
+
+    def enregistrer_image(self):
+        """Image choisie enregistree dans un fichier, telle qu'elle est dans le PDF (transparence comprise)."""
+        obj = self.objet
+        if not obj or obj["type"] != "image":
+            self.message(_("Sélectionnez d'abord une image (mode Modifier)."))
+            return
+        from moteur import retouche as R
+        nom = os.path.splitext(self.nom)[0] + f"_image_p{obj['page'] + 1}"
+        f, filtre = QFileDialog.getSaveFileName(self, _("Enregistrer l'image"),
+                                                os.path.join(os.path.dirname(self.chemin or ""), nom + ".png"),
+                                                _("Image PNG (*.png);;Image JPEG (*.jpg)"))
+        if not f:
+            return
+        try:
+            img = R.depuis_pdf(self.doc, obj["xref"])
+            jpeg = f.lower().endswith((".jpg", ".jpeg")) or ("JPEG" in filtre and not f.lower().endswith(".png"))
+            if jpeg and not f.lower().endswith((".jpg", ".jpeg")):
+                f += ".jpg"
+            with open(f, "wb") as fh:
+                fh.write(R.vers_jpeg(img, 92) if jpeg else R.vers_png(img))
+        except Exception as e:
+            self.message(_("Enregistrement de l'image impossible : {e}", e=e))
+            return
+        self.statut.emit(_("Image enregistrée : {f}", f=f))
+
+    def recadrer_image(self):
+        """Retouche ouverte : ne garde que la zone choisie (son rectangle englobant) ; l'image ne bouge pas."""
+        import numpy as np
+        from moteur import retouche as R
+        rt = getattr(self, "retouche", None)
+        if not rt or rt.get("masque") is None or not rt["masque"].any():
+            self.message(_("Choisissez d'abord la partie à garder : rectangle, lasso ou baguette magique."))
+            return
+        ys, xs = np.nonzero(rt["masque"])
+        zone = (xs.min(), ys.min(), xs.max() + 1, ys.max() + 1)
+        img = R.appliquer(rt["src"], self.reglages_retouche())
+        self.memoriser(_("Recadrage de l'image"))
+        ed = Editeur(self.doc)
+        try:
+            nx = ed.recadrer_image(rt["page"], rt["xref"], zone, img)
+        except Exception as e:
+            self.annulations.pop()
+            self.maj_historique()
+            self.message(_("Recadrage impossible : {e}", e=e))
+            return
+        n = rt["page"]
+        self.apres_modif(ed.journal)
+        r = next((r for x, r in Editeur(self.doc).images(n) if x == nx), None)
+        self.objet = {"type": "image", "page": n, "xref": nx, "rect": r, "garder_proportions": True} if r else None
+        if self.objet:
+            self.ouvrir_retouche(self.objet)
+        else:
+            self.fermer_retouche()
+        self.rafraichir_pages()
+
     def supprimer(self):
         obj = self.objet
         if not obj:
@@ -3464,6 +3621,9 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             ed.modifier_ligne(n, obj["rect"], "")
         elif obj["type"] == "image":
             Editeur(self.doc).supprimer_image(n, obj["xref"])
+        elif obj["type"] == "dessin":
+            from moteur import dessins
+            dessins.supprimer(self.doc[n], obj["rect"])
         self.objet = None
         self.apres_modif([_('Objet supprimé.')])
 
@@ -3527,12 +3687,19 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             m.addAction(icone("copier"), _('Copier'), self.copier)
             m.addAction(_('Couper'), self.couper)
             m.addAction(icone("fermer", "#c9252d"), _('Supprimer'), self.supprimer)
-            if self.objet["type"] in ("image", "ligne") or (self.objet["type"] == "annot" and self.objet.get("philpdf")):
+            if self.objet["type"] in ("image", "ligne", "dessin") or (self.objet["type"] == "annot" and self.objet.get("philpdf")):
                 m.addAction(icone("pivoter", "#444444"), _("Tourner de 90° à droite"), lambda: self.tourner_objet(-90))
                 m.addAction(_("Tourner de 90° à gauche"), lambda: self.tourner_objet(90))
                 m.addAction(_("Remettre droit"), lambda: self.tourner_objet(None))
+            if self.objet["type"] == "dessin":
+                m.addAction(_("Retourner gauche-droite (miroir)"), lambda: self.retourner_objet(True))
+                m.addAction(_("Retourner haut-bas (miroir)"), lambda: self.retourner_objet(False))
             if self.objet["type"] == "image":
+                m.addAction(_("Retourner gauche-droite (miroir)"), lambda: self.retourner_objet(True))
+                m.addAction(_("Retourner haut-bas (miroir)"), lambda: self.retourner_objet(False))
+                m.addAction(_("Recadrer, retoucher..."), lambda: self.ouvrir_retouche(self.objet, recadrer=True))
                 m.addAction(_("Remplacer l'image..."), self.remplacer_image)
+                m.addAction(_("Enregistrer l'image sous..."), self.enregistrer_image)
             if self.objet["type"] == "ligne":
                 m.addAction(_('Corriger dans la page'), lambda: pw.ouvrir_editeur(self.objet["rect"], None, self.objet["texte"]))
             m.addSeparator()
@@ -3568,6 +3735,10 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             elif obj["type"] == "image":
                 info = self.doc.extract_image(obj["xref"])
                 self.presse_objet = (("image", info["image"]), fitz.Rect(obj["rect"]))
+            elif obj["type"] == "dessin":                 # copie en image (le dessin d'origine reste net)
+                pm = self.doc[obj["page"]].get_pixmap(clip=obj["rect"], dpi=300, annots=False)
+                self.presse_objet = ((objets.pdf_depuis_image(pm.tobytes("png"), True), _('Dessin'), "tampon"),
+                                     fitz.Rect(obj["rect"]))
             self.message(_('Copié.'))
         elif self.selection:
             QGuiApplication.clipboard().setText(self.selection["texte"])

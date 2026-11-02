@@ -86,6 +86,8 @@ fun Application(recu: MutableState<Uri?>) {
                 val d = DocumentPdf.ouvrir(ctx, uri)
                 doc?.fermer()
                 doc = d
+                val reparees = d.reparerDebris()
+                if (reparees.isNotEmpty()) erreur = ctx.getString(R.string.repare_debris, reparees.joinToString(", "))
             } catch (e: SecurityException) {
                 erreur = texteInaccessible
             } catch (e: java.io.FileNotFoundException) {

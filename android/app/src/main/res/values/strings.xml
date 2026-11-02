@@ -468,4 +468,5 @@
     <string name="ordre_tabulation">Ordre de tabulation</string>
     <string name="reinitialiser_question">Effacer tout le formulaire (valeurs par défaut remises) ?</string>
     <string name="saisie_autre">Autre valeur (à taper)</string>
+    <string name="repare_debris">Ce fichier contenait des restes laissés par une ancienne version de PhilPDF (page(s) %1$s) : Acrobat montrait ces pages vides. Ils ont été retirés, la page est intacte. Enregistrez pour garder la correction.</string>
 </resources>

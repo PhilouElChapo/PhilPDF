@@ -10,6 +10,12 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.10.4
+- PDF abimes par les versions 1.10.0 et precedentes (debris dans le contenu d'une page) : Acrobat montrait la page
+  vide. Ils sont maintenant repares des l'ouverture, avec un message ; enregistrez pour garder la correction.
+- Bouton d'action (e-mail, imprimer...) : changer ses proprietes le redessinait en blanc ; il reste bleu.
+- Organiser les pages : toucher deux fois une page y conduit.
+
 1.10.3
 - Correction urgente : depuis la 1.10.1, reconnaitre ou modifier le texte d'une page faite d'un seul bloc de contenu
   effacait tout le dessin de la page (images, texte) a l'enregistrement. Repartez du fichier d'origine.
@@ -288,6 +294,22 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.57
+- Reconnaissance du texte (OCR) : l'image de la page n'est plus tassee (elle etait aplatie dans un carre, et le texte
+  reconnu ne tombait plus sur les mots). Lecture plus sure : plusieurs lectures faites en meme temps (image nettoyee,
+  image d'origine, scan peu fin agrandi), le mot le plus sur est garde. Texte a l'envers ou couche (livret plie,
+  page retournee) reconnu aussi. Une page en couleur garde son image d'origine (avant : passee en noir et blanc).
+- Bouton « Envoyer par e-mail » d'un formulaire : il ouvre le volet d'envoi, comme Acrobat, avec le choix : logiciel
+  de messagerie (PDF deja joint, carnet d'adresses), adresse e-mail reglee dans PhilPDF, ou messagerie web.
+- PDF abime par PhilPDF Android 1.10.0 ou precedent (Acrobat montrait une page vide) : repare a l'ouverture, avec un
+  message. Bouton d'Android affiche en blanc : redessine en bleu.
+- Images : celles rangees dans un sous-objet de la page (PDF faits sur Mac, InDesign...) se tournent, se deplacent,
+  se retournent maintenant comme les autres. Nouveau : miroir gauche-droite et haut-bas, recadrage (garder la zone
+  tracee), enregistrer l'image dans un fichier ; boutons en haut du volet de retouche et au clic droit.
+- Dessins (schemas, illustrations tracees, sans image) : en mode Modifier, un clic les choisit comme un objet ; on
+  peut les deplacer, les agrandir, les tourner, les retourner, les copier ou les supprimer.
+- Organiser les pages : un double-clic sur une page y conduit.
 
 0.9.56
 - Plantage signale par Windows (« pyside6.abi3.dll », c0000005) quand on ouvre un PDF alors que PhilPDF est deja

@@ -147,6 +147,9 @@ jobs:
           Remove-Item tesseract\tessdata -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item tesseract\doc, tesseract\*.html, tesseract\unins* -Recurse -Force -ErrorAction SilentlyContinue
 
+      - name: Reconnaissance du texte (OCR)
+        run: python tests/test_scan.py
+
       - name: Version
         shell: pwsh
         run: |

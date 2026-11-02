@@ -199,6 +199,11 @@ class TestsMoteur {
             p2.style = "etoile"; p2.valeurCochee = "OK"; p2.cocheeDefaut = true
             assertTrue(d.ecrireReglesChamp(accord, Regles.vide(), null, p2))
             assertTrue(d.creerBouton(0, Rect(300f, 300f, 420f, 324f), "Imprimer", org.json.JSONObject().put("genre", "imprimer")))
+            // proprietes du bouton changees ensuite : il doit rester bleu (le moteur le redessinait en blanc)
+            val bouton = d.champA(0, Point(360f, 312f))!!
+            val (pb, _) = d.proprietesChamp(bouton)!!
+            pb.info = "Imprimer le formulaire"
+            assertTrue(d.ecrireReglesChamp(bouton, Regles.vide().put("action", org.json.JSONObject().put("genre", "imprimer")), null, pb))
             assertTrue(d.poserOrdre(0, listOf(3, 2, 1, 0)))
         }
         nettoyer()
@@ -220,6 +225,8 @@ class TestsMoteur {
                 assertEquals("etoile", accord.style); assertEquals("OK", accord.valeurCochee); assertTrue(accord.cocheeDefaut)
                 val bouton = pg.widgets.first { it.fieldType == com.artifex.mupdf.fitz.PDFWidget.TYPE_BUTTON }
                 assertTrue(Regles.lire(bouton.getObject()).optJSONObject("action")?.optString("genre") == "imprimer")
+                val ap = String(bouton.getObject().get("AP").get("N").readStream(), Charsets.ISO_8859_1)
+                assertTrue("bouton bleu : $ap", ap.contains("0.165 0.42 0.69 rg"))
                 assertEquals("ordre de tabulation", "Bouton1", pg.widgets.first().name)
             } finally { pg.destroy() }
         } finally { p.destroy() }
@@ -308,6 +315,24 @@ class TestsMoteur {
         assertTrue("texte relu : ${texte(f)}", texte(f).uppercase().contains("PASSPORT"))
         assertFalse("charabia du texte lu a l'endroit : ${texte(f)}", texte(f).uppercase().contains("NOISSIN"))
         contenuGarde(f, "/Im0 Do")
+    }
+
+    @Test fun debrisRepares() {
+        // fichier abime par une version precedente : des chaines au milieu de la liste des contenus de la page
+        val src = pdfImage("abime-source.pdf", "PHILPDF")
+        val f = File(dossier, "abime.pdf")
+        val doc = Document.openDocument(src.absolutePath) as PDFDocument
+        val po = doc.findPage(0)
+        val t = doc.newArray()
+        t.push("debris"); t.ajouter(po.get("Contents")); t.push("debris")
+        po.put("Contents", t)
+        doc.save(f.absolutePath, ""); doc.destroy()
+        val d = ouvrir(f)
+        assertEquals(listOf(1), runBlocking { d.reparerDebris() })
+        val r = enregistrer(d, "abime-repare.pdf")
+        sansDebris(r)
+        contenuGarde(r, "/Im0 Do")
+        assertEquals(emptyList<Int>(), runBlocking { ouvrir(r).reparerDebris() })
     }
 
     // ------------------------------------------------------------------ signature numerique

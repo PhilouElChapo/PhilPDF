@@ -994,7 +994,20 @@ class Fenetre(MixinCoteACote, QMainWindow):
         self.params.ajouter_recent(chemin)
         self.params["dernier_dossier"] = os.path.dirname(chemin)
         self._session_touchee = True
-        return self.ajouter_onglet(o)
+        r = self.ajouter_onglet(o)
+        if getattr(o, "reparations", None):
+            pages = lambda q: ", ".join(str(n + 1) for n in sorted({n for n, x in o.reparations if (x == "bouton") == q}))
+            l = []
+            if pages(False):
+                l.append(_("Ce fichier contenait des restes laissés par une ancienne version de PhilPDF Android "
+                           "(page(s) {p}) : Acrobat montrait ces pages vides. Ils ont été retirés ; la page est intacte.",
+                           p=pages(False)))
+            if pages(True):
+                l.append(_("Un bouton créé sur Android s'affichait en blanc (page(s) {p}) : il a été redessiné en bleu.",
+                           p=pages(True)))
+            QMessageBox.information(self, _("Fichier réparé"), "\n\n".join(l + [
+                _("Enregistrez le document pour garder la correction.")]))
+        return r
 
     def filtre_ouvrir(self):
         """Tout ce que PhilPDF sait ouvrir : PDF, photos et images (converties en PDF), Word / Excel / PowerPoint

@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 
 package io.github.philouelchapo.philpdf
 
@@ -10,6 +10,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -226,7 +227,9 @@ private fun Grille(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, choix: 
                         },
                         onDragCancel = { tenue = null; glisse = Offset.Zero; cible = null })
                 }
-                .clickable { choisir(n) },
+                // toucher : choisir la page ; toucher deux fois : y aller (retour a la lecture)
+                .combinedClickable(onClick = { choisir(n) },
+                    onDoubleClick = { fermer(); portee.launch { etat.liste.scrollToItem(n) } }),
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Box {
                     Vignette(etat.doc, n, largeurPx, w, h, Modifier.fillMaxWidth()
