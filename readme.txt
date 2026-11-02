@@ -268,6 +268,12 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.54
+- Tampons prets a l'emploi (Recu, Valide, Paye...) : rangez-les dans l'ordre voulu, par clic droit dans le volet
+  (En premier, Monter, Descendre, En dernier) ou dans Preferences > Tampons et signatures > « Ordre des tampons prets
+  a l'emploi » (on les glisse). L'ordre suit sur vos autres postes.
+- Volet des tampons et signatures : clic droit sur un de vos tampons ou un favori pour le monter ou le descendre.
+
 0.9.53
 - Certificats crees sur le telephone (PhilPDF Android 1.8.0) : repris tout seuls depuis le dossier PhilPDF
   synchronise.

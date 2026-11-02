@@ -439,7 +439,7 @@ class PanneauBibliotheque(QWidget):
         self.rafraichir(next((e for e in self.b.elements(self.genre) if e["id"] == ident), None))
 
     def predefini(self):
-        noms = [n for n, _x, _x in objets.PREDEFINIS]
+        noms = [n for _i, n, _x, _y in objets.predefinis_ordonnes(getattr(self.window(), "params", None))]
         nom, ok = QInputDialog.getItem(self, _("Tampon prêt à l'emploi"), _('Tampon :'), noms, 0, False)
         if ok:
             n, t, c = next(x for x in objets.PREDEFINIS if x[0] == nom)
@@ -1504,3 +1504,52 @@ def demander_secret(parent, titre, texte, indice="", avec_indice=False):
     if avec_indice:
         return champ.text(), ok, (ind.text().strip() if ind is not None else "")
     return champ.text(), ok
+
+
+class DialogueOrdrePredefinis(QDialog):
+    """Ordre des tampons prets a l'emploi dans le volet : on les glisse a la place voulue."""
+
+    def __init__(self, parent, params):
+        super().__init__(parent)
+        from PySide6.QtWidgets import QListWidget, QAbstractItemView, QListWidgetItem, QDialogButtonBox
+        self.params = params
+        self.setWindowTitle(_("Ordre des tampons prêts à l'emploi"))
+        self.resize(360, 460)
+        v = QVBoxLayout(self)
+        l = QLabel(_("Glissez les tampons dans l'ordre voulu (le volet les montre dans cet ordre) :"))
+        l.setWordWrap(True)
+        v.addWidget(l)
+        self.liste = QListWidget()
+        self.liste.setObjectName("ordre_predefinis")
+        self.liste.setDragDropMode(QAbstractItemView.InternalMove)
+        for i, nom, t, c in objets.predefinis_ordonnes(params):
+            it = QListWidgetItem(nom)
+            it.setData(Qt.UserRole, i)
+            self.liste.addItem(it)
+        v.addWidget(self.liste, 1)
+        h = QHBoxLayout()
+        b = QPushButton(_("Ordre d'origine"))
+        b.clicked.connect(self._origine)
+        h.addWidget(b)
+        h.addStretch(1)
+        v.addLayout(h)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self._valider)
+        bb.rejected.connect(self.reject)
+        v.addWidget(bb)
+
+    def _origine(self):
+        items = sorted((self.liste.takeItem(0) for _i in range(self.liste.count())), key=lambda it: it.data(Qt.UserRole))
+        for it in items:
+            self.liste.addItem(it)
+
+    def _valider(self):
+        self.params["ordre_predefinis"] = [self.liste.item(i).data(Qt.UserRole) for i in range(self.liste.count())]
+        self.params.enregistrer()
+        from . import bibliotheque as _bib
+        for f in list(getattr(_bib, "CHANGEMENTS", [])):  # volets ouverts : ils suivent
+            try:
+                f()
+            except Exception:                             # noqa: BLE001
+                pass
+        self.accept()

@@ -116,11 +116,11 @@ object TexteModif {
         while (b < choisi.size - 1 && kotlin.math.abs(choisi[b + 1].taille - t0) < 0.6f && choisi[b + 1].haut - choisi[b].bas < t0 * 0.9f) b++
         val lignes = choisi.subList(a, b + 1).toList()
         // plusieurs polices dans le paragraphe (« Mode de paiement : » en gras, la suite normale) : la table de chacune
-        val noms = lignes.flatMap { it.fontes }.filter { it.isNotEmpty() }.toSet()
+        val nomsPolices = lignes.flatMap { it.fontes }.filter { it.isNotEmpty() }.toSet()
         val tables = HashMap<String, TablePolice>()
-        if (noms.size > 1 && noms.none { TYPE3.containsMatchIn(it) }) {
+        if (nomsPolices.size > 1 && nomsPolices.none { TYPE3.containsMatchIn(it) }) {
             val toutes = polices(page).mapNotNull { (nom, obj) -> try { table(nom, obj) } catch (_: Exception) { null } }
-            for (nf in noms) {
+            for (nf in nomsPolices) {
                 val court = nf.substringAfter('+')
                 toutes.firstOrNull { t -> t.nomBase.substringAfter('+').let { b -> b == court || (court.length >= 24 && b.startsWith(court)) } }
                     ?.let { tables[nf] = it }

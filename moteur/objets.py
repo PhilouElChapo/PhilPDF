@@ -29,6 +29,15 @@ PREDEFINIS = [
     (_('Classé'), _('CLASSÉ'), (0.35, 0.35, 0.35)),
 ]
 
+def predefinis_ordonnes(params=None):
+    """Tampons prets a l'emploi dans l'ordre choisi (Preferences ou volet) : [(numero, nom, texte, couleur)].
+    L'ordre est garde par numero (stable quelle que soit la langue) ; un tampon ajoute plus tard va a la fin."""
+    ordre = list((params or {}).get("ordre_predefinis") or []) if params is not None else []
+    vus = [i for i in ordre if isinstance(i, int) and 0 <= i < len(PREDEFINIS)]
+    vus = list(dict.fromkeys(vus)) + [i for i in range(len(PREDEFINIS)) if i not in vus]
+    return [(i,) + tuple(PREDEFINIS[i]) for i in vus]
+
+
 FILIGRANES = [_('COPIE'), _('CONFIDENTIEL'), _('BROUILLON'), _('ORIGINAL'), _('DUPLICATA'), _('PAYÉ'), _('ANNULÉ'), _('NE PAS DIFFUSER')]
 
 

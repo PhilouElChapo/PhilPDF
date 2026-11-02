@@ -2370,6 +2370,18 @@ class Fenetre(MixinCoteACote, QMainWindow):
             pb.setMinimumHeight(max(215, pb.minimumHeight()))
             vt.addWidget(pb, 1)
             panneaux.append(pb)
+        bordre = QPushButton(_("Ordre des tampons prêts à l'emploi..."))
+        bordre.setObjectName("pref_ordre_predefinis")
+        bordre.setToolTip(_("Reçu, Validé, Payé… : dans l'ordre que vous voulez dans le volet (aussi par clic droit dans le volet)"))
+
+        def _ordre_predefinis():
+            from .dialogues import DialogueOrdrePredefinis
+            DialogueOrdrePredefinis(w.window(), self.params).exec()
+        bordre.clicked.connect(_ordre_predefinis)
+        hpre = QHBoxLayout()
+        hpre.addWidget(bordre)
+        hpre.addStretch(1)
+        vt.addLayout(hpre)
         hb = QHBoxLayout()
         bsync = QPushButton(_(' Synchroniser avec le Drive maintenant'))
         bsync.setIcon(icone("synchro", "#0f6cbd"))

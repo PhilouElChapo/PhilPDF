@@ -2935,9 +2935,9 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
                                     _("Date ajoutée à la pose") if e.get("horodatage", "non") != "non" else None)
         if genre == "tampons":
             g_pre = groupe(None, "predefinis", _("Tampons prêts à l'emploi ({n})", n=len(objets.PREDEFINIS)))
-            for nom, t, c in objets.PREDEFINIS:
+            for i, nom, t, c in objets.predefinis_ordonnes(self.params):   # dans l'ordre choisi (clic droit : monter...)
                 pdf = objets.tampon_predefini(t, c, self.params.get("auteur", ""))
-                self._ajout_item_biblio(g_pre, nom, pdf, {"nom": nom, "dynamique": True, "texte": t, "couleur": list(c)},
+                self._ajout_item_biblio(g_pre, nom, pdf, {"nom": nom, "dynamique": True, "texte": t, "couleur": list(c), "predef": i},
                                         _('Tampon daté : la date est choisie au moment de le poser'))
         if getattr(self, "_reconstruction", False):   # simple mise a jour (renommage ailleurs) : rien d'autre
             return
@@ -2981,16 +2981,39 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         """Clic droit sur un tampon ou une signature du volet : ajouter aux favoris ou les retirer."""
         it = self.liste_biblio.itemAt(pos)
         e = it.data(0, Qt.UserRole) if it else None
-        if not e or not e.get("id"):
+        if not e:
             return
         from PySide6.QtWidgets import QMenu, QInputDialog
         from .dialogues import etoile_jaune, PanneauBibliotheque
         m = QMenu(self)
+        if "predef" in e:                                 # tampon pret a l'emploi : seulement sa place dans la liste
+            places = self._menu_places(m)
+            r = m.exec(self.liste_biblio.viewport().mapToGlobal(pos))
+            if r in places:
+                ordre = [i for i, *_x in objets.predefinis_ordonnes(self.params)]
+                self.params["ordre_predefinis"] = self._deplacer_dans(ordre, e["predef"], places[r])
+                self.params.enregistrer()
+                self._maj_volet_biblio()
+            return
+        if not e.get("id"):
+            return
         a = m.addAction(QIcon(etoile_jaune(16)), _("Retirer des favoris") if e.get("favori") else _("Ajouter aux favoris"))
         a_nom = m.addAction(_("Renommer..."))
         a_cat = m.addAction(_("Catégorie et date...") if self.genre_biblio == "tampons" else _("Catégorie..."))
         a_tr = m.addAction(_("Fond blanc transparent"))
+        m.addSeparator()
+        places = self._menu_places(m)
         r = m.exec(self.liste_biblio.viewport().mapToGlobal(pos))
+        if r in places:                                   # sa place parmi ses voisins (favoris, ou sa categorie)
+            tous = self.biblio.elements(self.genre_biblio)
+            fav = (it.parent() is not None and it.parent().data(0, Qt.UserRole + 1) == "favoris")
+            voisins = [x["id"] for x in tous if (x.get("favori") if fav else x.get("categorie", "") == e.get("categorie", ""))]
+            nouveaux = self._deplacer_dans(voisins, e["id"], places[r])
+            suite = iter(nouveaux)
+            ids = [next(suite) if x["id"] in voisins else x["id"] for x in tous]
+            self.biblio.reordonner(self.genre_biblio, ids)
+            self._maj_volet_biblio()
+            return
         if r == a_tr:
             try:
                 self.biblio.rendre_transparent(e)
@@ -3009,6 +3032,24 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             p.proprietes()
             p.deleteLater()
         self._maj_volet_biblio()
+
+    def _menu_places(self, m):
+        """Entrees « En premier, Monter, Descendre, En dernier » d'un menu : {action: sens}."""
+        out = {}
+        for t, k in ((_("En premier"), "debut"), (_("Monter"), "haut"), (_("Descendre"), "bas"), (_("En dernier"), "fin")):
+            out[m.addAction(t)] = k
+        return out
+
+    @staticmethod
+    def _deplacer_dans(liste, cle, sens):
+        l = list(liste)
+        if cle not in l:
+            return l
+        i = l.index(cle)
+        l.pop(i)
+        j = {"debut": 0, "haut": max(0, i - 1), "bas": min(len(l), i + 1), "fin": len(l)}[sens]
+        l.insert(j, cle)
+        return l
 
     def _memo_groupe(self, it, ouvert):
         cle = it.data(0, Qt.UserRole + 1)
