@@ -114,10 +114,12 @@ class TacheMiroir(QThread):
             elif self.mode == "choix":
                 self.fini.emit(miroir.synchroniser(self.params, choix=self.choix), "")
             elif self.mode in ("envois", "envois_seuls"):
-                r = miroir.synchroniser(self.params, sens=miroir.ENVOIS)
-                attente = []
-                if self.mode == "envois":
-                    attente = [a for a in miroir.planifier(self.params) if a["action"] in miroir.RECEPTIONS]
+                from .distant import discret
+                with discret():                           # chaque minute : le journal n'en garde que les erreurs
+                    r = miroir.synchroniser(self.params, sens=miroir.ENVOIS)
+                    attente = []
+                    if self.mode == "envois":
+                        attente = [a for a in miroir.planifier(self.params) if a["action"] in miroir.RECEPTIONS]
                 self.fini.emit({"res": r, "attente": attente}, "")
             else:
                 self.fini.emit(miroir.synchroniser(self.params), "")

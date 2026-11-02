@@ -11,7 +11,7 @@ Chaque emplacement offre : lister(dossier), telecharger(chemin, fichier_local), 
 tester(). Les chemins distants s'ecrivent toujours avec des / et commencent par /.
 Les mots de passe ne sont jamais dans les parametres : ils vont dans le coffre du systeme (coffre.py).
 """
-import base64, contextlib, ftplib, io, json, os, posixpath, re, ssl, time, urllib.error, urllib.parse, urllib.request, uuid
+import base64, contextlib, ftplib, io, json, os, posixpath, re, ssl, threading, time, urllib.error, urllib.parse, urllib.request, uuid
 import xml.etree.ElementTree as ET
 from .langue import _
 from . import coffre
@@ -82,6 +82,25 @@ def masquer(texte):
     return re.sub(r'("(?:client_secret|refresh_token|access_token|password|clef_\w+)"\s*:\s*")[^"]+"', r'\1****"', t)
 
 
+# Verification automatique de chaque minute (synchro) : ses echanges ne vont au journal qu'en cas d'erreur, sinon
+# ils le remplissaient (une quinzaine de lignes par minute) et en chassaient les informations utiles (plantages...).
+DISCRET = threading.local()
+
+
+@contextlib.contextmanager
+def discret():
+    DISCRET.actif, DISCRET.tampon = True, []
+    try:
+        yield
+    except Exception:
+        from .journal import ecrire                       # erreur : tout ce qui s'est passe va au journal
+        for source, texte in DISCRET.tampon[-60:]:
+            ecrire(source, texte)
+        raise
+    finally:
+        DISCRET.actif, DISCRET.tampon = False, []
+
+
 class Emplacement:
     def __init__(self, compte, mot_de_passe=None, code=None):
         self.c = compte
@@ -92,8 +111,12 @@ class Emplacement:
     def log(self, texte):
         self.journal.append(time.strftime("%H:%M:%S ") + masquer(texte))
         self.journal = self.journal[-200:]
+        source = libelle(self.c) if isinstance(self.c, dict) else "?"
+        if getattr(DISCRET, "actif", False):
+            DISCRET.tampon.append((source, texte))
+            return
         from .journal import ecrire
-        ecrire(libelle(self.c) if isinstance(self.c, dict) else "?", texte)
+        ecrire(source, texte)
 
     def texte_journal(self):
         return "\n".join(self.journal) or _("Aucun échange enregistré.")

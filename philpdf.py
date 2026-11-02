@@ -227,7 +227,7 @@ def main():
                 libre = True
                 break
             if confier_a_instance_ouverte(fichiers, impressions):
-                sys.exit(0)
+                sortie_rapide(0)
             app.processEvents()
             time.sleep(0.4)
         if libre:
@@ -236,7 +236,7 @@ def main():
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.information(None, "PhilPDF", "PhilPDF est déjà ouvert sur ce PC (il est peut-être occupé). "
                                                      "Utilisez sa fenêtre, ou fermez-le avant de le relancer.")
-            sys.exit(0)
+            sortie_rapide(0)
     import time as _tm
     _t0 = _tm.monotonic()
     demarrage = EcranDemarrage(app)
@@ -280,6 +280,32 @@ def main():
     QTimer.singleShot(800, lambda: w.impressions_en_attente(impressions))
     code = app.exec()
     sortir(w, code)
+
+
+def sortie_rapide(code):
+    """Second lancement qui confie son fichier a PhilPDF deja ouvert : il s'arrete aussitot. sys.exit laissait
+    PySide detruire les objets Qt un par un, ce qui plantait parfois (« APPCRASH pyside6.abi3.dll c0000005 »
+    dans le Moniteur de fiabilite, sans trace dans le journal : ce petit lancement n'en tient pas)."""
+    for f in (sys.stdout, sys.stderr):
+        try:
+            f.flush()
+        except Exception:
+            pass
+    try:
+        from PySide6.QtCore import qInstallMessageHandler
+        qInstallMessageHandler(None)
+    except Exception:
+        pass
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            k = ctypes.windll.kernel32
+            k.GetCurrentProcess.restype = ctypes.c_void_p
+            k.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+            k.TerminateProcess(k.GetCurrentProcess(), int(code) & 0xFFFFFFFF)
+        except Exception:
+            pass
+    os._exit(code)
 
 
 def sortir(w, code):

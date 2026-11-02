@@ -26,6 +26,12 @@ TEMPORAIRES = (".distant", ".tmp", ".part")
 
 def journal(texte):
     try:
+        from .distant import DISCRET
+        if getattr(DISCRET, "actif", False) and " 0 reçu(s), 0 envoyé(s)" in texte:
+            return                                      # verification de chaque minute sans changement : rien a noter
+    except Exception:
+        pass
+    try:
         from .journal import ecrire
         ecrire("synchro", texte)
     except Exception:

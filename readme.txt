@@ -289,6 +289,12 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.56
+- Plantage signale par Windows (« pyside6.abi3.dll », c0000005) quand on ouvre un PDF alors que PhilPDF est deja
+  ouvert : le second lancement, qui confie le fichier a la fenetre ouverte, s'arrete maintenant sans planter.
+- Journal : la verification de la synchronisation faite chaque minute n'y ecrit plus que ses erreurs (une quinzaine de
+  lignes par minute en chassaient les informations utiles, dont les plantages).
+
 0.9.55
 - Langue : en automatique, PhilPDF prend la langue du systeme s'il la connait (francais, anglais, espagnol, italien,
   allemand), sinon l'anglais. L'installateur fait de meme (francais ou anglais).
