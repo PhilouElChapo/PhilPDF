@@ -295,6 +295,13 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.58
+- Texte reconnu d'un scan (OCR) modifie : les lettres de l'image sont effacees sous la ligne et le nouveau texte est
+  ecrit, visible, a la meme place. Avant, l'ancien texte restait a l'ecran et le nouveau, invisible ou decale, ne se
+  voyait pas. La police est choisie en comparant l'image des lettres (avec ou sans empattements, normale ou grasse) ;
+  taille et couleur sont celles du scan.
+- Preferences > Tampons et signatures, « Mes tampons » : la liste des tampons prets a l'emploi suit l'ordre choisi.
+
 0.9.57
 - Reconnaissance du texte (OCR) : l'image de la page n'est plus tassee (elle etait aplatie dans un carre, et le texte
   reconnu ne tombait plus sur les mots). Lecture plus sure : plusieurs lectures faites en meme temps (image nettoyee,

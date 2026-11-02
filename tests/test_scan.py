@@ -48,6 +48,35 @@ for couleur, nom in ((False, "gris"), (True, "couleur")):
         img = fitz.open(sortie)[0].get_images(full=True)[0]
         verif(img[5] != "DeviceGray" and img[4] == 8, f"page en couleur : image d'origine gardee ({img[4]} bits, {img[5]})")
 
+# texte reconnu modifie : lettres de l'image effacees, nouveau texte visible a la meme place, en gras si l'image l'est
+from moteur.modifier import Editeur
+src = fitz.open()
+p = src.new_page(width=595, height=842)
+p.insert_text((60, 120), "Ordonnance du docteur Martin", fontsize=22, fontname="hebo")
+p.insert_text((60, 170), "Paracetamol un comprime matin et soir", fontsize=16)
+pm = p.get_pixmap(dpi=200, colorspace=fitz.csGRAY)
+d = fitz.open()
+q = d.new_page(width=595, height=842)
+q.insert_image(q.rect, pixmap=pm)
+entree, sortie = os.path.join(tmp, "modif.pdf"), os.path.join(tmp, "modif_OCR.pdf")
+d.save(entree)
+scan.traiter(entree, sortie)
+d = fitz.open(sortie)
+ed = Editeur(d)
+para = ed.paragraphe_a(0, fitz.Point(100, 112))
+ancien = para["texte"]
+ed.modifier_paragraphe(0, para, ancien.replace("Martin", "Durand"))
+vis = [s for b in d[0].get_text("dict")["blocks"] for l in b.get("lines", []) for s in l["spans"]
+       if "Durand" in s["text"]]
+verif(vis and vis[0].get("alpha", 255) == 255 and abs(vis[0]["origin"][1] - 120) < 4,
+      f"texte modifie visible, a la meme place ({[(s['text'], s['origin']) for s in vis]})")
+verif(vis and "Bold" in vis[0]["font"], f"gras de l'image garde ({vis[0]['font'] if vis else None})")
+im = d[0].get_pixmap(dpi=100, clip=fitz.Rect(300, 95, 420, 125), colorspace=fitz.csGRAY)
+import numpy as np
+noir = (np.frombuffer(im.samples, np.uint8) < 128).mean()
+verif(noir > 0.02, "nouveau texte dessine sur la page")
+verif("Martin" not in d[0].get_text(), "ancien mot retire")
+
 print()
 print(f"{ok_total}/{n_total} vérifications d'OCR réussies")
 sys.exit(0 if ok_total == n_total else 1)

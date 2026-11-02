@@ -3971,7 +3971,8 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             return
         self.objet = None
         self.apres_modif(ed.journal)
-        self._proposer_autre_methode(n, para, texte, taille, couleur)
+        if not res.get("ocr"):                     # texte d'un scan : l'autre methode ne s'applique pas
+            self._proposer_autre_methode(n, para, texte, taille, couleur)
         if res["en_plus"] > 0:                     # le texte descend : touche-t-il ce qui est en dessous ?
             bas_avant = para["rect"].y1
             dessous = [l for l in ed._infos_lignes(self.doc[n]) if bas_avant + 1 < l["base"] <= res["bas"] + 2

@@ -1183,5 +1183,17 @@ verif(_fp.params["drive_compte"] == "y9" and _cof.lire("y9.jeton") == "jeton-de-
 _fp.params = _P(comptes=[{"id": "z", "type": "onedrive", "adresse": "", "utilisateur": "autre"}])
 F.Fenetre._garder_compte_synchro(_fp, _ici)
 verif(_fp.params["drive_compte"] == "x1" and len(_fp.params["comptes"]) == 2, "nouveau poste : compte absent de la liste reprise -> ajouté")
+# ordre des tampons prets a l'emploi : suivi aussi dans les Preferences (fenetre a part)
+from app.dialogues import PanneauBibliotheque as _PB
+_ancien_ordre = w.params.get("ordre_predefinis")
+w.params["ordre_predefinis"] = list(reversed(range(len(objets.PREDEFINIS))))
+_pb = _PB(QDialog(w), w.biblio, "tampons")
+_vus = []
+_gi = QInputDialog.getItem
+QInputDialog.getItem = lambda *a, **k: (_vus.append(a[3]), ("", False))[1]
+_pb.predefini()
+QInputDialog.getItem = _gi
+verif(_vus and _vus[0][0] == objets.PREDEFINIS[-1][0], "Préférences : tampons prêts à l'emploi dans l'ordre choisi")
+w.params["ordre_predefinis"] = _ancien_ordre
 print(f"\n{sum(c for c, _ in ok)}/{len(ok)} vérifications réussies")
 sys.exit(0 if all(c for c, _ in ok) else 1)

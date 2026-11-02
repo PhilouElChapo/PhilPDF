@@ -438,8 +438,22 @@ class PanneauBibliotheque(QWidget):
         self.b.reordonner(self.genre, ids)
         self.rafraichir(next((e for e in self.b.elements(self.genre) if e["id"] == ident), None))
 
+    def _params(self):
+        """Reglages de PhilPDF (ordre des tampons prets a l'emploi...) : ce panneau est aussi dans les Preferences et
+        dans « Mes tampons », des fenetres a part ; on remonte jusqu'a la fenetre principale."""
+        from PySide6.QtWidgets import QApplication
+        w = self
+        while w is not None:
+            if getattr(w, "params", None) is not None and hasattr(w.params, "get"):
+                return w.params
+            w = w.parentWidget()
+        for top in QApplication.topLevelWidgets():
+            if getattr(top, "params", None) is not None and hasattr(top.params, "get") and hasattr(top, "onglets"):
+                return top.params
+        return None
+
     def predefini(self):
-        noms = [n for _i, n, _x, _y in objets.predefinis_ordonnes(getattr(self.window(), "params", None))]
+        noms = [n for _i, n, _x, _y in objets.predefinis_ordonnes(self._params())]
         nom, ok = QInputDialog.getItem(self, _("Tampon prêt à l'emploi"), _('Tampon :'), noms, 0, False)
         if ok:
             n, t, c = next(x for x in objets.PREDEFINIS if x[0] == nom)

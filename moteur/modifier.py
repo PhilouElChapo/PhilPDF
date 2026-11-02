@@ -404,6 +404,14 @@ class Editeur:
         page = self.doc[num_page]
         chars, r, ancien = self.ligne_a(num_page, zone)
         ancien_net = ancien.rstrip()
+        from . import texte_ocr
+        vis = [c for c, _sp in chars if c["c"].strip()]
+        info = {"chars": chars, "rect": r, "base": vis[0]["origin"][1] if vis else r.y1, "x0": r.x0, "x1": r.x1,
+                "taille": chars[0][1]["size"] if chars else 10, "texte": ancien_net}
+        if texte_ocr.est_ocr([info]):                 # scan : lettres de l'image effacees, texte ecrit visible
+            _n, _b, j = texte_ocr.reecrire(self.doc, num_page, [info], nouveau, taille, couleur)
+            self.journal += j
+            return
         if not nouveau.strip():
             page.add_redact_annot(fitz.Rect(r.x0 + 0.3, r.y0 + r.height * 0.25, r.x1 + 0.5, r.y1 - r.height * 0.25), fill=False)
             page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE,
@@ -650,6 +658,12 @@ class Editeur:
             ancien = para["texte"]                     # meme longueur : retours a la ligne exacts, styles alignes
         if nouveau == ancien and not (taille or couleur or police):
             return None
+        from . import texte_ocr
+        if texte_ocr.est_ocr(para["lignes"]):         # scan : lettres de l'image effacees, texte ecrit visible
+            n, bas, j = texte_ocr.reecrire(self.doc, num_page, para["lignes"], nouveau, taille, couleur, police,
+                                           para.get("interligne"))
+            self.journal += j
+            return {"lignes": n, "en_plus": n - len(para["lignes"]), "bas": bas, "ocr": True}
         k = (taille / para["taille"]) if taille else 1.0
         # style de chaque nouveau caractere : celui du caractere d'origine correspondant
         st = [None] * len(nouveau)
