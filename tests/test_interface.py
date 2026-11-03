@@ -1195,5 +1195,28 @@ _pb.predefini()
 QInputDialog.getItem = _gi
 verif(_vus and _vus[0][0] == objets.PREDEFINIS[-1][0], "Préférences : tampons prêts à l'emploi dans l'ordre choisi")
 w.params["ordre_predefinis"] = _ancien_ordre
+# scan avec texte reconnu (invisible) : l'image choisie (retouche ouverte), puis une ligne modifiee ; l'apercu de
+# l'image ne doit pas cacher le nouveau texte
+from moteur.modifier import Editeur as _Ed
+_src = fitz.open()
+_p = _src.new_page(width=595, height=842)
+_p.insert_text((60, 120), "Ordonnance du docteur Martin", fontsize=22, fontname="hebo")
+_pm = _p.get_pixmap(dpi=150, colorspace=fitz.csGRAY)
+_d = fitz.open()
+_q = _d.new_page(width=595, height=842)
+_q.insert_image(_q.rect, pixmap=_pm)
+_q.insert_text((60, 120), "Ordonnance du docteur Martin", fontsize=22, render_mode=3)
+_chemin = os.path.join(tempfile.mkdtemp(), "scan_ocr.pdf")
+_d.save(_chemin)
+_o = w.ouvrir(_chemin)
+_o.changer_mode("modifier")
+_o.choisir_objet(_o.objet_sous(0, fitz.Point(400, 600)))
+_para = _Ed(_o.doc).paragraphe_a(0, fitz.Point(100, 112))
+_o.modifier_paragraphe(0, _para, _para["texte"].replace("Martin", "Durand"))
+_vis = [s_ for b in _o.doc[0].get_text("dict")["blocks"] for l in b.get("lines", []) for s_ in l["spans"]
+        if "Durand" in s_["text"] and s_.get("alpha", 255) == 255]
+verif(_vis and _o.retouche is not None and _o.retouche.get("apercu") is None,
+      "scan : texte modifié visible, l'aperçu de l'image ne le cache pas")
+_o.changer_mode(None)
 print(f"\n{sum(c for c, _ in ok)}/{len(ok)} vérifications réussies")
 sys.exit(0 if all(c for c, _ in ok) else 1)

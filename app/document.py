@@ -2704,7 +2704,18 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         rt = getattr(self, "retouche", None)
         if not rt:
             return
-        img = R.appliquer(rt["petit"], self.reglages_retouche())
+        reg = self.reglages_retouche()
+        neutre = (not reg.get("auto") and not reg.get("noir_blanc")
+                  and all(reg.get(cle) == d for cle, _l, _a, _b, d in self.CURSEURS_RETOUCHE))
+        if neutre and rt["masque"] is None and not rt.get("modifiee"):
+            # rien a montrer : la page s'affiche telle quelle (sinon l'apercu de l'image cacherait le texte pose
+            # dessus, celui d'un scan modifie par exemple)
+            rt["apercu"] = None
+            for pw in self.page_widgets:
+                if pw.num == rt["page"]:
+                    pw.update()
+            return
+        img = R.appliquer(rt["petit"], reg)
         if rt["masque"] is not None:
             import cv2
             m = cv2.resize(rt["masque"].astype(np.uint8), (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST) > 0
@@ -4712,6 +4723,22 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
 
     def apres_modif(self, journal=None, reconstruire=False):
         self.modifie = True
+        rt = getattr(self, "retouche", None)
+        if rt is not None:                         # l'image a pu changer (texte d'un scan modifie...) : apercu repris
+            try:
+                imgs = Editeur(self.doc).images(rt["page"])
+                x = rt["xref"] if any(x == rt["xref"] for x, _r in imgs) else None
+                if x is None:                      # image refaite (lettres effacees) : celle qui est a la meme place
+                    c = rt["geo"][0]
+                    x = next((x for x, r in imgs if abs((r.x0 + r.x1) / 2 - c.x) < 2 and abs((r.y0 + r.y1) / 2 - c.y) < 2), None)
+                if x is not None:
+                    if self.objet and self.objet.get("type") == "image" and self.objet.get("xref") == rt["xref"]:
+                        self.objet["xref"] = x
+                    self.ouvrir_retouche({"page": rt["page"], "xref": x})
+                else:
+                    self.fermer_retouche()
+            except Exception:                      # noqa: BLE001
+                self.retouche = None
         if reconstruire or len(self.page_widgets) != len(self.doc):
             self.construire_pages()
         else:

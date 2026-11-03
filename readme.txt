@@ -295,6 +295,11 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.59
+- Texte d'un scan modifie : il disparaissait de l'ecran tant que le mode Modifier restait ouvert (l'apercu de
+  retouche de l'image le recouvrait) et ne revenait qu'avec « Terminer ». L'apercu ne s'affiche plus que si un
+  reglage de retouche est en cours, et il reprend l'image modifiee.
+
 0.9.58
 - Texte reconnu d'un scan (OCR) modifie : les lettres de l'image sont effacees sous la ligne et le nouveau texte est
   ecrit, visible, a la meme place. Avant, l'ancien texte restait a l'ecran et le nouveau, invisible ou decale, ne se
