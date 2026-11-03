@@ -108,4 +108,6 @@ verif(w.doc_droite is None and w.onglets.indexOf(a) >= 2, "fin du cote a cote : 
 
 print()
 print(f"{ok_total}/{n_total} vérifications d'organisation réussies")
-sys.exit(0 if ok_total == n_total else 1)
+sys.stdout.flush()
+# sortie directe : la fermeture de Qt plante parfois sous Windows apres les essais (code 1 alors que tout est bon)
+os._exit(0 if ok_total == n_total else 1)
