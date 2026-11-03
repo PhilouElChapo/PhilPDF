@@ -160,7 +160,7 @@ object ImagesPdf {
                             val sous = xo.get("Subtype").asName()
                             val num = if (xo.isIndirect) xo.asIndirect() else -1
                             if (sous == "Image" && num > 0) {
-                                out += Placee(n, nomX, num, flux, debut, fin, ctm, false)
+                                out += Placee(n, nomX!!, num, flux, debut, fin, ctm, false)
                             } else if (sous == "Form" && profondeur < 3 && num > 0) {
                                 appels[num] = (appels[num] ?: 0) + 1
                                 val r = xo.get("Resources").let { if (it.isNull) res else it }

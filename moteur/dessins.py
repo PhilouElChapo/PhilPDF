@@ -1,13 +1,17 @@
 """Dessins vectoriels de la page (illustrations, schemas, logos traces) traites comme des objets, comme Acrobat :
 on peut en choisir un, le deplacer, l'agrandir, le tourner ou le supprimer.
 
-Un « dessin » est un groupe de traces voisins (regroupes par le moteur). Pour le deplacer ou le tourner, ses traces
-sont relus (forme, couleurs, epaisseur, transparence), effaces de la page, puis redessines a la nouvelle place.
+Un « dessin » est un groupe de traces voisins (regroupes par le moteur). Pour le deplacer ou le tourner, on cherche
+d'abord ses instructions dans le contenu du PDF et on les entoure d'une matrice (dessins_flux) : degrades, motifs et
+transparences restent exactement les memes. Si le dessin n'est pas ecrit en morceaux separables, ses traces sont relus
+(forme, couleurs, epaisseur, transparence), effaces de la page, puis redessines a la nouvelle place.
 Le reste de la page (texte, images, autres dessins) n'est pas touche.
 """
 import math
 
 import pymupdf as fitz
+
+from moteur import dessins_flux
 
 MARGE = 1.0
 
@@ -17,7 +21,30 @@ def groupes(page):
     try:
         cadres = page.cluster_drawings()
     except Exception:                                  # noqa: BLE001
-        return []
+        cadres = []
+    # le moteur compte aussi l'apparence des champs et annotations : ce ne sont pas des dessins de la page
+    hors = _annotations(page)
+    if hors:
+        traces = [fitz.Rect(d["rect"]) for d in _traces(page)]
+        nets = []
+        for r in cadres:
+            z = fitz.Rect(r) + (-MARGE, -MARGE, MARGE, MARGE)
+            reste = fitz.EMPTY_RECT()
+            for t in traces:
+                if t in z:
+                    reste |= t
+            if reste.is_valid:
+                nets.append(reste)
+        cadres = nets
+    # les degrades et motifs ne sont pas vus par le moteur : on les ajoute (reunis aux dessins qu'ils touchent)
+    cadres = [fitz.Rect(r) for r in cadres]
+    for z in dessins_flux.degrades(page.parent, page):
+        for k, r in enumerate(cadres):
+            if r.intersects(z):
+                cadres[k] = r | z
+                break
+        else:
+            cadres.append(fitz.Rect(z))
     aire = page.rect.width * page.rect.height
     out = []
     for r in cadres:
@@ -30,10 +57,26 @@ def groupes(page):
     return out
 
 
+def _annotations(page):
+    out = []
+    try:
+        out += [fitz.Rect(a.rect) for a in page.annots()]
+        out += [fitz.Rect(w.rect) for w in page.widgets()]
+    except Exception:                                  # noqa: BLE001
+        pass
+    return out
+
+
+def _traces(page):
+    """Traces de la page, sans l'apparence des champs et des annotations (le moteur les compte aussi)."""
+    hors = [r + (-MARGE, -MARGE, MARGE, MARGE) for r in _annotations(page)]
+    return [d for d in page.get_drawings() if not any(fitz.Rect(d["rect"]) in h for h in hors)]
+
+
 def chemins(page, cadre):
     """Traces entierement dans le cadre du dessin."""
     z = fitz.Rect(cadre) + (-MARGE, -MARGE, MARGE, MARGE)
-    return [d for d in page.get_drawings() if fitz.Rect(d["rect"]) in z]
+    return [d for d in _traces(page) if fitz.Rect(d["rect"]) in z]
 
 
 def _effacer(page, cadre):
@@ -125,6 +168,12 @@ def _redessiner(page, traces, m, transparences=()):
 
 def transformer(page, cadre, m):
     """Deplace / agrandit / tourne le dessin (matrice m, en coordonnees de la page). Renvoie son nouveau cadre."""
+    try:
+        r = dessins_flux.transformer(page.parent, page, cadre, m)
+    except Exception:                                  # noqa: BLE001
+        r = None
+    if r is not None:
+        return r
     traces = chemins(page, cadre)
     if not traces:
         raise ValueError("Dessin introuvable à cet endroit")
@@ -162,6 +211,11 @@ def retourner(page, cadre, horizontal=True):
 
 
 def supprimer(page, cadre):
+    try:
+        if dessins_flux.supprimer(page.parent, page, cadre):
+            return
+    except Exception:                                  # noqa: BLE001
+        pass
     if not chemins(page, cadre):
         raise ValueError("Dessin introuvable à cet endroit")
     _effacer(page, cadre)

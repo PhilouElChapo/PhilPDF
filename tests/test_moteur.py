@@ -112,6 +112,33 @@ dessins.supprimer(d[0], next(r for r in dessins.groupes(d[0]) if r.y0 > 500 and 
 assert len(dessins.groupes(d[0])) == 1
 print("Dessins vectoriels : deplaces, tournes, supprimes : OK")
 
+# --- dessins avec degrades et motifs : deplaces tels qu'ecrits dans le PDF (rien n'est redessine ni perdu)
+d = fitz.open()
+p = d.new_page(width=420, height=300)
+fn = d.get_new_xref(); d.update_object(fn, "<</FunctionType 2/Domain[0 1]/C0[0.1 0.3 0.9]/C1[1 0.8 0.1]/N 1>>")
+sh = d.get_new_xref(); d.update_object(sh, f"<</ShadingType 2/ColorSpace/DeviceRGB/Coords[40 160 160 260]/Function {fn} 0 R/Extend[true true]>>")
+sh2 = d.get_new_xref(); d.update_object(sh2, f"<</ShadingType 3/ColorSpace/DeviceRGB/Coords[260 210 0 260 210 60]/Function {fn} 0 R/Extend[true true]>>")
+pat = d.get_new_xref(); d.update_object(pat, f"<</PatternType 2/Shading {sh2} 0 R/Matrix[1 0 0 1 0 0]>>")
+c = d.get_new_xref(); d.update_object(c, "<<>>")
+d.update_stream(c, b"q 40 160 120 100 re W n /Sh1 sh Q 0 0 0 RG 2 w 40 160 120 100 re S\nq /Pattern cs /P1 scn 200 150 120 120 re f Q")
+d.xref_set_key(p.xref, "Contents", f"{c} 0 R")
+d.xref_set_key(p.xref, "Resources", f"<</Shading<</Sh1 {sh} 0 R>>/Pattern<</P1 {pat} 0 R>>>>")
+g = dessins.groupes(d[0])
+assert any(abs(r.x0 - 200) < 1 and abs(r.y0 - 30) < 1 for r in g), ("degrade seul (motif) choisi comme un dessin", g)
+def _px(page):
+    pm = page.get_pixmap(dpi=72)
+    return np.frombuffer(pm.samples, np.uint8).reshape(pm.h, pm.w, pm.n).astype(int)
+av = _px(d[0])
+for r in g:
+    dessins.deplacer(d[0], r, fitz.Rect(r) + (10, 20, 10, 20) if r.x0 < 100 else fitz.Rect(r) + (60, 100, 60, 100))
+ap = _px(d[0])
+assert np.abs(av[40:140, 40:160] - ap[60:160, 50:170]).mean() < 1, "le degrade suit le dessin"
+assert np.abs(av[30:150, 200:320] - ap[130:250, 260:380]).mean() < 1, "le motif suit le dessin"
+dessins.tourner(d[0], fitz.Rect(260, 130, 380, 250), 90)
+ap2 = _px(d[0])
+assert ap2[190, 320, 2] > 150 and ap2[190, 320, 0] < 120, "centre du degrade tourne : toujours bleu"
+print("Dessins avec degrades et motifs : deplaces et tournes sans rien perdre : OK")
+
 # --- retouche : « Effacer » sur le fond d'un scan choisi a la baguette (grande zone) : rapide, et pas noirci
 import time as _t
 _img = np.full((2300, 1650, 4), 255, np.uint8)

@@ -110,4 +110,9 @@ print()
 print(f"{ok_total}/{n_total} vérifications d'organisation réussies")
 sys.stdout.flush()
 # sortie directe : la fermeture de Qt plante parfois sous Windows apres les essais (code 1 alors que tout est bon)
-os._exit(0 if ok_total == n_total else 1)
+_code = 0 if ok_total == n_total else 1
+if sys.platform == "win32":
+    # meme os._exit decharge les bibliotheques (Qt peut planter la) : on termine le processus sans rien decharger
+    import ctypes
+    ctypes.windll.kernel32.TerminateProcess(ctypes.windll.kernel32.GetCurrentProcess(), _code)
+os._exit(_code)

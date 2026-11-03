@@ -305,6 +305,14 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.62
+- Dessins vectoriels : deplacer, agrandir, tourner, retourner ou supprimer un dessin garde ses degrades, ses motifs
+  (quadrillages, trames) et ses transparences. PhilPDF deplace le dessin tel qu'il est ecrit dans le PDF au lieu de le
+  redessiner ; il reste a sa place dans l'empilement (le texte pose dessus reste visible). Si le dessin n'est pas
+  ecrit en morceaux separables, ou s'il sortirait de la zone ou le PDF le decoupe, l'ancienne methode prend le relais.
+- Un degrade seul (sans contour) se choisit maintenant comme un dessin.
+- Les boutons et champs de formulaire ne sont plus pris pour des dessins de la page.
+
 0.9.61
 - Retouche d'image : « Effacer » sur une grande zone (le fond blanc d'un scan choisi a la baguette magique) faisait
   planter PhilPDF ou noircissait toute l'image. La zone prend maintenant sa couleur dominante, en un instant ; les
