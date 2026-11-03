@@ -1,7 +1,7 @@
 """Fenetres des emplacements distants : compte (NAS, FTP, WebDAV...), choix d'un fichier ou d'un dossier."""
 import os, posixpath, urllib.parse
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QLineEdit, QPushButton, QComboBox,
+from PySide6.QtWidgets import (QTreeWidget, QTreeWidgetItem, QHeaderView, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QLineEdit, QPushButton, QComboBox,
                                QCheckBox, QSpinBox, QDialogButtonBox, QListWidget, QListWidgetItem, QMessageBox,
                                QInputDialog, QApplication, QWidget, QMenu, QToolButton)
 from .langue import _
@@ -25,6 +25,13 @@ AIDE = {
     "dropbox": _("Dropbox en direct : votre navigateur s'ouvre, vous autorisez PhilPDF, c'est tout."),
     "box": _("Box en direct : votre navigateur s'ouvre, vous autorisez PhilPDF, c'est tout."),
 }
+
+
+def _taille_lisible(n):
+    n = int(n or 0)
+    if n < 1024 * 1024:
+        return _("{n} Ko", n=max(1, round(n / 1024))) if n else ""
+    return _("{n} Mo", n=f"{n / 1048576:.1f}".replace(".", ","))
 
 
 def erreur(parent, titre, ex, e=None, info=False):
@@ -598,6 +605,25 @@ class PanneauComptes(QWidget):
 
 
 # ------------------------------------------------------------------------------------------- parcourir
+class _Ligne(QTreeWidgetItem):
+    """Ligne de la liste des fichiers : tri par la colonne cliquee (nom, date, taille) ; « .. » toujours en tete,
+    les dossiers toujours avant les fichiers (comme l'Explorateur de Windows)."""
+
+    def __lt__(self, autre):
+        arbre = self.treeWidget()
+        col = arbre.sortColumn() if arbre else 0
+        decroissant = arbre is not None and arbre.header().sortIndicatorOrder() == Qt.DescendingOrder
+        a, b = self.data(0, Qt.UserRole), autre.data(0, Qt.UserRole)
+        if a == ".." or b == "..":                     # toujours en haut, quel que soit le sens
+            return (a == "..") != decroissant
+        if a.dossier != b.dossier:
+            return a.dossier != decroissant
+        ka, kb = self.data(col, Qt.UserRole + 1), autre.data(col, Qt.UserRole + 1)
+        if ka == kb:
+            return a.nom.lower() < b.nom.lower()
+        return ka < kb
+
+
 class DialogueParcourir(QDialog):
     """Choisir un PDF a ouvrir, ou un dossier et un nom pour enregistrer, sur un emplacement distant."""
 
@@ -632,9 +658,24 @@ class DialogueParcourir(QDialog):
         self.bandeau.linkActivated.connect(lambda _l: self._reautoriser())
         self.bandeau.hide()
         v.addWidget(self.bandeau)
-        self.liste = QListWidget()
+        # colonnes Nom, Date de modification, Taille ; un clic sur un titre trie (un second clic : sens inverse)
+        self.liste = QTreeWidget()
+        self.liste.setObjectName("liste_distante")
+        self.liste.setRootIsDecorated(False)
+        self.liste.setUniformRowHeights(True)
         self.liste.setIconSize(QSize(20, 20))
-        self.liste.itemDoubleClicked.connect(self._double)
+        self.liste.setHeaderLabels([_("Nom"), _("Date de modification"), _("Taille")])
+        en_tete = self.liste.header()
+        en_tete.setSectionResizeMode(0, QHeaderView.Stretch)
+        en_tete.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        en_tete.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        en_tete.setStretchLastSection(False)
+        self.liste.headerItem().setTextAlignment(2, Qt.AlignRight | Qt.AlignVCenter)
+        self.liste.setSortingEnabled(True)
+        tri = params.get("parcourir_tri") or [0, 0]
+        self.liste.sortByColumn(int(tri[0]), Qt.DescendingOrder if tri[1] else Qt.AscendingOrder)
+        en_tete.sortIndicatorChanged.connect(self._tri_change)
+        self.liste.itemDoubleClicked.connect(lambda it, _c=0: self._double(it))
         self.liste.currentItemChanged.connect(self._choix)
         v.addWidget(self.liste, 1)
         self.nom = QLineEdit(nom)
@@ -684,22 +725,32 @@ class DialogueParcourir(QDialog):
         racine = dossier in ("", "/")
         self.b_haut.setEnabled(not racine)
         self.liste.clear()
+        self.liste.setSortingEnabled(False)            # remplie d'abord, triee ensuite (plus rapide)
         if not racine:
-            it = QListWidgetItem(icone("precedente", "#0f6cbd"), _("..  (dossier parent)"))
-            it.setData(Qt.UserRole, "..")
-            self.liste.addItem(it)
-        # dossiers d'abord (en gras), puis les PDF, chacun par ordre alphabetique
+            it = _Ligne([_("..  (dossier parent)"), "", ""])
+            it.setIcon(0, icone("precedente", "#0f6cbd"))
+            it.setData(0, Qt.UserRole, "..")
+            self.liste.addTopLevelItem(it)
+        # dossiers d'abord (en gras), puis les PDF
         f_gras = self.liste.font()
         f_gras.setBold(True)
-        for x in sorted(elems, key=lambda e: (not e.dossier, e.nom.lower())):
+        for x in elems:
             if not x.dossier and not x.nom.lower().endswith(".pdf"):
                 continue
-            it = QListWidgetItem(icone("ouvrir" if x.dossier else "creer", "#c8a000" if x.dossier else "#c9252d"),
-                                 x.nom + ("" if x.dossier else _("   ({n} Ko)", n=max(1, x.taille // 1024))))
+            q = x.quand()
+            it = _Ligne([x.nom, q.strftime("%d/%m/%Y %H:%M") if q else "",
+                         "" if x.dossier else _taille_lisible(x.taille)])
+            it.setIcon(0, icone("ouvrir" if x.dossier else "creer", "#c8a000" if x.dossier else "#c9252d"))
+            it.setTextAlignment(2, Qt.AlignRight | Qt.AlignVCenter)
+            it.setToolTip(0, x.nom)
             if x.dossier:
-                it.setFont(f_gras)
-            it.setData(Qt.UserRole, x)
-            self.liste.addItem(it)
+                it.setFont(0, f_gras)
+            it.setData(0, Qt.UserRole, x)
+            it.setData(0, Qt.UserRole + 1, x.nom.lower())
+            it.setData(1, Qt.UserRole + 1, q.timestamp() if q else 0.0)
+            it.setData(2, Qt.UserRole + 1, int(x.taille or 0))
+            self.liste.addTopLevelItem(it)
+        self.liste.setSortingEnabled(True)
         lim = distant.drive_limite(self.compte() or {})
         self.bandeau.setVisible(bool(lim))
         if lim:
@@ -728,8 +779,11 @@ class DialogueParcourir(QDialog):
         if self.e and self.dossier not in ("", "/"):
             self.aller(posixpath.dirname(self.dossier.rstrip("/")) or "/")
 
+    def _tri_change(self, colonne, ordre):
+        self.params["parcourir_tri"] = [int(colonne), 1 if ordre == Qt.DescendingOrder else 0]
+
     def _double(self, it):
-        x = it.data(Qt.UserRole)
+        x = it.data(0, Qt.UserRole)
         if x == "..":
             self.monter()
             return
@@ -740,7 +794,7 @@ class DialogueParcourir(QDialog):
             self.accept()
 
     def _choix(self, it, _ancien=None):
-        x = it.data(Qt.UserRole) if it else None
+        x = it.data(0, Qt.UserRole) if it else None
         if x == "..":
             return
         if x and not x.dossier and self.mode == "enregistrer":
@@ -751,7 +805,7 @@ class DialogueParcourir(QDialog):
             return
         if self.mode == "ouvrir":
             it = self.liste.currentItem()
-            x = it.data(Qt.UserRole) if it else None
+            x = it.data(0, Qt.UserRole) if it else None
             if not x:
                 return
             if x == "..":

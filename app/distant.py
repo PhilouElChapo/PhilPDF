@@ -49,6 +49,40 @@ class Element:
     def __repr__(self):
         return f"<{'D' if self.dossier else 'F'} {self.chemin}>"
 
+    def quand(self):
+        """Date de modification en datetime local (None si inconnue). Chaque service la donne a sa facon :
+        secondes depuis 1970 (dossier reseau, Synology), 20261103101200 (FTP), ISO 2026-11-03T10:12:00Z (Drive,
+        OneDrive, Dropbox, Box), « Tue, 03 Nov 2026 10:12:00 GMT » (WebDAV), « Nov 03 10:12 » (ancien FTP)."""
+        import datetime as dt
+        d = self.date
+        try:
+            if isinstance(d, (int, float)):
+                return dt.datetime.fromtimestamp(d) if d > 0 else None
+            d = (d or "").strip()
+            if not d:
+                return None
+            if d.isdigit() and len(d) >= 12 or (d[:14].isdigit() and "." in d):
+                v = dt.datetime.strptime(d[:14].ljust(14, "0"), "%Y%m%d%H%M%S").replace(tzinfo=dt.timezone.utc)
+                return v.astimezone().replace(tzinfo=None)
+            if len(d) >= 10 and d[4] == "-" and d[7] == "-":
+                v = dt.datetime.fromisoformat(d.replace("Z", "+00:00"))
+                return v.astimezone().replace(tzinfo=None) if v.tzinfo else v
+            if "," in d or d.endswith(("GMT", "UTC")):
+                import email.utils
+                return email.utils.parsedate_to_datetime(d).astimezone().replace(tzinfo=None)
+            for fmt in ("%b %d %H:%M", "%b %d %Y"):    # ancien FTP (ls -l)
+                try:
+                    v = dt.datetime.strptime(" ".join(d.split()), fmt)
+                    if fmt == "%b %d %H:%M":
+                        auj = dt.datetime.now()
+                        v = v.replace(year=auj.year if v.replace(year=auj.year) <= auj else auj.year - 1)
+                    return v
+                except ValueError:
+                    pass
+        except Exception:                                 # noqa: BLE001
+            return None
+        return None
+
 
 def _joindre(dossier, nom):
     return posixpath.join(dossier or "/", nom)
@@ -669,7 +703,7 @@ class GoogleDrive(_DriveOAuth):
             est_dossier = f.get("mimeType") == DOSSIER_MIME
             ch = _joindre(dossier, f["name"])
             self._ids["/" + "/".join(p for p in ch.split("/") if p)] = f["id"]
-            out.append(Element(f["name"], ch, est_dossier, int(f.get("size") or 0)))
+            out.append(Element(f["name"], ch, est_dossier, int(f.get("size") or 0), f.get("modifiedTime", "")))
         return sorted(out, key=lambda e: (not e.dossier, e.nom.lower()))
 
     def telecharger(self, chemin, local):
@@ -740,7 +774,8 @@ class OneDrive(_DriveOAuth):
         return out
 
     def lister(self, dossier):
-        return sorted((Element(f["name"], _joindre(dossier, f["name"]), "folder" in f, int(f.get("size") or 0))
+        return sorted((Element(f["name"], _joindre(dossier, f["name"]), "folder" in f, int(f.get("size") or 0),
+                               f.get("lastModifiedDateTime", ""))
                        for f in self._enfants(dossier)), key=lambda e: (not e.dossier, e.nom.lower()))
 
     def modifies(self, dossier):
@@ -810,7 +845,8 @@ class Dropbox(_DriveOAuth):
         e = self._entrees(dossier)
         if e is None:
             raise ErreurDistant(_("Dossier inaccessible : {dossier}", dossier=dossier))
-        return sorted((Element(x["name"], _joindre(dossier, x["name"]), x[".tag"] == "folder", int(x.get("size") or 0))
+        return sorted((Element(x["name"], _joindre(dossier, x["name"]), x[".tag"] == "folder", int(x.get("size") or 0),
+                               x.get("client_modified") or x.get("server_modified", ""))
                        for x in e if x[".tag"] in ("file", "folder")), key=lambda e: (not e.dossier, e.nom.lower()))
 
     def modifies(self, dossier):
@@ -883,7 +919,8 @@ class Box(_DriveOAuth):
         out = []
         for x in self._items(i):
             self._ids[self._cle(_joindre(dossier, x["name"]))] = x["id"]
-            out.append(Element(x["name"], _joindre(dossier, x["name"]), x["type"] == "folder", int(x.get("size") or 0)))
+            out.append(Element(x["name"], _joindre(dossier, x["name"]), x["type"] == "folder", int(x.get("size") or 0),
+                               x.get("modified_at", "")))
         return sorted(out, key=lambda e: (not e.dossier, e.nom.lower()))
 
     def modifies(self, dossier):

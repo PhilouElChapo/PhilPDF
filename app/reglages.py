@@ -22,7 +22,7 @@ COMMUNS = ["auteur", "langue", "outils_epingles", "barre_rapide", "volet", "vign
            "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "agenda", "messagerie", "ia_styles_perso",
            "identites", "certificats_approuves", "signature_reglages", "identites_supprimees", "certificats_retires",
            "formulaire_detection", "formulaire_types_auto", "comptes_mail", "courriel", "courriel_recents", "ordre_outils",
-           "carnet", "comptes_mail_retires", "carnet_retires", "imprimante", "imprimante_nom", "ordre_predefinis"]
+           "carnet", "comptes_mail_retires", "carnet_retires", "imprimante", "imprimante_nom", "ordre_predefinis", "parcourir_tri"]
 POSTE = ["imprimante_installee", "imprimante_philpdf", "imprimante_derniere", "secrets_refuses", "disposition_vue", "volet_largeur", "vignettes_largeur", "biblio_replies", "sessions_vues", "synchro_etat", "machine", "zoom", "racines", "nas", "dernier_dossier", "drive", "drive_compte", "association_pdf", "recherche_racines"]
 CLEFS_IA = ["clef_claude", "clef_gemini"]
 FICHIER_DRIVE = "preferences.json"
@@ -320,7 +320,7 @@ def libelle_commun(k):
             "maj_source": _("Source des mises à jour"), "maj_auto": _("Mises à jour automatiques"),
             "synchro": _("Synchronisation des fichiers"), "comptes": _("Comptes (NAS, FTP, Drives)"),
             "comptes_icone": _("Style des icônes des comptes"),
-            "defaut_tampons": _("Tampons par défaut"), "ordre_predefinis": _("Ordre des tampons prêts à l'emploi"), "defaut_signatures": _("Signatures par défaut"),
+            "defaut_tampons": _("Tampons par défaut"), "ordre_predefinis": _("Ordre des tampons prêts à l'emploi"), "parcourir_tri": _("Tri des fichiers des emplacements"), "defaut_signatures": _("Signatures par défaut"),
             "theme": _("Thème"), "synchro_secrets": _("Synchroniser les mots de passe"),
             "barre": _("Barre d'outils des documents"), "couleurs_annotations": _("Couleurs des annotations"),
             "style_souligne": _("Style du soulignement"), "opacite_surlignage": _("Opacité du surlignage"),

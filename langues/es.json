@@ -2750,5 +2750,9 @@
  "Fichier réparé": "Archivo reparado",
  "Ce fichier contenait des restes laissés par une ancienne version de PhilPDF Android (page(s) {p}) : Acrobat montrait ces pages vides. Ils ont été retirés ; la page est intacte.": "Este archivo contenía restos de una versión antigua de PhilPDF Android (página(s) {p}): Acrobat mostraba estas páginas en blanco. Se han eliminado; la página está intacta.",
  "Un bouton créé sur Android s'affichait en blanc (page(s) {p}) : il a été redessiné en bleu.": "Un botón creado en Android se mostraba en blanco (página(s) {p}): se ha vuelto a dibujar en azul.",
- "Enregistrez le document pour garder la correction.": "Guarde el documento para conservar la corrección."
+ "Enregistrez le document pour garder la correction.": "Guarde el documento para conservar la corrección.",
+ "{n} Mo": "{n} MB",
+ "{n} Ko": "{n} KB",
+ "Date de modification": "Fecha de modificación",
+ "Tri des fichiers des emplacements": "Orden de los archivos de las ubicaciones"
 }

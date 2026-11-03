@@ -2759,5 +2759,9 @@
  "Fichier réparé": "File repaired",
  "Ce fichier contenait des restes laissés par une ancienne version de PhilPDF Android (page(s) {p}) : Acrobat montrait ces pages vides. Ils ont été retirés ; la page est intacte.": "This file contained leftovers from an old version of PhilPDF Android (page(s) {p}): Acrobat showed these pages blank. They have been removed; the page is intact.",
  "Un bouton créé sur Android s'affichait en blanc (page(s) {p}) : il a été redessiné en bleu.": "A button created on Android was shown in white (page(s) {p}): it has been redrawn in blue.",
- "Enregistrez le document pour garder la correction.": "Save the document to keep the fix."
+ "Enregistrez le document pour garder la correction.": "Save the document to keep the fix.",
+ "{n} Mo": "{n} MB",
+ "{n} Ko": "{n} KB",
+ "Date de modification": "Date modified",
+ "Tri des fichiers des emplacements": "Sorting of location files"
 }

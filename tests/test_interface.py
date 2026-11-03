@@ -1218,5 +1218,27 @@ _vis = [s_ for b in _o.doc[0].get_text("dict")["blocks"] for l in b.get("lines",
 verif(_vis and _o.retouche is not None and _o.retouche.get("apercu") is None,
       "scan : texte modifié visible, l'aperçu de l'image ne le cache pas")
 _o.changer_mode(None)
+# ouvrir depuis un emplacement : colonnes Nom, Date, Taille, tri par clic sur un titre (dossiers toujours en tete)
+from app.dialogues_distant import DialogueParcourir as _DP
+_nas = tempfile.mkdtemp()
+os.makedirs(os.path.join(_nas, "Factures"))
+for _n, _t, _sz in (("b.pdf", 1700000000, 5000), ("a.pdf", 1760000000, 300000), ("c.pdf", 1750000000, 2500000)):
+    with open(os.path.join(_nas, _n), "wb") as _f:
+        _f.write(b"0" * _sz)
+    os.utime(os.path.join(_nas, _n), (_t, _t))
+_comptes = w.params.get("comptes")
+w.params["comptes"] = [{"id": "essai_tri", "type": "reseau", "nom": "NAS", "adresse": _nas}]
+_d = _DP(w, w.params, "ouvrir", compte_id="essai_tri")
+_l = lambda: [_d.liste.topLevelItem(i).text(0) for i in range(_d.liste.topLevelItemCount())]
+verif(_d.liste.columnCount() == 3 and _d.liste.topLevelItem(1).text(2) and _d.liste.topLevelItem(1).text(1),
+      "emplacement : colonnes nom, date, taille")
+_d.liste.sortByColumn(2, Qt.DescendingOrder)
+verif(_l() == ["Factures", "c.pdf", "a.pdf", "b.pdf"], f"emplacement : tri par taille ({_l()})")
+_d.liste.sortByColumn(1, Qt.AscendingOrder)
+verif(_l() == ["Factures", "b.pdf", "c.pdf", "a.pdf"] and w.params.get("parcourir_tri") == [1, 0],
+      f"emplacement : tri par date, retenu ({_l()})")
+_d.close()
+w.params["comptes"] = _comptes
+w.params["parcourir_tri"] = [0, 0]
 print(f"\n{sum(c for c, _ in ok)}/{len(ok)} vérifications réussies")
 sys.exit(0 if all(c for c, _ in ok) else 1)

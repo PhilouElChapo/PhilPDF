@@ -295,6 +295,11 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.60
+- Ouvrir ou enregistrer sur un emplacement (NAS, FTP, WebDAV, Google Drive, OneDrive, Dropbox, Box) : colonnes Nom,
+  Date de modification et Taille ; un clic sur un titre trie la liste (un second clic : sens inverse), les dossiers
+  restent en tete. Le tri choisi est retenu.
+
 0.9.59
 - Texte d'un scan modifie : il disparaissait de l'ecran tant que le mode Modifier restait ouvert (l'apercu de
   retouche de l'image le recouvrait) et ne revenait qu'avec « Terminer ». L'apercu ne s'affiche plus que si un
