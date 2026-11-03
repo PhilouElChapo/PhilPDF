@@ -369,6 +369,10 @@ def demander_consigne(parent, params, titre, cle, consigne_philpdf):
     zone = QPlainTextEdit()
     zone.setPlaceholderText(_("Votre consigne (laisser vide pour la consigne habituelle)"))
     v.addWidget(zone, 1)
+    # une consigne tapee ne reste en memoire que si on le demande (sinon elle sert pour cette fois seulement)
+    garder = QCheckBox(_("Garder cette consigne dans la liste, pour la reprendre plus tard"))
+    garder.setChecked(False)
+    v.addWidget(garder)
     cb.currentIndexChanged.connect(lambda i: cb.itemData(i) and zone.setPlainText(cb.itemData(i)))
     voir = QPushButton(_("Voir la consigne de PhilPDF"))
     voir.setCheckable(True)
@@ -400,7 +404,7 @@ def demander_consigne(parent, params, titre, cle, consigne_philpdf):
         return None
     ia.MOTEUR_FORCE = cb_ia.currentData() if cb_ia.count() > 1 else None   # pour cette demande
     perso = zone.toPlainText().strip()
-    if perso:
+    if perso and garder.isChecked():
         params[cle] = [perso] + [h for h in historique if h != perso][:9]
         params.enregistrer()
     return perso

@@ -317,6 +317,62 @@ class TestsMoteur {
         contenuGarde(f, "/Im0 Do")
     }
 
+    @Test fun listeAPlusieursChoix() {
+        val d = ouvrir(pdfTexte("plusieurs.pdf"))
+        runBlocking {
+            d.creerChamps(listOf(ChampDetecte(0, "liste", Rect(300f, 170f, 450f, 230f), "Villes", choix = listOf("Nice", "Cannes", "Antibes"))))
+            val c = d.champA(0, Point(400f, 200f))!!
+            val (p0, _) = d.proprietesChamp(c)!!
+            p0.plusieurs = true
+            assertTrue(d.ecrireReglesChamp(c, Regles.vide(), listOf("Nice", "Cannes", "Antibes"), p0))
+            val c2 = d.champA(0, Point(400f, 200f))!!
+            assertTrue("liste ouverte a plusieurs choix", c2.plusieurs)
+            assertTrue(d.remplirPlusieurs(c2, listOf("Antibes", "Nice")))
+        }
+        nettoyer()
+        val f = enregistrer(d, "plusieurs-choix.pdf")
+        sansDebris(f)
+        val relu = ouvrir(f)
+        val c3 = runBlocking { relu.champA(0, Point(400f, 200f)) }!!
+        assertEquals("choix gardes, dans l'ordre de la liste", listOf("Nice", "Antibes"), c3.choisis)
+    }
+
+    @Test fun imagesDeLaPage() {
+        // image placee par « q 523 0 0 126 36 600 cm /Im0 Do Q » : 523 x 126 pt, en bas a gauche a (36, 600) en PDF
+        val d = ouvrir(pdfImage("images.pdf", "PHILPDF"))
+        val (l, t) = runBlocking { d.images(0) }
+        assertEquals("une image sur la page", 1, l.size)
+        val i = l[0]
+        val c = i.cadre(t)
+        assertEquals("largeur", 523f, c[2] - c[0], 1f)
+        assertEquals("haut de l'image (page affichee)", 842f - 726f, c[1], 1f)
+        assertNotNull("trouvee sous le doigt", runBlocking { d.imageA(0, Point(300f, 180f)) })
+        // deplacer de 10 pt vers la droite, tourner d'un quart de tour, miroir, puis verifier apres enregistrement
+        assertTrue(runBlocking { d.transformerImage(i, ImagesPdf.M.translation(10f, 0f)) })
+        val i2 = runBlocking { d.images(0) }.first.single()
+        assertEquals("deplacee", c[0] + 10f, i2.cadre(t)[0], 1f)
+        val cc = i2.cadre(t)
+        assertTrue(runBlocking { d.transformerImage(i2, ImagesPdf.autour((cc[0] + cc[2]) / 2, (cc[1] + cc[3]) / 2, ImagesPdf.M.rotationEcran(90f))) })
+        val i3 = runBlocking { d.images(0) }.first.single()
+        val c3 = i3.cadre(t)
+        assertEquals("tournee : largeur et hauteur echangees", 126f, c3[2] - c3[0], 1.5f)
+        assertTrue(runBlocking { d.miroirImage(i3, true) })
+        nettoyer()
+        val f = enregistrer(d, "images-modifiees.pdf")
+        sansDebris(f)
+        val relu = ouvrir(f)
+        val l4 = runBlocking { relu.images(0) }.first
+        assertEquals("toujours une seule image", 1, l4.size)
+        assertEquals("tournee apres enregistrement", 126f, l4[0].cadre(t).let { it[2] - it[0] }, 1.5f)
+        // enregistrer l'image en PNG, la remplacer, la supprimer
+        val png = runBlocking { relu.exporterImage(l4[0], File(dossier, "image.png")) }
+        assertTrue("PNG enregistre", png != null && png.length() > 100)
+        assertTrue(runBlocking { relu.remplacerImage(l4[0], png!!.readBytes()) })
+        assertEquals(1, runBlocking { relu.images(0) }.first.size)
+        assertTrue(runBlocking { relu.supprimerImage(runBlocking { relu.images(0) }.first.single()) })
+        assertEquals("image retiree", 0, runBlocking { relu.images(0) }.first.size)
+    }
+
     @Test fun debrisRepares() {
         // fichier abime par une version precedente : des chaines au milieu de la liste des contenus de la page
         val src = pdfImage("abime-source.pdf", "PHILPDF")

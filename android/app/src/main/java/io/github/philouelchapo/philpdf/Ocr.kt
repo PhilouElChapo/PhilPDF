@@ -28,7 +28,11 @@ object Ocr {
     }
 
     /** Langues proposees (code Tesseract, nom, taille approximative a telecharger). Le francais est livre avec l'appli. */
-    data class Langue(val code: String, val nom: String, val mo: Float, val iso: String)
+    data class Langue(val code: String, val nomFr: String, val mo: Float, val iso: String) {
+        /** Nom de la langue dans la langue du telephone (Français, English, Español…). */
+        val nom: String get() = java.util.Locale(iso).getDisplayLanguage(java.util.Locale.getDefault())
+            .replaceFirstChar { it.titlecase(java.util.Locale.getDefault()) }.ifBlank { nomFr }
+    }
     val LANGUES = listOf(
         Langue("fra", "Français", 1.1f, "fr"), Langue("eng", "Anglais", 4.0f, "en"), Langue("spa", "Espagnol", 2.2f, "es"),
         Langue("ita", "Italien", 2.4f, "it"), Langue("deu", "Allemand", 1.5f, "de"), Langue("por", "Portugais", 1.9f, "pt"),

@@ -2754,5 +2754,18 @@
  "{n} Mo": "{n} MB",
  "{n} Ko": "{n} KB",
  "Date de modification": "Änderungsdatum",
- "Tri des fichiers des emplacements": "Sortierung der Dateien an Speicherorten"
+ "Tri des fichiers des emplacements": "Sortierung der Dateien an Speicherorten",
+ "Garder cette consigne dans la liste, pour la reprendre plus tard": "Diese Anweisung in der Liste behalten, um sie später wieder zu verwenden",
+ "Supprimer ce style": "Diesen Stil löschen",
+ "Retire le style choisi de « Mes styles » (sur tous vos postes)": "Entfernt den gewählten Stil aus „Meine Stile“ (auf allen Ihren Computern)",
+ "Choisissez d'abord un de vos styles dans la liste.": "Wählen Sie zuerst einen Ihrer Stile in der Liste.",
+ "Votre consigne est envoyée avec le texte du paragraphe, suivie de ces règles :": "Ihre Anweisung wird mit dem Text des Absatzes gesendet, gefolgt von diesen Regeln:",
+ "L'IMAGE": "BILD",
+ "RETOUCHE": "RETUSCHE",
+ "↺ Tourner à gauche": "↺ Nach links drehen",
+ "↻ Tourner à droite": "↻ Nach rechts drehen",
+ "Recadrer...": "Zuschneiden...",
+ "Tracez sur l'image le rectangle à garder, puis cliquez « Recadrer » de nouveau": "Zeichnen Sie auf dem Bild das zu behaltende Rechteck und klicken Sie dann erneut auf „Zuschneiden“",
+ "Tracez sur l'image le rectangle à garder, puis cliquez de nouveau « Recadrer... ».": "Zeichnen Sie auf dem Bild das zu behaltende Rechteck und klicken Sie dann erneut auf „Zuschneiden...“.",
+ "Zone très grande (le fond de l'image) : elle a pris sa couleur dominante. Pour effacer une tache ou un mot, choisissez une petite zone, ou baissez la tolérance.": "Sehr großer Bereich (der Bildhintergrund): Er hat seine vorherrschende Farbe erhalten. Um einen Fleck oder ein Wort zu löschen, wählen Sie einen kleinen Bereich oder verringern Sie die Toleranz."
 }

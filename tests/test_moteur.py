@@ -111,3 +111,14 @@ dessins.tourner(d[0], nouveau, 90)
 dessins.supprimer(d[0], next(r for r in dessins.groupes(d[0]) if r.y0 > 500 and r.x0 > 350))
 assert len(dessins.groupes(d[0])) == 1
 print("Dessins vectoriels : deplaces, tournes, supprimes : OK")
+
+# --- retouche : « Effacer » sur le fond d'un scan choisi a la baguette (grande zone) : rapide, et pas noirci
+import time as _t
+_img = np.full((2300, 1650, 4), 255, np.uint8)
+_img[500:540, 200:900, :3] = 0                                     # une ligne de « texte » noir
+_m = R.baguette(_img, 10, 10, 30)
+_d0 = _t.time()
+_o = R.effacer(_img, _m, "fond")
+assert _t.time() - _d0 < 5 and _o[:, :, :3][_m].mean() > 240, ("grande zone : remplie de sa couleur", _t.time() - _d0)
+assert _o[520, 500, 0] == 0, "le texte hors zone reste"
+print("Retouche, grande zone effacee : OK")

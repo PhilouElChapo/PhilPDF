@@ -488,6 +488,7 @@ fun SaisieChamp(etat: EtatLecteur, c: InfoChamp, fermer: () -> Unit) {
     // liste a saisie libre : la zone a taper part vide si la valeur actuelle est un des choix
     var t by remember(c) { mutableStateOf(if (c.options.isNotEmpty() && c.valeur in c.options) "" else c.valeur) }
     var erreur by remember { mutableStateOf<String?>(null) }
+    var coches by remember(c) { mutableStateOf(c.choisis.toSet()) }
     val r = remember(c) { try { JSONObject(c.regles) } catch (_: Exception) { JSONObject() } }
     val fmt = r.optJSONObject("format")
     val genre = fmt?.optString("genre") ?: "aucun"
@@ -512,7 +513,15 @@ fun SaisieChamp(etat: EtatLecteur, c: InfoChamp, fermer: () -> Unit) {
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 r.optJSONObject("aide")?.optString("entree")?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, color = Color(0xFF0F6CBD)) }
-                if (c.options.isNotEmpty()) {
+                if (c.options.isNotEmpty() && c.plusieurs) {
+                    c.options.forEach { o ->
+                        Row(Modifier.fillMaxWidth().clickable { coches = if (o in coches) coches - o else coches + o },
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(o in coches, { coches = if (it) coches + o else coches - o })
+                            Text(o)
+                        }
+                    }
+                } else if (c.options.isNotEmpty()) {
                     c.options.forEach { o ->
                         Text(o, Modifier.fillMaxWidth().clickable { valider(o) }
                             .padding(vertical = 10.dp), fontWeight = if (o == c.valeur) FontWeight.Bold else FontWeight.Normal)
@@ -532,7 +541,9 @@ fun SaisieChamp(etat: EtatLecteur, c: InfoChamp, fermer: () -> Unit) {
             }
         },
         confirmButton = {
-            if (c.options.isEmpty() || (c.libre && t.isNotBlank() && t !in c.options)) TextButton(onClick = { valider(t.trim()) }) { Text(stringResource(R.string.ok)) }
+            if (c.plusieurs && c.options.isNotEmpty()) TextButton(onClick = {
+                portee.launch { etat.doc.remplirPlusieurs(c, coches.toList()); fermer() } }) { Text(stringResource(R.string.ok)) }
+            else if (c.options.isEmpty() || (c.libre && t.isNotBlank() && t !in c.options)) TextButton(onClick = { valider(t.trim()) }) { Text(stringResource(R.string.ok)) }
         },
         dismissButton = { TextButton(onClick = fermer) { Text(stringResource(R.string.annuler)) } })
 }

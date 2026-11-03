@@ -107,6 +107,11 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var ordreTab by mutableStateOf<Int?>(null)
     var reinitialiser by mutableStateOf(false)                 // bouton « Reinitialiser » : confirmation                // ordre de tabulation de cette page
     var nouvelleListe by mutableStateOf<Pair<Int, com.artifex.mupdf.fitz.Rect>?>(null)   // liste deroulante a remplir
+    /** Outil Images : image choisie, repere de sa page (PDF -> ecran), geste en cours (apercu du cadre). */
+    var image by mutableStateOf<ImagesPdf.Placee?>(null)
+    var repereImage by mutableStateOf(ImagesPdf.M.I)
+    var gesteImage by mutableStateOf<ImagesPdf.M?>(null)
+    var texteImagePartagee = ""
     /** Portee du lecteur : une pose lancee ici va au bout meme quand l'apercu disparait de l'ecran. */
     var portee: kotlinx.coroutines.CoroutineScope? = null
     val page: Int get() = liste.firstVisibleItemIndex
@@ -121,6 +126,7 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
     var fermerApres by remember { mutableStateOf(false) }
     val portee = rememberCoroutineScope()
     etat.portee = portee
+    etat.texteImagePartagee = stringResource(R.string.image_partagee)
     val erreurEcriture = stringResource(R.string.enregistrement_impossible)
     val enregistre = stringResource(R.string.enregistre)
     fun ecrireVers(u: android.net.Uri, puisFermer: Boolean) {
@@ -679,11 +685,27 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                 Outil.TEXTE -> detectTapGestures(onTap = { o ->
                     portee.launch {
                         val p = d.paragrapheA(n, k(o))
-                        // page scannee (aucun texte) : on propose la reconnaissance du texte
-                        if (p == null) { if (etat.doc.modifiable && d.ocrPossible(n, k(o))) etat.ocr = n else etat.message = "aucun_texte" }
-                        else etat.paragraphe = p
+                        if (p != null) { etat.paragraphe = p; return@launch }
+                        // pas de texte ici : une image (photo, scan) devient l'objet choisi, avec ses outils (OCR compris)
+                        val im = if (etat.doc.modifiable) d.imageA(n, k(o)) else null
+                        if (im != null) {
+                            etat.repereImage = d.images(n).second
+                            etat.image = im
+                            r.outil = Outil.IMAGE
+                        } else if (etat.doc.modifiable && d.ocrPossible(n, k(o))) etat.ocr = n else etat.message = "aucun_texte"
                     }
                 })
+                Outil.IMAGE -> with(GestesImage) {
+                    gerer(etat, n, w) { pt ->
+                        portee.launch {
+                            val (l, t) = d.images(n)
+                            etat.repereImage = t
+                            etat.image = l.filter { it.contient(t, pt.x, pt.y) }
+                                .minByOrNull { x -> x.cadre(t).let { (it[2] - it[0]) * (it[3] - it[1]) } }
+                            if (etat.image == null) etat.message = ctx.getString(R.string.image_aucune)
+                        }
+                    }
+                }
                 // l'apercu suit le doigt (toucher ou glisser) ; rien n'est pose avant « Poser ici »
                 Outil.POSER -> awaitEachGesture {
                     val bas = awaitFirstDown()
@@ -831,6 +853,7 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
         val a = etat.aPoser
         if (marques && r.outil == Outil.POSER && a != null && f != null && f.first == n) Apercu(etat, a, f.second, w)
         etat.deplacement?.takeIf { marques && it.page == n }?.let { Deplacement(etat, it, w) }
+        if (marques && r.outil == Outil.IMAGE) CadreImage(etat, n, w)
     }
 }
 

@@ -15,7 +15,7 @@ ul{padding-left:20px}a{color:var(--rouge)}footer{color:var(--gris);font-size:14p
 <p class="langue"><a href="#en">English</a></p>
 <p class="marque"><b>PhilFactory</b> · PhilPDF</p>
 <h1>Règles de confidentialité</h1>
-<p class="sous">PhilPDF pour Windows, Linux et Android · mise à jour : 31 octobre 2026</p>
+<p class="sous">PhilPDF pour Windows, Linux et Android · mise à jour : 4 novembre 2026</p>
 <div class="carte"><h2 style="margin-top:0">En bref</h2>
 <p>PhilPDF fonctionne sur votre appareil. PhilFactory ne reçoit, ne collecte et ne conserve aucune de vos données :
 il n'y a ni serveur PhilPDF, ni compte PhilPDF, ni statistique d'utilisation, ni publicité, ni pisteur.</p></div>
@@ -42,6 +42,10 @@ exigences d'usage limité (Limited Use). Elles ne sont ni vendues, ni partagées
 <h2>Assistant IA (facultatif, Windows et Linux)</h2>
 <p>Si vous l'utilisez, le texte concerné est envoyé à Claude (Anthropic) ou Gemini (Google) avec votre propre clef API, uniquement
 quand vous cliquez, et selon les règles de ces services. Rien n'est envoyé sinon.</p>
+<h2>Reconnaissance du texte (OCR)</h2>
+<p>La lecture du texte des scans se fait sur votre appareil (Tesseract), rien n'est envoyé. Sur Android, si vous choisissez une autre
+langue que le français, son fichier de langue est téléchargé une seule fois depuis le projet Tesseract sur GitHub, sans aucune information
+sur vous ni sur vos documents.</p>
 <h2>Journal</h2>
 <p>PhilPDF tient un journal des échanges (connexions, synchronisation, mises à jour) sur votre appareil, mots de passe et jetons masqués.
 Il ne quitte l'appareil que si vous choisissez de le partager.</p>
@@ -68,7 +72,9 @@ Access tokens stay on your device (system vault on Windows and Linux, encrypted 
 the service concerned. PhilPDF's use and transfer of information received from Google APIs adheres to the
 <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the
 Limited Use requirements; this data is never sold, shared, used for advertising or to train AI models.</p>
-<p>Server passwords (NAS, FTP, WebDAV) are kept in the system vault, never in plain text. The optional AI assistant (Windows, Linux) sends text
+<p>Server passwords (NAS, FTP, WebDAV) are kept in the system vault, never in plain text. Text recognition (OCR) runs on
+your device; on Android, a language other than French is downloaded once from the Tesseract project on GitHub, without any information
+about you or your documents. The optional AI assistant (Windows, Linux) sends text
 to Claude or Gemini with your own API key only when you click. A local log of connections and updates, with secrets masked, stays on your
 device unless you share it. Update checks read GitHub's public release page; no personal data is sent. Uninstalling PhilPDF deletes
 everything it stored on the device; the "PhilPDF" folder in your Drive is yours to delete. PhilPDF is not directed at children and collects

@@ -223,7 +223,13 @@ class DialogueRetoucheIA(QDialog):
         b = QPushButton(_("Enregistrer comme mon style..."))
         b.setToolTip(_("Garde cette consigne dans « Mes styles » (suit sur vos autres postes)"))
         b.clicked.connect(self._enregistrer_style)
-        d.addWidget(b)
+        hs = QHBoxLayout()
+        hs.addWidget(b)
+        self.b_sup_style = QPushButton(_("Supprimer ce style"))
+        self.b_sup_style.setToolTip(_("Retire le style choisi de « Mes styles » (sur tous vos postes)"))
+        self.b_sup_style.clicked.connect(self._supprimer_style)
+        hs.addWidget(self.b_sup_style)
+        d.addLayout(hs)
         self.c_zones = QCheckBox(_("Mode avancé : entourer des zones"))
         self.c_zones.setToolTip(_("Entourez à la souris les zones à modifier et dites, pour chacune, ce qu'il faut en faire"))
         self.c_zones.toggled.connect(self._mode_zones)
@@ -271,7 +277,23 @@ class DialogueRetoucheIA(QDialog):
                 groupe = g
             self.cb_style.addItem("   " + nom, consigne)
 
+    def _style_perso(self):
+        nom = self.cb_style.currentText().strip()
+        return next((x for x in self.params.get("ia_styles_perso") or [] if x["nom"] == nom
+                     and x["consigne"] == self.cb_style.currentData()), None)
+
+    def _supprimer_style(self):
+        st = self._style_perso()
+        if st is None:
+            QMessageBox.information(self, _("Mes styles"), _("Choisissez d'abord un de vos styles dans la liste."))
+            return
+        self.params["ia_styles_perso"] = [x for x in self.params.get("ia_styles_perso") or [] if x is not st]
+        self.params.enregistrer()
+        self._remplir_styles()
+
     def _style_choisi(self, _i):
+        if hasattr(self, "b_sup_style"):
+            self.b_sup_style.setEnabled(self._style_perso() is not None)
         c = self.cb_style.currentData()
         if not c:
             return

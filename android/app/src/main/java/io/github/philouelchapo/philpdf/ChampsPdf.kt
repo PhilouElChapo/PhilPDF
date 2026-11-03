@@ -18,7 +18,9 @@ object ChampsPdf {
     const val FF_OBLIGATOIRE = 2
     const val FF_MULTILIGNE = 1 shl 12
     const val FF_POUSSOIR = 1 shl 16
+    const val FF_COMBO = 1 shl 17
     const val FF_LIBRE = 1 shl 18
+    const val FF_PLUSIEURS = 1 shl 21                 // liste ouverte : plusieurs choix possibles
     const val FF_TRI = 1 shl 19
     private const val F_MASQUE = 2
     private const val F_IMPRIME = 4
@@ -45,7 +47,7 @@ object ChampsPdf {
         var multi: Boolean = false, var maxlen: Int = 0, var alignement: Int = 0, var defaut: String = "",
         var police: String = "Helv", var taille: Float = 0f, var couleur: Triple<Float, Float, Float> = Triple(0f, 0f, 0f),
         // liste
-        var trier: Boolean = false, var libre: Boolean = false,
+        var trier: Boolean = false, var libre: Boolean = false, var plusieurs: Boolean = false,
         // case a cocher
         var style: String = "coche", var couleurSigne: Triple<Float, Float, Float> = Triple(0f, 0f, 0f),
         var valeurCochee: String = "Oui", var cocheeDefaut: Boolean = false,
@@ -100,6 +102,7 @@ object ChampsPdf {
         } ?: Regex("([\\d.]+)\\s+g\\b").find(d)?.let { m -> val x = m.groupValues[1].toFloat(); p.couleur = Triple(x, x, x); p.couleurSigne = p.couleur }
         p.trier = ff and FF_TRI != 0
         p.libre = ff and FF_LIBRE != 0
+        p.plusieurs = ff and FF_PLUSIEURS != 0
         val ca = w.get("MK").get("CA")
         if (ca.isString) {
             val c = ca.asString()
@@ -151,7 +154,11 @@ object ChampsPdf {
         if (genre == PDFWidget.TYPE_TEXT) bit(FF_MULTILIGNE, p.multi)
         if (genre == PDFWidget.TYPE_COMBOBOX || genre == PDFWidget.TYPE_LISTBOX) {
             bit(FF_TRI, p.trier)
-            if (genre == PDFWidget.TYPE_COMBOBOX) bit(FF_LIBRE, p.libre)
+            // plusieurs choix : liste ouverte (comme Acrobat, une liste deroulante n'en permet qu'un)
+            val etait = ff and FF_PLUSIEURS != 0
+            bit(FF_PLUSIEURS, p.plusieurs)
+            if (p.plusieurs) bit(FF_COMBO, false) else if (etait) bit(FF_COMBO, true)
+            bit(FF_LIBRE, p.libre && !p.plusieurs)
         }
         ch.put("Ff", ff)
         var fa = w.get("F").let { if (it.isNull) 0 else it.asInteger() }

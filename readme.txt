@@ -10,6 +10,16 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.11.0
+- PhilPDF en anglais sur un telephone qui n'est pas en francais (en francais sinon). Les langues de la
+  reconnaissance du texte s'affichent dans la langue du telephone.
+- Images de la page, comme sous Windows (Modifier > Texte et images > Images) : toucher une image la choisit ; on la
+  glisse pour la deplacer, la poignee carree l'agrandit, la ronde la tourne. Boutons : quart de tour, miroir
+  gauche-droite et haut-bas, reconnaitre le texte, remplacer par une autre image, enregistrer l'image, supprimer.
+  Avec l'outil « Modifier le texte », toucher une image (une page scannee par exemple) la choisit aussi.
+- Formulaires : liste ouverte a plusieurs choix (on coche les choix au remplissage) ; nombres : symbole avant le
+  nombre, affichage des nombres negatifs (-12,50, en rouge, entre parentheses), comme sous Windows.
+
 1.10.4
 - PDF abimes par les versions 1.10.0 et precedentes (debris dans le contenu d'une page) : Acrobat montrait la page
   vide. Ils sont maintenant repares des l'ouverture, avec un message ; enregistrez pour garder la correction.
@@ -294,6 +304,18 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.61
+- Retouche d'image : « Effacer » sur une grande zone (le fond blanc d'un scan choisi a la baguette magique) faisait
+  planter PhilPDF ou noircissait toute l'image. La zone prend maintenant sa couleur dominante, en un instant ; les
+  petites zones (une tache, un mot) sont reconstituees seulement autour d'elles, bien plus vite.
+- Volet de retouche plus clair : rubrique « L'IMAGE » (tourner a gauche ou a droite, miroir, Recadrer..., Remplacer...,
+  Enregistrer...) puis « RETOUCHE ». « Recadrer... » : un premier clic prepare le rectangle, on trace la partie a
+  garder, un second clic recadre. Plus aucun bouton tronque (verifie par les essais automatiques).
+- IA : une consigne tapee (resume, consigne libre d'un paragraphe) n'est plus gardee d'office : cochez « Garder cette
+  consigne dans la liste » pour la retrouver. Les consignes deja gardees se suppriment (bouton « Supprimer »), y
+  compris celles de la consigne libre ; « Mes styles » de la retouche d'image par l'IA ont un bouton « Supprimer ce
+  style ».
 
 0.9.60
 - Ouvrir ou enregistrer sur un emplacement (NAS, FTP, WebDAV, Google Drive, OneDrive, Dropbox, Box) : colonnes Nom,

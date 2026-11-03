@@ -2535,12 +2535,17 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         aide.setStyleSheet("color:#555;font-size:12px")
         v.addWidget(aide)
         # transformations simples, comme Acrobat : tourner, retourner, recadrer, remplacer, enregistrer
+        t_img = QLabel(_("L'IMAGE"))
+        t_img.setStyleSheet("font-size:11px;font-weight:600;color:#777;letter-spacing:1px;margin-top:6px")
+        v.addWidget(t_img)
         cadre_t = QWidget()
-        ft = FluxLayout(cadre_t, marge=0, espace=6)
-        for txt, aide_, fn in ((_("↺ 90°"), _("Tourner d'un quart de tour à gauche"), lambda: self.tourner_objet(90)),
-                               (_("↻ 90°"), _("Tourner d'un quart de tour à droite"), lambda: self.tourner_objet(-90)),
+        ft = FluxLayout(cadre_t, marge=0, espace=6)     # les boutons passent a la ligne plutot que d'etre tronques
+        for txt, aide_, fn in ((_("↺ Tourner à gauche"), _("Tourner d'un quart de tour à gauche"), lambda: self.tourner_objet(90)),
+                               (_("↻ Tourner à droite"), _("Tourner d'un quart de tour à droite"), lambda: self.tourner_objet(-90)),
                                (_("⇆ Miroir"), _("Retourner gauche-droite"), lambda: self.retourner_objet(True)),
                                (_("⇅ Miroir"), _("Retourner haut-bas"), lambda: self.retourner_objet(False)),
+                               (_("Recadrer..."), _("Tracez sur l'image le rectangle à garder, puis cliquez « Recadrer » de nouveau"),
+                                self.recadrer_image),
                                (_("Remplacer..."), _("Mettre une autre image à la même place"), self.remplacer_image),
                                (_("Enregistrer..."), _("Enregistrer l'image dans un fichier (PNG ou JPEG)"),
                                 self.enregistrer_image)):
@@ -2550,6 +2555,9 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             b.clicked.connect(lambda _c=False, fn=fn: fn())
             ft.addWidget(b)
         v.addWidget(cadre_t)
+        t_ret = QLabel(_("RETOUCHE"))
+        t_ret.setStyleSheet("font-size:11px;font-weight:600;color:#777;letter-spacing:1px;margin-top:6px")
+        v.addWidget(t_ret)
         self.ret_auto = QCheckBox(_("Correction automatique"))
         self.ret_auto.setToolTip(_("Niveaux et couleurs corrigés automatiquement"))
         self.ret_auto.toggled.connect(lambda _c: self._maj_retouche())
@@ -2624,10 +2632,6 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             b.clicked.connect(lambda _c=False, m=mode: self.effacer_zone(m))
             hb.addWidget(b)
         v.addWidget(cadre_b)
-        b = QPushButton(_("Recadrer : garder seulement la zone"))
-        b.setToolTip(_("Choisissez la partie à garder (rectangle, lasso ou baguette), puis cliquez ici"))
-        b.clicked.connect(self.recadrer_image)
-        v.addWidget(b)
         b = QPushButton(_("Désélectionner la zone"))
         b.clicked.connect(lambda: (self.retouche and self.retouche.update(masque=None), self._maj_retouche()))
         v.addWidget(b)
@@ -2677,7 +2681,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             b_.setChecked(False)
         if recadrer:
             self.ret_b_cadre.setChecked(True)
-            self.message(_("Tracez sur l'image la partie à garder, puis cliquez « Recadrer : garder seulement la zone »."))
+            self.message(_("Tracez sur l'image le rectangle à garder, puis cliquez de nouveau « Recadrer... »."))
         self.pile_volet.setCurrentIndex(3)
         self._montrer_volet()
         self._calcul_apercu()
@@ -2792,7 +2796,15 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         if not rt or rt["masque"] is None:
             self.message(_("Choisissez d'abord une zone : baguette magique, entourer à la main ou rectangle."))
             return
-        rt["src"] = R.effacer(rt["src"], rt["masque"], mode)
+        grande = mode == "fond" and rt["masque"].mean() > R.GRANDE_ZONE
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            rt["src"] = R.effacer(rt["src"], rt["masque"], mode)
+        finally:
+            QApplication.restoreOverrideCursor()
+        if grande:
+            self.message(_("Zone très grande (le fond de l'image) : elle a pris sa couleur dominante. Pour effacer une "
+                           "tache ou un mot, choisissez une petite zone, ou baissez la tolérance."))
         rt["petit"] = R.reduire(rt["src"])
         rt["masque"] = None
         rt["modifiee"] = True
@@ -3591,8 +3603,12 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         import numpy as np
         from moteur import retouche as R
         rt = getattr(self, "retouche", None)
-        if not rt or rt.get("masque") is None or not rt["masque"].any():
-            self.message(_("Choisissez d'abord la partie à garder : rectangle, lasso ou baguette magique."))
+        if not rt:
+            return
+        if rt.get("masque") is None or not rt["masque"].any():
+            # premier clic : l'outil rectangle est pret ; second clic (zone tracee) : on recadre
+            self.ret_b_cadre.setChecked(True)
+            self.message(_("Tracez sur l'image le rectangle à garder, puis cliquez de nouveau « Recadrer... »."))
             return
         ys, xs = np.nonzero(rt["masque"])
         zone = (xs.min(), ys.min(), xs.max() + 1, ys.max() + 1)

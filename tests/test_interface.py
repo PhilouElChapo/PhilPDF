@@ -1103,6 +1103,11 @@ orot_.ret_b_baguette.setChecked(True)
 verif(orot_.clic_baguette(c_) and orot_.retouche["masque"] is not None and orot_.retouche["masque"].any(),
       "retouche : baguette magique, zone choisie par sa couleur (image tournée comprise)")
 capture(w, "54_retouche.png")
+# aucun bouton du volet de retouche n'est tronque (texte plus large que le bouton)
+from PySide6.QtWidgets import QPushButton as _QPB
+_trop = [b_.text() for b_ in orot_.pile_volet.widget(3).findChildren(_QPB)
+         if b_.isVisible() and b_.text() and b_.fontMetrics().horizontalAdvance(b_.text()) + 12 > b_.width()]
+verif(not _trop, f"retouche : aucun bouton tronqué ({_trop})")
 orot_.effacer_zone("transparent")
 avant_ = orot_.doc.tobytes()
 orot_.appliquer_retouche()

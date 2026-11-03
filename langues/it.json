@@ -2754,5 +2754,18 @@
  "{n} Mo": "{n} MB",
  "{n} Ko": "{n} KB",
  "Date de modification": "Data di modifica",
- "Tri des fichiers des emplacements": "Ordinamento dei file delle posizioni"
+ "Tri des fichiers des emplacements": "Ordinamento dei file delle posizioni",
+ "Garder cette consigne dans la liste, pour la reprendre plus tard": "Conserva questa istruzione nell'elenco per riutilizzarla più tardi",
+ "Supprimer ce style": "Elimina questo stile",
+ "Retire le style choisi de « Mes styles » (sur tous vos postes)": "Rimuove lo stile scelto da «I miei stili» (su tutti i tuoi computer)",
+ "Choisissez d'abord un de vos styles dans la liste.": "Scegli prima uno dei tuoi stili nell'elenco.",
+ "Votre consigne est envoyée avec le texte du paragraphe, suivie de ces règles :": "La tua istruzione viene inviata con il testo del paragrafo, seguita da queste regole:",
+ "L'IMAGE": "IMMAGINE",
+ "RETOUCHE": "RITOCCO",
+ "↺ Tourner à gauche": "↺ Ruota a sinistra",
+ "↻ Tourner à droite": "↻ Ruota a destra",
+ "Recadrer...": "Ritaglia...",
+ "Tracez sur l'image le rectangle à garder, puis cliquez « Recadrer » de nouveau": "Traccia sull'immagine il rettangolo da conservare, poi fai di nuovo clic su «Ritaglia»",
+ "Tracez sur l'image le rectangle à garder, puis cliquez de nouveau « Recadrer... ».": "Traccia sull'immagine il rettangolo da conservare, poi fai di nuovo clic su «Ritaglia...».",
+ "Zone très grande (le fond de l'image) : elle a pris sa couleur dominante. Pour effacer une tache ou un mot, choisissez une petite zone, ou baissez la tolérance.": "Zona molto grande (lo sfondo dell'immagine): ha preso il suo colore dominante. Per cancellare una macchia o una parola, scegli una zona piccola o abbassa la tolleranza."
 }

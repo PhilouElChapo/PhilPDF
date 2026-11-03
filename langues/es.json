@@ -2754,5 +2754,18 @@
  "{n} Mo": "{n} MB",
  "{n} Ko": "{n} KB",
  "Date de modification": "Fecha de modificación",
- "Tri des fichiers des emplacements": "Orden de los archivos de las ubicaciones"
+ "Tri des fichiers des emplacements": "Orden de los archivos de las ubicaciones",
+ "Garder cette consigne dans la liste, pour la reprendre plus tard": "Guardar esta instrucción en la lista para reutilizarla más tarde",
+ "Supprimer ce style": "Eliminar este estilo",
+ "Retire le style choisi de « Mes styles » (sur tous vos postes)": "Quita el estilo elegido de «Mis estilos» (en todos sus equipos)",
+ "Choisissez d'abord un de vos styles dans la liste.": "Elija primero uno de sus estilos en la lista.",
+ "Votre consigne est envoyée avec le texte du paragraphe, suivie de ces règles :": "Su instrucción se envía con el texto del párrafo, seguida de estas reglas:",
+ "L'IMAGE": "IMAGEN",
+ "RETOUCHE": "RETOQUE",
+ "↺ Tourner à gauche": "↺ Girar a la izquierda",
+ "↻ Tourner à droite": "↻ Girar a la derecha",
+ "Recadrer...": "Recortar...",
+ "Tracez sur l'image le rectangle à garder, puis cliquez « Recadrer » de nouveau": "Trace en la imagen el rectángulo que desea conservar y vuelva a hacer clic en «Recortar»",
+ "Tracez sur l'image le rectangle à garder, puis cliquez de nouveau « Recadrer... ».": "Trace en la imagen el rectángulo que desea conservar y vuelva a hacer clic en «Recortar...».",
+ "Zone très grande (le fond de l'image) : elle a pris sa couleur dominante. Pour effacer une tache ou un mot, choisissez une petite zone, ou baissez la tolérance.": "Zona muy grande (el fondo de la imagen): ha tomado su color dominante. Para borrar una mancha o una palabra, elija una zona pequeña o baje la tolerancia."
 }

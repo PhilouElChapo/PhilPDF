@@ -149,6 +149,9 @@ def _anneau(masque, largeur=6):
     return (loin > 0) & ~(pres > 0)
 
 
+GRANDE_ZONE = 0.2        # part de l'image au-dela de laquelle « Effacer » ne reconstruit plus (remplit)
+
+
 def effacer(img, masque, mode="fond"):
     """Efface la zone choisie : « fond » = remplie avec ce qui l'entoure, « transparent », « blanc ».
     « fond » regarde d'abord l'anneau de pixels autour de la zone :
@@ -169,6 +172,13 @@ def effacer(img, masque, mode="fond"):
         out[:, :, 3][masque] = 255
         return out
     zone = cv2.dilate(masque.astype(np.uint8), np.ones((3, 3), np.uint8), iterations=1) > 0   # bords anti-crenelage
+    if zone.mean() > GRANDE_ZONE:
+        # grande zone (le fond blanc d'un scan choisi a la baguette) : on ne reconstruit pas toute l'image a partir des
+        # lettres qui l'entourent (tres long, et tout devenait noir) ; la zone prend sa propre couleur dominante
+        coul = np.median(img[:, :, :3][zone].reshape(-1, 3), axis=0).astype(np.uint8)
+        out[:, :, :3][zone] = coul
+        out[:, :, 3][zone] = 255
+        return out
     anneau = _anneau(zone)
     if not anneau.any():
         anneau = ~zone
@@ -184,13 +194,20 @@ def effacer(img, masque, mode="fond"):
         out[:, :, :3][zone] = med.astype(np.uint8)
         out[:, :, 3][zone] = 255
         return out
-    # autour : varie -> inpainting ; la couleur cachee des pixels transparents est neutralisee avant
-    rgb = np.ascontiguousarray(img[:, :, :3]).copy()
-    rgb[alpha < 128] = med.astype(np.uint8)
-    m = zone.astype(np.uint8) * 255
-    rayon = 5 if zone.sum() < 4000 else 9
-    out[:, :, :3] = cv2.inpaint(rgb, m, rayon, cv2.INPAINT_TELEA)
-    out[:, :, 3] = np.where(zone, cv2.inpaint(np.ascontiguousarray(alpha), m, rayon, cv2.INPAINT_TELEA), alpha)
+    # autour : varie -> inpainting, seulement sur le rectangle qui entoure la zone (rapide meme sur un grand scan) ;
+    # la couleur cachee des pixels transparents est neutralisee avant
+    ys, xs = np.nonzero(zone)
+    marge = 12
+    y0, y1 = max(0, ys.min() - marge), min(img.shape[0], ys.max() + 1 + marge)
+    x0, x1 = max(0, xs.min() - marge), min(img.shape[1], xs.max() + 1 + marge)
+    rgb = np.ascontiguousarray(img[y0:y1, x0:x1, :3]).copy()
+    a = np.ascontiguousarray(alpha[y0:y1, x0:x1])
+    rgb[a < 128] = med.astype(np.uint8)
+    z = zone[y0:y1, x0:x1]
+    m = z.astype(np.uint8) * 255
+    rayon = 5 if z.sum() < 4000 else 9
+    out[y0:y1, x0:x1, :3] = cv2.inpaint(rgb, m, rayon, cv2.INPAINT_TELEA)
+    out[y0:y1, x0:x1, 3] = np.where(z, cv2.inpaint(a, m, rayon, cv2.INPAINT_TELEA), a)
     return out
 
 

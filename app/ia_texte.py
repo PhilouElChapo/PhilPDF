@@ -37,6 +37,10 @@ REGLES = ("Réponds uniquement par le texte final, sans guillemets, sans comment
           "français sauf si le texte est dans une autre langue : garde alors sa langue.")
 
 
+def consigne_libre_aide():
+    return _("Votre consigne est envoyée avec le texte du paragraphe, suivie de ces règles :") + "\n\n" + REGLES
+
+
 def _executer(parent, texte, f):
     from .dialogues_ia import executer
     return executer(parent, texte, f)
@@ -48,16 +52,12 @@ def transformer(parent, params, texte, action):
     if not texte.strip():
         return None
     consigne = CONSIGNES.get(action)
-    if action == "libre":
-        from PySide6.QtWidgets import QInputDialog
-        hist = list(params.get("ia_consignes_texte") or [])
-        c, ok = QInputDialog.getItem(parent, _("Consigne libre"), _("Que faut-il faire de ce texte ?"),
-                                     hist or [""], 0, True)
-        if not ok or not c.strip():
+    if action == "libre":                          # consignes deja utilisees : supprimables, gardees sur demande
+        from .dialogues_ia import demander_consigne
+        c = demander_consigne(parent, params, _("Consigne libre"), "ia_consignes_texte", consigne_libre_aide())
+        if not c:
             return None
-        consigne = c.strip()
-        params["ia_consignes_texte"] = [consigne] + [h for h in hist if h != consigne][:9]
-        params.enregistrer()
+        consigne = c
     if not preparer_envoi(parent, params, texte):
         return None
     try:

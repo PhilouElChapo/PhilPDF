@@ -97,6 +97,58 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         return r
     }
 
+    // ---------------------------------------------------------------- images de la page (comme sous Windows)
+    /** Images placees sur la page et matrice du repere PDF vers la page affichee. */
+    suspend fun images(n: Int): Pair<List<ImagesPdf.Placee>, ImagesPdf.M> = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val p = pdf ?: return@withContext emptyList<ImagesPdf.Placee>() to ImagesPdf.M.I
+            val page = p.loadPage(n) as PDFPage
+            try { ImagesPdf.lister(p, page, n) to ImagesPdf.transformations(page).first }
+            catch (e: Exception) { Journal.ecrire("image", "lecture des images, page ${n + 1} : $e"); emptyList<ImagesPdf.Placee>() to ImagesPdf.M.I }
+            finally { page.destroy() }
+        }
+    }
+
+    /** L'image sous le doigt (la plus petite si plusieurs se superposent), ou null. */
+    suspend fun imageA(n: Int, pt: Point): ImagesPdf.Placee? {
+        val (l, t) = images(n)
+        return l.filter { it.contient(t, pt.x, pt.y) }.minByOrNull { val c = it.cadre(t); (c[2] - c[0]) * (c[3] - c[1]) }
+    }
+
+    /** Transformation de l'image dans le repere de la page affichee (deplacer, agrandir, tourner). */
+    suspend fun transformerImage(i: ImagesPdf.Placee, g: ImagesPdf.M): Boolean = operation("Image") { p ->
+        surPage(p, i.page) { page -> ImagesPdf.placer(p, page, i, ImagesPdf.apres(page, i, g)) }
+    }
+
+    /** Miroir gauche-droite (horizontal) ou haut-bas, sur place. */
+    suspend fun miroirImage(i: ImagesPdf.Placee, horizontal: Boolean): Boolean = operation("Miroir") { p ->
+        val f = if (horizontal) ImagesPdf.M(-1f, 0f, 0f, 1f, 1f, 0f) else ImagesPdf.M(1f, 0f, 0f, -1f, 0f, 1f)
+        surPage(p, i.page) { page -> ImagesPdf.placer(p, page, i, f * i.ctm) }
+    }
+
+    suspend fun supprimerImage(i: ImagesPdf.Placee): Boolean = operation("Supprimer l'image") { p ->
+        surPage(p, i.page) { page -> ImagesPdf.supprimer(p, page, i) }
+    }
+
+    suspend fun remplacerImage(i: ImagesPdf.Placee, octets: ByteArray): Boolean = operation("Remplacer l'image") { p ->
+        surPage(p, i.page) { page -> ImagesPdf.remplacer(p, page, i, com.artifex.mupdf.fitz.Image(octets)) }
+    }
+
+    /** L'image telle qu'elle est dans le PDF, enregistree en PNG (null si illisible). */
+    suspend fun exporterImage(i: ImagesPdf.Placee, dest: File): File? = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val p = pdf ?: return@withContext null
+            try {
+                var pm = p.loadImage(p.newIndirect(i.objet, 0)).toPixmap()
+                val n = pm.numberOfComponents
+                if (n != 1 && n != 3) pm = pm.convertToColorSpace(com.artifex.mupdf.fitz.ColorSpace.DeviceRGB, null, null, 0, true)
+                dest.parentFile?.mkdirs()
+                pm.saveAsPNG(dest.absolutePath)
+                dest
+            } catch (e: Exception) { Journal.ecrire("image", "enregistrement impossible : $e"); null }
+        }
+    }
+
     /** Debris laisses par une version precedente de PhilPDF (jusqu'a 1.10.0) dans les listes Contents et Annots des
      *  pages : MuPDF les ignore, mais Acrobat affichait alors la page vide. Retires (sauf document signe : la
      *  signature serait cassee). Renvoie les numeros des pages reparees (a partir de 1). */
@@ -469,7 +521,12 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                             try { w.options?.toList() ?: emptyList() } catch (_: Exception) { emptyList() },
                             try { w.isReadOnly } catch (_: Exception) { false }, try { w.name ?: "" } catch (_: Exception) { "" },
                             try { Regles.lire(w.getObject()).toString() } catch (_: Exception) { "" },
-                            try { Regles.champDe(w.getObject()).get("Ff").let { !it.isNull && it.asInteger() and ChampsPdf.FF_LIBRE != 0 } } catch (_: Exception) { false })
+                            try { Regles.champDe(w.getObject()).get("Ff").let { !it.isNull && it.asInteger() and ChampsPdf.FF_LIBRE != 0 } } catch (_: Exception) { false },
+                            try { Regles.champDe(w.getObject()).get("Ff").let { !it.isNull && it.asInteger() and ChampsPdf.FF_PLUSIEURS != 0 } } catch (_: Exception) { false },
+                            try { Regles.champDe(w.getObject()).get("V").let { v -> when {
+                                v.isArray -> (0 until v.size()).map { v.get(it).asString() }
+                                v.isString -> listOf(v.asString())
+                                else -> emptyList() } } } catch (_: Exception) { emptyList() })
                         break
                     }
                 }
@@ -506,6 +563,30 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
             ok
         }
         return erreur
+    }
+
+    /** Liste ouverte a plusieurs choix : les choix faits (dans l'ordre de la liste), et leurs numeros (/I). */
+    suspend fun remplirPlusieurs(c: InfoChamp, choix: List<String>): Boolean = operation("Remplir") { p ->
+        var nom = ""
+        val ok = surPage(p, c.page) { page ->
+            val w = page.widgets?.getOrNull(c.index) ?: return@surPage false
+            nom = w.name ?: ""
+            val ch = Regles.champDe(w.getObject())
+            val faits = c.options.filter { it in choix }
+            when (faits.size) {
+                0 -> { ch.delete("V"); ch.delete("I") }
+                1 -> ch.put("V", p.newString(faits[0]))
+                else -> { val a = p.newArray(); faits.forEach { a.push(it) }; ch.put("V", a) }
+            }
+            if (faits.size > 1) {
+                val idx = p.newArray(); c.options.forEachIndexed { k, o -> if (o in faits) idx.push(k.toFloat()) }
+                ch.put("I", idx)
+            } else ch.delete("I")
+            w.update()
+            true
+        }
+        if (ok) apresValeur(p, nom)
+        ok
     }
 
     /** Date ou heure du moment dans un champ vide qui le demande (comme Acrobat a l'entree du champ). */
@@ -1366,4 +1447,6 @@ data class InfoAnnot(val page: Int, val index: Int, val genre: Int, val couleur:
 data class InfoChamp(val page: Int, val index: Int, val genre: Int, val valeur: String, val options: List<String>,
                      val lectureSeule: Boolean, val nom: String = "", val regles: String = "",
                      /** liste deroulante ou l'on peut aussi taper sa propre valeur (« saisie libre ») */
-                     val libre: Boolean = false)
+                     val libre: Boolean = false,
+                     /** liste ouverte a plusieurs choix, et les choix faits */
+                     val plusieurs: Boolean = false, val choisis: List<String> = emptyList())

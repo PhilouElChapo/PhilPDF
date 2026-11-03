@@ -174,7 +174,14 @@ fun DialogueProprietes(etat: EtatLecteur, c: InfoChamp, fermer: () -> Unit) {
                             "nombre", "pourcentage" -> {
                                 Puces((0..4).map { "$it" to stringResource(R.string.f_decimales, it) }, f.optInt("decimales").toString()) { d -> maj { f.put("decimales", d.toInt()) } }
                                 Puces(Regles.SEPARATEURS.map { (k, t) -> "$k" to t.first }, f.optInt("separateur", 2).toString()) { d -> maj { f.put("separateur", d.toInt()) } }
-                                if (g == "nombre") Champ(f.optString("symbole"), stringResource(R.string.f_symbole)) { f.put("symbole", it) }
+                                if (g == "nombre") {
+                                    Champ(f.optString("symbole"), stringResource(R.string.f_symbole)) { f.put("symbole", it) }
+                                    Case(f.optBoolean("symbole_avant"), stringResource(R.string.f_symbole_avant)) { v -> maj { f.put("symbole_avant", v) } }
+                                    Text(stringResource(R.string.f_negatifs), fontSize = 13.sp)
+                                    Puces(listOf("0" to "-12,50", "1" to stringResource(R.string.f_neg_rouge), "2" to "(12,50)",
+                                        "3" to stringResource(R.string.f_neg_parentheses_rouge)), f.optInt("negatif", 0).toString()) { d ->
+                                        maj { f.put("negatif", d.toInt()) } }
+                                }
                             }
                             "masque" -> if (cle == "masque") Champ(f.optString("masque"), stringResource(R.string.f_masque_aide)) { f.put("masque", it) }
                         }

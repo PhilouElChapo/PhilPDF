@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
 private fun coul(t: Triple<Float, Float, Float>) = Color(t.first, t.second, t.third)
 
 @Composable
-private fun Case(oui: Boolean, texte: String, changer: (Boolean) -> Unit) {
+internal fun Case(oui: Boolean, texte: String, changer: (Boolean) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Checkbox(oui, changer)
         Text(texte, fontSize = 13.sp)
@@ -98,7 +98,8 @@ fun SectionsReglages(c: InfoChamp, p: ChampsPdf.Proprietes, r: org.json.JSONObje
         Titre(R.string.prop_liste)
         val l = choix.lines().map { it.trim() }.filter { it.isNotEmpty() }
         Case(p.trier, stringResource(R.string.prop_trier)) { maj { p.trier = it } }
-        if (g != PDFWidget.TYPE_LISTBOX) Case(p.libre, stringResource(R.string.prop_saisie_libre)) { maj { p.libre = it } }
+        Case(p.plusieurs, stringResource(R.string.prop_plusieurs_choix)) { maj { p.plusieurs = it; if (it) p.libre = false } }
+        if (!p.plusieurs) Case(p.libre, stringResource(R.string.prop_saisie_libre)) { maj { p.libre = it } }
         Text(stringResource(R.string.prop_choix_defaut), fontSize = 13.sp)
         Puces(listOf("" to stringResource(R.string.prop_aucun_vide)) + (if (p.trier) l.sortedBy { it.lowercase() } else l).map { it to it }, p.defaut) { k ->
             maj { p.defaut = k } }

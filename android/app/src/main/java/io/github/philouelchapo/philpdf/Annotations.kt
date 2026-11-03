@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 enum class Outil(val icone: String, val texte: Int) {
     MAIN("oeil", R.string.outil_lire),
     TEXTE("modifier", R.string.outil_texte),        // modifier le texte de la page (police d'origine gardee)
+    IMAGE("image", R.string.outil_image),           // images de la page : deplacer, agrandir, tourner, miroir...
     SURLIGNER("surligner", R.string.outil_surligner),
     SOULIGNER("souligner", R.string.outil_souligner),
     BARRER("barrer", R.string.outil_barrer),
@@ -54,7 +55,7 @@ enum class Outil(val icone: String, val texte: Int) {
 /** Groupes du volet Modifier : un bouton par groupe, ses outils s'affichent dessous (rien n'est noye). */
 enum class GroupeOutils(val icone: String, val texte: Int, val outils: List<Outil>) {
     LIRE("oeil", R.string.outil_lire, listOf(Outil.MAIN)),
-    TEXTE("modifier", R.string.outil_texte, listOf(Outil.TEXTE)),
+    TEXTE("modifier", R.string.groupe_texte_images, listOf(Outil.TEXTE, Outil.IMAGE)),
     ANNOTER("surligner", R.string.groupe_annoter, listOf(Outil.SURLIGNER, Outil.SOULIGNER, Outil.BARRER, Outil.NOTE,
         Outil.DESSIN, Outil.RECTANGLE, Outil.ELLIPSE, Outil.FLECHE)),
     EFFACER("supprimer", R.string.groupe_effacer, listOf(Outil.GOMME, Outil.EFFACER_ZONE)),
@@ -183,6 +184,7 @@ fun aideOutil(o: Outil): Int = when {
     o == Outil.GOMME -> R.string.aide_gomme
     o == Outil.POSER -> R.string.aide_poser
     o == Outil.TEXTE -> R.string.aide_texte_modif
+    o == Outil.IMAGE -> R.string.aide_image
     o.champ -> R.string.aide_champ
     o == Outil.EFFACER_ZONE -> R.string.aide_effacer_zone
     o == Outil.SIGNER_NUM -> R.string.aide_signer_num

@@ -2763,5 +2763,18 @@
  "{n} Mo": "{n} MB",
  "{n} Ko": "{n} KB",
  "Date de modification": "Date modified",
- "Tri des fichiers des emplacements": "Sorting of location files"
+ "Tri des fichiers des emplacements": "Sorting of location files",
+ "Garder cette consigne dans la liste, pour la reprendre plus tard": "Keep this instruction in the list, to use it again later",
+ "Supprimer ce style": "Delete this style",
+ "Retire le style choisi de « Mes styles » (sur tous vos postes)": "Removes the chosen style from “My styles” (on all your computers)",
+ "Choisissez d'abord un de vos styles dans la liste.": "First choose one of your styles in the list.",
+ "Votre consigne est envoyée avec le texte du paragraphe, suivie de ces règles :": "Your instruction is sent with the paragraph text, followed by these rules:",
+ "L'IMAGE": "IMAGE",
+ "RETOUCHE": "RETOUCH",
+ "↺ Tourner à gauche": "↺ Rotate left",
+ "↻ Tourner à droite": "↻ Rotate right",
+ "Recadrer...": "Crop...",
+ "Tracez sur l'image le rectangle à garder, puis cliquez « Recadrer » de nouveau": "Draw on the image the rectangle to keep, then click “Crop” again",
+ "Tracez sur l'image le rectangle à garder, puis cliquez de nouveau « Recadrer... ».": "Draw on the image the rectangle to keep, then click “Crop...” again.",
+ "Zone très grande (le fond de l'image) : elle a pris sa couleur dominante. Pour effacer une tache ou un mot, choisissez une petite zone, ou baissez la tolérance.": "Very large area (the image background): it took its dominant color. To erase a stain or a word, choose a small area, or lower the tolerance."
 }
