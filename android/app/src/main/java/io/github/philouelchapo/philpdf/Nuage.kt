@@ -119,7 +119,7 @@ class Nuage private constructor(val id: String) {
             true
         } catch (e: android.accounts.OperationCanceledException) {
             Journal.ecrire("compte", "Google Drive (compte du téléphone) : annulé")
-            throw ErreurCompte("Connexion annulée.")
+            throw ErreurCompte(Textes.t(R.string.err_connexion_annulee))
         } catch (e: Exception) {
             Journal.ecrire("compte", "Google Drive (compte du téléphone) : refusé par Google ($e)")
             false
@@ -130,7 +130,7 @@ class Nuage private constructor(val id: String) {
         val f = AccountManager.get(ctx).getAuthToken(Account(email, "com.google"), "oauth2:" + FOURNISSEURS[0].portee,
             null, activite?.get(), null, null)
         return f.result.getString(AccountManager.KEY_AUTHTOKEN)      // bloquant : jamais sur le fil de l'interface
-            ?: throw ErreurCompte("Google demande de vous reconnecter.")
+            ?: throw ErreurCompte(Textes.t(R.string.err_google_reconnecter))
     }
 
     // ------------------------------------------------------------ navigateur (tous les fournisseurs)
@@ -141,7 +141,7 @@ class Nuage private constructor(val id: String) {
      */
     suspend fun connecterNavigateur(ctx: Context, f: Fournisseur, indice: String?, attente: (String) -> Unit): Unit =
         withContext(Dispatchers.IO) {
-            if (!disponible(f)) throw ErreurCompte("Cette version n'a pas l'identifiant ${f.nom} de PhilPDF.")
+            if (!disponible(f)) throw ErreurCompte(Textes.t(R.string.err_identifiant, f.nom))
             val b64 = Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP
             val verif = Base64.encodeToString(ByteArray(48).also { SecureRandom().nextBytes(it) }, b64)
             val defi = Base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(verif.toByteArray()), b64)
@@ -150,7 +150,7 @@ class Nuage private constructor(val id: String) {
             // toute connexion venant d'ailleurs que le telephone lui-meme est refusee
             val srv = f.ports.firstNotNullOfOrNull { p ->
                 try { ServerSocket().apply { reuseAddress = true; bind(InetSocketAddress(p), 8) } } catch (_: Exception) { null }
-            } ?: throw ErreurCompte("Les ports ${f.ports.joinToString()} sont occupés sur ce téléphone.")
+            } ?: throw ErreurCompte(Textes.t(R.string.err_ports, f.ports.joinToString()))
             var code: String? = null
             var retour = ""
             try { srv.use { s0 ->
@@ -168,7 +168,7 @@ class Nuage private constructor(val id: String) {
                 }
                 while (code == null) {
                     val so = try { s0.accept() } catch (e: java.net.SocketTimeoutException) {
-                        throw ErreurCompte("Pas de réponse dans les 5 minutes : recommencez.")
+                        throw ErreurCompte(Textes.t(R.string.err_pas_de_reponse))
                     }
                     so.use {
                         if (!it.inetAddress.isLoopbackAddress) return@use
@@ -183,7 +183,7 @@ class Nuage private constructor(val id: String) {
                         it.getOutputStream().flush()
                         Journal.ecrire("compte", "${f.nom} : réponse du navigateur — " + when {
                             ok -> "accord reçu"; q["error"] != null -> "refus (${q["error"]})"; else -> "autre demande (${chemin.take(40)})" })
-                        if (q["error"] != null) throw ErreurCompte("${f.nom} a refusé : ${q["error_description"] ?: q["error"]}")
+                        if (q["error"] != null) throw ErreurCompte(Textes.t(R.string.err_a_refuse, f.nom, q["error_description"] ?: q["error"]))
                         if (ok) code = q["code"]
                     }
                 }
@@ -192,7 +192,7 @@ class Nuage private constructor(val id: String) {
             if (!premierPlan.value) {
                 attente(ctx.getString(R.string.attente_retour))
                 withTimeoutOrNull(10 * 60_000L) { premierPlan.first { it } }
-                    ?: run { AttenteConnexion.arreter(ctx); throw ErreurCompte("PhilPDF n'a pas été rouvert : recommencez.") }
+                    ?: run { AttenteConnexion.arreter(ctx); throw ErreurCompte(Textes.t(R.string.err_pas_rouvert)) }
             }
             AttenteConnexion.arreter(ctx)
             Journal.ecrire("compte", "${f.nom} : PhilPDF revenu au premier plan, échange du code...")
@@ -204,7 +204,7 @@ class Nuage private constructor(val id: String) {
                 Journal.ecrire("compte", "${f.nom} : échange du code refusé (${e.message})"); throw e
             }
             val durable = r.optString("refresh_token")
-            if (durable.isEmpty()) throw ErreurCompte("${f.nom} n'a pas donné d'autorisation durable : recommencez.")
+            if (durable.isEmpty()) throw ErreurCompte(Textes.t(R.string.err_pas_durable, f.nom))
             acces = r.getString("access_token"); expire = System.currentTimeMillis() + (r.optLong("expires_in", 3600) - 120) * 1000
             ids.clear()
             prefs(ctx).edit().clear().putString("fournisseur", f.cle).putString("email", indice ?: "")
@@ -217,14 +217,14 @@ class Nuage private constructor(val id: String) {
         // pas de redirection automatique : certains navigateurs la bloquent (« null est inaccessible ») ; un vrai bouton marche partout
         val lien = "intent://connecte#Intent;scheme=philpdf;package=${BuildConfig.APPLICATION_ID};end"
         val msg = when {
-            ok -> "C'est fait : PhilPDF est relié à votre ${f.nom}."
-            vide -> "PhilPDF attend la réponse de ${f.nom}."
-            else -> "Connexion refusée${erreur?.let { " ($it)" } ?: ""}."
+            ok -> Textes.t(R.string.retour_relie, f.nom)
+            vide -> Textes.t(R.string.retour_attente, f.nom)
+            else -> Textes.t(R.string.retour_refuse, erreur?.let { " ($it)" } ?: "")
         }
-        return """<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        return """<!doctype html><html lang="${java.util.Locale.getDefault().language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PhilPDF</title><style>body{font-family:sans-serif;text-align:center;padding:40px 16px;background:#f3f3f3;color:#222}
 a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;color:#fff;border-radius:28px;text-decoration:none;font-size:20px}</style></head>
-<body><h2>$msg</h2><a href="$lien">Revenir à PhilPDF</a></body></html>"""
+<body><h2>$msg</h2><a href="$lien">${Textes.t(R.string.retour_revenir)}</a></body></html>"""
     }
 
     // ------------------------------------------------------------ jeton d'acces et appels
@@ -232,12 +232,12 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
         val a = acces
         if (a != null && System.currentTimeMillis() < expire) return@withContext a
         val j = when (mode(ctx)) {
-            "telephone" -> jetonTelephone(ctx, email(ctx) ?: throw ErreurCompte("Aucun compte relié."))
+            "telephone" -> jetonTelephone(ctx, email(ctx) ?: throw ErreurCompte(Textes.t(R.string.err_aucun_compte)))
                 .also { expire = System.currentTimeMillis() + 50 * 60_000 }
             "navigateur" -> {
                 val f = fournisseur(ctx)
                 val r = prefs(ctx).getString("jeton", null)?.let { Coffre.dechiffrer(it) }
-                    ?: throw ErreurCompte("Autorisation perdue : reconnectez le compte ${f.nom}.")
+                    ?: throw ErreurCompte(Textes.t(R.string.err_autorisation_perdue, f.nom))
                 val champs = mutableMapOf("client_id" to f.id, "refresh_token" to r, "grant_type" to "refresh_token")
                 if (f.secret.isNotEmpty()) champs["client_secret"] = f.secret
                 val o = try { JSONObject(String(post(f.jeton, champs))) } catch (e: Exception) {
@@ -250,7 +250,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 expire = System.currentTimeMillis() + (o.optLong("expires_in", 3600) - 120) * 1000
                 o.getString("access_token")
             }
-            else -> throw ErreurCompte("Aucun compte relié.")
+            else -> throw ErreurCompte(Textes.t(R.string.err_aucun_compte))
         }
         acces = j
         j
@@ -282,7 +282,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
             val b = (if (code in 200..299) c.inputStream else c.errorStream)?.use { it.readBytes() } ?: ByteArray(0)
             return@withContext Triple(code, b, null)
         }
-        throw ErreurCompte("${fournisseur(ctx).nom} : autorisation refusée.")
+        throw ErreurCompte(Textes.t(R.string.err_autorisation_refusee, fournisseur(ctx).nom))
     }
 
     /** Contenu d'une adresse (en suivant une redirection signee, sans envoyer le jeton). */
@@ -291,7 +291,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
         val (code, b, ailleurs) = appel(ctx, methode, url, corps, entetes)
         if (ailleurs != null) return withContext(Dispatchers.IO) { URL(ailleurs).openStream().use { it.readBytes() } }
         if (code == 404 || code == 409) return null
-        if (code !in 200..299) throw ErreurCompte("${fournisseur(ctx).nom} : erreur $code ${String(b).take(200)}")
+        if (code !in 200..299) throw ErreurCompte(Textes.t(R.string.err_code, fournisseur(ctx).nom, code, String(b).take(200)))
         return b
     }
 
@@ -301,7 +301,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
         val (code, b, _) = appel(ctx, methode, url, envoi,
             if (envoi != null) mapOf("Content-Type" to "application/json") else emptyMap())
         if (code == 404 || code == 409) return null
-        if (code !in 200..299) throw ErreurCompte("${fournisseur(ctx).nom} : erreur $code ${String(b).take(200)}")
+        if (code !in 200..299) throw ErreurCompte(Textes.t(R.string.err_code, fournisseur(ctx).nom, code, String(b).take(200)))
         return JSONObject(String(b))
     }
 
@@ -389,7 +389,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
 
     /** Copie le fichier sur le telephone et retient d'ou il vient (pour « Meme fichier »). */
     suspend fun ouvrirFichier(ctx: Context, e: Entree): Uri {
-        val b = contenuFichier(ctx, e.id) ?: throw ErreurCompte("Fichier introuvable sur ${fournisseur(ctx).nom}.")
+        val b = contenuFichier(ctx, e.id) ?: throw ErreurCompte(Textes.t(R.string.err_fichier_introuvable, fournisseur(ctx).nom))
         val f = File(ctx.filesDir, "comptes/fichiers/$id/${empreinte(e.id)}/${e.nom.replace('/', '_')}")
         withContext(Dispatchers.IO) { f.parentFile?.mkdirs(); f.writeBytes(b) }
         Distants.retenir(ctx, f, Origine(id, e.id, e.nom))
@@ -423,7 +423,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
         }
         if (code !in 200..299) {
             Journal.ecrire("compte", "${fournisseur(ctx).nom} : renvoi de $nom refusé ($code)")
-            throw ErreurCompte("${fournisseur(ctx).nom} : envoi refusé ($code) ${String(b).take(160)}")
+            throw ErreurCompte(Textes.t(R.string.err_envoi_refuse, fournisseur(ctx).nom, code, String(b).take(160)))
         }
         Journal.ecrire("compte", "${fournisseur(ctx).nom} : $nom renvoyé à sa place")
     }
@@ -432,18 +432,18 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
     /** Depose le PDF dans PhilPDF/Partages du compte et renvoie un lien public (lecture seule), a mettre dans un e-mail. */
     suspend fun partagerParLien(ctx: Context, nom: String, octets: ByteArray): String {
         val f = fournisseur(ctx)
-        if (ids[""] == null && !trouverRacine(ctx)) throw ErreurCompte("${f.nom} : dossier PhilPDF introuvable (synchronisez d'abord avec PhilPDF Windows).")
+        if (ids[""] == null && !trouverRacine(ctx)) throw ErreurCompte(Textes.t(R.string.err_dossier_philpdf_windows, f.nom))
         val racine = ids[""]!!
         fun erreur(etape: String, code: Int, b: ByteArray): Nothing {
             Journal.ecrire("partage", "${f.nom} : $etape refusé ($code) ${String(b).take(200)}")
-            throw ErreurCompte("${f.nom} : $etape refusé ($code). ${String(b).take(160)}")
+            throw ErreurCompte(Textes.t(R.string.err_etape_refusee, f.nom, etape, code, String(b).take(160)))
         }
         val lien: String = when (f.cle) {
             "gdrive" -> {
                 val dossier = gEnfant(ctx, racine, "Partages")?.getString("id")
                     ?: json(ctx, "POST", "$GOOGLE/files?fields=id", JSONObject().put("name", "Partages")
                         .put("mimeType", "application/vnd.google-apps.folder").put("parents", JSONArray().put(racine)))?.getString("id")
-                    ?: throw ErreurCompte("${f.nom} : dossier Partages impossible à créer.")
+                    ?: throw ErreurCompte(Textes.t(R.string.err_dossier_creer, f.nom, "Partages"))
                 val bord = "PhilPDF" + java.util.UUID.randomUUID().toString().replace("-", "")
                 val meta = JSONObject().put("name", nom).put("parents", JSONArray().put(dossier)).toString()
                 val corps = ("--$bord\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n$meta\r\n" +
@@ -483,15 +483,14 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                     String(b2).contains("shared_link_already_exists") -> JSONObject(String(b2)).optJSONObject("error")
                         ?.optJSONObject("shared_link_already_exists")?.optJSONObject("metadata")?.optString("url")
                         ?.takeIf { it.isNotEmpty() } ?: erreur("lien", c2, b2)
-                    String(b2).contains("missing_scope") -> throw ErreurCompte("Dropbox : l'application PhilPDF n'a pas le droit de créer des liens " +
-                        "(permission « sharing.write » à cocher dans la console Dropbox, puis reconnecter le compte).")
+                    String(b2).contains("missing_scope") -> throw ErreurCompte(Textes.t(R.string.err_dropbox_liens))
                     else -> erreur("lien", c2, b2)
                 }
             }
             "box" -> {
                 val dossier = bEnfant(ctx, racine, "Partages")
                     ?: json(ctx, "POST", "$BOX/folders", JSONObject().put("name", "Partages").put("parent", JSONObject().put("id", racine)))?.optString("id")
-                    ?: throw ErreurCompte("Box : dossier Partages impossible à créer.")
+                    ?: throw ErreurCompte(Textes.t(R.string.err_dossier_creer, "Box", "Partages"))
                 val bord = "PhilPDF" + java.util.UUID.randomUUID().toString().replace("-", "")
                 val attr = JSONObject().put("name", nom).put("parent", JSONObject().put("id", dossier)).toString()
                 val corps = ("--$bord\r\nContent-Disposition: form-data; name=\"attributes\"\r\n\r\n$attr\r\n" +
@@ -505,7 +504,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 if (c2 !in 200..299) erreur("lien", c2, b2)
                 JSONObject(String(b2)).getJSONObject("shared_link").getString("url")
             }
-            else -> throw ErreurCompte("${f.nom} : partage par lien non disponible.")
+            else -> throw ErreurCompte(Textes.t(R.string.err_pas_de_lien, f.nom))
         }
         Journal.ecrire("partage", "${f.nom} : $nom déposé dans PhilPDF/Partages, lien créé")
         return lien
@@ -514,7 +513,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
     /** Ecrit (ou remplace) PhilPDF/<dossier>/<nom> dans le compte synchronise. */
     suspend fun deposer(ctx: Context, dossier: String, nom: String, octets: ByteArray) {
         val f = fournisseur(ctx)
-        if (ids[""] == null && !trouverRacine(ctx)) throw ErreurCompte("${f.nom} : dossier PhilPDF introuvable.")
+        if (ids[""] == null && !trouverRacine(ctx)) throw ErreurCompte(Textes.t(R.string.err_dossier_philpdf, f.nom))
         val racine = ids[""]!!
         val type = mapOf("Content-Type" to "application/octet-stream")
         val (code, b, _) = when (f.cle) {
@@ -522,7 +521,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 val d = gEnfant(ctx, racine, dossier)?.getString("id")
                     ?: json(ctx, "POST", "$GOOGLE/files?fields=id", JSONObject().put("name", dossier)
                         .put("mimeType", "application/vnd.google-apps.folder").put("parents", JSONArray().put(racine)))?.getString("id")
-                    ?: throw ErreurCompte("${f.nom} : dossier $dossier impossible à créer.")
+                    ?: throw ErreurCompte(Textes.t(R.string.err_dossier_creer, f.nom, dossier))
                 val existant = gEnfant(ctx, d, nom)?.getString("id")
                 if (existant != null) appel(ctx, "PATCH", "$GOOGLE_ENVOI/files/$existant?uploadType=media", octets, type)
                 else {
@@ -539,7 +538,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
             "box" -> {
                 val d = bEnfant(ctx, racine, dossier)
                     ?: json(ctx, "POST", "$BOX/folders", JSONObject().put("name", dossier).put("parent", JSONObject().put("id", racine)))?.optString("id")
-                    ?: throw ErreurCompte("Box : dossier $dossier impossible à créer.")
+                    ?: throw ErreurCompte(Textes.t(R.string.err_dossier_creer, "Box", dossier))
                 val existant = bEnfant(ctx, d, nom)
                 val bord = "PhilPDF" + java.util.UUID.randomUUID().toString().replace("-", "")
                 val attr = if (existant != null) "{}" else JSONObject().put("name", nom).put("parent", JSONObject().put("id", d)).toString()
@@ -551,7 +550,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
             }
             else -> Triple(0, ByteArray(0), null)
         }
-        if (code !in 200..299) throw ErreurCompte("${f.nom} : dépôt de $nom refusé ($code) ${String(b).take(160)}")
+        if (code !in 200..299) throw ErreurCompte(Textes.t(R.string.err_depot_refuse, f.nom, nom, code, String(b).take(160)))
     }
 
     // ------------------------------------------------------------ dossier PhilPDF (synchronisation) et lecture de ses fichiers
@@ -705,7 +704,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 try { return f() } catch (e: java.net.UnknownHostException) { derniere = e } catch (e: java.net.ConnectException) { derniere = e }
                 Thread.sleep(1500L * (i + 1))
             }
-            throw ErreurCompte("Pas de réseau pour PhilPDF (${derniere?.message}). Vérifiez la connexion, et que l'économiseur de données ne bloque pas PhilPDF.")
+            throw ErreurCompte(Textes.t(R.string.err_reseau, derniere?.message))
         }
 
         private fun post(url: String, champs: Map<String, String>): ByteArray = reessayer {
@@ -715,7 +714,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
             c.outputStream.use { it.write(formulaire(champs).toByteArray()) }
             if (c.responseCode !in 200..299) {
                 val msg = c.errorStream?.readBytes()?.let { String(it) }?.take(200) ?: ""
-                throw ErreurCompte("Autorisation : erreur ${c.responseCode} $msg")
+                throw ErreurCompte(Textes.t(R.string.err_autorisation_code, c.responseCode, msg))
             }
             c.inputStream.use { it.readBytes() }
         }
@@ -749,7 +748,7 @@ object Distants {
     /** Apres « Meme fichier » sur une copie venue d'un compte : on la renvoie a sa place. */
     suspend fun renvoyer(ctx: Context, uri: Uri) {
         val (f, o) = origine(ctx, uri) ?: return
-        val n = Nuage.liste(ctx).firstOrNull { it.id == o.compte } ?: throw ErreurCompte("Le compte d'origine n'est plus relié : choisissez « Autre nom ».")
+        val n = Nuage.liste(ctx).firstOrNull { it.id == o.compte } ?: throw ErreurCompte(Textes.t(R.string.err_compte_origine))
         n.renvoyer(ctx, o.id, o.nom, withContext(Dispatchers.IO) { f.readBytes() })
     }
 }
@@ -800,7 +799,7 @@ object Bibliotheque {
 
     fun oublier(ctx: Context) { dossier(ctx).deleteRecursively() }
 
-    private fun sync(ctx: Context): Nuage = Nuage.synchro(ctx) ?: throw ErreurCompte("Aucun compte de synchronisation relié.")
+    private fun sync(ctx: Context): Nuage = Nuage.synchro(ctx) ?: throw ErreurCompte(Textes.t(R.string.err_aucune_synchro))
 
     private fun versElement(o: JSONObject) = ElementBiblio(o.optString("id"), o.optString("genre"), o.optString("nom"),
         o.optString("ext", ".pdf").ifEmpty { ".pdf" }, o.optString("hash"), o.optString("maj"), o.optString("categorie"),

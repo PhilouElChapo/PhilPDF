@@ -251,7 +251,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
     /** Ecrit les pages choisies dans un nouveau PDF (le document ouvert n'est pas touche). */
     suspend fun extraire(pages: List<Int>, dest: File): File = verrou.withLock {
         withContext(Dispatchers.IO) {
-            val p = pdf ?: throw IllegalStateException("PDF non modifiable")
+            val p = pdf ?: throw IllegalStateException(Textes.t(R.string.err_pdf_non_modifiable))
             dest.parentFile?.mkdirs()
             val nouveau = PDFDocument()
             try {
@@ -612,18 +612,21 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
     private fun messageSaisie(err: String, r: org.json.JSONObject, valeur: String): String {
         val fmt = Regles.format(r)
         return when (err) {
-            "nombre" -> "« $valeur » n'est pas un nombre."
-            "date" -> "Date attendue au format " + fmt.optString("date", "dd/mm/yyyy").replace("yyyy", "aaaa").replace("dd", "jj") + "."
-            "heure" -> "Heure attendue au format " + fmt.optString("heure", "HH:MM") + "."
-            "masque" -> "Saisie attendue : " + fmt.optString("masque")
+            "nombre" -> Textes.t(R.string.saisie_nombre, valeur)
+            "date" -> Textes.t(R.string.saisie_date, fmt.optString("date", "dd/mm/yyyy").let { if (java.util.Locale.getDefault().language == "fr") it.replace("yyyy", "aaaa").replace("dd", "jj") else it })
+            "heure" -> Textes.t(R.string.saisie_heure, fmt.optString("heure", "HH:MM"))
+            "masque" -> Textes.t(R.string.saisie_masque, fmt.optString("masque"))
             "plage" -> r.optJSONObject("plage")?.let { pl ->
                 val a = if (pl.isNull("min")) null else Regles.valeurBrute(pl.optDouble("min"))
                 val b = if (pl.isNull("max")) null else Regles.valeurBrute(pl.optDouble("max"))
-                when { a != null && b != null -> "La valeur doit être comprise entre $a et $b."; a != null -> "La valeur doit être au moins $a."
-                    else -> "La valeur doit être au plus $b." }
-            } ?: "Valeur hors limites."
-            "controle" -> Regles.MESSAGES_CONTROLE[r.optString("controle")] ?: "Valeur incorrecte."
-            else -> "Valeur incorrecte."
+                when { a != null && b != null -> Textes.t(R.string.saisie_entre, a, b); a != null -> Textes.t(R.string.saisie_min, a)
+                    else -> Textes.t(R.string.saisie_max, b) }
+            } ?: Textes.t(R.string.saisie_limites)
+            "controle" -> when (r.optString("controle")) {
+                "email" -> Textes.t(R.string.controle_email); "nir" -> Textes.t(R.string.controle_nir)
+                "iban" -> Textes.t(R.string.controle_iban); "siret" -> Textes.t(R.string.controle_siret)
+                "rpps" -> Textes.t(R.string.controle_rpps); else -> Textes.t(R.string.saisie_incorrecte) }
+            else -> Textes.t(R.string.saisie_incorrecte)
         }
     }
 
@@ -812,7 +815,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         if (modifie) ecrire(dest) else withContext(Dispatchers.IO) { fichier.copyTo(dest, overwrite = true) }
         return verrou.withLock {
             withContext(Dispatchers.IO) {
-                val d2 = Document.openDocument(dest.absolutePath) as? PDFDocument ?: throw ErreurCertificat("PDF non modifiable")
+                val d2 = Document.openDocument(dest.absolutePath) as? PDFDocument ?: throw ErreurCertificat(Textes.t(R.string.err_pdf_non_modifiable))
                 try {
                     if (d2.needsPassword()) motDePasseOuverture?.let { d2.authenticatePassword(it) }
                     champsIndirects(d2)
@@ -825,7 +828,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                         val drapeaux = if (img != null) PDFWidget.SIGNATURE_SHOW_LABELS or PDFWidget.SIGNATURE_SHOW_TEXT_NAME or PDFWidget.SIGNATURE_SHOW_DATE
                             else PDFWidget.SIGNATURE_DEFAULT_APPEARANCE
                         if (!w.sign(signataire, drapeaux, img, raison.ifBlank { null }, lieu.ifBlank { null }))
-                            throw ErreurCertificat("Signature refusée par le moteur PDF.")
+                            throw ErreurCertificat(Textes.t(R.string.err_signature_refusee))
                         page.update()
                     } finally { page.destroy() }
                     // ajout a la fin du fichier (les signatures precedentes restent valides) ; sinon fichier reecrit
@@ -900,7 +903,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
             val an = d.findPage(n).get("Annots")
             if (an.isArray) for (i in 0 until an.size()) { val a = an.get(i)
                 if (!a.isIndirect && a.isDictionary && a.get("Subtype").asName() == "Widget")
-                    throw ErreurCertificat("Champ de signature illisible dans ce PDF : tracez un nouveau cadre de signature.") }
+                    throw ErreurCertificat(Textes.t(R.string.err_champ_signature)) }
         }
         if (refs.isNotEmpty()) Journal.ecrire("certificat", "${refs.size} champ(s) du formulaire remis en objet unique avant de signer")
     }
@@ -1151,7 +1154,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         val tmp = ecrire(File(ctx.cacheDir, "ouverts/enregistrement/" + nom.replace('/', '_')))
         withContext(Dispatchers.IO) {
             ctx.contentResolver.openOutputStream(cible, "wt")?.use { s -> tmp.inputStream().use { it.copyTo(s) } }
-                ?: throw IllegalStateException("écriture impossible")
+                ?: throw IllegalStateException(Textes.t(R.string.err_ecriture))
         }
         Distants.renvoyer(ctx, cible)        // copie d'un fichier OneDrive, Dropbox, Box... : renvoyee a sa place
         modifie = false
@@ -1405,7 +1408,7 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
             val copie = File(dossier, nom.replace('/', '_'))
             ctx.contentResolver.openInputStream(uri)?.use { entree ->
                 copie.outputStream().use { sortie -> entree.copyTo(sortie) }
-            } ?: throw IllegalStateException("lecture impossible")
+            } ?: throw IllegalStateException(Textes.t(R.string.err_lecture))
             DocumentPdf(uri, nom, copie, Document.openDocument(copie.absolutePath))
         }
 

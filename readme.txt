@@ -10,6 +10,13 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.11.1
+- Les derniers messages encore en francais sur un telephone en anglais sont traduits : erreurs de connexion aux
+  comptes (Drive, OneDrive, Dropbox, Box), certificats, saisie refusee dans un formulaire, telechargement des
+  langues de reconnaissance, page de retour du navigateur apres la connexion.
+- Tampons prets a l'emploi dans la langue du telephone (RECEIVED ON, PAID ON... en anglais) ; date et heure
+  « at » en anglais, « a » en francais. Noms proposes a l'enregistrement : « (modified) » / « signed » en anglais.
+
 1.11.0
 - PhilPDF en anglais sur un telephone qui n'est pas en francais (en francais sinon). Les langues de la
   reconnaissance du texte s'affichent dans la langue du telephone.

@@ -339,7 +339,7 @@ fun DialogueSigner(etat: EtatLecteur, page: Int, rect: com.artifex.mupdf.fitz.Re
                         catch (x: Exception) { erreur = ctx.getString(R.string.enregistrement_impossible) } finally { occupe = false }
                     }
                 }, enabled = !occupe) { Text(stringResource(R.string.meme_fichier)) }
-                TextButton(onClick = { autreNom.launch(etat.doc.nom.removeSuffix(".pdf") + " signé.pdf") }, enabled = !occupe) {
+                TextButton(onClick = { autreNom.launch(etat.doc.nom.removeSuffix(".pdf") + Textes.t(R.string.suffixe_signe) + ".pdf") }, enabled = !occupe) {
                     Text(stringResource(R.string.autre_nom))
                 }
             }
@@ -352,7 +352,7 @@ fun DialogueSigner(etat: EtatLecteur, page: Int, rect: com.artifex.mupdf.fitz.Re
 private suspend fun ecrireSigne(ctx: android.content.Context, f: java.io.File, u: Uri) {
     withContext(Dispatchers.IO) {
         ctx.contentResolver.openOutputStream(u, "wt")?.use { s -> f.inputStream().use { it.copyTo(s) } }
-            ?: throw IllegalStateException("écriture impossible")
+            ?: throw IllegalStateException(Textes.t(R.string.err_ecriture))
     }
     try { Distants.renvoyer(ctx, u) } catch (_: Exception) {}
 }

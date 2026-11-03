@@ -225,7 +225,7 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
                     }
                     TextButton(onClick = {
                         etat.demandeEnregistrer = false; quitter = false; fermerApres = q
-                        autreNom.launch(doc.nom.removeSuffix(".pdf").removeSuffix(".PDF") + " (modifié).pdf")
+                        autreNom.launch(doc.nom.removeSuffix(".pdf").removeSuffix(".PDF") + Textes.t(R.string.suffixe_modifie) + ".pdf")
                     }) { Text(stringResource(R.string.autre_nom)) }
                     if (q) TextButton(onClick = { quitter = false; fermer() }) {
                         Text(stringResource(R.string.ne_pas_enregistrer), color = Color(0xFFC62828))

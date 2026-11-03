@@ -69,15 +69,15 @@ object Ocr {
                 in 300..399 -> { url = java.net.URL(url, c.getHeaderField("Location")); c.disconnect() }
                 200 -> {
                     c.inputStream.use { e -> tmp.outputStream().use { e.copyTo(it) } }
-                    if (tmp.length() < 100_000) { tmp.delete(); throw IllegalStateException("fichier de langue incomplet") }
+                    if (tmp.length() < 100_000) { tmp.delete(); throw IllegalStateException(Textes.t(R.string.err_langue_incomplete)) }
                     tmp.renameTo(f)
                     Journal.ecrire("ocr", "langue $code téléchargée (${f.length() / 1024} Ko)")
                     return
                 }
-                else -> throw IllegalStateException("téléchargement refusé (${c.responseCode})")
+                else -> throw IllegalStateException(Textes.t(R.string.err_telechargement_refuse, c.responseCode))
             }
         }
-        throw IllegalStateException("téléchargement impossible")
+        throw IllegalStateException(Textes.t(R.string.err_telechargement))
     }
 
     private fun donnees(ctx: Context): String {
@@ -104,7 +104,7 @@ object Ocr {
         }
         val t = TessBaseAPI()
         try {
-            if (!t.init(donnees(ctx), langues)) throw IllegalStateException("Tesseract : langue introuvable ($langues)")
+            if (!t.init(donnees(ctx), langues)) throw IllegalStateException(Textes.t(R.string.err_langue_introuvable, langues))
             t.pageSegMode = TessBaseAPI.PageSegMode.PSM_AUTO
             t.setImage(img)
             t.getUTF8Text()                                  // lance la reconnaissance

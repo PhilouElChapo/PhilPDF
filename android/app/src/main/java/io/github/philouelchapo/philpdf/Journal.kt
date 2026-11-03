@@ -15,6 +15,7 @@ object Journal {
     private var dossier: File? = null
 
     fun demarrer(ctx: Context) {
+        Textes.demarrer(ctx)
         dossier = ctx.applicationContext.filesDir
         ecrire("démarrage", "PhilPDF Android ${BuildConfig.VERSION_NAME} (Android ${android.os.Build.VERSION.RELEASE}, " +
             "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL})")

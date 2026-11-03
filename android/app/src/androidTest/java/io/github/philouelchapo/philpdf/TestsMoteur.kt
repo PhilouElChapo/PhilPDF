@@ -407,4 +407,16 @@ class TestsMoteur {
         assertFalse("pas modifie depuis", l[0].modifieApres)
         Identites.retirer(ctx, ident.id)
     }
+
+    /** Messages et tampons dans la langue du telephone (anglais par defaut, francais avec values-fr). */
+    @Test fun messagesDansLaLangueDuTelephone() {
+        Textes.demarrer(ctx)
+        val l = TAMPONS
+        assertEquals(8, l.size)
+        assertEquals(ctx.getString(R.string.err_aucun_compte), Textes.t(R.string.err_aucun_compte))
+        assertTrue(Textes.t(R.string.err_a_refuse, "Dropbox", "x").startsWith("Dropbox"))
+        val t = texteTampon(l[0], Horodatage.DATE)
+        assertTrue(t, t.startsWith(l[0] + " ") && !t.contains("\n"))
+        assertEquals("URGENT\n", texteTampon("URGENT", Horodatage.HEURE).take(7))
+    }
 }

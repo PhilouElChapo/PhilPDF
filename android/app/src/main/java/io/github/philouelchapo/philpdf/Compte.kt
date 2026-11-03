@@ -83,7 +83,7 @@ fun PastilleCompte(version: Int, taille: Dp = 40.dp, onClick: () -> Unit) {
 /** Date ISO de PhilPDF Windows (2026-10-30T18:42:05) en clair. */
 fun dateIso(t: String): String = try {
     val d = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.FRANCE).parse(t.take(19))!!
-    SimpleDateFormat("dd/MM/yyyy 'à' HH:mm", Locale.FRANCE).format(d)
+    SimpleDateFormat(Textes.t(R.string.format_date_heure), Locale.FRANCE).format(d)
 } catch (_: Exception) { t.ifEmpty { "—" } }
 
 /**

@@ -97,7 +97,7 @@ object Signatures {
 val ENCRE = Color(0xFF0F3C8C)
 
 /** Tampons prets a l'emploi (comme sous Windows) ; {date} = date du jour. */
-val TAMPONS = listOf("REÇU LE", "PAYÉ LE", "VALIDÉ LE", "TRAITÉ LE", "COPIE CONFORME", "ANNULÉ", "BON POUR ACCORD", "URGENT")
+val TAMPONS: List<String> get() = Textes.t(R.string.tampons_defaut).split("|")
 
 /** Date ajoutee au tampon (comme sous Windows) : aucune, date du jour, ou date et heure. */
 enum class Horodatage(val texte: Int) { AUCUN(R.string.h_aucun), DATE(R.string.h_date), DATE_HEURE(R.string.h_date_heure), HEURE(R.string.h_heure) }
@@ -105,7 +105,7 @@ enum class Horodatage(val texte: Int) { AUCUN(R.string.h_aucun), DATE(R.string.h
 fun maintenant(h: Horodatage): String = when (h) {
     Horodatage.AUCUN -> ""
     Horodatage.DATE -> SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE).format(Date())
-    Horodatage.DATE_HEURE -> SimpleDateFormat("dd/MM/yyyy 'à' HH:mm", Locale.FRANCE).format(Date())
+    Horodatage.DATE_HEURE -> SimpleDateFormat(Textes.t(R.string.format_date_heure), Locale.FRANCE).format(Date())
     Horodatage.HEURE -> SimpleDateFormat("HH:mm", Locale.FRANCE).format(Date())
 }
 
@@ -115,13 +115,17 @@ fun texteTampon(t: String, h: Horodatage): String {
     if ("{date}" in t || "{heure}" in t)
         return t.replace("{date}", SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE).format(Date()))
             .replace("{heure}", SimpleDateFormat("HH:mm", Locale.FRANCE).format(Date()))
-    if (d.isEmpty()) return t.removeSuffix(" LE").removeSuffix(" le")
-    if (h == Horodatage.HEURE) return when {                // « REÇU A 14:32 » (majuscule sans accent)
-        t.endsWith(" LE") -> t.removeSuffix(" LE") + " A $d"
-        t.endsWith(" le") -> t.removeSuffix(" le") + " à $d"
+    // « REÇU LE » (francais) ou « RECEIVED ON » (anglais) : la date suit sur la meme ligne
+    val suffixe = listOf(" LE", " le", " ON", " on").firstOrNull { t.endsWith(it) }
+    if (d.isEmpty()) return if (suffixe != null) t.removeSuffix(suffixe) else t
+    if (h == Horodatage.HEURE) return when (suffixe) {      // « REÇU A 14:32 » (majuscule sans accent)
+        " LE" -> t.removeSuffix(" LE") + " A $d"
+        " le" -> t.removeSuffix(" le") + " à $d"
+        " ON" -> t.removeSuffix(" ON") + " AT $d"
+        " on" -> t.removeSuffix(" on") + " at $d"
         else -> "$t\n$d"
     }
-    return if (t.endsWith(" LE") || t.endsWith(" le")) "$t $d" else "$t\n$d"
+    return if (suffixe != null) "$t $d" else "$t\n$d"
 }
 
 /** Mes tampons (texte) : ceux tout prets au depart, puis les votres ; ordre, favoris, categories, propres au telephone. */

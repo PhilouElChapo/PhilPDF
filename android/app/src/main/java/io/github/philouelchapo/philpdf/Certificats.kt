@@ -86,14 +86,14 @@ object Identites {
     fun ouvrir(octets: ByteArray, mdp: String): Pair<PrivateKey, List<X509Certificate>> {
         val ks = KeyStore.getInstance("PKCS12", BC)
         try { ks.load(ByteArrayInputStream(octets), mdp.toCharArray()) }
-        catch (e: Exception) { throw ErreurCertificat("Mot de passe du certificat incorrect (ou fichier illisible).") }
+        catch (e: Exception) { throw ErreurCertificat(Textes.t(R.string.err_cert_mdp)) }
         for (alias in ks.aliases()) {
             if (!ks.isKeyEntry(alias)) continue
             val clef = ks.getKey(alias, mdp.toCharArray()) as? PrivateKey ?: continue
             val chaine = ks.getCertificateChain(alias)?.map { it as X509Certificate } ?: continue
             if (chaine.isNotEmpty()) return clef to chaine
         }
-        throw ErreurCertificat("Ce fichier ne contient pas de clef de signature.")
+        throw ErreurCertificat(Textes.t(R.string.err_cert_clef))
     }
 
     fun empreinte(c: X509Certificate): String = MessageDigest.getInstance("SHA-256").digest(c.encoded).joinToString("") { "%02X".format(it) }
@@ -290,9 +290,9 @@ object Identites {
 
     /** Recupere les identites (.pfx) et certificats approuves de vos postes. Renvoie le nombre d'identites. */
     suspend fun recupererWindows(ctx: Context, phrase: String): Int = withContext(Dispatchers.IO) {
-        val n = Nuage.synchro(ctx) ?: throw ErreurCertificat("Aucun compte de synchronisation relié.")
+        val n = Nuage.synchro(ctx) ?: throw ErreurCertificat(Textes.t(R.string.err_aucune_synchro))
         val chiffre = n.lire(ctx, "secrets.philpdf")
-            ?: throw ErreurCertificat("Aucun mot de passe partagé par vos postes (sous Windows : Préférences, « Partager les mots de passe »).")
+            ?: throw ErreurCertificat(Textes.t(R.string.err_cert_partage))
         val doc = Document.openDocument(chiffre, "application/pdf") as PDFDocument
         val json = try {
             // la phrase telle que tapee, sans espace autour, et sous ses deux formes Unicode (accents)
@@ -300,10 +300,9 @@ object Identites {
                 java.text.Normalizer.normalize(phrase.trim(), java.text.Normalizer.Form.NFD)).distinct()
             if (doc.needsPassword() && essais.none { doc.authenticatePassword(it) }) {
                 Journal.ecrire("certificat", "secrets.philpdf : ${chiffre.size} octets, phrase refusée (${phrase.length} caractères)")
-                throw ErreurCertificat("Phrase secrète refusée par le fichier de vos postes. Le certificat peut aussi arriver sans phrase : " +
-                    "ouvrez PhilPDF Windows une fois (version 0.9.52 ou plus), il le dépose dans le dossier PhilPDF.")
+                throw ErreurCertificat(Textes.t(R.string.err_cert_phrase))
             }
-            fichierJoint(doc, "preferences.json") ?: throw ErreurCertificat("Fichier de vos postes illisible.")
+            fichierJoint(doc, "preferences.json") ?: throw ErreurCertificat(Textes.t(R.string.err_cert_fichier))
         } finally { doc.destroy() }
         val secrets = JSONObject(String(json, Charsets.UTF_8)).optJSONObject("secrets") ?: JSONObject()
         // noms, dates et certificats approuves : reglages communs de vos postes
