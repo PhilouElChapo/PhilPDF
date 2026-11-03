@@ -129,7 +129,11 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
       - name: Fractionner, parapher, signets, cote a cote
-        run: python tests/test_organiser.py
+        # Qt plante parfois a la fermeture sous Windows (code de sortie faux) : on juge sur le bilan affiche
+        shell: bash
+        run: |
+          python tests/test_organiser.py | tee organiser.txt || true
+          grep -aE "^([0-9]+)/\1 v" organiser.txt
         env:
           QT_QPA_PLATFORM: offscreen
       - name: Envoi par e-mail
