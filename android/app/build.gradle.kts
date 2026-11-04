@@ -60,6 +60,7 @@ android {
             // Google Play demande un code optimise (R8 : raccourci et obscurci) ; regles dans proguard-rules.pro
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            testProguardFiles("proguard-essais.pro")
             signingConfig = if (clef != null) signingConfigs.getByName("philpdf") else signingConfigs.getByName("debug")
         }
     }
