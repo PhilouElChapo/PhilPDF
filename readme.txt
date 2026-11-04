@@ -320,6 +320,13 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.63
+- Modifier le texte et les images : les petites images posees sur un fond de page (image pleine page, comme dans les
+  rapports d'expertise avec photos) se choisissent enfin ; avant, le clic prenait toujours le fond. Quand plusieurs
+  images se superposent, c'est la plus petite (celle que l'on vise) qui est choisie.
+- Curseur : une main sur un objet que l'on peut choisir (texte, image, dessin), les quatre fleches sur l'objet deja
+  choisi, que l'on peut deplacer.
+
 0.9.62
 - Dessins vectoriels : deplacer, agrandir, tourner, retourner ou supprimer un dessin garde ses degrades, ses motifs
   (quadrillages, trames) et ses transparences. PhilPDF deplace le dessin tel qu'il est ecrit dans le PDF au lieu de le

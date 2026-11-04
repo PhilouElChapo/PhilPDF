@@ -165,6 +165,14 @@ verif(len(im) == 1, "image détectée")
 o.choisir_objet(o.objet_sous(0, im[0][1].tl + (5, 5)))
 o.appliquer_deplacement(im[0][1] + (-300, 400, -300, 400))
 verif(o.images_page(0) and o.images_page(0)[0][1].y0 > 400, "image déplacée")
+# petite image posee sur un fond de page (image pleine page, comme les rapports d'expertise) : la petite se choisit
+_pm = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 20, 20), False)
+_pm.clear_with(235)
+o.doc[0].insert_image(o.doc[0].rect, pixmap=_pm, overlay=False)
+o._cache_images.clear()
+_pet = next((x, r) for x, r in o.images_page(0) if r.width < 0.5 * o.doc[0].rect.width)
+_sous = o.objet_sous(0, _pet[1].tl + (5, 5))
+verif(bool(_sous) and _sous.get("xref") == _pet[0], "petite image sur un fond pleine page : c'est elle qui est choisie")
 o.changer_mode(None)
 
 # --- tampon pret a l'emploi : poser, deplacer, redimensionner, supprimer

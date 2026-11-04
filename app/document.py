@@ -530,9 +530,13 @@ class PageWidget(QWidget):
                 else:
                     self.setToolTip((w_.field_label or w_.field_name) +
                                     ("  (" + _("obligatoire") + ")" if w_.field_flags & fitz.PDF_FIELD_IS_REQUIRED else ""))
-        elif o.objet_sous(self.num, pt, survol=True):
+        elif (sous := o.objet_sous(self.num, pt, survol=True)):
             self.setToolTip("")
-            self.setCursor(Qt.SizeAllCursor)
+            # objet deja choisi : quatre fleches (on le deplace) ; sinon une main (on peut le choisir)
+            ch = o.objet
+            meme = bool(ch) and ch.get("type") == sous.get("type") and ch.get("page") == sous.get("page") and \
+                (ch.get("xref") == sous.get("xref") if "xref" in sous else fitz.Rect(ch.get("rect")) == fitz.Rect(sous.get("rect")))
+            self.setCursor(Qt.SizeAllCursor if meme else Qt.PointingHandCursor)
         elif o.mode in ("poser", "ajout_texte", "ajout_image", "lien", "recadrer", "biffer", "formulaire",
                         "signer_num", "champ_signature"):
             self.setCursor(Qt.CrossCursor)
@@ -3418,7 +3422,8 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             for r, t in self.lignes_page(n):
                 if fitz.Rect(r).contains(pt):
                     return {"type": "ligne", "page": n, "rect": fitz.Rect(r), "texte": t}
-            for xref, r in self.images_page(n):
+            # la plus petite d'abord : une petite photo posee sur un fond de page (image pleine page) se choisit
+            for xref, r in sorted(self.images_page(n), key=lambda t: t[1].width * t[1].height):
                 if r.contains(pt):
                     return {"type": "image", "page": n, "xref": xref, "rect": fitz.Rect(r), "garder_proportions": True}
             for r in sorted(self.dessins_page(n), key=lambda r: r.width * r.height):   # le plus petit d'abord
