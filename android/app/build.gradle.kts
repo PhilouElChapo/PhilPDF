@@ -57,10 +57,15 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Google Play demande un code optimise (R8 : raccourci et obscurci) ; regles dans proguard-rules.pro
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = if (clef != null) signingConfigs.getByName("philpdf") else signingConfigs.getByName("debug")
         }
     }
+
+    // les essais sur telephone simule tournent sur la version publiee (optimisee par R8) : ce qui sera distribue
+    testBuildType = "release"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

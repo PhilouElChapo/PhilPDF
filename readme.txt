@@ -10,6 +10,12 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.12.1
+- Code optimise pour Google Play (R8) : application plus legere et plus rapide a demarrer. Les essais sur telephone
+  simule tournent desormais sur cette version optimisee, celle qui est distribuee.
+- Affichage de bord a bord sur toutes les versions d'Android (comme Android 15 l'impose) ; rien ne passe sous les
+  barres d'Android.
+
 1.12.0
 - Lecture fluide (comme le « Mode liquide » d'Acrobat) : Plus > Lecture fluide (sur tablette, bouton en haut). Le
   texte de chaque page est remis en colonne a la largeur de l'ecran : titres, paragraphes recousus (mots coupes en fin

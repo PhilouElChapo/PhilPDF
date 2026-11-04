@@ -3,6 +3,7 @@ package io.github.philouelchapo.philpdf
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -25,6 +26,9 @@ class MainActivity : ComponentActivity() {
     private val recu = mutableStateOf<Uri?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // affichage de bord a bord sur toutes les versions d'Android (Android 15 l'impose) ; les marges des barres
+        // sont deja respectees partout (safeDrawingPadding, Fenetre)
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         Journal.demarrer(this)
         // plantage : la cause est notee dans le journal (Accueil > Aide > Journal) avant que l'application se ferme
