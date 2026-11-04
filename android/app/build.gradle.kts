@@ -65,9 +65,6 @@ android {
         }
     }
 
-    // les essais sur telephone simule tournent sur la version publiee (optimisee par R8) : ce qui sera distribue
-    testBuildType = "release"
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

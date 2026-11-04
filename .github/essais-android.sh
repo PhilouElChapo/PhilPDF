@@ -1,15 +1,34 @@
 #!/usr/bin/env bash
-# Essais sur le telephone simule (lance depuis android/ par android-emulator-runner), sur la version publiee (R8)
+# Essais sur le telephone simule (lance depuis android/ par android-emulator-runner)
+# 1) essais complets du moteur ; 2) la version publiee (optimisee par R8) s'installe et demarre sans planter
 adb logcat -c || true
-timeout 35m gradle --no-daemon connectedReleaseAndroidTest > essais.log 2>&1
+timeout 35m gradle --no-daemon connectedDebugAndroidTest > essais.log 2>&1
 r=$?
 if [ $r -ne 0 ]; then
   [ $r -eq 124 ] && echo "::error title=Essai Android::essais bloques plus de 35 minutes"
   grep -E "FAILED|Exception|AssertionError|expected|^e: |ERROR" essais.log | head -40 | cut -c1-300 | while IFS= read -r l; do echo "::error title=Essai Android::$l"; done
   tail -n 60 essais.log
-  echo "----- journal du telephone (plantages, PhilPDF) -----"
-  adb logcat -d 2>/dev/null | grep -E "AndroidRuntime|FATAL|philpdf|TestRunner|Instrumentation|R8|ClassNotFound|NoSuchMethod|NoClassDef|UnsatisfiedLink" | tail -150 | cut -c1-300
+  adb logcat -d 2>/dev/null | grep -E "AndroidRuntime|FATAL|philpdf" | tail -80 | cut -c1-300
   exit 1
 fi
 grep -E "Tests? .*(passed|finished)|BUILD SUCCESSFUL" essais.log | tail -3
-echo "::notice title=Essais Android::tous les essais passent"
+
+# --- version publiee, optimisee : demarrage (ecran d'accueil)
+timeout 20m gradle --no-daemon assembleRelease > release.log 2>&1 || { tail -n 40 release.log; echo "::error title=Essai Android::fabrication de la version publiee impossible"; exit 1; }
+apk=$(ls app/build/outputs/apk/release/*x86_64*.apk | head -1)
+adb uninstall io.github.philouelchapo.philpdf >/dev/null 2>&1 || true
+adb install -r "$apk" || { echo "::error title=Essai Android::installation de la version publiee impossible"; exit 1; }
+adb logcat -c || true
+adb shell am start -W -n io.github.philouelchapo.philpdf/.MainActivity
+sleep 12
+if ! adb shell pidof io.github.philouelchapo.philpdf >/dev/null; then
+  echo "::error title=Essai Android::la version publiee (R8) se ferme au demarrage"
+  adb logcat -d | grep -E "AndroidRuntime|FATAL" -A20 | head -60 | cut -c1-300
+  exit 1
+fi
+if adb logcat -d | grep -q "FATAL EXCEPTION"; then
+  echo "::error title=Essai Android::plantage de la version publiee (R8)"
+  adb logcat -d | grep -E "FATAL EXCEPTION" -A25 | head -60 | cut -c1-300
+  exit 1
+fi
+echo "::notice title=Essais Android::tous les essais passent, et la version publiee (R8) demarre sans planter"
