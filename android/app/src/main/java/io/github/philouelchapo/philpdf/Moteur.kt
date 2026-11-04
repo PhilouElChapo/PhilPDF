@@ -1298,6 +1298,28 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         return ResultatOcr(utiles.size, utiles.values.sumOf { it.size }, ignorees)
     }
 
+    /** Lecture fluide : texte de la page n remis en colonne (titres, paragraphes, images rendues a part). */
+    suspend fun texteFluide(n: Int): Fluide.PageFluide = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val page = doc.loadPage(n)
+            try { Fluide.lire(page) { zone -> rendreZone(page, zone) } } finally { page.destroy() }
+        }
+    }
+
+    /** Une zone de la page (une illustration), assez fine pour la largeur d'un telephone. */
+    private fun rendreZone(page: com.artifex.mupdf.fitz.Page, r: Rect): Bitmap? = try {
+        val w = r.x1 - r.x0; val h = r.y1 - r.y0
+        val z = (1200f / w).coerceIn(1f, 4f)
+        val lw = (w * z).toInt().coerceAtLeast(1); val lh = (h * z).toInt().coerceAtLeast(1)
+        if (lw.toLong() * lh > 6_000_000L) null else {
+            val bm = Bitmap.createBitmap(lw, lh, Bitmap.Config.ARGB_8888)
+            bm.eraseColor(Color.WHITE)
+            val dev = AndroidDrawDevice(bm, 0, 0)
+            try { page.run(dev, Matrix(z, 0f, 0f, z, -r.x0 * z, -r.y0 * z), null as Cookie?); dev.close() } finally { dev.destroy() }
+            bm
+        }
+    } catch (e: Exception) { Journal.ecrire("lecture fluide", "image : $e"); null }
+
     /** Image de la page n a la largeur demandee (en pixels). */
     suspend fun rendre(n: Int, largeurPx: Int): Bitmap = verrou.withLock {
         withContext(Dispatchers.IO) { rendreSansVerrou(n, largeurPx) }

@@ -546,4 +546,12 @@
     <string name="retour_attente">PhilPDF is waiting for %1$s’s answer.</string>
     <string name="retour_refuse">Sign-in refused%1$s.</string>
     <string name="retour_revenir">Back to PhilPDF</string>
+    <string name="lecture_fluide">Reading mode</string>
+    <string name="fluide_clair">Light</string>
+    <string name="fluide_sepia">Sepia</string>
+    <string name="fluide_sombre">Dark</string>
+    <string name="fluide_justifier">Justify</string>
+    <string name="fluide_serif">Serif</string>
+    <string name="fluide_page">Page %1$d</string>
+    <string name="fluide_scannee">Scanned page: its text is not recognized yet.</string>
 </resources>

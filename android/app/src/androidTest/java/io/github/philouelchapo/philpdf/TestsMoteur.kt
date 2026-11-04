@@ -419,4 +419,36 @@ class TestsMoteur {
         assertTrue(t, t.startsWith(l[0] + " ") && !t.contains("\n"))
         assertEquals("URGENT\n", texteTampon("URGENT", Horodatage.HEURE).take(7))
     }
+
+    /** Lecture fluide : titre reconnu, lignes recousues (mot coupe), gras garde, numero de page laisse ; scan repere. */
+    @Test fun lectureFluide() {
+        val pdf = PDFDocument()
+        val res = pdf.newDictionary()
+        val fonts = pdf.newDictionary()
+        fonts.put("F1", police(pdf, "Helvetica-Bold"))
+        fonts.put("F2", police(pdf, "Helvetica"))
+        res.put("Font", fonts)
+        val contenu = "BT /F1 24 Tf 72 760 Td (Grand titre) Tj ET\n" +
+            "BT /F2 11 Tf 72 720 Td (Ceci est un paragraphe assez long qui con-) Tj 0 -13 Td (tinue sur la ligne suivante avec ) Tj " +
+            "/F1 11 Tf (du gras) Tj /F2 11 Tf ( dedans.) Tj ET\n" +
+            "BT /F2 11 Tf 72 640 Td (Second paragraphe, bien separe du premier.) Tj ET\n" +
+            "BT /F2 9 Tf 290 20 Td (12) Tj ET"
+        pdf.insertPage(-1, pdf.addPage(Rect(0f, 0f, 595f, 842f), 0, res, contenu))
+        pdf.insertPage(-1, pdf.addPage(Rect(0f, 0f, 595f, 842f), 0, pdf.newDictionary(), ""))
+        val f = File(dossier, "fluide.pdf")
+        pdf.save(f.absolutePath, "")
+        pdf.destroy()
+        val d = ouvrir(f)
+        val p = runBlocking { d.texteFluide(0) }
+        assertFalse(p.scannee)
+        val titre = p.blocs.first()
+        assertTrue("titre", titre is Fluide.Bloc.Titre && titre.texte == "Grand titre" && titre.niveau == 1)
+        val paras = p.blocs.filterIsInstance<Fluide.Bloc.Para>()
+        assertEquals(2, paras.size)
+        val premier = paras[0].morceaux.joinToString("") { it.texte }
+        assertTrue(premier, premier.contains("qui continue sur la ligne") && premier.endsWith("dedans."))
+        assertTrue("gras garde", paras[0].morceaux.any { it.gras && it.texte.trim() == "du gras" })
+        assertFalse("numero de page laisse", p.blocs.any { it is Fluide.Bloc.Para && it.morceaux.joinToString("") { m -> m.texte }.trim() == "12" })
+        assertTrue("page vide : scannee", runBlocking { d.texteFluide(1) }.scannee)
+    }
 }

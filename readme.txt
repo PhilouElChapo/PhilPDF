@@ -10,6 +10,14 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.12.0
+- Lecture fluide (comme le « Mode liquide » d'Acrobat) : Plus > Lecture fluide (sur tablette, bouton en haut). Le
+  texte de chaque page est remis en colonne a la largeur de l'ecran : titres, paragraphes recousus (mots coupes en fin
+  de ligne recolles), gras et italique, images a leur place ; numeros de page et titres courants laisses de cote.
+  Reglages gardes : taille du texte (A- / A+), fond clair, sepia ou sombre, texte justifie ou non, police avec ou sans
+  empattements. Toucher « Page n » ramene a cette page dans l'affichage normal. Page scannee : son image, avec la
+  reconnaissance du texte proposee. Le PDF n'est pas modifie.
+
 1.11.1
 - Les derniers messages encore en francais sur un telephone en anglais sont traduits : erreurs de connexion aux
   comptes (Drive, OneDrive, Dropbox, Box), certificats, saisie refusee dans un formulaire, telechargement des

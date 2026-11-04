@@ -546,4 +546,12 @@
     <string name="retour_attente">PhilPDF attend la réponse de %1$s.</string>
     <string name="retour_refuse">Connexion refusée%1$s.</string>
     <string name="retour_revenir">Revenir à PhilPDF</string>
+    <string name="lecture_fluide">Lecture fluide</string>
+    <string name="fluide_clair">Clair</string>
+    <string name="fluide_sepia">Sépia</string>
+    <string name="fluide_sombre">Sombre</string>
+    <string name="fluide_justifier">Justifier</string>
+    <string name="fluide_serif">Avec empattements</string>
+    <string name="fluide_page">Page %1$d</string>
+    <string name="fluide_scannee">Page scannée : son texte n’est pas encore reconnu.</string>
 </resources>
