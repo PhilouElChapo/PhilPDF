@@ -451,4 +451,20 @@ class TestsMoteur {
         assertFalse("numero de page laisse", p.blocs.any { it is Fluide.Bloc.Para && it.morceaux.joinToString("") { m -> m.texte }.trim() == "12" })
         assertTrue("page vide : scannee", runBlocking { d.texteFluide(1) }.scannee)
     }
+
+    /** Annuler / retablir : la liste des etapes est donnee (nommees), on revient de plusieurs etapes d'un coup. */
+    @Test fun historiqueDesModifications() {
+        val d = ouvrir(pdfTexte("historique.pdf"))
+        runBlocking {
+            assertTrue(d.pivoter(listOf(0), 90))
+            assertTrue(d.pivoter(listOf(0), 90))
+            val e = d.etapes()
+            assertEquals(listOf("Pivoter", "Pivoter"), e.annulables.take(2))
+            assertEquals("Pivoter", d.annuler(2))
+            val e2 = d.etapes()
+            assertTrue(e2.retablissables.size >= 2)
+            assertEquals("Pivoter", d.retablir(1))
+            assertEquals(1, d.etapes().retablissables.size)
+        }
+    }
 }

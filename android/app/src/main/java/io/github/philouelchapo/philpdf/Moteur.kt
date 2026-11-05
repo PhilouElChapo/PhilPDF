@@ -183,18 +183,54 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         return pages
     }
 
-    suspend fun annuler() {
-        val p = pdf ?: return
-        verrou.withLock { withContext(Dispatchers.IO) { if (p.canUndo()) p.undo() } }
-        apres(true)
-        pagesVersion++                       // l'etape annulee touchait peut-etre les pages
+    /** Etapes du journal : a annuler (la plus recente d'abord) et a retablir (la prochaine d'abord). */
+    data class Etapes(val annulables: List<String?>, val retablissables: List<String?>)
+
+    suspend fun etapes(): Etapes {
+        val p = pdf ?: return Etapes(emptyList(), emptyList())
+        return verrou.withLock {
+            withContext(Dispatchers.IO) {
+                try {
+                    val pos = p.undoRedoPosition(); val n = p.undoRedoSteps()
+                    Etapes((pos - 1 downTo 0).map { runCatching { p.undoRedoStep(it) }.getOrNull() },
+                        (pos until n).map { runCatching { p.undoRedoStep(it) }.getOrNull() })
+                } catch (_: Exception) { Etapes(emptyList(), emptyList()) }
+            }
+        }
     }
 
-    suspend fun retablir() {
-        val p = pdf ?: return
-        verrou.withLock { withContext(Dispatchers.IO) { if (p.canRedo()) p.redo() } }
+    /** Annule les n dernieres etapes ; renvoie le nom de la derniere annulee (null : rien). */
+    suspend fun annuler(n: Int = 1): String? {
+        val p = pdf ?: return null
+        var nom: String? = null
+        verrou.withLock { withContext(Dispatchers.IO) {
+            repeat(n) {
+                if (p.canUndo()) {
+                    nom = runCatching { p.undoRedoStep(p.undoRedoPosition() - 1) }.getOrNull() ?: ""
+                    p.undo()
+                }
+            }
+        } }
+        apres(true)
+        pagesVersion++                       // l'etape annulee touchait peut-etre les pages
+        return nom
+    }
+
+    /** Retablit les n prochaines etapes ; renvoie le nom de la derniere retablie (null : rien). */
+    suspend fun retablir(n: Int = 1): String? {
+        val p = pdf ?: return null
+        var nom: String? = null
+        verrou.withLock { withContext(Dispatchers.IO) {
+            repeat(n) {
+                if (p.canRedo()) {
+                    nom = runCatching { p.undoRedoStep(p.undoRedoPosition()) }.getOrNull() ?: ""
+                    p.redo()
+                }
+            }
+        } }
         apres(true)
         pagesVersion++
+        return nom
     }
 
     // ------------------------------------------------------------ organiser les pages

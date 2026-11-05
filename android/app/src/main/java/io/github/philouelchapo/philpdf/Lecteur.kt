@@ -255,12 +255,9 @@ private fun DemandeNote(fermer: () -> Unit, valider: (String) -> Unit) {
 internal fun BoutonsEdition(etat: EtatLecteur) {
     val portee = rememberCoroutineScope()
     val d = etat.doc
-    IconButton(onClick = { portee.launch { d.annuler() } }, enabled = d.peutAnnuler) {
-        Icon(Icones.get("annuler", if (d.peutAnnuler) Color(0xFF333333) else Color(0xFFBBBBBB)), stringResource(R.string.annuler_action), tint = Color.Unspecified)
-    }
-    IconButton(onClick = { portee.launch { d.retablir() } }, enabled = d.peutRetablir) {
-        Icon(Icones.get("retablir", if (d.peutRetablir) Color(0xFF333333) else Color(0xFFBBBBBB)), stringResource(R.string.retablir), tint = Color.Unspecified)
-    }
+    // toucher : annule (retablit) la derniere etape et dit laquelle ; appui long : liste des modifications
+    BoutonHistorique(etat, retablir = false)
+    BoutonHistorique(etat, retablir = true)
     IconButton(onClick = { etat.demandeEnregistrer = true }, enabled = d.modifie) {
         Icon(Icones.get("enregistrer", if (d.modifie) ROUGE else Color(0xFFBBBBBB)), stringResource(R.string.enregistrer), tint = Color.Unspecified)
     }
@@ -435,11 +432,14 @@ private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, 
             var allerA by remember { mutableStateOf(false) }
             var signets by remember { mutableStateOf(false) }
             var comms by remember { mutableStateOf(false) }
+            var historique by remember { mutableStateOf(false) }
             when {
                 signets -> Signets(etat.doc, aller)
                 comms -> Commentaires(etat.doc, aller)
                 else -> Column(Modifier.padding(8.dp)) {
                     LigneAction("oeil", stringResource(R.string.lecture_fluide)) { etat.lectureFluide = true }
+                    if (etat.doc.modifiable) Box { LigneAction("annuler", stringResource(R.string.historique_menu)) { historique = true }
+                        if (historique) MenuHistorique(etat) { historique = false } }
                     LigneAction("suivante", stringResource(R.string.aller_page)) { allerA = true }
                     LigneAction("liste_fichiers", stringResource(R.string.signets)) { signets = true }
                     LigneAction("commentaire", stringResource(R.string.commentaires)) { comms = true }

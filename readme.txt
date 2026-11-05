@@ -10,6 +10,11 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.12.2
+- Annuler / Retablir : un toucher annule la derniere modification et dit laquelle (« Annule : Deplacer ») ; un appui
+  long sur le bouton montre la liste des modifications (celles a retablir, grisees, au-dessus du document actuel) :
+  toucher l'une d'elles y ramene d'un coup. Aussi dans Plus > Historique des modifications.
+
 1.12.1
 - Code optimise pour Google Play (R8) : application plus legere et plus rapide a demarrer. Les essais sur telephone
   simule tournent desormais sur cette version optimisee, celle qui est distribuee.
