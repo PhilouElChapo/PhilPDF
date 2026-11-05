@@ -740,7 +740,7 @@
     <string name="scan_magnificence_aide">Alla creazione, ogni pagina viene inviata a Gemini (la sua chiave), che la restituisce come uscita da uno scanner: dritta, sfondo bianco, senza grana né ombre. Anteprima qui: come Colore.</string>
     <string name="scan_magnificence_en_cours">Gemini pulisce la pagina %1$d di %2$d...</string>
     <string name="scan_magnificence_locales">Pagina/e %1$s: Gemini non ha restituito un\'immagine, sono state migliorate sul telefono (come Colore).</string>
-    <string name="redresser_aide">Regoli l\'angolo perché le righe del testo seguano la griglia. «Auto» misura l\'inclinazione del testo. Nulla cambia prima di «Applica».</string>
+    <string name="redresser_aide">Regoli gli angoli perché il testo segua la griglia: «Righe» ruota la pagina, «Verticali» raddrizza bordi e colonne inclinati (foglio fotografato di sbieco). «Auto» misura entrambi. Nulla cambia prima di «Applica».</string>
     <string name="redresser_auto">Auto</string>
     <string name="redresser_cette_page">Questa pagina</string>
     <string name="redresser_toutes">Tutte le pagine</string>
@@ -751,4 +751,6 @@
     <string name="redresser_bouton">Raddrizza</string>
     <string name="scan_recadrer">Ritaglia</string>
     <string name="op_redresser_la_page">Raddrizzare la pagina</string>
+    <string name="redresser_lignes">Righe (ruotare la pagina)</string>
+    <string name="redresser_verticales">Verticali (bordi, colonne inclinati)</string>
 </resources>

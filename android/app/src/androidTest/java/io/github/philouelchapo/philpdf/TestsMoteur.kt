@@ -570,11 +570,21 @@ class TestsMoteur {
     /** Redresser la page : contenu tourne (texte garde, une seule etape annulable). */
     @Test fun redresserLaPage() {
         val o = ouvrir(pdfTexte("redresser.pdf"))
-        assertTrue(runBlocking { o.redresserPages(listOf(0), 2.5f) })
+        assertTrue(runBlocking { o.redresserPages(listOf(0), 2.5f, -1.5f) })
         assertTrue(runBlocking { o.texteDocument() }.contains("Virement bancaire"))
         assertEquals(false, runBlocking { o.redresserPages(listOf(0), 0f) })
         val b = Bitmap.createBitmap(300, 400, Bitmap.Config.ARGB_8888); b.eraseColor(android.graphics.Color.WHITE)
         assertEquals(300, Numerisation.tourner(b, 3f).width)
+        // verticales penchees de 3 degres : mesurees, puis remises droites
+        val g = Bitmap.createBitmap(900, 1200, Bitmap.Config.ARGB_8888)
+        val c = Canvas(g); c.drawColor(android.graphics.Color.WHITE)
+        val pt = Paint().apply { color = android.graphics.Color.BLACK; strokeWidth = 4f; textSize = 30f }
+        for (x in listOf(80f, 450f, 820f)) c.drawLine(x, 60f, x, 1140f, pt)
+        for (y in 120..1100 step 50) c.drawText("Texte de la ligne $y", 100f, y.toFloat(), pt)
+        val penche = Numerisation.transformer(g, 0f, 3f)
+        val v = Numerisation.inclinaisonVerticale(penche, 0f)
+        assertTrue("verticales : $v", kotlin.math.abs(v + 3f) < 0.6f)
+        assertTrue(kotlin.math.abs(Numerisation.inclinaisonVerticale(Numerisation.transformer(penche, 0f, v), 0f)) < 0.6f)
         runBlocking { o.annuler() }
         assertTrue(runBlocking { o.texteDocument() }.contains("Virement bancaire"))
     }

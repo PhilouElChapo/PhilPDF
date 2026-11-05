@@ -86,11 +86,107 @@ def scanners_reseau():
         return []
 
 
+# ------------------------------------------------------------------ Windows (TWAIN)
+# Beaucoup de scanners USB (Avision, Fujitsu, Plustek...) n'ont qu'un pilote TWAIN, sans WIA : la fenetre de Windows
+# ne les voit pas, les logiciels de numerisation passent par TWAIN. PhilPDF est un programme 64 bits : il lui faut le
+# gestionnaire TWAIN 64 bits (TWAINDSM.dll, installe par les pilotes recents) et un pilote 64 bits du scanner.
+def _dsm():
+    import twain
+    erreurs = []
+    for nom in (None, os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "System32", "TWAINDSM.dll"),
+                os.path.join(os.path.dirname(sys.executable), "TWAINDSM.dll")):
+        try:
+            return twain.SourceManager(None, dsm_name=nom, ProductName="PhilPDF", Manufacturer="PhilPDF",
+                                       ProductFamily="PhilPDF")
+        except Exception as e:                          # noqa: BLE001
+            erreurs.append(f"{nom or 'twaindsm.dll'} : {e}")
+    raise RuntimeError("; ".join(erreurs))
+
+
+def scanners_twain():
+    """[("twain:<nom>", nom)] des sources TWAIN (Windows)."""
+    if sys.platform != "win32":
+        return []
+    try:
+        sm = _dsm()
+    except ImportError:
+        _journal("TWAIN : module absent de ce paquet")
+        return []
+    except Exception as e:                              # noqa: BLE001
+        _journal(f"TWAIN 64 bits indisponible (gestionnaire TWAINDSM.dll absent ?) : {e}")
+        return []
+    try:
+        noms = list(sm.source_list)
+    except Exception as e:                              # noqa: BLE001
+        _journal(f"TWAIN : liste des sources illisible : {e}")
+        noms = []
+    finally:
+        try:
+            sm.close()
+        except Exception:                               # noqa: BLE001
+            pass
+    _journal(f"TWAIN : {len(noms)} source(s) " + ", ".join(noms) + ("" if noms else
+             " (un pilote 32 bits seulement n'est pas visible d'un programme 64 bits)"))
+    return [("twain:" + n, n + " " + _("(TWAIN)")) for n in noms]
+
+
+def _numeriser_twain(nom, mode, dpi, source, fenetre=None, interface=False):
+    """Images (octets BMP) numerisees par la source TWAIN « nom ». interface : la fenetre du pilote du scanner."""
+    import twain
+    from twain.lowlevel import constants as C
+    sm = _dsm()
+    if fenetre:
+        sm._hwnd = int(fenetre)                         # le pilote ouvre ses fenetres au-dessus de PhilPDF
+    images = []
+    try:
+        src = sm.open_source(nom)
+        if src is None:
+            return []
+        try:
+            def cap(c, t, v):
+                try:
+                    src.set_capability(c, t, v)
+                except Exception as e:                  # noqa: BLE001
+                    _journal(f"TWAIN {nom} : réglage {c} refusé ({e})")
+            cap(C.ICAP_PIXELTYPE, C.TWTY_UINT16, {"couleur": C.TWPT_RGB, "auto": C.TWPT_RGB, "gris": C.TWPT_GRAY,
+                                                 "nb": C.TWPT_GRAY}[mode])
+            cap(C.ICAP_UNITS, C.TWTY_UINT16, C.TWUN_INCHES)
+            cap(C.ICAP_XRESOLUTION, C.TWTY_FIX32, float(dpi))
+            cap(C.ICAP_YRESOLUTION, C.TWTY_FIX32, float(dpi))
+            cap(C.CAP_FEEDERENABLED, C.TWTY_BOOL, source != "vitre")
+            if source != "vitre":
+                cap(C.CAP_AUTOFEED, C.TWTY_BOOL, True)
+                cap(C.CAP_XFERCOUNT, C.TWTY_INT16, -1)
+            cap(C.CAP_DUPLEXENABLED, C.TWTY_BOOL, source == "recto_verso")
+            dossier = tempfile.mkdtemp(prefix="philpdf_twain_")
+
+            def apres(img, reste):
+                f = os.path.join(dossier, f"p{len(images):03d}.bmp")
+                img.save(f)
+                img.close()
+                with open(f, "rb") as fh:
+                    images.append(fh.read())
+                if source == "vitre":
+                    raise twain.exceptions.CancelAll
+            try:
+                src.acquire_natively(after=apres, show_ui=interface, modal=interface)
+            except twain.exceptions.DSTransferCancelled:
+                pass
+        finally:
+            src.close()
+    finally:
+        sm.close()
+    _journal(f"TWAIN {nom} : {len(images)} page(s)")
+    return images
+
+
 def scanners(reseau=True):
     """[(identifiant, nom)] des scanners disponibles : WIA (Windows) ou SANE (Linux), puis ceux du reseau (eSCL)."""
     out = []
     if sys.platform == "win32":
         out = scanners_wia()
+        noms = {n for _i, n in out}
+        out += [(i, n) for i, n in scanners_twain() if n.rsplit(" (", 1)[0] not in noms]
     elif shutil.which("scanimage"):
         try:
             r = subprocess.run(["scanimage", "-f", "%d|%v %m%n"], capture_output=True, text=True, timeout=30)
@@ -161,8 +257,10 @@ def _numeriser_linux(device_id, mode, dpi, source):
     return [r.stdout] if r.stdout else []
 
 
-def numeriser(device_id, mode="auto", dpi=300, source="chargeur"):
-    """Renvoie la liste des images (PNG ou JPEG) numerisees."""
+def numeriser(device_id, mode="auto", dpi=300, source="chargeur", fenetre=None, interface=False):
+    """Renvoie la liste des images (PNG, JPEG ou BMP) numerisees."""
+    if device_id.startswith("twain:"):
+        return _numeriser_twain(device_id[6:], mode, dpi, source, fenetre, interface)
     if device_id.startswith("escl:"):
         from . import escl
         return escl.numeriser(device_id[5:], mode, dpi, source, _journal)
@@ -172,10 +270,22 @@ def numeriser(device_id, mode="auto", dpi=300, source="chargeur"):
 
 
 def dialogue_windows():
-    """Repli : fenetre de numerisation standard de Windows."""
+    """Repli : fenetre de numerisation standard de Windows (WIA)."""
+    try:
+        import pythoncom
+        pythoncom.CoInitialize()
+    except Exception:                                   # noqa: BLE001
+        pass
     import win32com.client
     cd = win32com.client.Dispatch("WIA.CommonDialog")
-    img = cd.ShowAcquireImage(1, 0, 0, FORMAT_PNG, False, True, False)
+    try:
+        img = cd.ShowAcquireImage(1, 0, 0, FORMAT_PNG, False, True, False)
+    except Exception as e:                              # noqa: BLE001
+        if "-2145320939" in str(e) or "0x80210015" in str(e).lower():
+            raise RuntimeError(_("Windows ne connaît aucun scanner WIA sur ce poste : la fenêtre de numérisation de "
+                                 "Windows ne peut rien faire. Choisissez le scanner dans la liste (réseau ou TWAIN) ; "
+                                 "s'il n'y est pas, installez le pilote 64 bits du fabricant.")) from e
+        raise
     return [bytes(img.FileData.BinaryData)] if img else []
 
 

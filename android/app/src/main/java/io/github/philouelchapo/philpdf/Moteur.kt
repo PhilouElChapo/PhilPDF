@@ -256,24 +256,29 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
      * Redresse les pages d'un petit angle (degres, sens des aiguilles d'une montre a l'ecran) : leur contenu est tourne
      * autour du centre de la page (texte, couleurs et qualite gardes ; le texte reconnu tourne avec l'image).
      */
-    suspend fun redresserPages(pages: List<Int>, angle: Float): Boolean =
-        if (kotlin.math.abs(angle) < 0.01f || pages.isEmpty()) false else operationPages("Redresser la page") { p ->
+    suspend fun redresserPages(pages: List<Int>, angle: Float, vertical: Float = 0f): Boolean =
+        if ((kotlin.math.abs(angle) < 0.01f && kotlin.math.abs(vertical) < 0.01f) || pages.isEmpty()) false
+        else operationPages("Redresser la page") { p ->
             for (n in pages) {
                 val o = p.findPage(n)
                 val mb = o.getInheritable("MediaBox")
-                val cx = (mb.get(0).asFloat() + mb.get(2).asFloat()) / 2; val cy = (mb.get(1).asFloat() + mb.get(3).asFloat()) / 2
-                val t = Math.toRadians(-angle.toDouble())                 // repere PDF : y vers le haut
-                val c = kotlin.math.cos(t).toFloat(); val sn = kotlin.math.sin(t).toFloat()
-                val tx = cx - c * cx + sn * cy; val ty = cy - sn * cx - c * cy
-                fun f(v: Float) = String.format(java.util.Locale.ROOT, "%.6f", v)
-                val avant = p.addStream("q ${f(c)} ${f(sn)} ${f(-sn)} ${f(c)} ${f(tx)} ${f(ty)} cm\n", p.newDictionary())
+                val x0 = mb.get(0).asFloat(); val y0 = mb.get(1).asFloat(); val x1 = mb.get(2).asFloat(); val y1 = mb.get(3).asFloat()
+                // correction dans le repere image de la page (y vers le bas), ramenee au repere PDF (y vers le haut)
+                val v = FloatArray(9).also { Numerisation.matrice(angle, vertical, x1 - x0, y1 - y0).getValues(it) }
+                val am = doubleArrayOf(v[0].toDouble(), v[1].toDouble(), v[2].toDouble(), v[3].toDouble(), v[4].toDouble(), v[5].toDouble())
+                // T = F^-1 A F, F : (x, y) -> (x - x0, y1 - y)
+                val a = am[0]; val b = -am[1]; val c = am[1] * y1 - am[0] * x0 + am[2] + x0
+                val d = -am[3]; val e = am[4]; val f = y1 - (am[3] * (-x0) + am[4] * y1 + am[5])
+                fun s(x: Double) = String.format(java.util.Locale.ROOT, "%.6f", x)
+                // matrice PDF [a' b' c' d' e' f'] : x' = a' x + c' y + e', y' = b' x + d' y + f'
+                val avant = p.addStream("q ${s(a)} ${s(d)} ${s(b)} ${s(e)} ${s(c)} ${s(f)} cm\n", p.newDictionary())
                 val apres = p.addStream("\nQ\n", p.newDictionary())
-                val a = p.newArray()
-                a.push(avant)
+                val arr = p.newArray()
+                arr.push(avant)
                 val anc = o.get("Contents")
-                if (anc.isArray) for (i in 0 until anc.size()) a.push(anc.get(i)) else if (!anc.isNull) a.push(anc)
-                a.push(apres)
-                o.put("Contents", a)
+                if (anc.isArray) for (i in 0 until anc.size()) arr.push(anc.get(i)) else if (!anc.isNull) arr.push(anc)
+                arr.push(apres)
+                o.put("Contents", arr)
             }
             true
         }

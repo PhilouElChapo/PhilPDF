@@ -16,16 +16,18 @@ from moteur import nettoyage as N
 class DialogueRedresser(QDialog):
     """gris : image en niveaux de gris a redresser (page rendue ou image). plusieurs : proposer « toutes les pages »."""
 
-    def __init__(self, parent, titre, gris, plusieurs=False):
+    def __init__(self, parent, titre, gris, plusieurs=False, verticales=True):
         super().__init__(parent)
         self.setWindowTitle(titre)
         ecran = self.screen().availableGeometry()
-        self.resize(min(760, ecran.width() - 40), min(900, ecran.height() - 60))
+        self.resize(min(780, ecran.width() - 40), min(940, ecran.height() - 60))
         e = min(1.0, 1100 / max(gris.shape[:2]))
         self.gris = cv2.resize(gris, None, fx=e, fy=e, interpolation=cv2.INTER_AREA) if e < 1 else np.ascontiguousarray(gris)
         v = QVBoxLayout(self)
-        aide = QLabel(_("Réglez l'angle pour que les lignes du texte suivent la grille. « Auto » mesure l'inclinaison "
-                        "du texte. Rien n'est changé avant « Appliquer » ; Ctrl+Z revient en arrière."))
+        aide = QLabel(_("Réglez les angles pour que le texte suive la grille : « Lignes » tourne la page (lignes "
+                        "horizontales), « Verticales » redresse les bords et les colonnes qui penchent (feuille "
+                        "photographiée de biais). « Auto » mesure les deux. Rien n'est changé avant « Appliquer » ; "
+                        "Ctrl+Z revient en arrière."))
         aide.setWordWrap(True)
         v.addWidget(aide)
         self.vue = QLabel()
@@ -33,29 +35,21 @@ class DialogueRedresser(QDialog):
         self.vue.setMinimumSize(300, 360)
         self.vue.setStyleSheet("background:#ffffff;border:1px solid #ddd")
         v.addWidget(self.vue, 1)
-        h = QHBoxLayout()
-        self.angle = QDoubleSpinBox()
-        self.angle.setRange(-15, 15)
-        self.angle.setSingleStep(0.1)
-        self.angle.setDecimals(1)
-        self.angle.setSuffix(" °")
-        self.curseur = QSlider(Qt.Horizontal)
-        self.curseur.setRange(-150, 150)
-        h.addWidget(self.angle)
-        h.addWidget(self.curseur, 1)
-        v.addLayout(h)
-        hb = QHBoxLayout()
-        for d in (-1.0, -0.1, 0.1, 1.0):
-            b = QPushButton(f"{d:+.1f} °".replace(".", ","))
-            b.clicked.connect(lambda _c=False, d=d: self.angle.setValue(self.angle.value() + d))
-            hb.addWidget(b)
         self.trouve = N.angle(self.gris)
-        b_auto = QPushButton(_("Auto ({a} °)", a=f"{self.trouve:+.1f}".replace(".", ",")))
+        self.trouve_v = N.angle_vertical(self.gris, self.trouve) if verticales else 0.0
+        self._t = QTimer(self, singleShot=True, interval=60, timeout=self._apercu)
+        self.angle = self._reglage(v, _("Lignes (horizontales)"), _("Tourne la page : les lignes du texte deviennent horizontales."))
+        self.vertical = self._reglage(v, _("Verticales"), _("Redresse ce qui penche de haut en bas (bords de la feuille, "
+                                                              "colonnes, tableaux) ; les lignes restent horizontales.")) if verticales else None
+        hb = QHBoxLayout()
+        b_auto = QPushButton(_("Auto (lignes {a} °, verticales {v} °)", a=f"{self.trouve:+.1f}".replace(".", ","),
+                               v=f"{self.trouve_v:+.1f}".replace(".", ",")) if verticales else
+                             _("Auto ({a} °)", a=f"{self.trouve:+.1f}".replace(".", ",")))
         b_auto.setToolTip(_("Inclinaison mesurée sur les lignes du texte"))
-        b_auto.clicked.connect(lambda: self.angle.setValue(self.trouve))
+        b_auto.clicked.connect(self.auto)
         hb.addWidget(b_auto)
         b0 = QPushButton("0 °")
-        b0.clicked.connect(lambda: self.angle.setValue(0))
+        b0.clicked.connect(lambda: (self.angle.setValue(0), self.vertical and self.vertical.setValue(0)))
         hb.addWidget(b0)
         hb.addStretch()
         v.addLayout(hb)
@@ -76,12 +70,45 @@ class DialogueRedresser(QDialog):
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         v.addWidget(bb)
-        self.angle.valueChanged.connect(lambda x: (self.curseur.blockSignals(True), self.curseur.setValue(round(x * 10)),
-                                                   self.curseur.blockSignals(False), self._t.start()))
-        self.curseur.valueChanged.connect(lambda x: self.angle.setValue(x / 10))
-        self._t = QTimer(self, singleShot=True, interval=60, timeout=self._apercu)
-        self.angle.setValue(self.trouve)                 # proposee d'office : on la voit, on la corrige
+        self.auto()                                       # proposee d'office : on la voit, on la corrige
         self._apercu()
+
+    def _reglage(self, v, nom, aide):
+        """Une ligne : nom, angle au dixieme, curseur, -1 / -0,1 / +0,1 / +1."""
+        h = QHBoxLayout()
+        lb = QLabel(nom)
+        lb.setMinimumWidth(80)
+        lb.setToolTip(aide)
+        h.addWidget(lb)
+        sp = QDoubleSpinBox()
+        sp.setRange(-15, 15)
+        sp.setSingleStep(0.1)
+        sp.setDecimals(1)
+        sp.setSuffix(" °")
+        sp.setToolTip(aide)
+        cur = QSlider(Qt.Horizontal)
+        cur.setRange(-150, 150)
+        h.addWidget(sp)
+        h.addWidget(cur, 1)
+        for d in (-1.0, -0.1, 0.1, 1.0):
+            b = QPushButton(f"{d:+.1f}".replace(".", ","))
+            b.setMaximumWidth(48)
+            b.clicked.connect(lambda _c=False, d=d: sp.setValue(sp.value() + d))
+            h.addWidget(b)
+        sp.valueChanged.connect(lambda x: (cur.blockSignals(True), cur.setValue(round(x * 10)), cur.blockSignals(False),
+                                           self._t.start()))
+        cur.valueChanged.connect(lambda x: sp.setValue(x / 10))
+        v.addLayout(h)
+        return sp
+
+    def auto(self):
+        self.angle.setValue(self.trouve)
+        if self.vertical is not None:
+            self.vertical.setValue(self.trouve_v)
+
+    def valeurs(self):
+        """(angle des lignes, inclinaison des verticales), degres."""
+        return self.angle.value(), (self.vertical.value() if self.vertical is not None else 0.0)
 
     def toutes(self):
         return bool(self.portee) and self.portee.checkedId() == 1
@@ -91,7 +118,8 @@ class DialogueRedresser(QDialog):
         self._t.start()
 
     def _apercu(self):
-        img = N.tourner(self.gris, self.angle.value())
+        a, vv = self.valeurs()
+        img = np.ascontiguousarray(N.transformer(self.gris, a, vv))
         h, w = img.shape
         pm = QPixmap.fromImage(QImage(img.data, w, h, w, QImage.Format_Grayscale8).copy())
         pm = pm.scaled(self.vue.size() - QSize(8, 8), Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -99,7 +127,7 @@ class DialogueRedresser(QDialog):
         p.setPen(QPen(QColor(26, 115, 232, 110), 1))
         for y in range(18, pm.height(), 18):
             p.drawLine(0, y, pm.width(), y)
-        p.setPen(QPen(QColor(26, 115, 232, 60), 1))
+        p.setPen(QPen(QColor(26, 115, 232, 80), 1))
         for x in range(36, pm.width(), 36):
             p.drawLine(x, 0, x, pm.height())
         p.end()
@@ -116,13 +144,14 @@ def redresser_page(fenetre, onglet, n=None):
     from PySide6.QtWidgets import QDialog as _D
     n = onglet.page_courante() if n is None else n
     d = DialogueRedresser(fenetre, _("Redresser la page {n}", n=n + 1), gris_page(onglet.doc[n]), plusieurs=len(onglet.doc) > 1)
-    if d.exec() != _D.Accepted or abs(d.angle.value()) < 0.05:
+    a, vv = d.valeurs() if d.exec() == _D.Accepted else (0, 0)
+    if abs(a) < 0.05 and abs(vv) < 0.05:
         return
     pages = list(range(len(onglet.doc))) if d.toutes() else [n]
     onglet.memoriser(_("Redresser la page"))
-    N.redresser_pages(onglet.doc, pages, d.angle.value())
-    onglet.apres_modif([_("{n} page(s) redressée(s) de {a} °.", n=len(pages), a=f"{d.angle.value():+.1f}".replace(".", ","))],
-                       reconstruire=True)
+    N.redresser_pages(onglet.doc, pages, a, vv)
+    onglet.apres_modif([_("{n} page(s) redressée(s) : lignes {a} °, verticales {v} °.", n=len(pages),
+                          a=f"{a:+.1f}".replace(".", ","), v=f"{vv:+.1f}".replace(".", ","))], reconstruire=True)
 
 
 def redresser_image(onglet):
@@ -134,6 +163,6 @@ def redresser_image(onglet):
     # l'image telle qu'on la voit sur la page (sa rotation ou son miroir eventuels compris)
     pm = onglet.doc[obj["page"]].get_pixmap(clip=obj["rect"], dpi=150, colorspace=fitz.csGRAY, alpha=False)
     gris = np.frombuffer(pm.samples, np.uint8).reshape(pm.height, pm.width).copy()
-    d = DialogueRedresser(onglet.window(), _("Redresser l'image"), gris)
+    d = DialogueRedresser(onglet.window(), _("Redresser l'image"), gris, verticales=False)
     if d.exec() == _D.Accepted and abs(d.angle.value()) >= 0.05:
         onglet.tourner_objet(d.angle.value())

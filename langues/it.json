@@ -2875,5 +2875,16 @@
  "Redresser l'image (petit angle)...": "Raddrizzare l'immagine (piccolo angolo)...",
  "Redresser une page": "Raddrizzare una pagina",
  "Page penchée remise droite": "Pagina inclinata raddrizzata",
- "Tourne la page d'un petit angle (automatique, ou au dixième de degré) : texte, couleurs et qualité gardés.": "Ruota la pagina di un piccolo angolo (automatico, o al decimo di grado): testo, colori e qualità conservati."
+ "Tourne la page d'un petit angle (automatique, ou au dixième de degré) : texte, couleurs et qualité gardés.": "Ruota la pagina di un piccolo angolo (automatico, o al decimo di grado): testo, colori e qualità conservati.",
+ "Réglez les angles pour que le texte suive la grille : « Lignes » tourne la page (lignes horizontales), « Verticales » redresse les bords et les colonnes qui penchent (feuille photographiée de biais). « Auto » mesure les deux. Rien n'est changé avant « Appliquer » ; Ctrl+Z revient en arrière.": "Regoli gli angoli perché il testo segua la griglia: «Righe» ruota la pagina (righe orizzontali), «Verticali» raddrizza bordi e colonne inclinati (foglio fotografato di sbieco). «Auto» misura entrambi. Nulla cambia prima di «Applica»; Ctrl+Z torna indietro.",
+ "Lignes (horizontales)": "Righe (orizzontali)",
+ "Tourne la page : les lignes du texte deviennent horizontales.": "Ruota la pagina: le righe del testo diventano orizzontali.",
+ "{n} page(s) redressée(s) : lignes {a} °, verticales {v} °.": "{n} pagina/e raddrizzata/e: righe {a}°, verticali {v}°.",
+ "Verticales": "Verticali",
+ "Redresse ce qui penche de haut en bas (bords de la feuille, colonnes, tableaux) ; les lignes restent horizontales.": "Raddrizza ciò che pende dall'alto in basso (bordi del foglio, colonne, tabelle); le righe restano orizzontali.",
+ "Auto (lignes {a} °, verticales {v} °)": "Auto (righe {a}°, verticali {v}°)",
+ "Ouvrir la fenêtre du pilote du scanner (réglages du fabricant)": "Aprire la finestra del driver dello scanner (impostazioni del produttore)",
+ "Pour un scanner TWAIN : si la numérisation directe ne marche pas, la fenêtre de son pilote s'ouvre.": "Per uno scanner TWAIN: se la scansione diretta non funziona, si apre la finestra del suo driver.",
+ "(TWAIN)": "(TWAIN)",
+ "Windows ne connaît aucun scanner WIA sur ce poste : la fenêtre de numérisation de Windows ne peut rien faire. Choisissez le scanner dans la liste (réseau ou TWAIN) ; s'il n'y est pas, installez le pilote 64 bits du fabricant.": "Windows non conosce alcuno scanner WIA su questo computer: la finestra di scansione di Windows non può fare nulla. Scelga lo scanner nell'elenco (rete o TWAIN); se non c'è, installi il driver a 64 bit del produttore."
 }

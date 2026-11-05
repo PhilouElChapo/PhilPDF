@@ -2875,5 +2875,16 @@
  "Redresser l'image (petit angle)...": "Enderezar la imagen (ángulo pequeño)...",
  "Redresser une page": "Enderezar una página",
  "Page penchée remise droite": "Página inclinada enderezada",
- "Tourne la page d'un petit angle (automatique, ou au dixième de degré) : texte, couleurs et qualité gardés.": "Gira la página un pequeño ángulo (automático, o a la décima de grado): se conservan el texto, los colores y la calidad."
+ "Tourne la page d'un petit angle (automatique, ou au dixième de degré) : texte, couleurs et qualité gardés.": "Gira la página un pequeño ángulo (automático, o a la décima de grado): se conservan el texto, los colores y la calidad.",
+ "Réglez les angles pour que le texte suive la grille : « Lignes » tourne la page (lignes horizontales), « Verticales » redresse les bords et les colonnes qui penchent (feuille photographiée de biais). « Auto » mesure les deux. Rien n'est changé avant « Appliquer » ; Ctrl+Z revient en arrière.": "Ajuste los ángulos para que el texto siga la cuadrícula: «Líneas» gira la página (líneas horizontales), «Verticales» endereza bordes y columnas inclinados (hoja fotografiada de lado). «Auto» mide ambos. Nada cambia antes de «Aplicar»; Ctrl+Z deshace.",
+ "Lignes (horizontales)": "Líneas (horizontales)",
+ "Tourne la page : les lignes du texte deviennent horizontales.": "Gira la página: las líneas del texto quedan horizontales.",
+ "{n} page(s) redressée(s) : lignes {a} °, verticales {v} °.": "{n} página(s) enderezada(s): líneas {a}°, verticales {v}°.",
+ "Verticales": "Verticales",
+ "Redresse ce qui penche de haut en bas (bords de la feuille, colonnes, tableaux) ; les lignes restent horizontales.": "Endereza lo que se inclina de arriba abajo (bordes de la hoja, columnas, tablas); las líneas siguen horizontales.",
+ "Auto (lignes {a} °, verticales {v} °)": "Auto (líneas {a}°, verticales {v}°)",
+ "Ouvrir la fenêtre du pilote du scanner (réglages du fabricant)": "Abrir la ventana del controlador del escáner (ajustes del fabricante)",
+ "Pour un scanner TWAIN : si la numérisation directe ne marche pas, la fenêtre de son pilote s'ouvre.": "Para un escáner TWAIN: si el escaneo directo falla, se abre la ventana de su controlador.",
+ "(TWAIN)": "(TWAIN)",
+ "Windows ne connaît aucun scanner WIA sur ce poste : la fenêtre de numérisation de Windows ne peut rien faire. Choisissez le scanner dans la liste (réseau ou TWAIN) ; s'il n'y est pas, installez le pilote 64 bits du fabricant.": "Windows no conoce ningún escáner WIA en este equipo: la ventana de escaneo de Windows no puede hacer nada. Elija el escáner en la lista (red o TWAIN); si no está, instale el controlador de 64 bits del fabricante."
 }

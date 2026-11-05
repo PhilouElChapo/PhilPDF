@@ -177,6 +177,54 @@ object Numerisation {
         return tourner(bm, a)
     }
 
+    /**
+     * Correction (repere image, y vers le bas) : rotation de a degres (sens des aiguilles d'une montre) puis
+     * inclinaison des verticales de v degres (les lignes horizontales restent horizontales), autour du centre.
+     */
+    fun matrice(a: Float, v: Float, w: Float, h: Float): android.graphics.Matrix = android.graphics.Matrix().apply {
+        setRotate(a, w / 2, h / 2)
+        postSkew(kotlin.math.tan(Math.toRadians(v.toDouble())).toFloat(), 0f, w / 2, h / 2)
+    }
+
+    /** Image redressee : rotation a et inclinaison des verticales v (degres), meme taille, coins blancs. */
+    fun transformer(bm: Bitmap, a: Float, v: Float): Bitmap {
+        if (kotlin.math.abs(a) < 0.01f && kotlin.math.abs(v) < 0.01f) return bm
+        val out = Bitmap.createBitmap(bm.width, bm.height, Bitmap.Config.ARGB_8888)
+        Canvas(out).apply {
+            drawColor(android.graphics.Color.WHITE)
+            drawBitmap(bm, matrice(a, v, bm.width.toFloat(), bm.height.toFloat()), Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
+        }
+        return out
+    }
+
+    /** Inclinaison des verticales (degres) apres la rotation a : bords de la feuille, colonnes, tableaux. */
+    fun inclinaisonVerticale(bm: Bitmap, a: Float): Float {
+        val k = max(1f, max(bm.width, bm.height) / 700f)
+        val w = (bm.width / k).toInt().coerceAtLeast(8); val h = (bm.height / k).toInt().coerceAtLeast(8)
+        val petit = tourner(Bitmap.createScaledBitmap(bm, w, h, true), a)
+        val px = IntArray(w * h).also { petit.getPixels(it, 0, w, 0, 0, w, h) }
+        val xs = ArrayList<Float>(); val ys = ArrayList<Float>()
+        val mx = (w * 0.04f).toInt(); val my = (h * 0.04f).toInt()
+        for (y in my until h - my) for (x in mx until w - mx) if (gris(px[y * w + x]) < 140) { xs += x.toFloat(); ys += y - h / 2f }
+        if (xs.size < 200) return 0f
+        val xa = xs.toFloatArray(); val ya = ys.toFloatArray()
+        val marge = w / 2
+        fun score(deg: Float): Double {
+            val t = kotlin.math.tan(Math.toRadians(deg.toDouble())).toFloat()
+            val col = IntArray(w + 2 * marge)
+            for (i in xa.indices) { val x = (xa[i] + t * ya[i]).toInt() + marge; if (x in col.indices) col[x]++ }
+            var s = 0.0; for (c in col) s += c.toDouble() * c
+            return s
+        }
+        val zero = score(0f)
+        var best = 0f; var bs = -1.0
+        var d = -6f
+        while (d <= 6f) { val sc = score(d); if (sc > bs) { bs = sc; best = d }; d += 0.25f }
+        var f = best - 0.25f; val fin = best + 0.25f
+        while (f <= fin) { val sc = score(f); if (sc > bs) { bs = sc; best = f }; f += 0.05f }
+        return if (bs > zero * 1.04) best else 0f
+    }
+
     /** Image tournee de deg degres (sens des aiguilles d'une montre), meme taille, coins blancs. */
     fun tourner(bm: Bitmap, a: Float): Bitmap {
         if (kotlin.math.abs(a) < 0.01f) return bm

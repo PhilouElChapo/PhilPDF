@@ -91,5 +91,15 @@ def _ang(p):
 N.redresser_pages(_d, [0], 3.0)
 _a = _ang(_d[0]); assert abs(_a + 3) < 0.3, _a
 N.redresser_pages(_d, [0], _a); assert abs(_ang(_d[0])) < 0.2 and "numero 100" in _d[0].get_text()
-print("Redresser la page : OK")
+for _x in (60, 300, 540):
+    _p.draw_line((_x, 80), (_x, 760), width=1.5)
+N.redresser_pages(_d, [0], -2.0, 3.0)
+def _mes(p):
+    pm = p.get_pixmap(dpi=100, colorspace=fitz.csGRAY)
+    g = np.frombuffer(pm.samples, np.uint8).reshape(pm.h, pm.w)
+    a = N.angle(g)
+    return a, N.angle_vertical(g, a)
+_a, _v = _mes(_d[0]); assert abs(_a - 2) < 0.3 and abs(_v + 3) < 0.4, (_a, _v)
+N.redresser_pages(_d, [0], _a, _v); _a, _v = _mes(_d[0]); assert abs(_a) < 0.3 and abs(_v) < 0.3, (_a, _v)
+print("Redresser la page (lignes et verticales) : OK")
 print("RESULTAT : OK")

@@ -12,3 +12,4 @@ pyhanko-certvalidator
 openpyxl
 fonttools
 truststore
+pytwain; sys_platform == "win32"

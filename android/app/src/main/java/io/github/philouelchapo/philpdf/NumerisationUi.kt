@@ -266,10 +266,10 @@ fun EcranNumerisation(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
         }
     }
     aTourner?.let { p ->
-        RedresserImage(p.image, stringResource(R.string.redresser_page_n, pages.indexOf(p) + 1), { aTourner = null }) { a, _t ->
+        RedresserImage(p.image, stringResource(R.string.redresser_page_n, pages.indexOf(p) + 1), { aTourner = null }) { a, v, _t ->
             aTourner = null
             portee.launch {
-                val r = withContext(Dispatchers.Default) { Numerisation.tourner(p.image, a) }
+                val r = withContext(Dispatchers.Default) { Numerisation.transformer(p.image, a, v) }
                 val k = pages.indexOf(p); if (k >= 0) pages[k] = PageScan(r)
             }
         }

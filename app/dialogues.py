@@ -1235,8 +1235,12 @@ class DialogueNumeriser(QDialog):
         self.blanches.setChecked(True)
         self.redresser = QCheckBox(_('Redresser les pages'))
         self.redresser.setChecked(True)
-        for c in (self.ocr, self.blanches, self.redresser):
+        self.interface = QCheckBox(_("Ouvrir la fenêtre du pilote du scanner (réglages du fabricant)"))
+        self.interface.setToolTip(_("Pour un scanner TWAIN : si la numérisation directe ne marche pas, la fenêtre de son pilote s'ouvre."))
+        for c in (self.ocr, self.blanches, self.redresser, self.interface):
             v.addWidget(c)
+        self.app.currentIndexChanged.connect(lambda _i: self.interface.setVisible(str(self.app.currentData() or "").startswith("twain:")))
+        self.interface.setVisible(str(self.app.currentData() or "").startswith("twain:"))
         self.estimation = QLabel()
         self.estimation.setStyleSheet("background:#f7f7f7;border-radius:8px;padding:10px")
         v.addWidget(self.estimation)
@@ -1256,9 +1260,12 @@ class DialogueNumeriser(QDialog):
         self._t_reseau.stop()
         connus = {n for _i, n in self.liste}
         nouveaux = [(i, n) for i, n in self._reseau if n not in connus]
+        fenetre_windows = self.app.currentData() is None
         for i, n in nouveaux:
             self.app.insertItem(self.app.count() - (1 if sys.platform == "win32" else 0), n, i)
         self.liste += nouveaux
+        if nouveaux and fenetre_windows and self.app.currentData() is None:
+            self.app.setCurrentIndex(0)                 # un vrai scanner plutot que la fenetre de Windows
         self.etat_reseau.setText(_("{n} scanner(s) trouvé(s) sur le réseau.", n=len(self._reseau)) if self._reseau else
                                  _("Aucun scanner réseau sans pilote trouvé (voir Aide > Journal pour le détail)."))
         if not self.liste:
@@ -1278,7 +1285,14 @@ class DialogueNumeriser(QDialog):
         if ident is None:
             images = self.sc.dialogue_windows()
         else:
-            images = self.sc.numeriser(ident, self.mode(), dpi, src)
+            fen = int(self.parent().winId()) if self.parent() is not None else None
+            try:
+                images = self.sc.numeriser(ident, self.mode(), dpi, src, fenetre=fen, interface=self.interface.isChecked())
+            except Exception:
+                if not str(ident).startswith("twain:") or self.interface.isChecked():
+                    raise
+                # pilote TWAIN qui refuse la numerisation directe : on reessaie avec sa propre fenetre
+                images = self.sc.numeriser(ident, self.mode(), dpi, src, fenetre=fen, interface=True)
         return self.sc.assembler(images, self.mode(), dpi, self.blanches.isChecked(), self.redresser.isChecked())
 
 

@@ -147,24 +147,68 @@ def page(gris, dpi=300, reglages=None):
     return nb, a, {"taches": ntaches, "bords": nbords}
 
 
-def redresser_pages(doc, pages, angle):
-    """Tourne le contenu des pages d'un petit angle (degres, sens inverse des aiguilles d'une montre, comme
-    angle()) autour du centre de la page : texte, couleurs et qualite gardes, le texte reconnu tourne avec."""
+def matrice(a, v, w, h):
+    """Correction (3x3, repere image : y vers le bas) : rotation de a degres (sens inverse des aiguilles d'une
+    montre, comme angle()) puis inclinaison des verticales de v degres (les lignes horizontales restent horizontales),
+    autour du centre de l'image (w x h)."""
     import math
-    import pymupdf as fitz
-    if abs(angle) < 0.01:
+    R = np.vstack([cv2.getRotationMatrix2D((w / 2, h / 2), a, 1), [0, 0, 1]])
+    k = math.tan(math.radians(v))
+    S = np.array([[1, k, -k * h / 2], [0, 1, 0], [0, 0, 1]], dtype=float)
+    return S @ R
+
+
+def transformer(img, a, v, fond=255):
+    """Image redressee : rotation a et inclinaison verticale v (degres), meme taille, coins blancs."""
+    h, w = img.shape[:2]
+    bv = fond if img.ndim == 2 else (fond, fond, fond)
+    return cv2.warpAffine(img, matrice(a, v, w, h)[:2], (w, h), flags=cv2.INTER_CUBIC, borderValue=bv)
+
+
+def angle_vertical(gris, a=0.0):
+    """Inclinaison des verticales (degres) apres la rotation a : bords de la feuille, colonnes, tableaux, marge."""
+    import math
+    h, w = gris.shape[:2]
+    k = 1200 / max(h, w)
+    petit = cv2.resize(gris, None, fx=k, fy=k, interpolation=cv2.INTER_AREA)
+    if abs(a) > 0.01:
+        petit = tourner(petit, a)
+    enc = _encre(petit, 170)
+    hh, ww = enc.shape
+    enc = enc[int(hh * 0.04):int(hh * 0.96), int(ww * 0.04):int(ww * 0.96)]
+    if enc.sum() < 50:
+        return 0.0
+
+    def score(v):
+        t = math.tan(math.radians(v))
+        M = np.array([[1, t, -t * enc.shape[0] / 2], [0, 1, 0]], dtype=np.float32)
+        r = cv2.warpAffine(enc, M, (enc.shape[1], enc.shape[0]), flags=cv2.INTER_NEAREST)
+        return float(np.var(r.sum(axis=0).astype(float)))
+    zero = score(0)
+    best = max(np.arange(-6, 6.01, 0.25), key=score)
+    best = max(np.arange(best - 0.25, best + 0.26, 0.05), key=score)
+    return float(best) if score(best) > zero * 1.04 else 0.0
+
+
+def redresser_pages(doc, pages, angle, vertical=0.0):
+    """Redresse le contenu des pages autour de leur centre : rotation de angle degres (sens inverse des aiguilles
+    d'une montre, comme angle()) et inclinaison des verticales de vertical degres (comme angle_vertical()).
+    Texte, couleurs et qualite gardes, le texte reconnu suit."""
+    if abs(angle) < 0.01 and abs(vertical) < 0.01:
         return 0
     n = 0
     for i in pages:
         p = doc[i]
         mb = p.mediabox
-        cx, cy = (mb.x0 + mb.x1) / 2, (mb.y0 + mb.y1) / 2
-        t = math.radians(angle)
-        c, s = math.cos(t), math.sin(t)
-        tx, ty = cx - c * cx + s * cy, cy - s * cx - c * cy
+        w, h = mb.width, mb.height
+        A = matrice(angle, vertical, w, h)
+        # repere PDF (y vers le haut) <-> repere image en points (y vers le bas, origine en haut a gauche)
+        F = np.array([[1, 0, -mb.x0], [0, -1, mb.y1], [0, 0, 1]], dtype=float)
+        T = np.linalg.inv(F) @ A @ F
         anciens = p.get_contents()
         avant, apres = doc.get_new_xref(), doc.get_new_xref()
-        for x, flux in ((avant, f"q {c:.6f} {s:.6f} {-s:.6f} {c:.6f} {tx:.4f} {ty:.4f} cm\n".encode()), (apres, b"\nQ\n")):
+        cm = f"q {T[0, 0]:.6f} {T[1, 0]:.6f} {T[0, 1]:.6f} {T[1, 1]:.6f} {T[0, 2]:.4f} {T[1, 2]:.4f} cm\n"
+        for x, flux in ((avant, cm.encode()), (apres, b"\nQ\n")):
             doc.update_object(x, "<<>>")
             doc.update_stream(x, flux)
         doc.xref_set_key(p.xref, "Contents", "[" + " ".join(f"{x} 0 R" for x in [avant] + anciens + [apres]) + "]")
