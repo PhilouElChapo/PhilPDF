@@ -198,3 +198,23 @@ assert _P.ameliorer(_img, "magnificence").shape[0] == 2200
 _j = _P.jpeg_envoi(_img)
 assert _j[:2] == b"\xff\xd8" and max(_P.decoder(_j).shape[:2]) == 2000
 print("Lecture fluide traduite, Magnificence IA (apercu, envoi) : OK")
+# formulaire : une etiquette courte (« Mme ») n'est pas collee aux lignes du dessous ; un texte pose sur des
+# pointilles se deplace seul, sans emporter ni effacer les pointilles
+from moteur.modifier import Editeur as _Ed
+_d = fitz.open()
+_p = _d.new_page()
+_p.insert_text((60, 100), "Mme", fontsize=11)
+_p.insert_text((40, 116), "Prénom(s) :", fontsize=11)
+_p.insert_text((40, 132), "Nom d'usage ou nom marital :", fontsize=11)
+_p.insert_text((40, 180), "Ville de naissance : " + "." * 90, fontsize=11)
+_e = _Ed(_d)
+assert _e.paragraphe_a(0, fitz.Point(66, 97))["texte"] == "Mme"
+_n0 = _p.get_text().count(".")
+_e.ajouter_texte(0, fitz.Point(150, 176), "Cannes", 11)
+_z = next(l["bbox"] for b in _p.get_text("dict")["blocks"] for l in b.get("lines", []) if "".join(s["text"] for s in l["spans"]).strip() == "Cannes")
+_e.deplacer_ligne(0, _z, 30, -12)
+_t = _p.get_text()
+assert _t.count(".") == _n0 and "Ville de naissance" in _t, (_t.count("."), _n0)
+_c = next(l["bbox"] for b in _p.get_text("dict")["blocks"] for l in b.get("lines", []) if "Cannes" in "".join(s["text"] for s in l["spans"]))
+assert abs(_c[0] - 180) < 1 and _c[1] < _z[1] - 10, _c
+print("Formulaire : etiquette courte a part, texte sur pointilles deplace seul : OK")

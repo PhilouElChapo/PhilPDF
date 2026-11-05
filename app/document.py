@@ -334,8 +334,16 @@ class PageWidget(QWidget):
         o = self.o
         o.barre_rapide.hide()
         o.fermer_bulle_aide()
-        if self.editeur:
-            self.editeur.valider()
+        # un texte en cours de saisie (sur cette page ou une autre) : le clic ailleurs le valide, comme Ctrl+Entree,
+        # et s'arrete la (il ne pose pas un nouveau champ de texte)
+        ouverts = [pw for pw in getattr(o, "page_widgets", [self]) if pw.editeur]
+        if ouverts:
+            ajout = o.mode == "ajout_texte"
+            for pw in ouverts:
+                pw.editeur.valider()
+            if ajout:
+                o.changer_mode("modifier")          # retour au curseur normal ; « Ajouter du texte » pour un autre
+            return
         pt = self.vers_pdf(e.position())
         if o.mode == "mesure":
             if e.button() == Qt.RightButton:
@@ -1169,7 +1177,11 @@ class EditeurParagraphe(QFrame):
                 self.annuler()
                 return True
             if ev.key() in (Qt.Key_Return, Qt.Key_Enter) and ev.modifiers() & Qt.ControlModifier:
+                o = self.pw.o
+                ajout = self.para is None and o.mode == "ajout_texte"
                 self.valider()
+                if ajout:
+                    o.changer_mode("modifier")
                 return True
         if obj is self.poignee:
             if t == ev.Type.MouseButtonPress:

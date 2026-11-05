@@ -335,34 +335,74 @@ class Editeur:
         zone = fitz.Rect(zone)
         lignes = [([(c, sp) for sp in l["spans"] for c in sp["chars"]], l["dir"])
                   for b in page.get_text("rawdict", flags=fitz.TEXT_PRESERVE_WHITESPACE)["blocks"] for l in b.get("lines", [])]
-        for chars, direction in lignes:
-            if not chars:
-                continue
-            angle = math.degrees(math.atan2(-direction[1], direction[0]))    # une ligne tournee le reste
+
+        def cadre(chars):
             r = fitz.Rect()
             for c, _ in chars:
                 r |= fitz.Rect(c["bbox"])
-            if not r.intersects(zone) or (r & zone).get_area() < 0.5 * min(r.get_area(), zone.get_area()):
-                continue
-            plan, repli = [], None
-            for c, s in chars:
-                ch = c["c"]
-                p = self._police_du_span(page, s)
-                cible = p if p and p.a(ch) else next((q for q in self._polices(page).values()
-                                                      if p and q.famille() == p.famille() and q.a(ch)), None)
-                if cible is None and ch != " ":
-                    if repli is None:
-                        repli = self._police_par_nom(p) or PoliceIncorporee(*self._choisir_par_rendu(page, chars[:12])[1:])
-                    cible = repli
-                plan.append((ch, cible, s["size"], fitz.sRGB_to_pdf(s["color"]), c["origin"][0] + dx, "", c["origin"][1] + dy,
-                             angle if abs(angle) > 0.05 else 0))
-            h = r.height
-            if abs(angle) <= 0.05:
-                page.add_redact_annot(fitz.Rect(r.x0 + 0.3, r.y0 + h * 0.25, r.x1 + 0.5, r.y1 - h * 0.25), fill=False)
-            else:
-                _effacer_lettres(page, chars)
+            return r
+
+        def accord(chars):
+            """Ressemblance du cadre de la ligne avec la zone choisie (1 = le meme) : une ligne posee sur une autre
+            (texte ajoute sur des pointilles) ne fait plus bouger celle du dessous."""
+            r = cadre(chars)
+            if not r.intersects(zone):
+                return 0
+            i = (r & zone).get_area()
+            return i / max(1e-6, r.get_area() + zone.get_area() - i)
+        toutes = [x for x in lignes if x[0]]
+        lignes = sorted((x for x in toutes if accord(x[0]) > 0), key=lambda x: -accord(x[0]))
+        for chars, direction in lignes[:1]:
+            angle = math.degrees(math.atan2(-direction[1], direction[0]))    # une ligne tournee le reste
+            r = cadre(chars)
+            if (r & zone).get_area() < 0.5 * min(r.get_area(), zone.get_area()):
+                break
+            def plan_de(chars, angle, dx, dy):
+                plan, repli = [], None
+                for c, s in chars:
+                    ch = c["c"]
+                    p = self._police_du_span(page, s)
+                    cible = p if p and p.a(ch) else next((q for q in self._polices(page).values()
+                                                          if p and q.famille() == p.famille() and q.a(ch)), None)
+                    if cible is None and ch != " ":
+                        if repli is None:
+                            repli = self._police_par_nom(p) or PoliceIncorporee(*self._choisir_par_rendu(page, chars[:12])[1:])
+                        cible = repli
+                    plan.append((ch, cible, s["size"], fitz.sRGB_to_pdf(s["color"]), c["origin"][0] + dx, "", c["origin"][1] + dy,
+                                 angle if abs(angle) > 0.05 else 0))
+                return plan
+            plan = plan_de(chars, angle, dx, dy)
+            # lettres des AUTRES lignes a la meme hauteur (texte pose sur des pointilles) : notees avant
+            # l'effacement, reecrites a l'identique si l'effacement en a perdu
+            voisines = []
+            for ch2, dir2 in toutes:
+                if ch2 is chars:
+                    continue
+                # toute la ligne voisine : l'effacement de MuPDF peut aussi perdre des lettres plus loin sur elle
+                if not (cadre(ch2) & fitz.Rect(page.rect.x0, r.y0 - 2, page.rect.x1, r.y1 + 2)):
+                    continue
+                pres = [(c, sp) for c, sp in ch2 if c["c"] != " "]
+                if pres:
+                    voisines.append((pres, math.degrees(math.atan2(-dir2[1], dir2[0]))))
+            _effacer_lettres(page, chars)
             page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE,
                                   text=fitz.PDF_REDACT_TEXT_REMOVE)
+            if voisines:
+                restent = {}
+                for b in page.get_text("rawdict")["blocks"]:
+                    for l in b.get("lines", []):
+                        for sp in l["spans"]:
+                            for c in sp["chars"]:
+                                restent.setdefault(c["c"], []).append(c["origin"])
+
+                def encore(c):
+                    return any(abs(o[0] - c["origin"][0]) < 0.6 and abs(o[1] - c["origin"][1]) < 0.6 for o in restent.get(c["c"], ()))
+                for pres, a2 in voisines:
+                    perdues = [(c, sp) for c, sp in pres if not encore(c)]
+                    if perdues:
+                        pl = [x for x in plan_de(perdues, a2, 0, 0) if x[1] is not None]
+                        if pl:
+                            self._ecrire(page, pl, pl[0][6])
             self._ecrire(page, [x for x in plan if x[1] is not None], plan[0][6])
             self.journal.append(f"ligne déplacée de {dx:+.0f} / {dy:+.0f} pt, polices d'origine conservées")
             return True
@@ -584,6 +624,11 @@ class Editeur:
                 nxt = min(cands, key=lambda l: abs(l["base"] - cur["base"]))
                 d = abs(nxt["base"] - cur["base"])
                 if d > 1.8 * cur["taille"] or (pas and d > pas * 1.3) or traverse_bord(cur, nxt):
+                    break
+                # dans un paragraphe, une ligne ne passe a la suivante que si elle est pleine : une ligne courte
+                # au-dessus d'une plus longue (etiquettes d'un formulaire : « Mme », « Prenom(s) : ») est a part
+                haut, bas = (cur, nxt) if sens == 1 else (nxt, cur)
+                if (haut["x1"] - haut["x0"]) < 0.65 * (bas["x1"] - bas["x0"]):
                     break
                 # un trou (autre texte entre les deux) arrete le paragraphe
                 if any(l is not nxt and meme_colonne(cur, l) and min(cur["base"], nxt["base"]) < l["base"] < max(cur["base"], nxt["base"])
