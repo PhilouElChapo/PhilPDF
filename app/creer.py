@@ -25,6 +25,8 @@ class DialogueCreer(QDialog):
         for genre, ic, titre, aide in (
                 ("vierge", "creer", _("Page vierge"), _("Une page A4 blanche")),
                 ("images", "image", _("Depuis des images"), _("JPG, PNG, TIFF... une page par image")),
+                ("photos", "numeriser", _("Depuis des photos de documents"),
+                 _("Photos prises au téléphone : bords repérés, page redressée et nettoyée, texte reconnu")),
                 ("office", "exporter", _("Depuis un fichier Word, Excel ou PowerPoint"),
                  _("Converti par Office (ou LibreOffice), polices intégrées : le document exact")),
                 ("presse_papiers", "copier", _("Depuis le presse-papiers"), _("L'image ou le texte copié")),

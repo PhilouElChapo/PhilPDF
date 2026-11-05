@@ -473,6 +473,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
         act(sm, _("A partir d'images..."), lambda: self.creer("images"), None, "exporter")
         act(sm, _('A partir de plusieurs fichiers (combiner)...'), lambda: self.lancer_outil("combiner"), None, "combiner")
         act(sm, _('Depuis le scanner...'), lambda: self.lancer_outil("numeriser"), None, "numeriser")
+        act(sm, _('Depuis des photos de documents...'), lambda: self.numeriser_photos(), None, "image")
         m.addSeparator()
         act(m, _('Enregistrer'), lambda: self.enregistrer(), "Ctrl+S", "enregistrer")
         act(m, _('Enregistrer sous...'), lambda: self.enregistrer(sous=True), "Shift+Ctrl+S", "enregistrer_sous")
@@ -538,6 +539,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
         a = act(m, _("Barre d'actions rapides sur sélection"), self._basculer_barre, None, "barre")
         a.setCheckable(True)
         a.setChecked(self.params.get("barre_rapide", True))
+        act(m, _('Lecture fluide (texte remis en colonne)...'), self.lecture_fluide, None, "oeil")
         act(m, _('Côte à côte...'), self.menu_cote_a_cote, "Ctrl+Alt+C", "comparer")
         act(m, _('Plein écran'), lambda: self.showNormal() if self.isFullScreen() else self.showFullScreen(), "F11", "plein_ecran")
 
@@ -1790,6 +1792,9 @@ class Fenetre(MixinCoteACote, QMainWindow):
                 self.params, biblio=self.biblio, doc=d,
                 nom=_("Capture du {d}", d=__import__("datetime").datetime.now().strftime("%d-%m-%Y %Hh%M")) + ".pdf")))
             return
+        if genre == "photos":
+            self.numeriser_photos()
+            return
         if genre == "images":
             fs = QFileDialog.getOpenFileNames(self, _('Images'), self.dossier_depart(), _('Images (*.png *.jpg *.jpeg *.tif *.tiff *.bmp)'))[0]
             if not fs:
@@ -1958,6 +1963,62 @@ class Fenetre(MixinCoteACote, QMainWindow):
         o = self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=doc, nom="Numérisation.pdf"))
         if d.ocr.isChecked():
             self.statusBar().showMessage(_('Enregistrez la numérisation pour lancer la reconnaissance du texte.'), 10000)
+
+    def lecture_fluide(self):
+        o = self.doc_courant()
+        if not o:
+            return
+        from .lecture_fluide import FenetreLectureFluide
+        self._fluide = FenetreLectureFluide(o, self.params)
+        self._fluide.show()
+
+    def numeriser_photos(self, fichiers=None):
+        """Photos de documents -> PDF propre (bords, perspective, modele), puis texte reconnu (comme sur Android)."""
+        from .dialogue_photos import DialogueScanPhotos, nom_scan
+        d = DialogueScanPhotos(self, self.params, fichiers)
+        if d.exec() != QDialog.Accepted or d.doc is None:
+            return
+        try:
+            self.params.enregistrer()
+        except Exception:                            # noqa: BLE001
+            pass
+        nom = nom_scan()
+        doc = d.doc
+        if d.ocr.isChecked():
+            from moteur.scan import tesseract_exe
+            if not tesseract_exe():
+                QMessageBox.information(self, _('Reconnaître le texte'),
+                                        _("Le module de reconnaissance de texte est absent de ce paquet PhilPDF.\nTéléchargez la version complète (elle l'embarque)."))
+            else:
+                import tempfile
+                from moteur import scan
+                from .apprentissage import ocr_appris
+                from .dialogues_ia import executer_suivi
+                dossier = tempfile.mkdtemp(prefix="philpdf_scan_")
+                source, sortie = os.path.join(dossier, "photos.pdf"), os.path.join(dossier, "photos_ocr.pdf")
+                doc.save(source)
+                appris = ocr_appris(self.params)
+
+                def travail(t):
+                    def prog(i, n):
+                        t.avancer(_("Reconnaissance du texte : page {i} sur {n}...", i=min(i + 1, n), n=n), i, n)
+                    an = scan.analyser(source, prog, appris)
+                    for pg in an["pages"]:
+                        t.noter(_("Page {p} : {m} mots, confiance {q} %", p=pg["num"] + 1, m=len(pg["mots"]), q=round(pg["qualite"])))
+                    t.avancer(_("Enregistrement..."), len(an["pages"]), len(an["pages"]))
+                    scan.assembler(an, sortie)
+                    return sortie
+                try:
+                    if executer_suivi(self, _('Reconnaître le texte'), travail):
+                        doc = fitz.open("pdf", open(sortie, "rb").read())
+                except InterruptedError:
+                    pass
+                except Exception as e:                # noqa: BLE001
+                    QMessageBox.warning(self, _('Reconnaître le texte'),
+                                        _("La reconnaissance a échoué (le PDF reste sans texte reconnu) :\n{e}", e=e))
+        o = self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=doc, nom=nom))
+        self.statusBar().showMessage(_("Document numérisé : {n} page(s). Enregistrez-le pour le garder.", n=len(doc)), 10000)
+        return o
 
     def imprimante_preferee(self):
         """Imprimante proposee par PhilPDF (Preferences > Imprimante), si elle existe encore sur ce poste ; sinon None

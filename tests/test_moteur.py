@@ -149,3 +149,40 @@ _o = R.effacer(_img, _m, "fond")
 assert _t.time() - _d0 < 5 and _o[:, :, :3][_m].mean() > 240, ("grande zone : remplie de sa couleur", _t.time() - _d0)
 assert _o[520, 500, 0] == 0, "le texte hors zone reste"
 print("Retouche, grande zone effacee : OK")
+
+# --- numeriser depuis des photos (comme Android) : feuille penchee sur une table sombre, avec une ombre
+import cv2 as _cv
+from moteur import photo_doc as _P
+_img = np.full((1600, 1200, 3), (40, 50, 60), np.uint8)
+_img[250:1350, 200:1000] = (225, 232, 235)
+_cv.putText(_img, "FACTURE", (280, 550), _cv.FONT_HERSHEY_SIMPLEX, 3, (40, 40, 40), 8)
+_img = _cv.warpAffine(_img, _cv.getRotationMatrix2D((600, 800), 6, 1), (1200, 1600), borderValue=(40, 50, 60))
+_img = (_img * np.linspace(0.6, 1, 1200)[None, :, None]).astype(np.uint8)
+_c = _P.coins(_img)
+_l = np.linalg.norm(_c[1] - _c[0])
+assert 700 < _l < 950, ("coins de la feuille", _c)
+_pg = _P.redresser(_img, _c)
+assert _pg.shape[0] > _pg.shape[1]
+_nb = _P.ameliorer(_pg, "nb")
+assert set(np.unique(_nb)) <= {0, 255} and (_nb == 255).mean() > 0.8, "noir et blanc net, fond blanc"
+_d = _P.pdf([_P.octets(_nb, "nb"), _P.octets(_P.ameliorer(_pg, "email"), "email")])
+assert len(_d) == 2 and abs(_d[0].rect.width - 595) < 1
+print("Numeriser depuis des photos : bords, redressement, modeles, PDF : OK")
+
+# --- lecture fluide : titre, paragraphe recousu (mot coupe), gras, numero de page laisse
+from moteur import fluide as _F
+_d = fitz.open()
+_p = _d.new_page()
+_p.insert_text((72, 80), "Grand titre", fontsize=24, fontname="hebo")
+_p.insert_text((72, 120), "Ceci est un paragraphe assez long qui con-", fontsize=11)
+_p.insert_text((72, 133), "tinue sur la ligne suivante.", fontsize=11)
+_p.insert_text((72, 200), "Second paragraphe, bien separe.", fontsize=11)
+_p.insert_text((290, 830), "12", fontsize=9)
+_b, _s = _F.page(_p)
+assert not _s and _b[0] == ("titre", 1, "Grand titre"), _b[:1]
+_paras = [b for b in _b if b[0] == "para"]
+_t0 = "".join(m[0] for m in _paras[0][2])
+assert len(_paras) == 2 and "qui continue sur la ligne" in _t0, _paras
+assert not any("".join(m[0] for m in b[2]).strip() == "12" for b in _paras), "numero de page laisse"
+assert _F.page(_d.new_page())[1], "page vide : scannee"
+print("Lecture fluide : titre, paragraphes, numero de page : OK")

@@ -348,6 +348,17 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.64
+- Numeriser depuis des photos de documents (Fichier > Creer un PDF, comme sur PhilPDF Android) : les bords de la
+  feuille sont reperes seuls (quatre coins a faire glisser pour corriger), la page est redressee, puis amelioree
+  selon le modele : Noir et blanc (texte net, tres leger), Couleur (fond eclairci, ombres retirees), Pour e-mail
+  (allege au maximum), Photo (sans retouche). Plusieurs photos a la suite, a ranger en glissant, tourner ou retirer ;
+  apercu du resultat. Le texte est reconnu aussitot (OCR), le document s'ouvre, pret a enregistrer.
+- Lecture fluide (Affichage > Lecture fluide, comme sur Android) : le texte du document remis en colonne, avec ses
+  titres, ses paragraphes recousus (mots coupes recolles), le gras, l'italique et les images ; numeros de page et
+  titres courants laisses de cote. Taille du texte, fond clair, sepia ou sombre, justifie ou non, police avec ou
+  sans empattements (reglages gardes). Cliquer « Page n » ramene a cette page. Le PDF n'est pas modifie.
+
 0.9.63
 - Modifier le texte et les images : les petites images posees sur un fond de page (image pleine page, comme dans les
   rapports d'expertise avec photos) se choisissent enfin ; avant, le clic prenait toujours le fond. Quand plusieurs
