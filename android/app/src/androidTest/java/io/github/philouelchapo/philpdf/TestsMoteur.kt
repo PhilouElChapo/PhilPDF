@@ -521,4 +521,17 @@ class TestsMoteur {
         runBlocking { o.annuler() }
         assertEquals(1, runBlocking { o.tailles() }.size)
     }
+
+    /** Numeriser : une page penchee de 3 degres est remise a l'horizontale. */
+    @Test fun numeriserRemetDAplomb() {
+        val bm = Bitmap.createBitmap(900, 1200, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bm); c.drawColor(android.graphics.Color.WHITE)
+        c.rotate(3f, 450f, 600f)
+        val p = Paint().apply { textSize = 34f; isAntiAlias = true; color = android.graphics.Color.BLACK }
+        for (y in 150..1050 step 45) c.drawText("Ligne de texte numero $y pour essayer", 70f, y.toFloat(), p)
+        val a = Numerisation.inclinaison(bm)
+        assertTrue("angle trouve : $a", kotlin.math.abs(kotlin.math.abs(a) - 3f) < 0.6f)
+        val r = Numerisation.aplomb(bm)
+        assertTrue("apres : ${Numerisation.inclinaison(r)}", kotlin.math.abs(Numerisation.inclinaison(r)) < 0.6f)
+    }
 }

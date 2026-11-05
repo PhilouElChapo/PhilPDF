@@ -636,4 +636,7 @@
     <string name="combiner_nom">Combinato</string>
     <string name="combiner_rien">Nessuna pagina leggibile in questi file.</string>
     <string name="combiner_illisibles">Esclusi (illeggibili o protetti da password): %1$s</string>
+    <string name="accueil_ouvrir">Apri</string>
+    <string name="accueil_numeriser">Scansiona</string>
+    <string name="accueil_combiner">Combina</string>
 </resources>

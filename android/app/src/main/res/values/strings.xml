@@ -637,4 +637,7 @@
     <string name="combiner_nom">Combined</string>
     <string name="combiner_rien">No readable page in these files.</string>
     <string name="combiner_illisibles">Left out (unreadable or protected by a password): %1$s</string>
+    <string name="accueil_ouvrir">Open</string>
+    <string name="accueil_numeriser">Scan</string>
+    <string name="accueil_combiner">Combine</string>
 </resources>

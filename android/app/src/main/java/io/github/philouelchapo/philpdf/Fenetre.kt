@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,9 +34,15 @@ fun Fenetre(fermer: () -> Unit, alignement: Alignment = Alignment.Center, conten
     val marges = LocalMarges.current
     Dialog(onDismissRequest = fermer,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        // marges : les plus grandes entre celles de l'activite et celles de la fenetre elle-meme (affichage de bord a
+        // bord : la fenetre passe sous les barres d'Android, ses propres marges le disent), clavier compris
+        val dir = androidx.compose.ui.platform.LocalLayoutDirection.current
+        val activite = androidx.compose.foundation.layout.WindowInsets(marges.calculateLeftPadding(dir), marges.calculateTopPadding(),
+            marges.calculateRightPadding(dir), marges.calculateBottomPadding())
         Box(Modifier.fillMaxSize()
             .clickable(remember { MutableInteractionSource() }, null) { fermer() }
-            .padding(marges), contentAlignment = alignement) {
+            .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.safeDrawing.union(activite)),
+            contentAlignment = alignement) {
             // le contenu ne transmet pas ses touches au fond (qui fermerait la fenetre)
             Box(Modifier.clickable(remember { MutableInteractionSource() }, null) {}) { contenu() }
         }

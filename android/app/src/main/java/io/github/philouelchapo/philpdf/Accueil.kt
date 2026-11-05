@@ -76,21 +76,12 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
                 }
             }
             val bouton: @Composable () -> Unit = {
-                // ouvrir un PDF, ou photographier un document (numeriser) : les deux cote a cote, a la ligne si besoin
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Button(onClick = choisir, colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) {
-                        Text(stringResource(R.string.ouvrir_fichier))
-                    }
-                    OutlinedButton(onClick = numeriser) {
-                        Icon(Icones.get("numeriser", ROUGE), null, tint = Color.Unspecified)
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.scan_bouton))
-                    }
-                    OutlinedButton(onClick = combiner) {
-                        Icon(Icones.get("combiner", ROUGE), null, tint = Color.Unspecified)
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.combiner_titre_court))
-                    }
+                // ouvrir, numeriser, combiner : trois boutons sur une seule ligne (icone et nom court dessous)
+                Row(if (etroit) Modifier.fillMaxWidth() else Modifier.widthIn(max = 420.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BoutonAccueil("ouvrir", stringResource(R.string.accueil_ouvrir), true, Modifier.weight(1f), choisir)
+                    BoutonAccueil("numeriser", stringResource(R.string.accueil_numeriser), false, Modifier.weight(1f), numeriser)
+                    BoutonAccueil("combiner", stringResource(R.string.accueil_combiner), false, Modifier.weight(1f), combiner)
                 }
             }
             if (etroit) {
@@ -202,5 +193,21 @@ private fun dateFr(t: Long): String {
         memeJour -> stringResource(R.string.aujourdhui, heure)
         hier -> stringResource(R.string.hier, heure)
         else -> SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRANCE).format(Date(t))
+    }
+}
+
+/** Bouton de l'Accueil : icone au-dessus d'un nom court (le nom retrecit plutot que d'etre coupe). */
+@Composable
+private fun BoutonAccueil(icone: String, texte: String, principal: Boolean, modifier: Modifier, action: () -> Unit) {
+    val fond = if (principal) ROUGE else Color.White
+    val encre = if (principal) Color.White else ROUGE
+    Surface(onClick = action, modifier = modifier.heightIn(min = 64.dp), shape = RoundedCornerShape(14.dp), color = fond,
+        border = if (principal) null else androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCCCCCC))) {
+        Column(Modifier.padding(horizontal = 6.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center) {
+            Icon(Icones.get(icone, encre), null, tint = Color.Unspecified)
+            Spacer(Modifier.height(4.dp))
+            CompositionLocalProvider(LocalContentColor provides encre) { TexteAjuste(texte, 14.sp) }
+        }
     }
 }

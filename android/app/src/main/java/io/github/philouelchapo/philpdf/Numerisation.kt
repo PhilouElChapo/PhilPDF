@@ -119,6 +119,50 @@ object Numerisation {
         m.setPolyToPoly(floatArrayOf(c[0].x, c[0].y, c[1].x, c[1].y, c[2].x, c[2].y, c[3].x, c[3].y), 0,
             floatArrayOf(0f, 0f, lw, 0f, lw, lh, 0f, lh), 0, 4)
         Canvas(out).apply { drawColor(android.graphics.Color.WHITE); drawBitmap(bm, m, Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)) }
+        return aplomb(out)
+    }
+
+    /**
+     * Angle (degres) qui remet les lignes de texte a l'horizontale : profil de projection (comme PhilPDF Windows),
+     * recherche grossiere puis fine, sur une copie reduite. 0 si la page n'a presque pas d'encre.
+     */
+    fun inclinaison(bm: Bitmap): Float {
+        val k = max(1f, max(bm.width, bm.height) / 700f)
+        val w = (bm.width / k).toInt().coerceAtLeast(8); val h = (bm.height / k).toInt().coerceAtLeast(8)
+        val px = IntArray(w * h).also { Bitmap.createScaledBitmap(bm, w, h, true).getPixels(it, 0, w, 0, 0, w, h) }
+        val xs = ArrayList<Float>(); val ys = ArrayList<Float>()
+        for (i in px.indices) if (gris(px[i]) < 140) { xs += (i % w - w / 2f); ys += (i / w - h / 2f) }
+        if (xs.size < 200) return 0f
+        val xa = xs.toFloatArray(); val ya = ys.toFloatArray()
+        val diag = kotlin.math.hypot(w.toFloat(), h.toFloat()).toInt() + 2
+        fun score(deg: Float): Double {
+            val r = Math.toRadians(deg.toDouble()); val c = kotlin.math.cos(r); val sn = kotlin.math.sin(r)
+            val rangs = IntArray(diag)
+            for (i in xa.indices) {
+                val y = (xa[i] * sn + ya[i] * c + diag / 2).toInt()
+                if (y in 0 until diag) rangs[y]++
+            }
+            var t = 0.0; for (v in rangs) t += v.toDouble() * v
+            return t
+        }
+        var best = 0f; var bs = -1.0
+        var a = -6f
+        while (a <= 6f) { val sc = score(a); if (sc > bs) { bs = sc; best = a }; a += 0.5f }
+        var f = best - 0.5f; val fin = best + 0.5f
+        while (f <= fin) { val sc = score(f); if (sc > bs) { bs = sc; best = f }; f += 0.1f }
+        return best
+    }
+
+    /** Lignes de texte remises a l'horizontale (petite inclinaison restee apres le recadrage). */
+    fun aplomb(bm: Bitmap): Bitmap {
+        val a = inclinaison(bm)
+        if (kotlin.math.abs(a) < 0.2f) return bm
+        val out = Bitmap.createBitmap(bm.width, bm.height, Bitmap.Config.ARGB_8888)
+        Canvas(out).apply {
+            drawColor(android.graphics.Color.WHITE)
+            rotate(a, bm.width / 2f, bm.height / 2f)
+            drawBitmap(bm, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
+        }
         return out
     }
 

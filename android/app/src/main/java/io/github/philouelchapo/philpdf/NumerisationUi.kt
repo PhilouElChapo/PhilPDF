@@ -87,7 +87,12 @@ fun EcranNumerisation(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
                 occupe = ctx.getString(R.string.scan_preparation)
                 val r = withContext(Dispatchers.Default) { l.map { Numerisation.redresser(it, Numerisation.coins(it)) } }
                 r.forEach { pages += PageScan(it) }; occupe = null
-            } else l.forEach { pages += PageScan(it) }
+            } else {
+                // pages du scanner de Google (deja recadrees) : lignes remises a l'horizontale
+                occupe = ctx.getString(R.string.scan_preparation)
+                val r = withContext(Dispatchers.Default) { l.map { Numerisation.aplomb(it) } }
+                r.forEach { pages += PageScan(it) }; occupe = null
+            }
         }
     }
     val appareil = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->

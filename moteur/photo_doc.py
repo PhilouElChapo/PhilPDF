@@ -79,7 +79,21 @@ def redresser(img, c, max_cote=2600):
     e = min(1.0, max_cote / max(lw, lh, 1))
     lw, lh = max(1, int(round(lw * e))), max(1, int(round(lh * e)))
     m = cv2.getPerspectiveTransform(c, np.array([[0, 0], [lw, 0], [lw, lh], [0, lh]], dtype=np.float32))
-    return cv2.warpPerspective(img, m, (lw, lh), flags=cv2.INTER_CUBIC, borderValue=(255, 255, 255))
+    return aplomb(cv2.warpPerspective(img, m, (lw, lh), flags=cv2.INTER_CUBIC, borderValue=(255, 255, 255)))
+
+
+def aplomb(img):
+    """Lignes de texte remises a l'horizontale (petite inclinaison restee apres le recadrage)."""
+    from moteur.scan import angle_inclinaison
+    try:
+        a = angle_inclinaison(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img)
+    except Exception:                                   # noqa: BLE001
+        return img
+    if abs(a) < 0.15:
+        return img
+    h, w = img.shape[:2]
+    m = cv2.getRotationMatrix2D((w / 2, h / 2), a, 1)
+    return cv2.warpAffine(img, m, (w, h), flags=cv2.INTER_CUBIC, borderValue=(255, 255, 255))
 
 
 def _reduire(img, cote):

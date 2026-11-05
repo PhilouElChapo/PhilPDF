@@ -637,4 +637,7 @@
     <string name="combiner_nom">Combiné</string>
     <string name="combiner_rien">Aucune page lisible dans ces fichiers.</string>
     <string name="combiner_illisibles">Laissés de côté (illisibles ou protégés par un mot de passe) : %1$s</string>
+    <string name="accueil_ouvrir">Ouvrir</string>
+    <string name="accueil_numeriser">Numériser</string>
+    <string name="accueil_combiner">Combiner</string>
 </resources>

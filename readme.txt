@@ -10,6 +10,13 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.15.1
+- Accueil : Ouvrir, Numeriser et Combiner sur une seule ligne (icone et nom court), la liste des recents a plus de place.
+- Numeriser : apres le recadrage, les lignes de texte sont remises a l'horizontale (page legerement penchee redressee),
+  aussi pour les pages du scanner de Google.
+- Fenetres plein ecran (Numeriser, Combiner, Organiser...) : elles s'arretent de nouveau au-dessus des boutons
+  d'Android ; « Creer le PDF » etait colle a la barre du bas depuis l'affichage de bord a bord.
+
 1.15.0
 - Combiner des fichiers (bouton a l'Accueil), comme sous Windows : plusieurs PDF et images choisis d'un coup, ranges
   avec les fleches, pages vierges intercalees, assembles dans un nouveau PDF qui s'ouvre (pret a enregistrer). Un
@@ -353,6 +360,10 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.67
+- Numeriser depuis des photos : apres le recadrage, les lignes de texte sont remises a l'horizontale (comme sur
+  Android).
 
 0.9.66
 - Accueil : bouton « Numeriser... » (depuis des photos de documents, ou depuis le scanner).
