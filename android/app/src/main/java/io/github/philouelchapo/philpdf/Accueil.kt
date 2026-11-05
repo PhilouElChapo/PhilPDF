@@ -49,6 +49,7 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
     var ecranCompte by remember { mutableStateOf(false) }
     var parcourir by remember { mutableStateOf<Nuage?>(null) }
     var aide by remember { mutableStateOf(false) }
+    var reglagesIa by remember { mutableStateOf(false) }
     val comptes = remember(versionCompte) { Nuage.liste(ctx) }
     // Google Drive (autorisation limitee) : ses PDF passent par le selecteur d'Android, qui le propose deja
     val voir: (Nuage) -> Unit = { n -> if (n.parcourable(ctx)) parcourir = n else choisir() }
@@ -145,6 +146,7 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
         Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.version, BuildConfig.VERSION_NAME), Modifier.weight(1f), fontSize = 12.sp, color = Color.Gray)
+            TextButton(onClick = { reglagesIa = true }) { Text(stringResource(R.string.ia_court_accueil)) }
             TextButton(onClick = { aide = true }) { Text(stringResource(R.string.aide)) }
         }
     }
@@ -152,6 +154,7 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
         parcourir = { n -> ecranCompte = false; versionCompte++; voir(n) })
     parcourir?.let { n -> EcranFichiers(n, fermer = { parcourir = null }, ouvrir = ouvrir) }
     if (aide) EcranAide { aide = false }
+    if (reglagesIa) ReglagesIa { reglagesIa = false }
 }
 
 @Composable

@@ -10,7 +10,30 @@ MODELES = {               # grand cote (pixels), qualite JPEG (0 = PNG noir et b
     "couleur": (2200, 82),
     "email": (1400, 60),
     "photo": (2400, 88),
+    "magnificence": (2200, 85),   # page nettoyee par Gemini (apercu sur le poste : comme Couleur)
 }
+
+# « Magnificence IA » : la meme consigne que sur Android (Numerisation.CONSIGNE_MAGNIFICENCE)
+CONSIGNE_MAGNIFICENCE = (
+    "Voici la photo d'une page de document, prise avec un téléphone, déjà recadrée. "
+    "Rends l'image de cette même page comme si elle sortait d'un bon scanner à plat, pour une reconnaissance du texte (OCR) parfaite : "
+    "page parfaitement droite et à plat (perspective, inclinaison et pliures corrigées), bords de la feuille au bord de l'image, "
+    "fond blanc uniforme sans ombre, reflet, grain ni taches, texte noir net et bien contrasté. "
+    "Ne change, n'ajoute, ne retire et ne réécris AUCUN mot, chiffre, signature, tampon, logo ou tableau : seulement nettoyer, "
+    "redresser et rendre lisible. Garde les couleurs des logos, tampons, surlignages et photos. Garde les proportions de la page.")
+
+
+def jpeg_envoi(img, cote=2000):
+    """JPEG de la page a envoyer a l'IA (reduite)."""
+    ok, buf = cv2.imencode(".jpg", _reduire(img, cote), [cv2.IMWRITE_JPEG_QUALITY, 90])
+    if not ok:
+        raise ValueError("encodage impossible")
+    return buf.tobytes()
+
+
+def decoder(octets_img):
+    """Image (BGR) d'octets PNG ou JPEG, ou None."""
+    return cv2.imdecode(np.frombuffer(octets_img, dtype=np.uint8), cv2.IMREAD_COLOR)
 
 
 def lire(chemin):

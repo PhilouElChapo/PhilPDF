@@ -2822,5 +2822,18 @@
  "Résultats pour <a href='{m}'><b>{m}</b></a> (vous aviez tapé « {t} »)": "Results for <a href='{m}'><b>{m}</b></a> (you typed “{t}”)",
  "Aucun outil ne correspond. Essayez un autre mot (signer, alléger, OCR, formulaire...).": "No tool matches. Try another word (sign, reduce, OCR, form...).",
  "{n} page(s) numérisée(s). Placez la feuille suivante sur la vitre (ou dans le chargeur) pour la mettre à la suite dans le même PDF.": "{n} page(s) scanned. Put the next sheet on the glass (or in the feeder) to add it to the same PDF.",
- "Numériser la suite": "Scan the next page"
+ "Numériser la suite": "Scan the next page",
+ "Magnificence IA": "AI Magnificence",
+ "La page est envoyée à Gemini (votre clef), qui la rend comme sortie d'un scanner : droite, fond blanc, sans grain ni ombre. L'IA peut changer une lettre ou un chiffre : relisez.": "The page is sent to Gemini (your key), which returns it as if from a scanner: straight, white background, no grain or shadow. The AI may change a letter or a digit: proofread.",
+ "Il faut une clef Gemini (Edition › Préférences › IA) : Claude ne sait pas rendre une image.": "A Gemini key is needed (Edit › Preferences › AI): Claude cannot return an image.",
+ "Les {n} page(s) vont être envoyées à Gemini (Google), avec votre clef, pour être nettoyées.\n\nL'IA peut changer une lettre ou un chiffre : relisez le document avant de vous en servir.\n\nEnvoyer ?": "The {n} page(s) will be sent to Gemini (Google), with your key, to be cleaned.\n\nThe AI may change a letter or a digit: proofread the document before using it.\n\nSend?",
+ "Page(s) {l} : Gemini n'a pas rendu d'image, elles ont été améliorées sur ce poste (comme « Couleur »).": "Page(s) {l}: Gemini returned no image, they were enhanced on this computer (like “Colour”).",
+ "Gemini nettoie la page {i} sur {n}...": "Gemini is cleaning page {i} of {n}...",
+ "Gemini n'a renvoyé aucune image.": "Gemini returned no image.",
+ "Page {p} : {e}": "Page {p}: {e}",
+ "Texte d'origine": "Original text",
+ "Traduire avec l'IA (votre clef Claude ou Gemini), page par page : le PDF n'est pas modifié.": "Translate with AI (your Claude or Gemini key), page by page: the PDF is not changed.",
+ "Traduire :": "Translate:",
+ "Traduction impossible : {e}": "Translation failed: {e}",
+ "Traduction en cours...": "Translating..."
 }

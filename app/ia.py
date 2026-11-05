@@ -348,7 +348,8 @@ def retoucher_image(params, png, consigne, zones_png=None, delai=240):
     clef = nettoyer_clef(params.get("clef_gemini", ""))
     if not clef:
         raise ErreurIA(_("Il faut une clef Gemini (Edition › Préférences › IA) : Claude ne sait pas modifier une image."))
-    parts = [{"inline_data": {"mime_type": "image/png", "data": base64.b64encode(png).decode()}}]
+    mime = "image/jpeg" if png[:2] == b"\xff\xd8" else "image/png"
+    parts = [{"inline_data": {"mime_type": mime, "data": base64.b64encode(png).decode()}}]
     if zones_png:
         parts.append({"inline_data": {"mime_type": "image/png", "data": base64.b64encode(zones_png).decode()}})
     parts.append({"text": consigne})

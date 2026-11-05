@@ -2813,5 +2813,18 @@
  "Résultats pour <a href='{m}'><b>{m}</b></a> (vous aviez tapé « {t} »)": "Resultados para <a href='{m}'><b>{m}</b></a> (había escrito «{t}»)",
  "Aucun outil ne correspond. Essayez un autre mot (signer, alléger, OCR, formulaire...).": "Ninguna herramienta coincide. Pruebe otra palabra (firmar, reducir, OCR, formulario...).",
  "{n} page(s) numérisée(s). Placez la feuille suivante sur la vitre (ou dans le chargeur) pour la mettre à la suite dans le même PDF.": "{n} página(s) escaneada(s). Coloque la hoja siguiente en el cristal (o en el alimentador) para añadirla al mismo PDF.",
- "Numériser la suite": "Escanear la siguiente"
+ "Numériser la suite": "Escanear la siguiente",
+ "Magnificence IA": "Magnificencia IA",
+ "La page est envoyée à Gemini (votre clef), qui la rend comme sortie d'un scanner : droite, fond blanc, sans grain ni ombre. L'IA peut changer une lettre ou un chiffre : relisez.": "La página se envía a Gemini (su clave), que la devuelve como salida de un escáner: recta, fondo blanco, sin grano ni sombra. La IA puede cambiar una letra o una cifra: revise.",
+ "Il faut une clef Gemini (Edition › Préférences › IA) : Claude ne sait pas rendre une image.": "Se necesita una clave de Gemini (Edición › Preferencias › IA): Claude no puede devolver una imagen.",
+ "Les {n} page(s) vont être envoyées à Gemini (Google), avec votre clef, pour être nettoyées.\n\nL'IA peut changer une lettre ou un chiffre : relisez le document avant de vous en servir.\n\nEnvoyer ?": "Las {n} página(s) se enviarán a Gemini (Google), con su clave, para limpiarlas.\n\nLa IA puede cambiar una letra o una cifra: revise el documento antes de usarlo.\n\n¿Enviar?",
+ "Page(s) {l} : Gemini n'a pas rendu d'image, elles ont été améliorées sur ce poste (comme « Couleur »).": "Página(s) {l}: Gemini no devolvió imagen, se mejoraron en este equipo (como «Color»).",
+ "Gemini nettoie la page {i} sur {n}...": "Gemini limpia la página {i} de {n}...",
+ "Gemini n'a renvoyé aucune image.": "Gemini no devolvió ninguna imagen.",
+ "Page {p} : {e}": "Página {p}: {e}",
+ "Texte d'origine": "Texto original",
+ "Traduire avec l'IA (votre clef Claude ou Gemini), page par page : le PDF n'est pas modifié.": "Traducir con IA (su clave de Claude o Gemini), página por página: el PDF no se modifica.",
+ "Traduire :": "Traducir:",
+ "Traduction impossible : {e}": "Traducción imposible: {e}",
+ "Traduction en cours...": "Traduciendo..."
 }

@@ -96,6 +96,8 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var message by mutableStateOf<String?>(null)
     var organiser by mutableStateOf(false)                  // ecran « Organiser les pages »
     var lectureFluide by mutableStateOf(false)              // ecran « Lecture fluide »
+    var resumeIa by mutableStateOf(false)                   // « Resumer avec l'IA »
+    var reglagesIa by mutableStateOf(false)
     var ocr by mutableStateOf<Int?>(null)                   // reconnaissance du texte proposee (page de depart)
     var ocrAuto = false                                     // document numerise : reconnaissance lancee d'office
     var choixPartage by mutableStateOf(false)               // envoyer le fichier ou un lien
@@ -211,6 +213,8 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
         if (n != null) portee.launch { etat.liste.scrollToItem(n) }
     }
     etat.ocr?.let { n -> DialogueOcr(etat, n) { etat.ocr = null } }
+    if (etat.resumeIa) ResumeIa(etat) { etat.resumeIa = false }
+    if (etat.reglagesIa) ReglagesIa { etat.reglagesIa = false }
     etat.message?.let { m ->
         val txt = if (m == "aucun_texte") stringResource(R.string.aucun_texte) else m
         LaunchedEffect(m) { android.widget.Toast.makeText(ctx, txt, android.widget.Toast.LENGTH_LONG).show(); etat.message = null }
@@ -288,6 +292,7 @@ private fun DispositionTablette(etat: EtatLecteur, tailles: List<Pair<Float, Flo
                 Bouton("zoom_plus", stringResource(R.string.zoom_plus)) { etat.echelle = (etat.echelle * 1.25f).coerceAtMost(5f) }
                 Bouton("largeur", stringResource(R.string.ajuster)) { etat.echelle = 1f; etat.decalage = Offset.Zero }
                 Bouton("oeil", stringResource(R.string.lecture_fluide)) { etat.lectureFluide = true }
+                Bouton("ia", stringResource(R.string.ia_resumer)) { etat.resumeIa = true }
                 Bouton("suivante", stringResource(R.string.aller_page)) { allerA = true }
                 Bouton("courriel", stringResource(R.string.partager)) { etat.choixPartage = true }
                 Bouton("imprimer", stringResource(R.string.imprimer)) { portee.launch { imprimer(ctx, etat.doc) } }
@@ -440,6 +445,7 @@ private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, 
                 comms -> Commentaires(etat.doc, aller)
                 else -> Column(Modifier.padding(8.dp)) {
                     LigneAction("oeil", stringResource(R.string.lecture_fluide)) { etat.lectureFluide = true }
+                    LigneAction("ia", stringResource(R.string.ia_resumer)) { etat.resumeIa = true }
                     if (etat.doc.modifiable) Box { LigneAction("annuler", stringResource(R.string.historique_menu)) { historique = true }
                         if (historique) MenuHistorique(etat) { historique = false } }
                     LigneAction("suivante", stringResource(R.string.aller_page)) { allerA = true }
@@ -452,6 +458,7 @@ private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, 
                     LigneAction("courriel", stringResource(R.string.partager)) { etat.choixPartage = true }
                     LigneAction("imprimer", stringResource(R.string.imprimer)) { portee.launch { imprimer(ctx, etat.doc) } }
                     LigneAction("largeur", stringResource(R.string.ajuster)) { etat.echelle = 1f; etat.decalage = Offset.Zero }
+                    LigneAction("parametres", stringResource(R.string.ia_reglages)) { etat.reglagesIa = true }
                     Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.infos_doc, etat.doc.nom, tailles.size), Modifier.padding(8.dp),
                         fontSize = 12.sp, color = Color.Gray)

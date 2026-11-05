@@ -186,3 +186,15 @@ assert len(_paras) == 2 and "qui continue sur la ligne" in _t0, _paras
 assert not any("".join(m[0] for m in b[2]).strip() == "12" for b in _paras), "numero de page laisse"
 assert _F.page(_d.new_page())[1], "page vide : scannee"
 print("Lecture fluide : titre, paragraphes, numero de page : OK")
+# traduction de la lecture fluide : textes dans l'ordre, puis remis a leur place
+_tx = _F.textes(_b)
+assert _tx[0] == "Grand titre" and len(_tx) == len([b for b in _b if b[0] in ("titre", "para")])
+_r = _F.remplacer(_b, ["Big title"] + ["X"] * (len(_tx) - 1))
+assert _r[0] == ("titre", 1, "Big title") and all(b[2] == [("X", False, False)] for b in _r if b[0] == "para")
+# Magnificence IA : apercu sur le poste comme Couleur, envoi en JPEG reduit, reponse relue
+import numpy as _np
+_img = _np.full((3000, 2000, 3), 200, _np.uint8)
+assert _P.ameliorer(_img, "magnificence").shape[0] == 2200
+_j = _P.jpeg_envoi(_img)
+assert _j[:2] == b"\xff\xd8" and max(_P.decoder(_j).shape[:2]) == 2000
+print("Lecture fluide traduite, Magnificence IA (apercu, envoi) : OK")

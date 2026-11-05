@@ -18,7 +18,9 @@ from moteur import photo_doc as P
 MODELES = [("nb", _("Noir et blanc"), _("Texte net sur fond blanc, fichier très léger : courriers, factures, formulaires.")),
            ("couleur", _("Couleur"), _("Couleurs gardées, fond éclairci et ombres retirées : documents en couleur, cartes.")),
            ("email", _("Pour e-mail"), _("Comme Couleur, mais allégé au maximum pour l'envoyer par e-mail.")),
-           ("photo", _("Photo"), _("Aucune retouche, seulement recadré et redressé : tickets, photos, pièces d'identité."))]
+           ("photo", _("Photo"), _("Aucune retouche, seulement recadré et redressé : tickets, photos, pièces d'identité.")),
+           ("magnificence", _("Magnificence IA"), _("La page est envoyée à Gemini (votre clef), qui la rend comme sortie d'un scanner : "
+                                                   "droite, fond blanc, sans grain ni ombre. L'IA peut changer une lettre ou un chiffre : relisez."))]
 
 
 def qimage(img):
@@ -305,6 +307,13 @@ class DialogueScanPhotos(QDialog):
         m = self.modele()
         self.params["scan_photo_modele"] = m
         self.params["scan_photo_ocr"] = self.ocr.isChecked()
+        if m == "magnificence":
+            pages = self._magnifier()
+            if pages is None:
+                return
+            self.doc = P.pdf(pages)
+            self.accept()
+            return
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             pages = [P.octets(P.ameliorer(P.redresser(p["img"], np.array(p["coins"], dtype=np.float32)), m), m)
@@ -316,6 +325,55 @@ class DialogueScanPhotos(QDialog):
             return
         QApplication.restoreOverrideCursor()
         self.accept()
+
+
+    def _magnifier(self):
+        """« Magnificence IA » : chaque page redressee est envoyee a Gemini, qui la rend nettoyee. Une page que Gemini ne
+        rend pas est amelioree ici (comme Couleur), et on le dit. None : abandon."""
+        from . import ia
+        from .dialogues_ia import executer_suivi
+        if not ia.nettoyer_clef(self.params.get("clef_gemini", "")):
+            QMessageBox.information(self, _("Magnificence IA"), _(
+                "Il faut une clef Gemini (Edition › Préférences › IA) : Claude ne sait pas rendre une image."))
+            return None
+        if QMessageBox.question(self, _("Magnificence IA"), _(
+                "Les {n} page(s) vont être envoyées à Gemini (Google), avec votre clef, pour être nettoyées.\n\n"
+                "L'IA peut changer une lettre ou un chiffre : relisez le document avant de vous en servir.\n\nEnvoyer ?",
+                n=len(self.pages))) != QMessageBox.Yes:
+            return None
+        pages = [P.redresser(p["img"], np.array(p["coins"], dtype=np.float32)) for p in self.pages]
+        locales = []
+
+        def travail(t):
+            out, derniere = [], None
+            for k, img in enumerate(pages):
+                t.avancer(_("Gemini nettoie la page {i} sur {n}...", i=k + 1, n=len(pages)), k, len(pages))
+                r = None
+                try:
+                    r = P.decoder(ia.retoucher_image(self.params, P.jpeg_envoi(img), P.CONSIGNE_MAGNIFICENCE))
+                except ia.ErreurIA as e:
+                    derniere = e
+                    t.noter(_("Page {p} : {e}", p=k + 1, e=e))
+                if r is None:
+                    locales.append(k + 1)
+                    out.append(P.octets(P.ameliorer(img, "couleur"), "couleur"))
+                else:
+                    out.append(P.octets(P._reduire(r, P.MODELES["magnificence"][0]), "magnificence"))
+            if len(locales) == len(pages):
+                raise derniere or ia.ErreurIA(_("Gemini n'a renvoyé aucune image."))
+            return out
+        try:
+            out = executer_suivi(self, _("Magnificence IA"), travail)
+        except InterruptedError:
+            return None
+        except Exception as e:                      # noqa: BLE001
+            QMessageBox.warning(self, _("Magnificence IA"), _("L'IA n'a pas pu répondre :\n{e}", e=e))
+            return None
+        if locales:
+            QMessageBox.information(self, _("Magnificence IA"), _(
+                "Page(s) {l} : Gemini n'a pas rendu d'image, elles ont été améliorées sur ce poste (comme « Couleur »).",
+                l=", ".join(map(str, locales))))
+        return out
 
 
 def nom_scan():

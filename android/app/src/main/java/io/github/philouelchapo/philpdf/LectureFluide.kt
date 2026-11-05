@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -123,6 +124,33 @@ object Fluide {
         return PageFluide(blocs, false)
     }
 
+    /** Langues proposees : nom pour la consigne (francais), nom affiche (dans sa langue). */
+    val LANGUES = listOf("anglais" to "English", "espagnol" to "Español", "italien" to "Italiano", "allemand" to "Deutsch",
+        "portugais" to "Português", "néerlandais" to "Nederlands", "français" to "Français", "arabe" to "العربية",
+        "russe" to "Русский", "chinois" to "中文", "japonais" to "日本語")
+
+    private const val CONSIGNES_TRADUIRE = """Tu traduis les textes d'un document PDF en LANGUE. On te donne un objet JSON {"textes": [...]} ;
+réponds par {"textes": [...]} avec exactement le même nombre d'éléments, dans le même ordre, chacun traduit.
+Garde les nombres, montants, dates, références, noms propres et adresses tels quels (adapte seulement le format
+si c'est l'usage dans la langue cible). Traduction fidèle et naturelle, registre du document, sans commentaire."""
+
+    /** Textes de la page (titres et paragraphes, dans l'ordre) traduits par l'IA, par lots. */
+    suspend fun traduire(ctx: Context, page: PageFluide, langue: String): List<String> {
+        val textes = page.blocs.mapNotNull { b -> when (b) {
+            is Bloc.Titre -> b.texte
+            is Bloc.Para -> b.morceaux.joinToString("") { it.texte }
+            else -> null } }
+        val out = ArrayList<String>()
+        for (lot in textes.chunked(40)) {
+            val r = Ia.lireJson(Ia.demander(ctx, CONSIGNES_TRADUIRE.replace("LANGUE", langue),
+                org.json.JSONObject().put("textes", org.json.JSONArray(lot)).toString(), json = true, maxJetons = 8000))
+            val a = r.optJSONArray("textes")
+            if (a == null || a.length() != lot.size) throw Ia.ErreurIa(Textes.t(R.string.ia_e_incomplet, lot.size))
+            for (i in 0 until a.length()) out += a.optString(i)
+        }
+        return out
+    }
+
     private fun paragraphes(b: BlocTexte, corps: Float): List<Bloc> {
         val out = ArrayList<Bloc>()
         val largeur = (b.r.x1 - b.r.x0).coerceAtLeast(1f)
@@ -219,6 +247,12 @@ fun LectureFluide(etat: EtatLecteur, nb: Int, fermer: (Int?) -> Unit) {
     val liste = rememberLazyListState(initialFirstVisibleItemIndex = etat.page.coerceIn(0, (nb - 1).coerceAtLeast(0)))
     val fond = FONDS[r.theme]; val encre = ENCRES[r.theme]
     val pageVue = liste.firstVisibleItemIndex
+    // traduction (IA) : langue choisie, textes traduits par page ; accord donne une fois pour tout le document
+    var choixLangue by remember { mutableStateOf(false) }
+    var demandee by remember { mutableStateOf<String?>(null) }
+    var langue by remember { mutableStateOf<String?>(null) }
+    val traductions = remember(etat.doc, etat.doc.version, langue) { mutableStateMapOf<Int, List<String>>() }
+    val erreurs = remember(etat.doc, etat.doc.version, langue) { mutableStateMapOf<Int, String>() }
     Fenetre({ fermer(pageVue) }) {
         Surface(Modifier.fillMaxSize(), color = fond) {
             Column(Modifier.fillMaxSize()) {
@@ -247,13 +281,33 @@ fun LectureFluide(etat: EtatLecteur, nb: Int, fermer: (Int?) -> Unit) {
                             label = { Text(stringResource(R.string.fluide_justifier)) })
                         FilterChip(selected = r.serif, onClick = { r.serif = !r.serif; r.garder() },
                             label = { Text(stringResource(R.string.fluide_serif)) })
+                        FilterChip(selected = langue != null, onClick = { if (langue != null) langue = null else choixLangue = true },
+                            leadingIcon = { Icon(Icones.get("langue", if (langue != null) ROUGE else Color(0xFF555555)), null, Modifier.size(18.dp), tint = Color.Unspecified) },
+                            label = { Text(langue?.let { l -> stringResource(R.string.fluide_traduit, Fluide.LANGUES.firstOrNull { it.first == l }?.second ?: l) }
+                                ?: stringResource(R.string.fluide_traduire)) })
                     }
+                    if (langue != null) Text(stringResource(R.string.fluide_traduit_aide, Ia.nom(Ia.dernier?.first)), Modifier.padding(horizontal = 12.dp),
+                        fontSize = 11.sp, color = Color.Gray)
                     HorizontalDivider(color = Color(0xFFE2E2E2))
+                }
+                if (choixLangue) ChoixLangue({ choixLangue = false }) { l -> choixLangue = false; demandee = l }
+                demandee?.let { l ->
+                    val tout by produceState<String?>(null, l) { value = try { etat.doc.texteDocument() } catch (_: Exception) { "" } }
+                    tout?.let { t ->
+                        if (t.isBlank()) { LaunchedEffect(l) { demandee = null; android.widget.Toast.makeText(ctx, ctx.getString(R.string.ia_sans_texte), android.widget.Toast.LENGTH_LONG).show() } }
+                        else EnvoiIa(t, stringResource(R.string.fluide_traduction_en_cours), {
+                            // premiere page visible traduite tout de suite : la clef et la connexion sont verifiees
+                            val n = pageVue
+                            val pg = cache[n] ?: etat.doc.texteFluide(n)
+                            n to (if (pg.scannee) emptyList() else Fluide.traduire(ctx, pg, l))
+                        }, { (n, tr) -> traductions[n] = tr; demandee = null; langue = l; Journal.ecrire("lecture fluide", "traduction en $l") },
+                            { demandee = null })
+                    }
                 }
                 LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = liste,
                     contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp)) {
                     items(nb, key = { it }) { n ->
-                        PageLue(etat, n, r, encre, cache) { fermer(n) }
+                        PageLue(etat, n, r, encre, cache, langue, traductions, erreurs) { fermer(n) }
                     }
                 }
             }
@@ -263,8 +317,11 @@ fun LectureFluide(etat: EtatLecteur, nb: Int, fermer: (Int?) -> Unit) {
 
 @Composable
 private fun PageLue(etat: EtatLecteur, n: Int, r: ReglagesFluide, encre: Color,
-                    cache: MutableMap<Int, Fluide.PageFluide>, allerPage: () -> Unit) {
+                    cache: MutableMap<Int, Fluide.PageFluide>, langue: String?, traductions: MutableMap<Int, List<String>>,
+                    erreurs: MutableMap<Int, String>, allerPage: () -> Unit) {
     val dens = LocalDensity.current
+    val ctx = LocalContext.current
+    var relance by remember { mutableIntStateOf(0) }
     val page by produceState(cache[n], n, etat.doc.version) {
         if (value == null) value = try { etat.doc.texteFluide(n) } catch (e: Exception) {
             Journal.ecrire("lecture fluide", "page ${n + 1} : $e"); Fluide.PageFluide(emptyList(), true)
@@ -283,16 +340,34 @@ private fun PageLue(etat: EtatLecteur, n: Int, r: ReglagesFluide, encre: Color,
             return@Column
         }
         if (p.scannee) { PageScannee(etat, n, encre, dens.density); return@Column }
+        // traduction de la page quand elle arrive a l'ecran (pas tout le document d'un coup)
+        val trad = if (langue != null) traductions[n] else null
+        if (langue != null && trad == null) {
+            LaunchedEffect(n, langue, relance) {
+                erreurs.remove(n)
+                try { traductions[n] = Fluide.traduire(ctx, p, langue) }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (e: Exception) { erreurs[n] = e.message ?: e.toString() }
+            }
+            val err = erreurs[n]
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (err == null) { CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.fluide_traduction_en_cours), fontSize = 12.sp, color = encre.copy(alpha = 0.6f)) }
+                else { Text(err, Modifier.weight(1f), fontSize = 12.sp, color = Color(0xFFC62828))
+                    TextButton(onClick = { relance++ }) { Text(stringResource(R.string.reessayer)) } }
+            }
+        }
+        var k = 0
         val famille = if (r.serif) FontFamily.Serif else FontFamily.Default
         val style = TextStyle(color = encre, fontSize = r.taille.sp, lineHeight = (r.taille * 1.5f).sp, fontFamily = famille,
             textAlign = if (r.justifie) TextAlign.Justify else TextAlign.Start, hyphens = Hyphens.Auto,
             lineBreak = LineBreak.Paragraph)
         for (b in p.blocs) when (b) {
-            is Fluide.Bloc.Titre -> Text(b.texte, Modifier.padding(top = 14.dp, bottom = 6.dp), style = style.copy(
+            is Fluide.Bloc.Titre -> Text(trad?.getOrNull(k++) ?: b.texte, Modifier.padding(top = 14.dp, bottom = 6.dp), style = style.copy(
                 fontSize = (r.taille * when (b.niveau) { 1 -> 1.45f; 2 -> 1.2f; else -> 1.05f }).sp,
                 lineHeight = (r.taille * when (b.niveau) { 1 -> 1.8f; 2 -> 1.55f; else -> 1.4f }).sp,
                 fontWeight = FontWeight.Bold, textAlign = TextAlign.Start, hyphens = Hyphens.None))
-            is Fluide.Bloc.Para -> Text(texteStyle(b), Modifier.padding(bottom = 10.dp, start = if (b.puce) 8.dp else 0.dp),
+            is Fluide.Bloc.Para -> Text(trad?.getOrNull(k++)?.let { AnnotatedString(it) } ?: texteStyle(b), Modifier.padding(bottom = 10.dp, start = if (b.puce) 8.dp else 0.dp),
                 style = if (b.puce) style.copy(textAlign = TextAlign.Start) else style)
             is Fluide.Bloc.Img -> {
                 val img = remember(b) { b.image.asImageBitmap() }
@@ -325,4 +400,23 @@ private fun PageScannee(etat: EtatLecteur, n: Int, encre: Color, densite: Float)
             bm?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxWidth().padding(vertical = 6.dp), contentScale = ContentScale.FillWidth) }
         }
     }
+}
+
+/** Langue de la traduction : une des courantes, ou une autre tapee. */
+@Composable
+private fun ChoixLangue(annuler: () -> Unit, choisir: (String) -> Unit) {
+    var autre by remember { mutableStateOf("") }
+    AlertDialog(onDismissRequest = annuler, title = { Text(stringResource(R.string.fluide_traduire_en)) },
+        text = {
+            Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                Text(stringResource(R.string.fluide_traduire_aide), fontSize = 12.sp, color = Color.Gray)
+                Fluide.LANGUES.forEach { (cle, nom) ->
+                    Text(nom, Modifier.fillMaxWidth().clickable { choisir(cle) }.padding(vertical = 10.dp), fontSize = 16.sp)
+                }
+                OutlinedTextField(autre, { autre = it }, Modifier.fillMaxWidth(), singleLine = true,
+                    label = { Text(stringResource(R.string.fluide_autre_langue)) })
+            }
+        },
+        confirmButton = { TextButton(onClick = { choisir(autre.trim()) }, enabled = autre.isNotBlank()) { Text(stringResource(R.string.ok)) } },
+        dismissButton = { TextButton(onClick = annuler) { Text(stringResource(R.string.annuler)) } })
 }

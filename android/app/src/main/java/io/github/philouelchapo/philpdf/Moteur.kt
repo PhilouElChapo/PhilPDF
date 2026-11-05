@@ -1248,6 +1248,25 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         }
     }
 
+    /** Texte du document pour l'IA (pages numerotees), coupe au-dela de maxCar caracteres. */
+    suspend fun texteDocument(maxCar: Int = 120_000): String = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val sb = StringBuilder()
+            var n = 0
+            for (i in 0 until doc.countPages()) {
+                val pg = doc.loadPage(i)
+                val t = try { val st = pg.toStructuredText(); try { st.asText().trim() } finally { st.destroy() } }
+                    catch (_: Exception) { "" } finally { pg.destroy() }
+                if (t.isEmpty()) continue
+                if (sb.isNotEmpty()) sb.append("\n\n")
+                sb.append("--- Page ${i + 1} ---\n").append(t)
+                n += t.length
+                if (n > maxCar) { sb.append("\n\n[... document tronqué ...]"); break }
+            }
+            sb.toString()
+        }
+    }
+
     /** Images et lignes de texte de la page (repere de la page) : pour savoir ou chercher du texte dans les images. */
     data class ContenuPage(val images: List<Rect>, val lignes: List<Rect>)
 

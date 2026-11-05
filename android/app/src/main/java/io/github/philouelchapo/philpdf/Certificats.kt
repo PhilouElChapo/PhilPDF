@@ -288,8 +288,8 @@ object Identites {
         return k
     }
 
-    /** Recupere les identites (.pfx) et certificats approuves de vos postes. Renvoie le nombre d'identites. */
-    suspend fun recupererWindows(ctx: Context, phrase: String): Int = withContext(Dispatchers.IO) {
+    /** Mots de passe et clefs partages par vos postes (PhilPDF/secrets.philpdf, chiffre par la phrase secrete). */
+    suspend fun secretsWindows(ctx: Context, phrase: String): JSONObject = withContext(Dispatchers.IO) {
         val n = Nuage.synchro(ctx) ?: throw ErreurCertificat(Textes.t(R.string.err_aucune_synchro))
         val chiffre = n.lire(ctx, "secrets.philpdf")
             ?: throw ErreurCertificat(Textes.t(R.string.err_cert_partage))
@@ -304,7 +304,13 @@ object Identites {
             }
             fichierJoint(doc, "preferences.json") ?: throw ErreurCertificat(Textes.t(R.string.err_cert_fichier))
         } finally { doc.destroy() }
-        val secrets = JSONObject(String(json, Charsets.UTF_8)).optJSONObject("secrets") ?: JSONObject()
+        JSONObject(String(json, Charsets.UTF_8)).optJSONObject("secrets") ?: JSONObject()
+    }
+
+    /** Recupere les identites (.pfx) et certificats approuves de vos postes. Renvoie le nombre d'identites. */
+    suspend fun recupererWindows(ctx: Context, phrase: String): Int = withContext(Dispatchers.IO) {
+        val n = Nuage.synchro(ctx) ?: throw ErreurCertificat(Textes.t(R.string.err_aucune_synchro))
+        val secrets = secretsWindows(ctx, phrase)
         // noms, dates et certificats approuves : reglages communs de vos postes
         val communs = try { n.lire(ctx, "preferences.json")?.let { JSONObject(String(it)).optJSONObject("communs") } } catch (_: Exception) { null }
         val infos = HashMap<String, JSONObject>()

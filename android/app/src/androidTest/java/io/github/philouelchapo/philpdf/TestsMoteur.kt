@@ -534,4 +534,20 @@ class TestsMoteur {
         val r = Numerisation.aplomb(bm)
         assertTrue("apres : ${Numerisation.inclinaison(r)}", kotlin.math.abs(Numerisation.inclinaison(r)) < 0.6f)
     }
+
+    /** IA (sans reseau) : donnees sensibles reperees, clefs chiffrees, reponse JSON lue, texte recoupe, Markdown. */
+    @Test fun iaSansReseau() {
+        val s = Ia.sensibles("Virement sur FR76 3000 6000 0112 3456 7890 189, carte 4970 1012 3456 7893, mot de passe : azerty")
+        assertTrue(s.toString(), s.size == 3)
+        assertTrue(Ia.sensibles("Facture 2026-11 du 05/11/2026, total 120,00 euros").isEmpty())
+        Ia.poserClef(ctx, "gemini", "  AIza-essai \n")
+        assertEquals("AIza-essai", Ia.clef(ctx, "gemini"))
+        assertEquals("AIza-essai", Ia.moteurs(ctx, "gemini").first().second)
+        Ia.poserClef(ctx, "gemini", "")
+        assertTrue(Ia.clef(ctx, "gemini").isEmpty())
+        assertEquals(2, Ia.lireJson("```json\n{\"textes\": [\"a\", \"b\"]}\n```").getJSONArray("textes").length())
+        val r = Ia.recouper("un deux trois quatre cinq six sept huit neuf dix", "1234567890123456\nabc")
+        assertTrue(r, r.split("\n").all { it.length <= 16 } && r.replace("\n", " ") == "un deux trois quatre cinq six sept huit neuf dix")
+        assertEquals("Titre\n• point **gras** fin".replace("**", ""), markdownSimple("## Titre\n- point **gras** fin").text)
+    }
 }

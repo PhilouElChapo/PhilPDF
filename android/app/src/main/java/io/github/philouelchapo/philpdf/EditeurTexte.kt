@@ -3,6 +3,7 @@
 package io.github.philouelchapo.philpdf
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -33,6 +34,11 @@ fun EditeurTexte(etat: EtatLecteur, par: Paragraphe, fermer: () -> Unit) {
     var couleur by remember(par) { mutableStateOf(couleurOrigine) }
     var droite by remember(par) { mutableStateOf(false) }
     var occupe by remember { mutableStateOf(false) }
+    // IA : action choisie (corriger, reformuler...), texte d'avant pour revenir en arriere
+    var menuIa by remember { mutableStateOf(false) }
+    var actionIa by remember { mutableStateOf<Pair<String, String?>?>(null) }   // consigne, moteur force
+    var libre by remember { mutableStateOf(false) }
+    var avantIa by remember(par) { mutableStateOf<String?>(null) }
     val t = par.table
     val manquantes = t?.manquantes(texte.replace("\n", ""))?.filter { !it.isWhitespace() || t.code(' ') == null } ?: emptyList()
     val styleChange = gras != l0.gras || italique != l0.italique
@@ -50,6 +56,24 @@ fun EditeurTexte(etat: EtatLecteur, par: Paragraphe, fermer: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(texte, { texte = it }, Modifier.fillMaxWidth(), minLines = 2, maxLines = 9,
                     label = { Text(stringResource(R.string.texte_lignes)) })
+                FlowRow(verticalArrangement = Arrangement.Center) {
+                    Box {
+                        OutlinedButton(onClick = { menuIa = true }, enabled = !occupe && texte.isNotBlank()) {
+                            Icon(Icones.get("ia", ROUGE), null, tint = Color.Unspecified)
+                            Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.ia_ameliorer))
+                        }
+                        DropdownMenu(menuIa, { menuIa = false }) {
+                            ActionsTexteIa.forEach { (cle, lib) ->
+                                DropdownMenuItem(text = { Text(stringResource(lib)) }, onClick = {
+                                    menuIa = false
+                                    if (cle == "libre") libre = true else actionIa = ConsignesTexteIa.getValue(cle) to null
+                                })
+                            }
+                        }
+                    }
+                    avantIa?.let { a -> TextButton(onClick = { texte = a; avantIa = null }) { Text(stringResource(R.string.ia_revenir)) } }
+                }
+                if (avantIa != null) Text(stringResource(R.string.ia_texte_recoupe), fontSize = 12.sp, color = Color.Gray)
                 Spacer(Modifier.height(8.dp))
                 // police : gardee, ou remplacee (et pourquoi), dit AVANT d'appliquer
                 val (msg, coul) = when {
@@ -98,5 +122,42 @@ fun EditeurTexte(etat: EtatLecteur, par: Paragraphe, fermer: () -> Unit) {
                 }
             }
         }
+    }
+    IaTexte(texte, actionIa, libre, { c -> libre = false; actionIa = c }, { r ->
+        actionIa = null
+        if (r.isNotBlank() && r != texte) { avantIa = texte; texte = Ia.recouper(r, texte) }
+        else android.widget.Toast.makeText(ctx, ctx.getString(R.string.ia_rien_change), android.widget.Toast.LENGTH_SHORT).show()
+    }) { actionIa = null }
+}
+
+private val ActionsTexteIa = listOf("corriger" to R.string.ia_corriger, "clarifier" to R.string.ia_clarifier, "formel" to R.string.ia_formel,
+    "simple" to R.string.ia_simple, "court" to R.string.ia_court, "libre" to R.string.ia_libre)
+
+/** Memes consignes que sous Windows (app/ia_texte.py). */
+private val ConsignesTexteIa = mapOf(
+    "corriger" to "Corrige l'orthographe, la grammaire, les accords et la ponctuation du texte. Ne change ni le style, ni le vocabulaire, ni l'ordre des phrases.",
+    "clarifier" to "Reformule le texte pour qu'il soit plus clair et plus fluide, en gardant exactement le même sens, les mêmes informations et à peu près la même longueur.",
+    "formel" to "Reformule le texte dans un registre plus formel et professionnel (vouvoiement), même sens, mêmes informations.",
+    "simple" to "Reformule le texte avec des phrases plus courtes et des mots plus simples, même sens, mêmes informations.",
+    "court" to "Raccourcis le texte d'environ un tiers en gardant toutes les informations importantes.")
+
+private const val REGLES_TEXTE_IA = "Réponds uniquement par le texte final, sans guillemets, sans commentaire ni explication. Garde les " +
+    "retours à la ligne, les noms propres, les nombres, les dates et les montants tels quels. Écris en " +
+    "français sauf si le texte est dans une autre langue : garde alors sa langue."
+
+/** Fenetres de l'IA du texte (consigne libre, envoi), montrees par EditeurTexte. */
+@Composable
+private fun IaTexte(texte: String, action: Pair<String, String?>?, libre: Boolean, finLibre: (Pair<String, String?>?) -> Unit,
+                    fini: (String) -> Unit, annule: () -> Unit) {
+    val ctx = LocalContext.current
+    if (libre) ConsigneIa(stringResource(R.string.ia_libre_titre), "texte",
+        stringResource(R.string.ia_regles_texte) + "\n\n" + REGLES_TEXTE_IA, true, { finLibre(null) }) { c, m -> finLibre(c to m) }
+    action?.let { (consigne, m) ->
+        val envoi = texte.split("\n").joinToString(" ").replace(Regex(" {2,}"), " ").trim()
+        EnvoiIa(envoi, stringResource(R.string.ia_travaille_texte), {
+            var r = Ia.demander(ctx, consigne + "\n\n" + REGLES_TEXTE_IA, envoi, force = m).trim()
+            if (r.length > 1 && r.first() in "«\"“" && r.last() in "»\"”" && envoi.firstOrNull() !in listOf('«', '"', '“')) r = r.substring(1, r.length - 1).trim()
+            r
+        }, { r -> fini(r) }, annule, force = m)
     }
 }

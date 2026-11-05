@@ -26,7 +26,24 @@ object Numerisation {
         NOIR_BLANC(R.string.scan_nb, 2200, 0),        // PNG : texte net, fichier leger
         COULEUR(R.string.scan_couleur, 2200, 82),
         EMAIL(R.string.scan_email, 1400, 60),
-        PHOTO(R.string.scan_photo, 2400, 88)
+        PHOTO(R.string.scan_photo, 2400, 88),
+        MAGNIFICENCE(R.string.scan_magnificence, 2200, 85)   // Gemini nettoie la page ; apercu : comme Couleur
+    }
+
+    /** Consigne de « Magnificence IA » (la meme sous Windows, moteur/photo_doc.py). */
+    const val CONSIGNE_MAGNIFICENCE = "Voici la photo d'une page de document, prise avec un téléphone, déjà recadrée. " +
+        "Rends l'image de cette même page comme si elle sortait d'un bon scanner à plat, pour une reconnaissance du texte (OCR) parfaite : " +
+        "page parfaitement droite et à plat (perspective, inclinaison et pliures corrigées), bords de la feuille au bord de l'image, " +
+        "fond blanc uniforme sans ombre, reflet, grain ni taches, texte noir net et bien contrasté. " +
+        "Ne change, n'ajoute, ne retire et ne réécris AUCUN mot, chiffre, signature, tampon, logo ou tableau : seulement nettoyer, " +
+        "redresser et rendre lisible. Garde les couleurs des logos, tampons, surlignages et photos. Garde les proportions de la page."
+
+    /** Page nettoyee par Gemini (image), ou null si sa reponse n'est pas une image lisible. */
+    suspend fun magnifier(ctx: Context, bm: Bitmap): Bitmap? {
+        val petite = reduire(bm, 2000)
+        val o = ByteArrayOutputStream().also { petite.setHasAlpha(false); petite.compress(Bitmap.CompressFormat.JPEG, 90, it) }.toByteArray()
+        val r = Ia.image(ctx, o, CONSIGNE_MAGNIFICENCE)
+        return android.graphics.BitmapFactory.decodeByteArray(r, 0, r.size)
     }
 
     /** Image d'un fichier, tournee selon l'appareil photo (EXIF) et reduite si elle est enorme. */

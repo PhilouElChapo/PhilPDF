@@ -148,3 +148,28 @@ def html_page(blocs, scannee, image_page=None, texte_scannee="Page scannée : so
             out.append(f"<p class='{'puce' if b[1] else 'para'}'>{corps.strip()}</p>")
     return "\n".join(out)
 
+
+
+def textes(blocs):
+    """Textes a traduire d'une page (titres et paragraphes, dans l'ordre)."""
+    out = []
+    for b in blocs:
+        if b[0] == "titre":
+            out.append(b[2])
+        elif b[0] == "para":
+            out.append("".join(t for t, _g, _i in b[2]))
+    return out
+
+
+def remplacer(blocs, traduits):
+    """Memes blocs, textes remplaces par leur traduction (dans l'ordre de textes())."""
+    it = iter(traduits)
+    out = []
+    for b in blocs:
+        if b[0] == "titre":
+            out.append(("titre", b[1], next(it, b[2])))
+        elif b[0] == "para":
+            out.append(("para", b[1], [(next(it, "".join(t for t, _g, _i in b[2])), False, False)]))
+        else:
+            out.append(b)
+    return out

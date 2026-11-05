@@ -72,6 +72,10 @@ fun EcranNumerisation(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
     var occupe by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var googleEssaye by remember { mutableStateOf(false) }
+    // « Magnificence IA » : pages a envoyer a Gemini (accord demande), avancement
+    var magnifier by remember { mutableStateOf<List<Bitmap>?>(null) }
+    var accordMagnifier by remember { mutableStateOf(false) }
+    var avanceMagnifier by remember { mutableStateOf("") }
     val photo = remember { File(ctx.cacheDir, "ouverts/scan/photo.jpg").apply { parentFile?.mkdirs() } }
 
     fun ajouterBrute(bm: Bitmap) { aCadrer = bm to Numerisation.coins(bm) }
@@ -184,6 +188,7 @@ fun EcranNumerisation(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
                         Numerisation.Modele.COULEUR -> R.string.scan_couleur_aide
                         Numerisation.Modele.EMAIL -> R.string.scan_email_aide
                         Numerisation.Modele.PHOTO -> R.string.scan_photo_aide
+                        Numerisation.Modele.MAGNIFICENCE -> R.string.scan_magnificence_aide
                     }), Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 12.dp, vertical = 2.dp), fontSize = 12.sp, color = Color.Gray)
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         if (pages.isEmpty()) Text(stringResource(R.string.scan_vide), Modifier.align(Alignment.Center).padding(24.dp), color = Color.Gray)
@@ -224,6 +229,7 @@ fun EcranNumerisation(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
                         Button(onClick = {
                             val m = modele
                             val l = pages.map { it.image }
+                            if (m == Numerisation.Modele.MAGNIFICENCE) { magnifier = l; return@Button }
                             occupe = ctx.getString(R.string.scan_creation)
                             portee.launch {
                                 try {
@@ -249,6 +255,31 @@ fun EcranNumerisation(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
                 }
             }
         }
+    }
+    magnifier?.let { l ->
+        if (!accordMagnifier) AlertDialog(onDismissRequest = { magnifier = null },
+            title = { Text(stringResource(R.string.scan_magnificence)) },
+            text = { Text(stringResource(R.string.scan_magnificence_accord, l.size)) },
+            confirmButton = { TextButton(onClick = { accordMagnifier = true }) { Text(stringResource(R.string.ia_envoyer)) } },
+            dismissButton = { TextButton(onClick = { magnifier = null }) { Text(stringResource(R.string.annuler)) } })
+        else EnvoiIa("", avanceMagnifier.ifEmpty { stringResource(R.string.scan_magnificence_en_cours, 1, l.size) }, {
+            val locales = ArrayList<Int>()
+            var derniere: Exception? = null
+            val o = l.mapIndexed { k, b ->
+                avanceMagnifier = ctx.getString(R.string.scan_magnificence_en_cours, k + 1, l.size)
+                val r = try { Numerisation.magnifier(ctx, b) } catch (e: Ia.ErreurIa) { derniere = e; null }
+                // page non rendue par Gemini : amelioree ici, comme « Couleur », et on le dit
+                if (r == null) { locales += k + 1; withContext(Dispatchers.Default) { Numerisation.octets(Numerisation.ameliorer(b, Numerisation.Modele.COULEUR), Numerisation.Modele.COULEUR) } }
+                else withContext(Dispatchers.Default) { Numerisation.octets(r, Numerisation.Modele.MAGNIFICENCE) }
+            }
+            if (locales.size == l.size) throw derniere ?: Ia.ErreurIa(ctx.getString(R.string.ia_e_pas_image, "?"))
+            withContext(Dispatchers.IO) { Numerisation.fabriquerPdf(o, File(ctx.cacheDir, "ouverts/scan/" + System.currentTimeMillis() + "/" + Numerisation.nom())) } to locales
+        }, { (f, locales) ->
+            Journal.ecrire("numérisation", "${l.size} page(s), Magnificence IA (${Ia.dernier?.second}), ${locales.size} améliorée(s) ici, ${f.length() / 1024} Ko")
+            magnifier = null; accordMagnifier = false; avanceMagnifier = ""
+            if (locales.isNotEmpty()) android.widget.Toast.makeText(ctx, ctx.getString(R.string.scan_magnificence_locales, locales.joinToString(", ")), android.widget.Toast.LENGTH_LONG).show()
+            ouvrirPdf(f)
+        }, { magnifier = null; accordMagnifier = false; avanceMagnifier = "" }, gemini = true)
     }
     message?.let { m ->
         AlertDialog(onDismissRequest = { message = null }, text = { Text(m) },
