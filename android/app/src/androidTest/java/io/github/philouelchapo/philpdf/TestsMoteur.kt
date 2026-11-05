@@ -556,7 +556,7 @@ class TestsMoteur {
         val w = 600; val h = 800
         val px = IntArray(w * h) { -1 }
         fun carre(x: Int, y: Int, c: Int) { for (yy in y until y + c) for (xx in x until x + c) px[yy * w + xx] = 0xFF000000.toInt() }
-        for (x in 100 until 400 step 12) { for (y in 300 until 330) px[y * w + x] = 0xFF000000.toInt(); px[y * w + x + 1] = 0xFF000000.toInt() }  // « lettres »
+        for (x in 100 until 400 step 12) for (y in 300 until 330) { px[y * w + x] = 0xFF000000.toInt(); px[y * w + x + 1] = 0xFF000000.toInt() }  // « lettres »
         carre(150, 290, 2)                                   // point du i, tout pres des lettres : garde
         carre(300, 600, 2); carre(50, 700, 2)                // taches isolees : retirees
         for (y in 0 until h) px[y * w + 1] = 0xFF000000.toInt()   // trait du bord de la vitre
