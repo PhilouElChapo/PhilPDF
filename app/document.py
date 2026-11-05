@@ -3741,6 +3741,8 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             if self.objet["type"] == "image":
                 m.addAction(_("Retourner gauche-droite (miroir)"), lambda: self.retourner_objet(True))
                 m.addAction(_("Retourner haut-bas (miroir)"), lambda: self.retourner_objet(False))
+                m.addAction(icone("pivoter", "#444444"), _("Redresser l'image (petit angle)..."),
+                            lambda: __import__("app.dialogue_redresser", fromlist=["x"]).redresser_image(self))
                 m.addAction(_("Recadrer, retoucher..."), lambda: self.ouvrir_retouche(self.objet, recadrer=True))
                 m.addAction(_("Remplacer l'image..."), self.remplacer_image)
                 m.addAction(_("Enregistrer l'image sous..."), self.enregistrer_image)
@@ -3749,6 +3751,8 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             m.addSeparator()
         m.addAction(_('Coller'), lambda: self.coller(pw.num, pt))
         m.addAction(_('Ajouter du texte ici'), lambda: pw.ouvrir_editeur(None, pt))
+        m.addAction(icone("pivoter", "#444444"), _("Redresser la page..."),
+                    lambda: __import__("app.dialogue_redresser", fromlist=["x"]).redresser_page(self.window(), self, pw.num))
         m.exec(pos_globale)
 
     def _supprimer_annot(self, n, xref):

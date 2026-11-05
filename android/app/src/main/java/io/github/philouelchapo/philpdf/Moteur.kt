@@ -252,6 +252,32 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         pages.isNotEmpty()
     }
 
+    /**
+     * Redresse les pages d'un petit angle (degres, sens des aiguilles d'une montre a l'ecran) : leur contenu est tourne
+     * autour du centre de la page (texte, couleurs et qualite gardes ; le texte reconnu tourne avec l'image).
+     */
+    suspend fun redresserPages(pages: List<Int>, angle: Float): Boolean =
+        if (kotlin.math.abs(angle) < 0.01f || pages.isEmpty()) false else operationPages("Redresser la page") { p ->
+            for (n in pages) {
+                val o = p.findPage(n)
+                val mb = o.getInheritable("MediaBox")
+                val cx = (mb.get(0).asFloat() + mb.get(2).asFloat()) / 2; val cy = (mb.get(1).asFloat() + mb.get(3).asFloat()) / 2
+                val t = Math.toRadians(-angle.toDouble())                 // repere PDF : y vers le haut
+                val c = kotlin.math.cos(t).toFloat(); val sn = kotlin.math.sin(t).toFloat()
+                val tx = cx - c * cx + sn * cy; val ty = cy - sn * cx - c * cy
+                fun f(v: Float) = String.format(java.util.Locale.ROOT, "%.6f", v)
+                val avant = p.addStream("q ${f(c)} ${f(sn)} ${f(-sn)} ${f(c)} ${f(tx)} ${f(ty)} cm\n", p.newDictionary())
+                val apres = p.addStream("\nQ\n", p.newDictionary())
+                val a = p.newArray()
+                a.push(avant)
+                val anc = o.get("Contents")
+                if (anc.isArray) for (i in 0 until anc.size()) a.push(anc.get(i)) else if (!anc.isNull) a.push(anc)
+                a.push(apres)
+                o.put("Contents", a)
+            }
+            true
+        }
+
     suspend fun supprimerPages(pages: List<Int>): Boolean = operationPages("Supprimer des pages") { p ->
         if (pages.isEmpty() || pages.size >= p.countPages()) return@operationPages false   // jamais un PDF vide
         for (n in pages.distinct().sortedDescending()) p.deletePage(n)

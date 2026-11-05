@@ -566,4 +566,16 @@ class TestsMoteur {
         assertEquals(0xFF000000.toInt(), px[310 * w + 100])
         assertEquals(-1, px[600 * w + 300]); assertEquals(-1, px[400 * w + 1])
     }
+
+    /** Redresser la page : contenu tourne (texte garde, une seule etape annulable). */
+    @Test fun redresserLaPage() {
+        val o = ouvrir(pdfTexte("redresser.pdf"))
+        assertTrue(runBlocking { o.redresserPages(listOf(0), 2.5f) })
+        assertTrue(runBlocking { o.texteDocument() }.contains("Virement bancaire"))
+        assertEquals(false, runBlocking { o.redresserPages(listOf(0), 0f) })
+        val b = Bitmap.createBitmap(300, 400, Bitmap.Config.ARGB_8888); b.eraseColor(android.graphics.Color.WHITE)
+        assertEquals(300, Numerisation.tourner(b, 3f).width)
+        runBlocking { o.annuler() }
+        assertTrue(runBlocking { o.texteDocument() }.contains("Virement bancaire"))
+    }
 }

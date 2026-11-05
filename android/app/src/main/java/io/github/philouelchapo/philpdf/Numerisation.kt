@@ -174,6 +174,12 @@ object Numerisation {
     fun aplomb(bm: Bitmap): Bitmap {
         val a = inclinaison(bm)
         if (kotlin.math.abs(a) < 0.2f) return bm
+        return tourner(bm, a)
+    }
+
+    /** Image tournee de deg degres (sens des aiguilles d'une montre), meme taille, coins blancs. */
+    fun tourner(bm: Bitmap, a: Float): Bitmap {
+        if (kotlin.math.abs(a) < 0.01f) return bm
         val out = Bitmap.createBitmap(bm.width, bm.height, Bitmap.Config.ARGB_8888)
         Canvas(out).apply {
             drawColor(android.graphics.Color.WHITE)
@@ -285,7 +291,9 @@ object Numerisation {
             val touche = x0[c] <= m || y0[c] <= m || x1[c] >= w - 1 - m || y1[c] >= h - 1 - m
             val bande = x1[c] < bxw || x0[c] > w - bxw || y1[c] < byh || y0[c] > h - byh
             val trait = (bh > 0.08f * h && bw < 0.03f * w) || (bw > 0.08f * w && bh < 0.03f * h)
-            if ((touche && (trait || bande)) || (bande && trait)) { effacer[c] = true; bords++ }
+            // bande noire le long d'un bord (table ou ombre autour de la feuille) : haute et etroite, ou l'inverse
+            val bandeBord = touche && ((bh > 0.5f * h && bw < 0.2f * w) || (bw > 0.5f * w && bh < 0.2f * h))
+            if ((touche && (trait || bande)) || (bande && trait) || bandeBord) { effacer[c] = true; bords++ }
         }
         // 2. taches isolees : petites, sans lettre a moins de ~2 mm (somme cumulee de l'encre « grosse »)
         val petit = 20f * k * k

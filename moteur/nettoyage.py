@@ -74,7 +74,9 @@ def bords(nb):
     dans_bande = (x + bw <= bande_x) | (x >= w - bande_x) | (y + bh <= bande_y) | (y >= h - bande_y)
     trait = ((bh > 0.08 * h) & (bw < 0.03 * w)) | ((bw > 0.08 * w) & (bh < 0.03 * h))
     pres = (x <= 2 * bande_x) | (x + bw >= w - 2 * bande_x) | (y <= 2 * bande_y) | (y + bh >= h - 2 * bande_y)
-    effacer = (touche & (trait | dans_bande)) | (dans_bande & trait) | (pres & trait & (a < 0.25 * bw * bh))
+    # bande noire le long d'un bord (table, ombre autour de la feuille photographiee) : haute et etroite, ou l'inverse
+    bande_bord = touche & (((bh > 0.5 * h) & (bw < 0.2 * w)) | ((bw > 0.5 * w) & (bh < 0.2 * h)))
+    effacer = (touche & (trait | dans_bande)) | (dans_bande & trait) | (pres & trait & (a < 0.25 * bw * bh)) | bande_bord
     ids = np.where(effacer)[0] + 1
     if not len(ids):
         return nb, 0
@@ -143,3 +145,28 @@ def page(gris, dpi=300, reglages=None):
         nb, nbords = bords(nb)
     nb, ntaches = taches(nb, dpi, r["taches"])
     return nb, a, {"taches": ntaches, "bords": nbords}
+
+
+def redresser_pages(doc, pages, angle):
+    """Tourne le contenu des pages d'un petit angle (degres, sens inverse des aiguilles d'une montre, comme
+    angle()) autour du centre de la page : texte, couleurs et qualite gardes, le texte reconnu tourne avec."""
+    import math
+    import pymupdf as fitz
+    if abs(angle) < 0.01:
+        return 0
+    n = 0
+    for i in pages:
+        p = doc[i]
+        mb = p.mediabox
+        cx, cy = (mb.x0 + mb.x1) / 2, (mb.y0 + mb.y1) / 2
+        t = math.radians(angle)
+        c, s = math.cos(t), math.sin(t)
+        tx, ty = cx - c * cx + s * cy, cy - s * cx - c * cy
+        anciens = p.get_contents()
+        avant, apres = doc.get_new_xref(), doc.get_new_xref()
+        for x, flux in ((avant, f"q {c:.6f} {s:.6f} {-s:.6f} {c:.6f} {tx:.4f} {ty:.4f} cm\n".encode()), (apres, b"\nQ\n")):
+            doc.update_object(x, "<<>>")
+            doc.update_stream(x, flux)
+        doc.xref_set_key(p.xref, "Contents", "[" + " ".join(f"{x} 0 R" for x in [avant] + anciens + [apres]) + "]")
+        n += 1
+    return n

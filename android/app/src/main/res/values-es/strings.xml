@@ -740,4 +740,15 @@
     <string name="scan_magnificence_aide">Al crear, cada página se envía a Gemini (su clave), que la devuelve como salida de un escáner: recta, fondo blanco, sin grano ni sombra. Vista previa aquí: como Color.</string>
     <string name="scan_magnificence_en_cours">Gemini limpia la página %1$d de %2$d...</string>
     <string name="scan_magnificence_locales">Página(s) %1$s: Gemini no devolvió imagen, se mejoraron en el teléfono (como Color).</string>
+    <string name="redresser_aide">Ajuste el ángulo para que las líneas del texto sigan la cuadrícula. «Auto» mide la inclinación del texto. Nada cambia antes de «Aplicar».</string>
+    <string name="redresser_auto">Auto</string>
+    <string name="redresser_cette_page">Esta página</string>
+    <string name="redresser_toutes">Todas las páginas</string>
+    <string name="redresser_page_n">Enderezar la página %1$d</string>
+    <string name="redresser_fait">Página enderezada (Deshacer para volver).</string>
+    <string name="redresser_rien">Ángulo nulo: nada que cambiar.</string>
+    <string name="redresser_menu">Enderezar la página</string>
+    <string name="redresser_bouton">Enderezar</string>
+    <string name="scan_recadrer">Recortar</string>
+    <string name="op_redresser_la_page">Enderezar la página</string>
 </resources>

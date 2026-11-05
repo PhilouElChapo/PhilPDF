@@ -1706,6 +1706,9 @@ class Fenetre(MixinCoteACote, QMainWindow):
         elif oid == "nettoyer":
             from .dialogue_nettoyage import DialogueNettoyerScan
             DialogueNettoyerScan(self, o).exec()
+        elif oid == "redresser":
+            from .dialogue_redresser import redresser_page
+            redresser_page(self, o)
         elif oid == "ocr":
             self.ocr(o)
 

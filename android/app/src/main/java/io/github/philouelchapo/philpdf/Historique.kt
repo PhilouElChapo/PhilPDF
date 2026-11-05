@@ -36,6 +36,7 @@ object Historique {
         "Pivoter" to R.string.op_pivoter,
         "Propriétés du champ" to R.string.op_proprietes_du_champ,
         "Reconnaître le texte" to R.string.op_reconnaitre_le_texte,
+        "Redresser la page" to R.string.op_redresser_la_page,
         "Remplacer l'image" to R.string.op_remplacer_l_image,
         "Remplir" to R.string.op_remplir,
         "Renommer un champ" to R.string.op_renommer_un_champ,

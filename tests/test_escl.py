@@ -80,4 +80,16 @@ assert d["taches"] >= 110 and d["bords"] >= 1, d
 assert (nb[:, 4:9] < 128).mean() < 0.01, "trait du bord efface"
 assert (nb[400:2600] < 128).mean() > 0.01, "texte garde"
 print(f"Nettoyage : angle {a:+.2f}, {d['taches']} taches, {d['bords']} bord(s) : OK")
+# redresser une page : contenu tourne, texte garde, angle remis a zero
+import pymupdf as fitz
+_d = fitz.open(); _p = _d.new_page()
+for y in range(100, 700, 30):
+    _p.insert_text((72, y), "Ligne de texte numero %d pour essayer le redressement" % y, fontsize=12)
+def _ang(p):
+    pm = p.get_pixmap(dpi=100, colorspace=fitz.csGRAY)
+    return N.angle(np.frombuffer(pm.samples, np.uint8).reshape(pm.h, pm.w))
+N.redresser_pages(_d, [0], 3.0)
+_a = _ang(_d[0]); assert abs(_a + 3) < 0.3, _a
+N.redresser_pages(_d, [0], _a); assert abs(_ang(_d[0])) < 0.2 and "numero 100" in _d[0].get_text()
+print("Redresser la page : OK")
 print("RESULTAT : OK")

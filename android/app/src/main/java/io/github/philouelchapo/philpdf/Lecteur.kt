@@ -98,6 +98,7 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var lectureFluide by mutableStateOf(false)              // ecran « Lecture fluide »
     var resumeIa by mutableStateOf(false)                   // « Resumer avec l'IA »
     var reglagesIa by mutableStateOf(false)
+    var redresser by mutableStateOf<Int?>(null)               // « Redresser la page » : page choisie
     var ocr by mutableStateOf<Int?>(null)                   // reconnaissance du texte proposee (page de depart)
     var ocrAuto = false                                     // document numerise : reconnaissance lancee d'office
     var choixPartage by mutableStateOf(false)               // envoyer le fichier ou un lien
@@ -215,6 +216,7 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
     etat.ocr?.let { n -> DialogueOcr(etat, n) { etat.ocr = null } }
     if (etat.resumeIa) ResumeIa(etat) { etat.resumeIa = false }
     if (etat.reglagesIa) ReglagesIa { etat.reglagesIa = false }
+    etat.redresser?.let { n -> RedresserPage(etat, n) { etat.redresser = null } }
     etat.message?.let { m ->
         val txt = if (m == "aucun_texte") stringResource(R.string.aucun_texte) else m
         LaunchedEffect(m) { android.widget.Toast.makeText(ctx, txt, android.widget.Toast.LENGTH_LONG).show(); etat.message = null }
@@ -452,6 +454,7 @@ private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, 
                     LigneAction("liste_fichiers", stringResource(R.string.signets)) { signets = true }
                     LigneAction("commentaire", stringResource(R.string.commentaires)) { comms = true }
                     if (etat.doc.modifiable) LigneAction("organiser", stringResource(R.string.organiser_pages)) { etat.organiser = true }
+                    if (etat.doc.modifiable) LigneAction("pivoter", stringResource(R.string.redresser_menu)) { etat.redresser = etat.page }
                     if (etat.doc.modifiable) LigneAction("ocr", stringResource(R.string.ocr_titre_menu)) { etat.ocr = etat.page }
                     LigneAction("certificat", stringResource(R.string.sig_verifier)) { etat.verifierSignatures = true }
                     LigneAction("enregistrer", stringResource(R.string.enregistrer)) { etat.demandeEnregistrer = true }

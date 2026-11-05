@@ -741,4 +741,15 @@
     <string name="scan_magnificence_aide">On creation, each page is sent to Gemini (your key), which returns it as if from a scanner: straight, white background, no grain or shadow. Preview here: like Colour.</string>
     <string name="scan_magnificence_en_cours">Gemini is cleaning page %1$d of %2$d...</string>
     <string name="scan_magnificence_locales">Page(s) %1$s: Gemini returned no image, they were enhanced on the phone (like Colour).</string>
+    <string name="redresser_aide">Adjust the angle so the text lines follow the grid. “Auto” measures the text tilt. Nothing changes before “Apply”.</string>
+    <string name="redresser_auto">Auto</string>
+    <string name="redresser_cette_page">This page</string>
+    <string name="redresser_toutes">All pages</string>
+    <string name="redresser_page_n">Straighten page %1$d</string>
+    <string name="redresser_fait">Page straightened (Undo to go back).</string>
+    <string name="redresser_rien">Zero angle: nothing to change.</string>
+    <string name="redresser_menu">Straighten the page</string>
+    <string name="redresser_bouton">Straighten</string>
+    <string name="scan_recadrer">Crop</string>
+    <string name="op_redresser_la_page">Straighten the page</string>
 </resources>

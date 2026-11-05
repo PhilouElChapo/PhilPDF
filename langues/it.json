@@ -2863,5 +2863,17 @@
  "Automatique : noms affichés si la place suffit": "Automatico: nomi se c'è spazio",
  "(La barre d'outils d'un document a son propre réglage : clic droit sur la barre.)": "(La barra degli strumenti di un documento ha la propria impostazione: clic destro sulla barra.)",
  "Boutons de l'Accueil (icône, nom)": "Pulsanti della Home (icona, nome)",
- "(réseau, sans pilote)": "(rete, senza driver)"
+ "(réseau, sans pilote)": "(rete, senza driver)",
+ "Redresser la page {n}": "Raddrizzare la pagina {n}",
+ "Redresser la page": "Raddrizzare la pagina",
+ "Redresser l'image": "Raddrizzare l'immagine",
+ "Réglez l'angle pour que les lignes du texte suivent la grille. « Auto » mesure l'inclinaison du texte. Rien n'est changé avant « Appliquer » ; Ctrl+Z revient en arrière.": "Regoli l'angolo perché le righe del testo seguano la griglia. «Auto» misura l'inclinazione del testo. Nulla cambia prima di «Applica»; Ctrl+Z torna indietro.",
+ "Auto ({a} °)": "Auto ({a}°)",
+ "Inclinaison mesurée sur les lignes du texte": "Inclinazione misurata sulle righe del testo",
+ "{n} page(s) redressée(s) de {a} °.": "{n} pagina/e raddrizzata/e di {a}°.",
+ "Redresser la page...": "Raddrizzare la pagina...",
+ "Redresser l'image (petit angle)...": "Raddrizzare l'immagine (piccolo angolo)...",
+ "Redresser une page": "Raddrizzare una pagina",
+ "Page penchée remise droite": "Pagina inclinata raddrizzata",
+ "Tourne la page d'un petit angle (automatique, ou au dixième de degré) : texte, couleurs et qualité gardés.": "Ruota la pagina di un piccolo angolo (automatico, o al decimo di grado): testo, colori e qualità conservati."
 }

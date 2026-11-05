@@ -2872,5 +2872,17 @@
  "Automatique : noms affichés si la place suffit": "Automatic: names shown if there is room",
  "(La barre d'outils d'un document a son propre réglage : clic droit sur la barre.)": "(A document's toolbar has its own setting: right-click the bar.)",
  "Boutons de l'Accueil (icône, nom)": "Home screen buttons (icon, name)",
- "(réseau, sans pilote)": "(network, driverless)"
+ "(réseau, sans pilote)": "(network, driverless)",
+ "Redresser la page {n}": "Straighten page {n}",
+ "Redresser la page": "Straighten the page",
+ "Redresser l'image": "Straighten the image",
+ "Réglez l'angle pour que les lignes du texte suivent la grille. « Auto » mesure l'inclinaison du texte. Rien n'est changé avant « Appliquer » ; Ctrl+Z revient en arrière.": "Adjust the angle so the text lines follow the grid. “Auto” measures the text tilt. Nothing changes before “Apply”; Ctrl+Z goes back.",
+ "Auto ({a} °)": "Auto ({a}°)",
+ "Inclinaison mesurée sur les lignes du texte": "Tilt measured on the text lines",
+ "{n} page(s) redressée(s) de {a} °.": "{n} page(s) straightened by {a}°.",
+ "Redresser la page...": "Straighten the page...",
+ "Redresser l'image (petit angle)...": "Straighten the image (small angle)...",
+ "Redresser une page": "Straighten a page",
+ "Page penchée remise droite": "Tilted page made straight",
+ "Tourne la page d'un petit angle (automatique, ou au dixième de degré) : texte, couleurs et qualité gardés.": "Turns the page by a small angle (automatic, or to a tenth of a degree): text, colours and quality kept."
 }

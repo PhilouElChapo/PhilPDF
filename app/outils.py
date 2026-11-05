@@ -66,6 +66,8 @@ OUTILS = [
      _('Redresse les pages, nettoie le scan et ajoute le texte reconnu (nécessite Tesseract).'), True),
     ("nettoyer", "scans", "nettoyer", _('Nettoyer un scan'), _('Redresser, effacer traits et taches'),
      _('Remettre au format, redresser, effacer traits et taches, noir et blanc net.'), True),
+    ("redresser", "scans", "pivoter", _('Redresser une page'), _('Page penchée remise droite'),
+     _("Tourne la page d'un petit angle (automatique, ou au dixième de degré) : texte, couleurs et qualité gardés."), True),
     ("formulaire", "formulaires", "formulaire", _('Créer un formulaire'), _('Champs détectés ou tracés'),
      _("Repère les zones à remplir (pointillés, traits, cases, cadres) et en fait de vrais champs, remplissables "
        "ici, dans Acrobat ou tout lecteur PDF. Tracez texte, case, radio, liste, date, montant ou signature ; "

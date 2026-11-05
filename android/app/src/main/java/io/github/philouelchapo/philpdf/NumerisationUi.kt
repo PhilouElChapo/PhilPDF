@@ -69,6 +69,8 @@ fun EcranNumerisation(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
     var modele by remember { mutableStateOf(Numerisation.Modele.valueOf(
         ctx.getSharedPreferences("numerisation", Context.MODE_PRIVATE).getString("modele", null) ?: "NOIR_BLANC")) }
     var aCadrer by remember { mutableStateOf<Pair<Bitmap, List<PointF>>?>(null) }
+    var aRemplacer by remember { mutableStateOf<PageScan?>(null) }       // recadrer une page deja prise
+    var aTourner by remember { mutableStateOf<PageScan?>(null) }         // redresser une page (angle)
     var occupe by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var googleEssaye by remember { mutableStateOf(false) }
@@ -160,15 +162,19 @@ fun EcranNumerisation(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
                     Cadrage(ac.first, ac.second, Modifier.weight(1f)) { c -> aCadrer = ac.first to c }
                     FlowRow(Modifier.fillMaxWidth().background(Color.White).padding(6.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
-                        OutlinedButton(onClick = { aCadrer = null; prendrePhoto() }) { Text(stringResource(R.string.scan_reprendre)) }
+                        if (aRemplacer == null) OutlinedButton(onClick = { aCadrer = null; prendrePhoto() }) { Text(stringResource(R.string.scan_reprendre)) }
+                        else OutlinedButton(onClick = { aCadrer = null; aRemplacer = null }) { Text(stringResource(R.string.annuler)) }
                         OutlinedButton(onClick = { val b = ac.first; aCadrer = b to listOf(PointF(0f, 0f), PointF(b.width.toFloat(), 0f),
                             PointF(b.width.toFloat(), b.height.toFloat()), PointF(0f, b.height.toFloat())) }) { Text(stringResource(R.string.scan_toute_photo)) }
                         Button(onClick = {
                             val (b, c) = ac; aCadrer = null
                             occupe = ctx.getString(R.string.scan_preparation)
+                            val rp = aRemplacer; aRemplacer = null
                             portee.launch {
                                 val r = withContext(Dispatchers.Default) { Numerisation.redresser(b, c) }
-                                pages += PageScan(r); occupe = null
+                                val k = rp?.let { pages.indexOf(it) } ?: -1
+                                if (k >= 0) pages[k] = PageScan(r) else pages += PageScan(r)
+                                occupe = null
                             }
                         }, colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) { Text(stringResource(R.string.scan_valider_cadre)) }
                     }
@@ -209,6 +215,9 @@ fun EcranNumerisation(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
                                                 val n = PageScan(r); pages[pages.indexOf(p)] = n
                                             }
                                         }) { Text("↻") }
+                                        TextButton(onClick = { aTourner = p }) { Text(stringResource(R.string.redresser_bouton)) }
+                                        TextButton(onClick = { aRemplacer = p; aCadrer = p.image to Numerisation.coins(p.image) }) {
+                                            Text(stringResource(R.string.scan_recadrer)) }
                                         TextButton(onClick = { pages.remove(p) }) { Text(stringResource(R.string.supprimer), color = Color(0xFFC62828)) }
                                     }
                                 }
@@ -253,6 +262,15 @@ fun EcranNumerisation(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
                         }
                     }
                 }
+            }
+        }
+    }
+    aTourner?.let { p ->
+        RedresserImage(p.image, stringResource(R.string.redresser_page_n, pages.indexOf(p) + 1), { aTourner = null }) { a, _t ->
+            aTourner = null
+            portee.launch {
+                val r = withContext(Dispatchers.Default) { Numerisation.tourner(p.image, a) }
+                val k = pages.indexOf(p); if (k >= 0) pages[k] = PageScan(r)
             }
         }
     }

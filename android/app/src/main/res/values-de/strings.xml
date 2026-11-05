@@ -740,4 +740,15 @@
     <string name="scan_magnificence_aide">Beim Erstellen wird jede Seite an Gemini (Ihr Schlüssel) gesendet, die sie wie aus einem Scanner zurückgibt: gerade, weißer Hintergrund, ohne Körnung oder Schatten. Vorschau hier: wie Farbe.</string>
     <string name="scan_magnificence_en_cours">Gemini bereinigt Seite %1$d von %2$d...</string>
     <string name="scan_magnificence_locales">Seite(n) %1$s: Gemini hat kein Bild geliefert, sie wurden auf dem Telefon verbessert (wie Farbe).</string>
+    <string name="redresser_aide">Stellen Sie den Winkel so ein, dass die Textzeilen dem Raster folgen. „Auto“ misst die Neigung des Textes. Vor „Anwenden“ ändert sich nichts.</string>
+    <string name="redresser_auto">Auto</string>
+    <string name="redresser_cette_page">Diese Seite</string>
+    <string name="redresser_toutes">Alle Seiten</string>
+    <string name="redresser_page_n">Seite %1$d begradigen</string>
+    <string name="redresser_fait">Seite begradigt (Rückgängig zum Zurücksetzen).</string>
+    <string name="redresser_rien">Winkel null: nichts zu ändern.</string>
+    <string name="redresser_menu">Seite begradigen</string>
+    <string name="redresser_bouton">Begradigen</string>
+    <string name="scan_recadrer">Zuschneiden</string>
+    <string name="op_redresser_la_page">Seite begradigen</string>
 </resources>

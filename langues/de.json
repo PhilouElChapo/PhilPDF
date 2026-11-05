@@ -2863,5 +2863,17 @@
  "Automatique : noms affichés si la place suffit": "Automatisch: Namen, wenn genug Platz ist",
  "(La barre d'outils d'un document a son propre réglage : clic droit sur la barre.)": "(Die Symbolleiste eines Dokuments hat eine eigene Einstellung: Rechtsklick auf die Leiste.)",
  "Boutons de l'Accueil (icône, nom)": "Start-Schaltflächen (Symbol, Name)",
- "(réseau, sans pilote)": "(Netzwerk, ohne Treiber)"
+ "(réseau, sans pilote)": "(Netzwerk, ohne Treiber)",
+ "Redresser la page {n}": "Seite {n} begradigen",
+ "Redresser la page": "Seite begradigen",
+ "Redresser l'image": "Bild begradigen",
+ "Réglez l'angle pour que les lignes du texte suivent la grille. « Auto » mesure l'inclinaison du texte. Rien n'est changé avant « Appliquer » ; Ctrl+Z revient en arrière.": "Stellen Sie den Winkel so ein, dass die Textzeilen dem Raster folgen. „Auto“ misst die Neigung des Textes. Vor „Anwenden“ ändert sich nichts; Strg+Z macht es rückgängig.",
+ "Auto ({a} °)": "Auto ({a}°)",
+ "Inclinaison mesurée sur les lignes du texte": "Auf den Textzeilen gemessene Neigung",
+ "{n} page(s) redressée(s) de {a} °.": "{n} Seite(n) um {a}° begradigt.",
+ "Redresser la page...": "Seite begradigen...",
+ "Redresser l'image (petit angle)...": "Bild begradigen (kleiner Winkel)...",
+ "Redresser une page": "Seite begradigen",
+ "Page penchée remise droite": "Schiefe Seite gerade gerichtet",
+ "Tourne la page d'un petit angle (automatique, ou au dixième de degré) : texte, couleurs et qualité gardés.": "Dreht die Seite um einen kleinen Winkel (automatisch oder auf ein Zehntelgrad genau): Text, Farben und Qualität bleiben erhalten."
 }
