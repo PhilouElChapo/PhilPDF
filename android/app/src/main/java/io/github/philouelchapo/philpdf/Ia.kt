@@ -324,7 +324,7 @@ object Ia {
 
     /** Clefs Claude / Gemini de vos postes Windows (fichier chiffre de PhilPDF sur votre compte). Renvoie les moteurs repris. */
     suspend fun reprendreDePostes(ctx: Context, phrase: String): List<String> {
-        val s = Certificats.secretsWindows(ctx, phrase)
+        val s = Identites.secretsWindows(ctx, phrase)
         val repris = ArrayList<String>()
         for (m in listOf("claude", "gemini")) {
             val v = nettoyerClef(s.optString("clef_$m"))

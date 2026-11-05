@@ -94,7 +94,7 @@ fun ReglagesIa(fermer: () -> Unit) {
                     if (relie) {
                         Spacer(Modifier.height(8.dp))
                         OutlinedButton(onClick = {
-                            val p = Certificats.phraseRetenue(ctx)
+                            val p = Identites.phraseRetenue(ctx)
                             if (p != null) reprendre(p) else phrase = ""
                         }, enabled = !occupe, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ia_reprendre_postes)) }
                         Text(stringResource(R.string.ia_reprendre_aide), fontSize = 12.sp, color = Color.Gray)
