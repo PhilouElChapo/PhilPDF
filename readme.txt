@@ -10,6 +10,13 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.13.0
+- PhilPDF Android en allemand, espagnol et italien (en plus du francais et de l'anglais), selon la langue du
+  telephone. Un essai automatique verifie a chaque fabrication qu'aucun texte ne manque dans aucune langue.
+- Tampons prets a l'emploi dans ces langues (ERHALTEN AM, RECIBIDO EL, RICEVUTO IL...), date et heure comprises.
+- Ecran de demarrage : logo, version et etape en cours (chargement du moteur PDF, ouverture du document), le temps
+  que PhilPDF se prepare.
+
 1.12.2
 - Annuler / Retablir : un toucher annule la derniere modification et dit laquelle (« Annule : Deplacer ») ; un appui
   long sur le bouton montre la liste des modifications (celles a retablir, grisees, au-dessus du document actuel) :

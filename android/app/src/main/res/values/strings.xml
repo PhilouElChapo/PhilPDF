@@ -598,4 +598,7 @@
     <string name="historique_vide">Nothing to undo or redo.</string>
     <string name="historique_maintenant">— Document now —</string>
     <string name="historique_menu">Undo history</string>
+    <string name="demarrage_moteur">Loading the PDF engine…</string>
+    <string name="demarrage_nettoyage">Tidying temporary files…</string>
+    <string name="demarrage_document">Opening the document…</string>
 </resources>

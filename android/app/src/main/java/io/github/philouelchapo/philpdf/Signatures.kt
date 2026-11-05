@@ -115,14 +115,20 @@ fun texteTampon(t: String, h: Horodatage): String {
     if ("{date}" in t || "{heure}" in t)
         return t.replace("{date}", SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE).format(Date()))
             .replace("{heure}", SimpleDateFormat("HH:mm", Locale.FRANCE).format(Date()))
-    // « REÇU LE » (francais) ou « RECEIVED ON » (anglais) : la date suit sur la meme ligne
-    val suffixe = listOf(" LE", " le", " ON", " on").firstOrNull { t.endsWith(it) }
+    // « REÇU LE », « RECEIVED ON », « ERHALTEN AM », « RECIBIDO EL », « RICEVUTO IL » : la date suit sur la meme ligne
+    val suffixe = listOf(" LE", " le", " ON", " on", " AM", " am", " EL", " el", " IL", " il").firstOrNull { t.endsWith(it) }
     if (d.isEmpty()) return if (suffixe != null) t.removeSuffix(suffixe) else t
     if (h == Horodatage.HEURE) return when (suffixe) {      // « REÇU A 14:32 » (majuscule sans accent)
         " LE" -> t.removeSuffix(" LE") + " A $d"
         " le" -> t.removeSuffix(" le") + " à $d"
         " ON" -> t.removeSuffix(" ON") + " AT $d"
         " on" -> t.removeSuffix(" on") + " at $d"
+        " AM" -> t.removeSuffix(" AM") + " UM $d"
+        " am" -> t.removeSuffix(" am") + " um $d"
+        " EL" -> t.removeSuffix(" EL") + " A LAS $d"
+        " el" -> t.removeSuffix(" el") + " a las $d"
+        " IL" -> t.removeSuffix(" IL") + " ALLE $d"
+        " il" -> t.removeSuffix(" il") + " alle $d"
         else -> "$t\n$d"
     }
     return if (suffixe != null) "$t $d" else "$t\n$d"

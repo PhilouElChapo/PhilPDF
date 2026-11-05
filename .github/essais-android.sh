@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Essais sur le telephone simule (lance depuis android/ par android-emulator-runner)
 # 1) essais complets du moteur ; 2) la version publiee (optimisee par R8) s'installe et demarre sans planter
+# 0) langues : aucun texte ne manque en francais, allemand, espagnol, italien (memes %1$s)
+python3 ../tests/test_langues_android.py || { echo "::error title=Langues Android::textes manquants ou formats differents"; exit 1; }
 adb logcat -c || true
 timeout 35m gradle --no-daemon connectedDebugAndroidTest > essais.log 2>&1
 r=$?

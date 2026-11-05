@@ -8,7 +8,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.asPaddingValues
@@ -37,7 +43,6 @@ class MainActivity : ComponentActivity() {
             try { Journal.ecrire("plantage", e.stackTraceToString().take(3000)) } catch (_: Exception) {}
             avant?.uncaughtException(t, e)
         }
-        DocumentPdf.nettoyerCache(this)
         recu.value = uriDe(intent)
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(primary = ROUGE)) {
@@ -45,7 +50,9 @@ class MainActivity : ComponentActivity() {
                     // marges des barres d'Android et du clavier, transmises aux fenetres (Fenetre) : rien ne passe dessous
                     val marges = androidx.compose.foundation.layout.WindowInsets.safeDrawing.asPaddingValues()
                     androidx.compose.runtime.CompositionLocalProvider(LocalMarges provides marges) {
-                        Box(Modifier.safeDrawingPadding()) { Application(recu) }
+                        // ecran de demarrage (logo, version, etape) tant que le moteur PDF se charge
+                        var pret by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+                        Box(Modifier.safeDrawingPadding()) { if (pret) Application(recu) else Demarrage(recu.value != null) { pret = true } }
                     }
                 }
             }
@@ -120,5 +127,39 @@ fun Application(recu: MutableState<Uri?>) {
     erreur?.let { e ->
         AlertDialog(onDismissRequest = { erreur = null }, text = { Text(e) },
             confirmButton = { TextButton(onClick = { erreur = null }) { Text(stringResource(R.string.ok)) } })
+    }
+}
+
+/** Ecran de demarrage : on voit tout de suite que PhilPDF demarre, et ce qu'il fait. */
+@Composable
+fun Demarrage(avecDocument: Boolean, fini: () -> Unit) {
+    val ctx = LocalContext.current
+    var etape by remember { mutableIntStateOf(R.string.demarrage_moteur) }
+    LaunchedEffect(Unit) {
+        val debut = System.currentTimeMillis()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            // charge la bibliotheque MuPDF (la plus longue etape au premier lancement)
+            try { Class.forName("com.artifex.mupdf.fitz.Context") } catch (_: Throwable) {}
+        }
+        etape = R.string.demarrage_nettoyage
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { DocumentPdf.nettoyerCache(ctx) }
+        if (avecDocument) etape = R.string.demarrage_document
+        // assez long pour etre lu, sans retarder : 0,6 s au plus en tout
+        val reste = 600 - (System.currentTimeMillis() - debut)
+        if (reste > 0) kotlinx.coroutines.delay(reste)
+        fini()
+    }
+    androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.White),
+        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.logo), null,
+            Modifier.size(112.dp))
+        androidx.compose.foundation.layout.Spacer(Modifier.height(18.dp))
+        Text("PhilPDF", fontSize = 26.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+        Text(BuildConfig.VERSION_NAME, fontSize = 13.sp, color = androidx.compose.ui.graphics.Color.Gray)
+        androidx.compose.foundation.layout.Spacer(Modifier.height(28.dp))
+        LinearProgressIndicator(Modifier.width(180.dp), color = ROUGE)
+        androidx.compose.foundation.layout.Spacer(Modifier.height(10.dp))
+        Text(stringResource(etape), fontSize = 13.sp, color = androidx.compose.ui.graphics.Color(0xFF555555))
     }
 }

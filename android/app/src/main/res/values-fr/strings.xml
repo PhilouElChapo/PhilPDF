@@ -598,4 +598,7 @@
     <string name="historique_vide">Rien à annuler ni à rétablir.</string>
     <string name="historique_maintenant">— Document actuel —</string>
     <string name="historique_menu">Historique des modifications</string>
+    <string name="demarrage_moteur">Chargement du moteur PDF…</string>
+    <string name="demarrage_nettoyage">Rangement des fichiers temporaires…</string>
+    <string name="demarrage_document">Ouverture du document…</string>
 </resources>
