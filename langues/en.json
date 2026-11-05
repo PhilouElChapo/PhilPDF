@@ -2814,5 +2814,7 @@
  "Fond :": "Background:",
  "{n} page(s). Cliquez « Page n » pour revenir à cette page dans le document.": "{n} page(s). Click “Page n” to go back to that page in the document.",
  "Page scannée : son texte n'est pas encore reconnu (Outils > Reconnaître le texte).": "Scanned page: its text is not recognized yet (Tools > Recognize text).",
- "Page illisible : {e}": "Unreadable page: {e}"
+ "Page illisible : {e}": "Unreadable page: {e}",
+ "Intercale une page blanche (du format de la page qui la précède)": "Inserts a blank page (same size as the page before it)",
+ "Laissés de côté (illisibles ou protégés par un mot de passe) :": "Left out (unreadable or protected by a password):"
 }

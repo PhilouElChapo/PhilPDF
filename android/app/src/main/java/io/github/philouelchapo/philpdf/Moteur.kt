@@ -288,6 +288,23 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         return n
     }
 
+    /** Ajoute plusieurs fichiers (PDF ou images, dans l'ordre) a la place « a », en une seule etape annulable.
+     *  Renvoie (pages ajoutees, noms illisibles). */
+    suspend fun insererFichiers(fichiers: List<Triple<File, Boolean, String>>, a: Int): Pair<Int, List<String>> {
+        var n = 0
+        val illisibles = ArrayList<String>()
+        operationPages("Combiner") { p ->
+            var place = a.coerceIn(0, p.countPages())
+            for ((f, image, nom) in fichiers) {
+                val k = try { Combiner.ajouterFichier(p, f, image, place) } catch (_: Exception) { 0 }
+                if (k == 0) illisibles += nom
+                place += k; n += k
+            }
+            n > 0
+        }
+        return n to illisibles
+    }
+
     /** Ecrit les pages choisies dans un nouveau PDF (le document ouvert n'est pas touche). */
     suspend fun extraire(pages: List<Int>, dest: File): File = verrou.withLock {
         withContext(Dispatchers.IO) {

@@ -207,7 +207,7 @@
     <string name="pivoter_droite">Nach rechts drehen</string>
     <string name="extraire">Extrahieren</string>
     <string name="page_blanche">Leere Seite</string>
-    <string name="ajouter_pdf">PDF hinzufügen</string>
+    <string name="ajouter_pdf">PDF oder Bilder hinzufügen</string>
     <string name="compresser">Verkleinern</string>
     <string name="supprimer_pages_titre">%1$d Seite(n) löschen?</string>
     <string name="supprimer_pages_texte">Sie werden aus dem Dokument entfernt. „Rückgängig“ (Pfeil oben) bringt sie zurück, solange Sie das Dokument nicht geschlossen haben.</string>
@@ -625,4 +625,15 @@
     <string name="scan_pas_appareil">Keine Kamera-App auf diesem Telefon: importieren Sie stattdessen Fotos.</string>
     <string name="scan_echec">PDF kann nicht erstellt werden: %1$s</string>
     <string name="scan_nom_fichier">Scan %1$s</string>
+    <string name="combiner_titre">DATEIEN KOMBINIEREN</string>
+    <string name="combiner_titre_court">Dateien kombinieren</string>
+    <string name="combiner_aide">PDFs und Bilder in dieser Reihenfolge in einem neuen PDF. Pfeile, um die Reihenfolge zu ändern.</string>
+    <string name="combiner_vide">Noch keine Datei: „Dateien hinzufügen“.</string>
+    <string name="combiner_ajouter">Dateien hinzufügen</string>
+    <string name="combiner_bouton">Kombinieren</string>
+    <string name="combiner_en_cours">Wird zusammengefügt…</string>
+    <string name="combiner_progression">Datei %1$d von %2$d…</string>
+    <string name="combiner_nom">Kombiniert</string>
+    <string name="combiner_rien">Keine lesbare Seite in diesen Dateien.</string>
+    <string name="combiner_illisibles">Ausgelassen (unlesbar oder passwortgeschützt): %1$s</string>
 </resources>

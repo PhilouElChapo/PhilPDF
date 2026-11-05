@@ -40,7 +40,7 @@ import java.util.Locale
 val ROUGE = Color(0xFFC9252D)
 
 @Composable
-fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = {}) {
+fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = {}, combiner: () -> Unit = {}) {
     val ctx = LocalContext.current
     var recents by remember { mutableStateOf(Recents.liste(ctx)) }
     var maj by remember { mutableStateOf<NouvelleVersion?>(null) }
@@ -85,6 +85,11 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
                         Icon(Icones.get("numeriser", ROUGE), null, tint = Color.Unspecified)
                         Spacer(Modifier.width(6.dp))
                         Text(stringResource(R.string.scan_bouton))
+                    }
+                    OutlinedButton(onClick = combiner) {
+                        Icon(Icones.get("combiner", ROUGE), null, tint = Color.Unspecified)
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.combiner_titre_court))
                     }
                 }
             }

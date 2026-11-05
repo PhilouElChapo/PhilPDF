@@ -497,4 +497,28 @@ class TestsMoteur {
         val t = enregistrer(d, "scan_ocr.pdf").let { texte(it) }
         assertTrue(t, t.contains("FACTURE"))
     }
+
+    /** Combiner : deux PDF et une image, une page vierge intercalee, un fichier illisible laisse de cote. */
+    @Test fun combinerDesFichiers() {
+        val a = pdfTexte("comb_a.pdf"); val b = pdfImage("comb_b.pdf", "DEUX")
+        val bm = Bitmap.createBitmap(600, 400, Bitmap.Config.ARGB_8888).also { it.eraseColor(android.graphics.Color.BLUE) }
+        val img = File(dossier, "comb_c.png").also { f -> f.outputStream().use { bm.compress(Bitmap.CompressFormat.PNG, 100, it) } }
+        val faux = File(dossier, "comb_faux.pdf").also { it.writeText("pas un pdf") }
+        val l = listOf(Combiner.Element.Fichier(Uri.fromFile(a), "a.pdf", false), Combiner.Element.PageVierge,
+            Combiner.Element.Fichier(Uri.fromFile(b), "b.pdf", false), Combiner.Element.Fichier(Uri.fromFile(img), "c.png", true),
+            Combiner.Element.Fichier(Uri.fromFile(faux), "faux.pdf", false))
+        val dest = File(dossier, "combine.pdf")
+        val illisibles = Combiner.fabriquer(ctx, l, dest) { _, _ -> }
+        assertEquals(listOf("faux.pdf"), illisibles)
+        val d = Document.openDocument(dest.absolutePath)
+        try { assertEquals(4, d.countPages()) } finally { d.destroy() }
+        assertTrue(texte(dest).contains("Virement bancaire"))
+        // dans un document ouvert : plusieurs fichiers ajoutes d'un coup, une seule etape annulable
+        val o = ouvrir(pdfTexte("comb_o.pdf"))
+        val (n, ill) = runBlocking { o.insererFichiers(listOf(Triple(a, false, "a"), Triple(img, true, "c")), 1) }
+        assertEquals(2, n); assertTrue(ill.isEmpty())
+        assertEquals(3, runBlocking { o.tailles() }.size)
+        runBlocking { o.annuler() }
+        assertEquals(1, runBlocking { o.tailles() }.size)
+    }
 }

@@ -2805,5 +2805,7 @@
  "Fond :": "Fondo:",
  "{n} page(s). Cliquez « Page n » pour revenir à cette page dans le document.": "{n} página(s). Haga clic en «Página n» para volver a esa página en el documento.",
  "Page scannée : son texte n'est pas encore reconnu (Outils > Reconnaître le texte).": "Página escaneada: su texto aún no está reconocido (Herramientas > Reconocer el texto).",
- "Page illisible : {e}": "Página ilegible: {e}"
+ "Page illisible : {e}": "Página ilegible: {e}",
+ "Intercale une page blanche (du format de la page qui la précède)": "Intercala una página en blanco (del formato de la página anterior)",
+ "Laissés de côté (illisibles ou protégés par un mot de passe) :": "Omitidos (ilegibles o protegidos con contraseña):"
 }

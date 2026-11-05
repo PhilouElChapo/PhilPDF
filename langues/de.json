@@ -2805,5 +2805,7 @@
  "Fond :": "Hintergrund:",
  "{n} page(s). Cliquez « Page n » pour revenir à cette page dans le document.": "{n} Seite(n). Klicken Sie auf „Seite n“, um im Dokument zu dieser Seite zurückzukehren.",
  "Page scannée : son texte n'est pas encore reconnu (Outils > Reconnaître le texte).": "Gescannte Seite: ihr Text ist noch nicht erkannt (Werkzeuge > Text erkennen).",
- "Page illisible : {e}": "Unlesbare Seite: {e}"
+ "Page illisible : {e}": "Unlesbare Seite: {e}",
+ "Intercale une page blanche (du format de la page qui la précède)": "Fügt eine leere Seite ein (im Format der vorherigen Seite)",
+ "Laissés de côté (illisibles ou protégés par un mot de passe) :": "Ausgelassen (unlesbar oder passwortgeschützt):"
 }

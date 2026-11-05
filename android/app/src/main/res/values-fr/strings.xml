@@ -208,7 +208,7 @@
     <string name="pivoter_droite">Pivoter à droite</string>
     <string name="extraire">Extraire</string>
     <string name="page_blanche">Page blanche</string>
-    <string name="ajouter_pdf">Ajouter un PDF</string>
+    <string name="ajouter_pdf">Ajouter des PDF ou images</string>
     <string name="compresser">Alléger</string>
     <string name="supprimer_pages_titre">Supprimer %1$d page(s) ?</string>
     <string name="supprimer_pages_texte">Elles sont retirées du document. « Annuler » (flèche en haut) les remet tant que vous n\'avez pas fermé le document.</string>
@@ -626,4 +626,15 @@
     <string name="scan_pas_appareil">Pas d’application d’appareil photo sur ce téléphone : importez des photos à la place.</string>
     <string name="scan_echec">Création du PDF impossible : %1$s</string>
     <string name="scan_nom_fichier">Scan %1$s</string>
+    <string name="combiner_titre">COMBINER DES FICHIERS</string>
+    <string name="combiner_titre_court">Combiner des fichiers</string>
+    <string name="combiner_aide">PDF et images, dans cet ordre, dans un nouveau PDF. Flèches pour changer l’ordre.</string>
+    <string name="combiner_vide">Aucun fichier pour l’instant : « Ajouter des fichiers ».</string>
+    <string name="combiner_ajouter">Ajouter des fichiers</string>
+    <string name="combiner_bouton">Combiner</string>
+    <string name="combiner_en_cours">Assemblage…</string>
+    <string name="combiner_progression">Fichier %1$d sur %2$d…</string>
+    <string name="combiner_nom">Combiné</string>
+    <string name="combiner_rien">Aucune page lisible dans ces fichiers.</string>
+    <string name="combiner_illisibles">Laissés de côté (illisibles ou protégés par un mot de passe) : %1$s</string>
 </resources>

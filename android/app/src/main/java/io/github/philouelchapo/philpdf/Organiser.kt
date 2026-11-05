@@ -86,22 +86,19 @@ fun OrganiserPages(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, fermer:
             dire(ctx.getString(R.string.pages_extraites, tries.size))
         }
     }
-    val ajouterPdf = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u: Uri? ->
-        if (u != null) lancer {
+    val ajouterPdf = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { l: List<Uri> ->
+        if (l.isNotEmpty()) lancer {
+            // plusieurs PDF ou images a la fois, ajoutes dans l'ordre choisi apres la derniere page choisie
             val f = withContext(Dispatchers.IO) {
-                val f = File(ctx.cacheDir, "ouverts/ajout/" + nomDuFichier(ctx, u).replace('/', '_'))
-                f.parentFile?.mkdirs()
-                ctx.contentResolver.openInputStream(u)?.use { e -> f.outputStream().use { e.copyTo(it) } }
-                    ?: throw IllegalStateException(ctx.getString(R.string.ajout_impossible))
-                f
+                l.map { u -> val nom = nomDuFichier(ctx, u); Triple(Combiner.copie(ctx, u, nom), Combiner.estImage(ctx, u, nom), nom) }
             }
-            val n = d.inserer(f, apres)
-            if (n == 0) dire(ctx.getString(R.string.ajout_impossible))
-            else {
-                Journal.ecrire("organiser", "${d.nom} : $n page(s) ajoutée(s) depuis ${f.name}")
+            val (n, illisibles) = d.insererFichiers(f, apres)
+            if (illisibles.isNotEmpty()) dire(ctx.getString(R.string.combiner_illisibles, illisibles.joinToString(", ")))
+            if (n > 0) {
+                Journal.ecrire("organiser", "${d.nom} : $n page(s) ajoutée(s) depuis ${f.size} fichier(s)")
                 choix = (apres until apres + n).toSet()
                 dire(ctx.getString(R.string.pages_ajoutees, n))
-            }
+            } else if (illisibles.isEmpty()) dire(ctx.getString(R.string.ajout_impossible))
         }
     }
 
@@ -160,7 +157,7 @@ fun OrganiserPages(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, fermer:
                         val (w, h) = tailles.getOrElse((apres - 1).coerceAtLeast(0)) { 595f to 842f }
                         lancer { if (d.pageBlanche(apres, w, h)) choix = setOf(apres) }
                     }
-                    Action("combiner", stringResource(R.string.ajouter_pdf)) { ajouterPdf.launch(arrayOf("application/pdf")) }
+                    Action("combiner", stringResource(R.string.ajouter_pdf)) { ajouterPdf.launch(arrayOf("application/pdf", "image/*")) }
                     Action("alleger", stringResource(R.string.compresser)) { dialogueCompresser = true }
                     Action("motdepasse", stringResource(R.string.mot_de_passe)) { dialogueMdp = true }
                 }

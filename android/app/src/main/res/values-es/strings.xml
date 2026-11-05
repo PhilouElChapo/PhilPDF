@@ -207,7 +207,7 @@
     <string name="pivoter_droite">Girar a la derecha</string>
     <string name="extraire">Extraer</string>
     <string name="page_blanche">Página en blanco</string>
-    <string name="ajouter_pdf">Añadir un PDF</string>
+    <string name="ajouter_pdf">Añadir PDF o imágenes</string>
     <string name="compresser">Reducir tamaño</string>
     <string name="supprimer_pages_titre">¿Eliminar %1$d página(s)?</string>
     <string name="supprimer_pages_texte">Se quitan del documento. «Deshacer» (flecha de arriba) las recupera mientras no haya cerrado el documento.</string>
@@ -625,4 +625,15 @@
     <string name="scan_pas_appareil">No hay aplicación de cámara en este teléfono: importe fotos en su lugar.</string>
     <string name="scan_echec">No se puede crear el PDF: %1$s</string>
     <string name="scan_nom_fichier">Escaneo %1$s</string>
+    <string name="combiner_titre">COMBINAR ARCHIVOS</string>
+    <string name="combiner_titre_court">Combinar archivos</string>
+    <string name="combiner_aide">PDF e imágenes, en este orden, en un PDF nuevo. Flechas para cambiar el orden.</string>
+    <string name="combiner_vide">Aún no hay archivos: «Añadir archivos».</string>
+    <string name="combiner_ajouter">Añadir archivos</string>
+    <string name="combiner_bouton">Combinar</string>
+    <string name="combiner_en_cours">Combinando…</string>
+    <string name="combiner_progression">Archivo %1$d de %2$d…</string>
+    <string name="combiner_nom">Combinado</string>
+    <string name="combiner_rien">Ninguna página legible en estos archivos.</string>
+    <string name="combiner_illisibles">Omitidos (ilegibles o protegidos con contraseña): %1$s</string>
 </resources>

@@ -208,7 +208,7 @@
     <string name="pivoter_droite">Rotate right</string>
     <string name="extraire">Extract</string>
     <string name="page_blanche">Blank page</string>
-    <string name="ajouter_pdf">Add a PDF</string>
+    <string name="ajouter_pdf">Add PDFs or images</string>
     <string name="compresser">Reduce size</string>
     <string name="supprimer_pages_titre">Delete %1$d page(s)?</string>
     <string name="supprimer_pages_texte">They are removed from the document. “Undo” (arrow at the top) brings them back as long as you have not closed the document.</string>
@@ -626,4 +626,15 @@
     <string name="scan_pas_appareil">No camera app on this phone: import photos instead.</string>
     <string name="scan_echec">Cannot create the PDF: %1$s</string>
     <string name="scan_nom_fichier">Scan %1$s</string>
+    <string name="combiner_titre">COMBINE FILES</string>
+    <string name="combiner_titre_court">Combine files</string>
+    <string name="combiner_aide">PDFs and images, in this order, in a new PDF. Arrows to change the order.</string>
+    <string name="combiner_vide">No file yet: “Add files”.</string>
+    <string name="combiner_ajouter">Add files</string>
+    <string name="combiner_bouton">Combine</string>
+    <string name="combiner_en_cours">Combining…</string>
+    <string name="combiner_progression">File %1$d of %2$d…</string>
+    <string name="combiner_nom">Combined</string>
+    <string name="combiner_rien">No readable page in these files.</string>
+    <string name="combiner_illisibles">Left out (unreadable or protected by a password): %1$s</string>
 </resources>

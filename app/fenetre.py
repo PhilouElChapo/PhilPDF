@@ -1825,6 +1825,10 @@ class Fenetre(MixinCoteACote, QMainWindow):
         b = QPushButton(_('Ajouter des fichiers...'))
         b.clicked.connect(lambda: [lst.addItem(self._item(f)) for f in QFileDialog.getOpenFileNames(d, _('Ajouter'), self.dossier_depart(), _('PDF et images (*.pdf *.png *.jpg *.jpeg *.tif)'))[0]])
         h.addWidget(b)
+        bv = QPushButton(_('Page vierge'))
+        bv.setToolTip(_("Intercale une page blanche (du format de la page qui la précède)"))
+        bv.clicked.connect(lambda: lst.insertItem(lst.currentRow() + 1 if lst.currentRow() >= 0 else lst.count(), self._item(None)))
+        h.addWidget(bv)
         r = QPushButton(_('Retirer'))
         r.clicked.connect(lambda: [lst.takeItem(lst.row(i)) for i in lst.selectedItems()])
         h.addWidget(r)
@@ -1838,16 +1842,31 @@ class Fenetre(MixinCoteACote, QMainWindow):
         if d.exec() != QDialog.Accepted or lst.count() == 0:
             return
         res = fitz.open()
+        illisibles = []
         for i in range(lst.count()):
             f = lst.item(i).data(Qt.UserRole)
-            src = fitz.open(f)
-            if not src.is_pdf:
-                src = fitz.open("pdf", src.convert_to_pdf())
-            res.insert_pdf(src)
+            if f is None:                           # page vierge : format de la page precedente (A4 au debut)
+                r = res[-1].rect if len(res) else fitz.paper_rect("a4")
+                res.new_page(width=r.width, height=r.height)
+                continue
+            try:
+                src = fitz.open(f)
+                if src.needs_pass:
+                    raise ValueError("mot de passe")
+                if not src.is_pdf:
+                    src = fitz.open("pdf", src.convert_to_pdf())
+                res.insert_pdf(src)
+            except Exception:                       # noqa: BLE001
+                illisibles.append(os.path.basename(f))
+        if illisibles:
+            QMessageBox.warning(self, _('Combiner des fichiers'),
+                                _("Laissés de côté (illisibles ou protégés par un mot de passe) :") + "\n" + "\n".join(illisibles))
+        if len(res) == 0:
+            return
         self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=res, nom="Combiné.pdf"))
 
     def _item(self, f):
-        it = QListWidgetItem(icone("creer", "#c9252d"), os.path.basename(f))
+        it = QListWidgetItem(icone("creer", "#c9252d"), os.path.basename(f) if f else "— " + _('Page vierge') + " —")
         it.setData(Qt.UserRole, f)
         return it
 

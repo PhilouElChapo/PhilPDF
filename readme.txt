@@ -10,6 +10,12 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.15.0
+- Combiner des fichiers (bouton a l'Accueil), comme sous Windows : plusieurs PDF et images choisis d'un coup, ranges
+  avec les fleches, pages vierges intercalees, assembles dans un nouveau PDF qui s'ouvre (pret a enregistrer). Un
+  fichier illisible ou protege par un mot de passe est laisse de cote et nomme.
+- Organiser les pages : « Ajouter des PDF ou images » prend plusieurs fichiers a la fois (une seule etape a annuler).
+
 1.14.0
 - Numeriser un document (bouton a l'Accueil) : le scanner de Google quand il est sur le telephone (bords trouves en
   direct), sinon l'appareil photo et le recadrage de PhilPDF (les quatre coins se reperent seuls et s'ajustent du
@@ -347,6 +353,10 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.65
+- Combiner des fichiers : bouton « Page vierge » pour intercaler une page blanche (comme sur Android) ; un fichier
+  illisible ou protege par un mot de passe est laisse de cote et nomme, au lieu d'arreter tout.
 
 0.9.64
 - Numeriser depuis des photos de documents (Fichier > Creer un PDF, comme sur PhilPDF Android) : les bords de la

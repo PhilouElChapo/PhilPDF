@@ -119,6 +119,17 @@ fun Application(recu: MutableState<Uri?>) {
     }
 
     var numeriser by remember { mutableStateOf(false) }
+    var combiner by remember { mutableStateOf(false) }
+    if (combiner) EcranCombiner(fermer = { combiner = false }) { f ->
+        combiner = false
+        portee.launch {
+            try {
+                val nd = DocumentPdf.ouvrir(ctx, Uri.fromFile(f))
+                nd.neuf = true; nd.modifie = true
+                doc?.fermer(); doc = nd
+            } catch (e: Exception) { erreur = ctx.getString(R.string.illisible, e.message ?: e.javaClass.simpleName) }
+        }
+    }
     val d = doc
     if (numeriser) EcranNumerisation(fermer = { numeriser = false }) { f ->
         numeriser = false
@@ -131,7 +142,7 @@ fun Application(recu: MutableState<Uri?>) {
         }
     }
     if (d == null) {
-        Accueil(ouvrir = { ouvrir(it) }, choisir = { selecteur.launch(arrayOf("application/pdf")) }, numeriser = { numeriser = true })
+        Accueil(ouvrir = { ouvrir(it) }, choisir = { selecteur.launch(arrayOf("application/pdf")) }, numeriser = { numeriser = true }, combiner = { combiner = true })
     } else {
         Lecteur(d) { d.fermer(); doc = null }
     }
