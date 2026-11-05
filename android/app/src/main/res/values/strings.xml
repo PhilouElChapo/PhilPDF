@@ -754,4 +754,5 @@
     <string name="op_redresser_la_page">Straighten the page</string>
     <string name="redresser_lignes">Lines (rotate the page)</string>
     <string name="redresser_verticales">Verticals (leaning edges, columns)</string>
+    <string name="inserer_scan">Insert a scan</string>
 </resources>

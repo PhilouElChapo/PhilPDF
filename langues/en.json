@@ -2895,5 +2895,13 @@
  "Ouvrir la fenêtre du pilote du scanner (réglages du fabricant)": "Open the scanner driver window (manufacturer settings)",
  "Pour un scanner TWAIN : si la numérisation directe ne marche pas, la fenêtre de son pilote s'ouvre.": "For a TWAIN scanner: if direct scanning fails, its driver window opens.",
  "(TWAIN)": "(TWAIN)",
- "Windows ne connaît aucun scanner WIA sur ce poste : la fenêtre de numérisation de Windows ne peut rien faire. Choisissez le scanner dans la liste (réseau ou TWAIN) ; s'il n'y est pas, installez le pilote 64 bits du fabricant.": "Windows knows no WIA scanner on this computer: the Windows scan window can do nothing. Choose the scanner in the list (network or TWAIN); if it is not there, install the manufacturer's 64-bit driver."
+ "Windows ne connaît aucun scanner WIA sur ce poste : la fenêtre de numérisation de Windows ne peut rien faire. Choisissez le scanner dans la liste (réseau ou TWAIN) ; s'il n'y est pas, installez le pilote 64 bits du fabricant.": "Windows knows no WIA scanner on this computer: the Windows scan window can do nothing. Choose the scanner in the list (network or TWAIN); if it is not there, install the manufacturer's 64-bit driver.",
+ "Insérer un document numérisé après...": "Insert a scanned document after...",
+ "Remplacer par un document numérisé...": "Replace with a scanned document...",
+ "Insérer un scan...": "Insert a scan...",
+ "{n} page(s) numérisée(s) insérée(s).": "{n} scanned page(s) inserted.",
+ "Numériser...": "Scan...",
+ "Ajoute un document numérisé (scanner ou photos) à la liste": "Adds a scanned document (scanner or photos) to the list",
+ "Terminer et insérer": "Finish and insert",
+ "Numérisation": "Scan"
 }

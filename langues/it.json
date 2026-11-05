@@ -2886,5 +2886,13 @@
  "Ouvrir la fenêtre du pilote du scanner (réglages du fabricant)": "Aprire la finestra del driver dello scanner (impostazioni del produttore)",
  "Pour un scanner TWAIN : si la numérisation directe ne marche pas, la fenêtre de son pilote s'ouvre.": "Per uno scanner TWAIN: se la scansione diretta non funziona, si apre la finestra del suo driver.",
  "(TWAIN)": "(TWAIN)",
- "Windows ne connaît aucun scanner WIA sur ce poste : la fenêtre de numérisation de Windows ne peut rien faire. Choisissez le scanner dans la liste (réseau ou TWAIN) ; s'il n'y est pas, installez le pilote 64 bits du fabricant.": "Windows non conosce alcuno scanner WIA su questo computer: la finestra di scansione di Windows non può fare nulla. Scelga lo scanner nell'elenco (rete o TWAIN); se non c'è, installi il driver a 64 bit del produttore."
+ "Windows ne connaît aucun scanner WIA sur ce poste : la fenêtre de numérisation de Windows ne peut rien faire. Choisissez le scanner dans la liste (réseau ou TWAIN) ; s'il n'y est pas, installez le pilote 64 bits du fabricant.": "Windows non conosce alcuno scanner WIA su questo computer: la finestra di scansione di Windows non può fare nulla. Scelga lo scanner nell'elenco (rete o TWAIN); se non c'è, installi il driver a 64 bit del produttore.",
+ "Insérer un document numérisé après...": "Inserire un documento scansionato dopo...",
+ "Remplacer par un document numérisé...": "Sostituire con un documento scansionato...",
+ "Insérer un scan...": "Inserire una scansione...",
+ "{n} page(s) numérisée(s) insérée(s).": "{n} pagina/e scansionata/e inserita/e.",
+ "Numériser...": "Scansionare...",
+ "Ajoute un document numérisé (scanner ou photos) à la liste": "Aggiunge un documento scansionato (scanner o foto) all'elenco",
+ "Terminer et insérer": "Terminare e inserire",
+ "Numérisation": "Scansione"
 }

@@ -92,7 +92,8 @@ class DialogueRedresser(QDialog):
         h.addWidget(cur, 1)
         for d in (-1.0, -0.1, 0.1, 1.0):
             b = QPushButton(f"{d:+.1f}".replace(".", ","))
-            b.setMaximumWidth(48)
+            # largeur du texte + marges du style : jamais coupe (« +0,1 » entier)
+            b.setMinimumWidth(b.fontMetrics().horizontalAdvance(b.text()) + 22)
             b.clicked.connect(lambda _c=False, d=d: sp.setValue(sp.value() + d))
             h.addWidget(b)
         sp.valueChanged.connect(lambda x: (cur.blockSignals(True), cur.setValue(round(x * 10)), cur.blockSignals(False),

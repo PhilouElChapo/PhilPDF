@@ -66,6 +66,7 @@ fun OrganiserPages(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, fermer:
     var dialogueMdp by remember { mutableStateOf(false) }
     var dialogueCompresser by remember { mutableStateOf(false) }
     var occupe by remember { mutableStateOf(false) }
+    var numeriser by remember { mutableStateOf(false) }          // inserer un document numerise
     fun dire(t: String) = android.widget.Toast.makeText(ctx, t, android.widget.Toast.LENGTH_LONG).show()
     fun lancer(bloc: suspend () -> Unit) {
         if (occupe) return
@@ -158,6 +159,7 @@ fun OrganiserPages(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, fermer:
                         lancer { if (d.pageBlanche(apres, w, h)) choix = setOf(apres) }
                     }
                     Action("combiner", stringResource(R.string.ajouter_pdf)) { ajouterPdf.launch(arrayOf("application/pdf", "image/*")) }
+                    Action("numeriser", stringResource(R.string.inserer_scan)) { numeriser = true }
                     Action("alleger", stringResource(R.string.compresser)) { dialogueCompresser = true }
                     Action("motdepasse", stringResource(R.string.mot_de_passe)) { dialogueMdp = true }
                 }
@@ -165,6 +167,21 @@ fun OrganiserPages(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, fermer:
         }
     }
 
+    // numerisation (scanner de Google ou appareil photo) : le PDF obtenu est insere apres les pages choisies
+    if (numeriser) {
+        val ou = apres
+        EcranNumerisation(fermer = { numeriser = false }) { f ->
+            numeriser = false
+            lancer {
+                val (n, _i) = d.insererFichiers(listOf(Triple(f, false, f.name)), ou)
+                if (n > 0) {
+                    Journal.ecrire("organiser", "${d.nom} : $n page(s) numérisée(s) insérée(s)")
+                    choix = (ou until ou + n).toSet()
+                    dire(ctx.getString(R.string.pages_ajoutees, n))
+                } else dire(ctx.getString(R.string.ajout_impossible))
+            }
+        }
+    }
     if (confirmerSuppression) AlertDialog(
         onDismissRequest = { confirmerSuppression = false },
         title = { Text(stringResource(R.string.supprimer_pages_titre, choix.size)) },

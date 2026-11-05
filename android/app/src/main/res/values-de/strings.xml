@@ -753,4 +753,5 @@
     <string name="op_redresser_la_page">Seite begradigen</string>
     <string name="redresser_lignes">Zeilen (Seite drehen)</string>
     <string name="redresser_verticales">Senkrechte (schiefe Ränder, Spalten)</string>
+    <string name="inserer_scan">Scan einfügen</string>
 </resources>

@@ -754,4 +754,5 @@
     <string name="op_redresser_la_page">Redresser la page</string>
     <string name="redresser_lignes">Lignes (tourner la page)</string>
     <string name="redresser_verticales">Verticales (bords, colonnes qui penchent)</string>
+    <string name="inserer_scan">Insérer un scan</string>
 </resources>

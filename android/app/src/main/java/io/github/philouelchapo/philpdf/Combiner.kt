@@ -117,6 +117,7 @@ fun EcranCombiner(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
     val liste = remember { mutableStateListOf<Combiner.Element>() }
     var occupe by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
+    var numeriser by remember { mutableStateOf(false) }
     val choix = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { l ->
         l.forEach { u ->
             val nom = try { nomDuFichier(ctx, u) } catch (_: Exception) { u.lastPathSegment ?: "?" }
@@ -167,6 +168,9 @@ fun EcranCombiner(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
                     OutlinedButton(onClick = { choix.launch(arrayOf("application/pdf", "image/*")) }, enabled = occupe == null) {
                         Text(stringResource(R.string.combiner_ajouter))
                     }
+                    OutlinedButton(onClick = { numeriser = true }, enabled = occupe == null) {
+                        Text(stringResource(R.string.accueil_numeriser))
+                    }
                     OutlinedButton(onClick = { liste += Combiner.Element.PageVierge }, enabled = occupe == null) {
                         Text("+ " + stringResource(R.string.page_blanche))
                     }
@@ -192,6 +196,10 @@ fun EcranCombiner(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
                 }
             }
         }
+    }
+    if (numeriser) EcranNumerisation(fermer = { numeriser = false }) { f ->
+        numeriser = false
+        liste += Combiner.Element.Fichier(android.net.Uri.fromFile(f), f.name, false)
     }
     message?.let { m ->
         AlertDialog(onDismissRequest = { message = null }, text = { Text(m) },

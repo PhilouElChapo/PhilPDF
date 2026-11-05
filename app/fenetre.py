@@ -1862,6 +1862,18 @@ class Fenetre(MixinCoteACote, QMainWindow):
         b = QPushButton(_('Ajouter des fichiers...'))
         b.clicked.connect(lambda: [lst.addItem(self._item(f)) for f in QFileDialog.getOpenFileNames(d, _('Ajouter'), self.dossier_depart(), _('PDF et images (*.pdf *.png *.jpg *.jpeg *.tif)'))[0]])
         h.addWidget(b)
+        bs = QPushButton(_('Numériser...'))
+        bs.setToolTip(_("Ajoute un document numérisé (scanner ou photos) à la liste"))
+
+        def ajouter_scan():
+            sc = self.scan_a_inserer(d, bs.mapToGlobal(bs.rect().bottomLeft()))
+            if sc is not None and len(sc):
+                import tempfile
+                f = os.path.join(tempfile.mkdtemp(prefix="philpdf_scan_"), _("Numérisation") + ".pdf")
+                sc.save(f)
+                lst.insertItem(lst.currentRow() + 1 if lst.currentRow() >= 0 else lst.count(), self._item(f))
+        bs.clicked.connect(ajouter_scan)
+        h.addWidget(bs)
         bv = QPushButton(_('Page vierge'))
         bv.setToolTip(_("Intercale une page blanche (du format de la page qui la précède)"))
         bv.clicked.connect(lambda: lst.insertItem(lst.currentRow() + 1 if lst.currentRow() >= 0 else lst.count(), self._item(None)))
@@ -1993,15 +2005,17 @@ class Fenetre(MixinCoteACote, QMainWindow):
                 d.appliquer(o.doc)
                 o.apres_modif([_('Arrière-plan appliqué.')])
 
-    def numeriser(self):
+    def numeriser(self, inserer=False):
+        """Numerisation depuis le scanner. inserer : renvoie le document numerise (pour l'inserer dans un autre),
+        sans ouvrir d'onglet ; None si rien n'a ete numerise."""
         from moteur.scanner import scanners
         import sys as _s
         if _s.platform != "win32" and not scanners():
             QMessageBox.information(self, _('Numériser'), _('Aucun scanner détecté sur ce PC.'))
-            return
+            return None
         d = DialogueNumeriser(self)
         if d.exec() != QDialog.Accepted:
-            return
+            return None
         doc = fitz.open()
         ajuster = False
         while True:
@@ -2016,26 +2030,29 @@ class Fenetre(MixinCoteACote, QMainWindow):
                 prog.close()
                 QMessageBox.warning(self, _('Numériser'), _('La numérisation a échoué :\n{e}', e=e))
                 if len(doc) == 0:
-                    return
+                    return None
                 break
             prog.close()
             if len(lot):
                 doc.insert_pdf(lot)
             if len(doc) == 0:
                 QMessageBox.information(self, _('Numériser'), _('Aucune page numérisée.'))
-                return
+                return None
             m = QMessageBox(QMessageBox.Question, _('Numériser'),
                             _("{n} page(s) numérisée(s). Placez la feuille suivante sur la vitre (ou dans le chargeur) "
                               "pour la mettre à la suite dans le même PDF.", n=len(doc)), parent=self)
             b_suite = m.addButton(_("Numériser la suite"), QMessageBox.AcceptRole)
             b_ajuster = m.addButton(_("Terminer et ajuster le nettoyage..."), QMessageBox.ActionRole)
             b_ajuster.setToolTip(_("Avant / après : redresser, bords noirs, taches et grain, contraste, page par page."))
-            m.addButton(_("Terminer"), QMessageBox.RejectRole)
+            b_ajuster.setVisible(not inserer)
+            m.addButton(_("Terminer et insérer") if inserer else _("Terminer"), QMessageBox.RejectRole)
             m.setDefaultButton(b_suite)
             m.exec()
             ajuster = m.clickedButton() is b_ajuster
             if m.clickedButton() is not b_suite:
                 break
+        if inserer:
+            return doc
         o = self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=doc, nom="Numérisation.pdf"))
         if ajuster:
             from .dialogue_nettoyage import DialogueNettoyerScan
@@ -2051,12 +2068,27 @@ class Fenetre(MixinCoteACote, QMainWindow):
         self._fluide = FenetreLectureFluide(o, self.params)
         self._fluide.show()
 
-    def numeriser_photos(self, fichiers=None):
-        """Photos de documents -> PDF propre (bords, perspective, modele), puis texte reconnu (comme sur Android)."""
+    def scan_a_inserer(self, parent=None, ancre=None):
+        """Menu « Depuis le scanner / Depuis des photos » puis numerisation : le document a inserer, ou None."""
+        from PySide6.QtWidgets import QMenu
+        from PySide6.QtGui import QCursor
+        m = QMenu(parent or self)
+        a_sc = m.addAction(icone("numeriser", "#444444"), _("Depuis le scanner..."))
+        a_ph = m.addAction(icone("image", "#444444"), _("Depuis des photos de documents..."))
+        choix = m.exec(ancre or QCursor.pos())
+        if choix is a_sc:
+            return self.numeriser(inserer=True)
+        if choix is a_ph:
+            return self.numeriser_photos(inserer=True)
+        return None
+
+    def numeriser_photos(self, fichiers=None, inserer=False):
+        """Photos de documents -> PDF propre (bords, perspective, modele), puis texte reconnu (comme sur Android).
+        inserer : renvoie le document (pour l'inserer dans un autre), sans ouvrir d'onglet."""
         from .dialogue_photos import DialogueScanPhotos, nom_scan
         d = DialogueScanPhotos(self, self.params, fichiers)
         if d.exec() != QDialog.Accepted or d.doc is None:
-            return
+            return None
         try:
             self.params.enregistrer()
         except Exception:                            # noqa: BLE001
@@ -2095,6 +2127,8 @@ class Fenetre(MixinCoteACote, QMainWindow):
                 except Exception as e:                # noqa: BLE001
                     QMessageBox.warning(self, _('Reconnaître le texte'),
                                         _("La reconnaissance a échoué (le PDF reste sans texte reconnu) :\n{e}", e=e))
+        if inserer:
+            return doc
         o = self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=doc, nom=nom))
         self.statusBar().showMessage(_("Document numérisé : {n} page(s). Enregistrez-le pour le garder.", n=len(doc)), 10000)
         return o

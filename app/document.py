@@ -2281,7 +2281,8 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
                        (_('Pivoter ↻'), lambda: self._sel_grille(lambda p: self.pivoter(p, 90, demander=False))),
                        (_('Supprimer'), lambda: self._sel_grille(self.supprimer_pages)),
                        (_('Extraire'), lambda: self._sel_grille(self.extraire)),
-                       (_('Insérer un fichier...'), self.inserer_fichier)]:
+                       (_('Insérer un fichier...'), lambda: self.inserer_fichier(self._apres_selection())),
+                       (_('Insérer un scan...'), lambda: self.inserer_scan(self._apres_selection()))]:
             b = QPushButton(txt)
             b.clicked.connect(f)
             h.addWidget(b)
@@ -4600,11 +4601,21 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         m.addAction(_('Déplacer au début'), lambda: self.reordonner(pages + [i for i in range(len(self.doc)) if i not in pages]))
         m.addAction(_('Déplacer à la fin'), lambda: self.reordonner([i for i in range(len(self.doc)) if i not in pages] + pages))
         m.addAction(_("Insérer des pages d'un fichier après..."), lambda: self.inserer_fichier(pages[-1] + 1))
+        m.addAction(icone("numeriser", "#444444"), _("Insérer un document numérisé après..."), lambda: self.inserer_scan(pages[-1] + 1))
         m.addAction(_("Remplacer par les pages d'un fichier..."), lambda: self.remplacer_pages(pages))
+        m.addAction(_("Remplacer par un document numérisé..."), lambda: self.remplacer_pages(pages, scan=True))
         m.addAction(icone("exporter"), _('Extraire dans un nouveau PDF'), lambda: self.extraire(pages))
         m.addSeparator()
         m.addAction(icone("fermer", "#c9252d"), _('Supprimer'), lambda: self.supprimer_pages(pages))
         m.exec(liste.mapToGlobal(pos))
+
+    def _apres_selection(self):
+        """Place d'insertion dans Organiser : apres les pages choisies, sinon a la fin."""
+        try:
+            sel = sorted(it.data(Qt.UserRole) for it in self.grille.selectedItems())
+            return sel[-1] + 1 if sel else None
+        except Exception:                               # noqa: BLE001
+            return None
 
     def reordonner(self, ordre):
         self.memoriser()
@@ -4619,6 +4630,20 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         self.doc.delete_pages(pages)
         self.apres_modif(reconstruire=True)
 
+    def _scan(self):
+        """Document numerise (scanner ou photos) a inserer, ou None."""
+        f = self.window()
+        return f.scan_a_inserer(self) if hasattr(f, "scan_a_inserer") else None
+
+    def inserer_scan(self, apres=None):
+        """Insere un document numerise (scanner ou photos) apres la page donnee (a la fin par defaut)."""
+        src = self._scan()
+        if src is None or not len(src):
+            return
+        self.memoriser(_("Insertion de pages"))
+        self.doc.insert_pdf(src, start_at=len(self.doc) if apres is None else apres)
+        self.apres_modif([_("{n} page(s) numérisée(s) insérée(s).", n=len(src))], reconstruire=True)
+
     def inserer_fichier(self, apres=None):
         f, _x = QFileDialog.getOpenFileName(self, _('Insérer des pages'), "", _('PDF et images (*.pdf *.png *.jpg *.jpeg *.tif)'))
         if not f:
@@ -4630,11 +4655,16 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         self.doc.insert_pdf(src, start_at=len(self.doc) if apres is None else apres)
         self.apres_modif([_('Pages insérées.')], reconstruire=True)
 
-    def remplacer_pages(self, pages):
-        f, _x = QFileDialog.getOpenFileName(self, _('Pages de remplacement'), "", _('PDF (*.pdf)'))
-        if not f:
-            return
-        src = fitz.open(f)
+    def remplacer_pages(self, pages, scan=False):
+        if scan:
+            src = self._scan()
+            if src is None or not len(src):
+                return
+        else:
+            f, _x = QFileDialog.getOpenFileName(self, _('Pages de remplacement'), "", _('PDF (*.pdf)'))
+            if not f:
+                return
+            src = fitz.open(f)
         self.memoriser()
         debut = pages[0]
         self.doc.delete_pages(pages)

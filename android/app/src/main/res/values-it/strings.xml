@@ -753,4 +753,5 @@
     <string name="op_redresser_la_page">Raddrizzare la pagina</string>
     <string name="redresser_lignes">Righe (ruotare la pagina)</string>
     <string name="redresser_verticales">Verticali (bordi, colonne inclinati)</string>
+    <string name="inserer_scan">Inserire una scansione</string>
 </resources>
