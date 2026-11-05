@@ -362,6 +362,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
         self.accueil.ouvrir_dialogue.connect(self.dialogue_ouvrir)
         self.accueil.ouvrir_distant.connect(lambda: self.ouvrir_distant())
         self.accueil.rechercher.connect(lambda: self.lancer_outil("ia_recherche"))
+        self.accueil.numeriser.connect(lambda g: self.numeriser_photos() if g == "photos" else self.lancer_outil("numeriser"))
         self.accueil.action_fichier.connect(self.action_fichier)
         self.accueil.reprendre.connect(self.reprendre_proposee)
         self.accueil.synchroniser.connect(self.synchroniser)
@@ -1965,20 +1966,36 @@ class Fenetre(MixinCoteACote, QMainWindow):
         d = DialogueNumeriser(self)
         if d.exec() != QDialog.Accepted:
             return
-        prog = QProgressDialog(_('Numérisation en cours...'), None, 0, 0, self)
-        prog.setWindowModality(Qt.WindowModal)
-        prog.show()
-        QApplication.processEvents()
-        try:
-            doc = d.numeriser()
-        except Exception as e:
+        doc = fitz.open()
+        while True:
+            # une passe (vitre : une page ; chargeur : toutes ses pages), puis on propose d'enchainer
+            prog = QProgressDialog(_('Numérisation en cours...'), None, 0, 0, self)
+            prog.setWindowModality(Qt.WindowModal)
+            prog.show()
+            QApplication.processEvents()
+            try:
+                lot = d.numeriser()
+            except Exception as e:
+                prog.close()
+                QMessageBox.warning(self, _('Numériser'), _('La numérisation a échoué :\n{e}', e=e))
+                if len(doc) == 0:
+                    return
+                break
             prog.close()
-            QMessageBox.warning(self, _('Numériser'), _('La numérisation a échoué :\n{e}', e=e))
-            return
-        prog.close()
-        if len(doc) == 0:
-            QMessageBox.information(self, _('Numériser'), _('Aucune page numérisée.'))
-            return
+            if len(lot):
+                doc.insert_pdf(lot)
+            if len(doc) == 0:
+                QMessageBox.information(self, _('Numériser'), _('Aucune page numérisée.'))
+                return
+            m = QMessageBox(QMessageBox.Question, _('Numériser'),
+                            _("{n} page(s) numérisée(s). Placez la feuille suivante sur la vitre (ou dans le chargeur) "
+                              "pour la mettre à la suite dans le même PDF.", n=len(doc)), parent=self)
+            b_suite = m.addButton(_("Numériser la suite"), QMessageBox.AcceptRole)
+            m.addButton(_("Terminer"), QMessageBox.RejectRole)
+            m.setDefaultButton(b_suite)
+            m.exec()
+            if m.clickedButton() is not b_suite:
+                break
         o = self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=doc, nom="Numérisation.pdf"))
         if d.ocr.isChecked():
             self.statusBar().showMessage(_('Enregistrez la numérisation pour lancer la reconnaissance du texte.'), 10000)

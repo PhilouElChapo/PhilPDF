@@ -2807,5 +2807,11 @@
  "Page scannée : son texte n'est pas encore reconnu (Outils > Reconnaître le texte).": "Página escaneada: su texto aún no está reconocido (Herramientas > Reconocer el texto).",
  "Page illisible : {e}": "Página ilegible: {e}",
  "Intercale une page blanche (du format de la page qui la précède)": "Intercala una página en blanco (del formato de la página anterior)",
- "Laissés de côté (illisibles ou protégés par un mot de passe) :": "Omitidos (ilegibles o protegidos con contraseña):"
+ "Laissés de côté (illisibles ou protégés par un mot de passe) :": "Omitidos (ilegibles o protegidos con contraseña):",
+ "  Numériser...": "  Escanear...",
+ "Numériser un document : depuis des photos (téléphone, appareil photo) ou depuis le scanner": "Escanear un documento: desde fotos (teléfono, cámara) o desde el escáner",
+ "Résultats pour <a href='{m}'><b>{m}</b></a> (vous aviez tapé « {t} »)": "Resultados para <a href='{m}'><b>{m}</b></a> (había escrito «{t}»)",
+ "Aucun outil ne correspond. Essayez un autre mot (signer, alléger, OCR, formulaire...).": "Ninguna herramienta coincide. Pruebe otra palabra (firmar, reducir, OCR, formulario...).",
+ "{n} page(s) numérisée(s). Placez la feuille suivante sur la vitre (ou dans le chargeur) pour la mettre à la suite dans le même PDF.": "{n} página(s) escaneada(s). Coloque la hoja siguiente en el cristal (o en el alimentador) para añadirla al mismo PDF.",
+ "Numériser la suite": "Escanear la siguiente"
 }

@@ -354,6 +354,13 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.66
+- Accueil : bouton « Numeriser... » (depuis des photos de documents, ou depuis le scanner).
+- Numeriser depuis le scanner : apres chaque passage, « Numeriser la suite » met la feuille suivante a la suite dans
+  le meme PDF (utile avec la vitre, une feuille a la fois) ; « Terminer » ouvre le document.
+- Outils, recherche : sans tenir compte des majuscules ni des accents (« numeriser » trouve « Numeriser »), et une
+  faute de frappe est corrigee (« numerser » : « Resultats pour numeriser », un clic applique le mot).
+
 0.9.65
 - Combiner des fichiers : bouton « Page vierge » pour intercaler une page blanche (comme sur Android) ; un fichier
   illisible ou protege par un mot de passe est laisse de cote et nomme, au lieu d'arreter tout.

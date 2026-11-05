@@ -1,7 +1,8 @@
 """Onglets Accueil et Outils."""
+import re
 import os
 from PySide6.QtCore import Qt, Signal, QRect, QSize, QPoint
-from PySide6.QtWidgets import (QMessageBox, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+from PySide6.QtWidgets import (QMenu, QMessageBox, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
                                QScrollArea, QFrame, QLayout, QSizePolicy, QListWidget, QListWidgetItem,
                                QToolButton)
 from .icones import icone, logo
@@ -74,6 +75,7 @@ class Tuile(QFrame):
         oid, fam, ic, titre, sous, aide, dispo = o
         _x, _x, coul, fond = famille(fam)
         self.oid, self.titre, self.texte = oid, titre, (titre + " " + sous + " " + aide).lower()
+        self.texte_simple = sans_accents(self.texte)
         self.setObjectName("tuile")
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedSize(236, 160)
@@ -221,6 +223,13 @@ class PageOutils(QScrollArea):
         self.recherche.setStyleSheet("QLineEdit{background:#fff;border:1px solid #cfcfcf;border-radius:10px;padding:10px 12px;font-size:15px}")
         self.recherche.textChanged.connect(self._filtrer)
         v.addWidget(self.recherche)
+        # « Vouliez-vous dire » : faute de frappe ou mot approchant, on propose le bon mot (un clic l'applique)
+        self.suggestion = QLabel()
+        self.suggestion.setTextFormat(Qt.RichText)
+        self.suggestion.setStyleSheet("color:#555;font-size:13px")
+        self.suggestion.linkActivated.connect(lambda m: self.recherche.setText(m))
+        self.suggestion.hide()
+        v.addWidget(self.suggestion)
         zone_filtres = QWidget()
         filtres = FlowLayout(zone_filtres, espace=8)     # passe a la ligne si la fenetre est etroite (langues longues)
         self.boutons_fam = {}
@@ -312,16 +321,34 @@ class PageOutils(QScrollArea):
         self._filtrer()
 
     def _filtrer(self):
-        t = self.recherche.text().strip().lower()
+        mots = [sans_accents(m) for m in self.recherche.text().split()]
+        # sans tenir compte des majuscules ni des accents ; une petite faute de frappe est pardonnee (« numerser »)
+        vocab = sorted({m for tu, _f in self.tuiles for m in re.findall(r"\w{3,}", tu.texte_simple)})
+        corriges = [m if any(m in tu.texte_simple for tu, _f in self.tuiles) else (proche(m, vocab) or m) for m in mots]
         visibles = set()
         for tu, fid in self.tuiles:
-            ok = (self.famille_active in (None, fid)) and (not t or all(m in tu.texte for m in t.split()))
+            ok = (self.famille_active in (None, fid)) and all(m in tu.texte_simple for m in corriges)
             tu.setVisible(ok)
             if ok:
                 visibles.add(fid)
         for fid, sec in self.sections.items():
             sec.setVisible(fid in visibles)
             sec.updateGeometry()
+        if corriges != mots:
+            # le mot montre avec ses accents (« numériser »), tel qu'il est ecrit dans les outils
+            jolis = {}
+            for tu, _f in self.tuiles:
+                for m in re.findall(r"\w{3,}", tu.texte):
+                    jolis.setdefault(sans_accents(m), m)
+            proposee = " ".join(jolis.get(m, m) for m in corriges)
+            self.suggestion.setText(_("Résultats pour <a href='{m}'><b>{m}</b></a> (vous aviez tapé « {t} »)",
+                                      m=proposee, t=self.recherche.text().strip()))
+            self.suggestion.show()
+        elif mots and not visibles:
+            self.suggestion.setText(_("Aucun outil ne correspond. Essayez un autre mot (signer, alléger, OCR, formulaire...)."))
+            self.suggestion.show()
+        else:
+            self.suggestion.hide()
 
     def maj_etoiles(self):
         for t, _x in self.tuiles:
@@ -337,6 +364,24 @@ class PageOutils(QScrollArea):
         self.params["outils_epingles"] = e
         self.params.enregistrer()
         self.epingles_changes.emit(e)
+
+
+
+def sans_accents(t):
+    """« Numériser » -> « numeriser » : recherche sans majuscules ni accents."""
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", t.lower()) if unicodedata.category(c) != "Mn")
+
+
+def proche(mot, vocab):
+    """Mot du vocabulaire le plus proche (faute de frappe) ; None si rien d'assez proche. Un debut de mot compte."""
+    if len(mot) < 3:
+        return None
+    if any(v.startswith(mot) for v in vocab):
+        return mot
+    import difflib
+    l = difflib.get_close_matches(mot, vocab, n=1, cutoff=0.75 if len(mot) > 5 else 0.8)
+    return l[0] if l else None
 
 
 _TACHES_ACCUEIL = set()
@@ -355,6 +400,7 @@ class PageAccueil(QWidget):
     session_vue = Signal()        # Reprendre ou Ignorer : on ne remontre le bandeau qu'apres un changement sur l'autre poste
     doublon_choisi = Signal(str, object, str)   # machine, fichier de l'autre poste, chemin choisi ici
     rechercher = Signal()         # rechercher dans tous mes PDF
+    numeriser = Signal(str)       # « photos » ou « scanner »
     changer_synchro = Signal()    # changer l'emplacement de synchronisation
 
     def __init__(self, params):
@@ -398,6 +444,14 @@ class PageAccueil(QWidget):
         bd.setToolTip(_("Ouvrir depuis un emplacement (NAS, FTP, Drive)..."))
         bd.setStyleSheet("QPushButton{padding:10px 16px;border-radius:8px;font-weight:600}")
         bd.clicked.connect(self.ouvrir_distant)
+        bn = QPushButton(_("  Numériser..."))
+        bn.setIcon(icone("numeriser", "#c9252d"))
+        bn.setToolTip(_("Numériser un document : depuis des photos (téléphone, appareil photo) ou depuis le scanner"))
+        bn.setStyleSheet("QPushButton{padding:10px 16px;border-radius:8px;font-weight:600}")
+        mn = QMenu(bn)
+        mn.addAction(icone("image", "#444444"), _("Depuis des photos de documents..."), lambda: self.numeriser.emit("photos"))
+        mn.addAction(icone("numeriser", "#444444"), _("Depuis le scanner..."), lambda: self.numeriser.emit("scanner"))
+        bn.clicked.connect(lambda: mn.exec(bn.mapToGlobal(bn.rect().bottomLeft())))
         br = QPushButton(_("  Rechercher dans mes PDF"))
         br.setIcon(icone("rechercher", "#0b5e63"))
         br.setStyleSheet("QPushButton{padding:10px 16px;border-radius:8px;font-weight:600}")
@@ -406,6 +460,7 @@ class PageAccueil(QWidget):
         hb_ = QHBoxLayout(bw)
         hb_.setContentsMargins(0, 0, 0, 0)
         hb_.addStretch()
+        hb_.addWidget(bn)
         hb_.addWidget(br)
         hb_.addWidget(bd)
         hb_.addWidget(b)
@@ -416,7 +471,7 @@ class PageAccueil(QWidget):
         self._marque.setMinimumWidth(110)
         h.addWidget(bw, 1)
         # fenetre etroite : d'abord sans le sous-titre, puis boutons en icones seules (nom en bulle) : rien de tronque
-        self._boutons_tete = [(x, x.text()) for x in (br, bd, b)]
+        self._boutons_tete = [(x, x.text()) for x in (bn, br, bd, b)]
         for x, txt in self._boutons_tete:
             x.setToolTip(x.toolTip() or txt.strip())
         self._tete_mode = None

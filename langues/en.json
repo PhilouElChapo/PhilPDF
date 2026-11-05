@@ -2816,5 +2816,11 @@
  "Page scannée : son texte n'est pas encore reconnu (Outils > Reconnaître le texte).": "Scanned page: its text is not recognized yet (Tools > Recognize text).",
  "Page illisible : {e}": "Unreadable page: {e}",
  "Intercale une page blanche (du format de la page qui la précède)": "Inserts a blank page (same size as the page before it)",
- "Laissés de côté (illisibles ou protégés par un mot de passe) :": "Left out (unreadable or protected by a password):"
+ "Laissés de côté (illisibles ou protégés par un mot de passe) :": "Left out (unreadable or protected by a password):",
+ "  Numériser...": "  Scan...",
+ "Numériser un document : depuis des photos (téléphone, appareil photo) ou depuis le scanner": "Scan a document: from photos (phone, camera) or from the scanner",
+ "Résultats pour <a href='{m}'><b>{m}</b></a> (vous aviez tapé « {t} »)": "Results for <a href='{m}'><b>{m}</b></a> (you typed “{t}”)",
+ "Aucun outil ne correspond. Essayez un autre mot (signer, alléger, OCR, formulaire...).": "No tool matches. Try another word (sign, reduce, OCR, form...).",
+ "{n} page(s) numérisée(s). Placez la feuille suivante sur la vitre (ou dans le chargeur) pour la mettre à la suite dans le même PDF.": "{n} page(s) scanned. Put the next sheet on the glass (or in the feeder) to add it to the same PDF.",
+ "Numériser la suite": "Scan the next page"
 }
