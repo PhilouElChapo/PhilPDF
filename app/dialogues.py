@@ -1,8 +1,8 @@
 """Dialogues : bibliotheque de tampons et signatures, import de zone, signature dessinee,
 filigrane, en-tete et pied de page, numerisation, export."""
-import datetime, os
+import datetime, os, sys
 import pymupdf as fitz
-from PySide6.QtCore import Qt, Signal, QRectF, QPointF, QSize, QPoint, QRect
+from PySide6.QtCore import Qt, Signal, QRectF, QPointF, QSize, QPoint, QRect, QTimer
 from PySide6.QtGui import QImage, QPainter, QColor, QPen, QPixmap, QPainterPath, QIcon
 from PySide6.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QListWidgetItem,
                                QFileDialog, QInputDialog, QDialogButtonBox, QCheckBox, QComboBox, QSpinBox,
@@ -1185,12 +1185,21 @@ class DialogueNumeriser(QDialog):
         v = QVBoxLayout(self)
         f = QFormLayout()
         self.app = QComboBox()
-        self.liste = scanner.scanners()
+        self.liste = scanner.scanners(reseau=False)
         for i, n in self.liste:
             self.app.addItem(n, i)
-        if not self.liste:
-            self.app.addItem(_('Aucun scanner détecté (fenêtre de Windows)'), None)
+        if sys.platform == "win32":
+            self.app.addItem(_('Fenêtre de numérisation de Windows...'), None)
         f.addRow(_('Scanner'), self.app)
+        # scanners du reseau sans pilote (eSCL) : cherches a cote, ajoutes des qu'ils repondent
+        self.etat_reseau = QLabel(_("Recherche des scanners du réseau..."))
+        self.etat_reseau.setStyleSheet("color:#666")
+        f.addRow("", self.etat_reseau)
+        import threading
+        self._reseau = None
+        threading.Thread(target=lambda: setattr(self, "_reseau", scanner.scanners_reseau()), daemon=True).start()
+        self._t_reseau = QTimer(self, interval=300, timeout=self._reseau_trouve)
+        self._t_reseau.start()
         self.source = QComboBox()
         self.source.addItems([_('Chargeur, recto-verso'), _('Chargeur, recto'), _('Vitre')])
         self.source.setCurrentIndex(1)
@@ -1240,6 +1249,20 @@ class DialogueNumeriser(QDialog):
         bb.rejected.connect(self.reject)
         v.addWidget(bb)
         self._estimer()
+
+    def _reseau_trouve(self):
+        if self._reseau is None:
+            return
+        self._t_reseau.stop()
+        connus = {n for _i, n in self.liste}
+        nouveaux = [(i, n) for i, n in self._reseau if n not in connus]
+        for i, n in nouveaux:
+            self.app.insertItem(self.app.count() - (1 if sys.platform == "win32" else 0), n, i)
+        self.liste += nouveaux
+        self.etat_reseau.setText(_("{n} scanner(s) trouvé(s) sur le réseau.", n=len(self._reseau)) if self._reseau else
+                                 _("Aucun scanner réseau sans pilote trouvé (voir Aide > Journal pour le détail)."))
+        if not self.liste:
+            self.etat_reseau.setText(self.etat_reseau.text() + " " + _("Aucun scanner détecté : la fenêtre de Windows reste possible."))
 
     def mode(self):
         return self.modes.checkedButton().property("cle")

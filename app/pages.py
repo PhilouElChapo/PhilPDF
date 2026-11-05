@@ -467,6 +467,7 @@ class PageAccueil(QWidget):
         from PySide6.QtWidgets import QSizePolicy as _SP
         bw.setSizePolicy(_SP.Ignored, _SP.Preferred)   # la fenetre peut retrecir : les boutons s'adaptent
         bw.setMinimumWidth(200)
+        self._tete_w = bw
         self._marque.setSizePolicy(_SP.Preferred, _SP.Preferred)
         self._marque.setMinimumWidth(110)
         h.addWidget(bw, 1)
@@ -474,6 +475,9 @@ class PageAccueil(QWidget):
         self._boutons_tete = [(x, x.text()) for x in (bn, br, bd, b)]
         for x, txt in self._boutons_tete:
             x.setToolTip(x.toolTip() or txt.strip())
+            # clic droit : affichage des boutons de l'Accueil (reglage a part de celui de la barre d'outils)
+            x.setContextMenuPolicy(Qt.CustomContextMenu)
+            x.customContextMenuRequested.connect(lambda pos, x=x: self._menu_tete(x.mapToGlobal(pos)))
         self._tete_mode = None
         v.addLayout(h)
         # --- carte "session plus recente sur un autre poste" (reste la tant qu'elle n'est pas traitee)
@@ -893,6 +897,13 @@ class PageAccueil(QWidget):
         dispo = self.width() - 64 - 56 - 40
         plein, marque = self._larg_tete
         mode = "complet" if dispo >= plein + marque else "court" if dispo >= plein + 150 else "icones"
+        choix = self.params.get("accueil_style") or "auto"
+        if choix == "icone":
+            mode = "icones"
+        elif choix == "icone_nom" and mode == "icones":
+            mode = "court"                            # les noms restent : la fenetre ne retrecit plus sous leur largeur
+        from PySide6.QtWidgets import QSizePolicy as _SP
+        self._tete_w.setSizePolicy(_SP.Preferred if choix == "icone_nom" else _SP.Ignored, _SP.Preferred)
         if mode == self._tete_mode:
             return
         self._tete_mode = mode
@@ -902,6 +913,30 @@ class PageAccueil(QWidget):
         for x, t in self._boutons_tete:
             x.setText(t if mode != "icones" else "")
             x.setIconSize(QSize(20, 20) if mode == "icones" else QSize(16, 16))
+
+    def _menu_tete(self, pos):
+        """Clic droit sur un bouton de l'Accueil : icone et nom, icone seule, ou automatique."""
+        from PySide6.QtGui import QActionGroup
+        m = QMenu(self)
+        m.addSection(_("Affichage des boutons de l'Accueil"))
+        g = QActionGroup(m)
+        actuel = self.params.get("accueil_style") or "auto"
+        for cle, txt in (("auto", _("Automatique : noms affichés si la place suffit")),
+                         ("icone_nom", _("Icône et nom")), ("icone", _("Icône seule"))):
+            a = m.addAction(txt)
+            a.setCheckable(True)
+            a.setChecked(cle == actuel)
+            g.addAction(a)
+            a.triggered.connect(lambda _c=False, k=cle: self._choisir_style_tete(k))
+        m.addSeparator()
+        m.addAction(_("(La barre d'outils d'un document a son propre réglage : clic droit sur la barre.)")).setEnabled(False)
+        m.exec(pos)
+
+    def _choisir_style_tete(self, cle):
+        self.params["accueil_style"] = cle
+        self.params.enregistrer()
+        self._tete_mode = None
+        self._adapter_tete()
 
     def _etat_synchro(self):
         """Derniere synchronisation de ce poste : reussie (heure) ou echec (raison), visible sur l'Accueil."""

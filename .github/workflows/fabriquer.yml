@@ -81,6 +81,9 @@ jobs:
       - name: Test du moteur
         run: python tests/test_moteur.py
 
+      - name: Test des scanners reseau (eSCL) et du nettoyage des scans
+        run: python tests/test_escl.py
+
       - name: Test de la session partagee
         run: python tests/test_session.py
 

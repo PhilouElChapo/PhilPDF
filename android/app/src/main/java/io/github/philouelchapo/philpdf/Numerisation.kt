@@ -239,8 +239,78 @@ object Numerisation {
                 (0xFF shl 24) or (v shl 16) or (v shl 8) or v
             } else (0xFF shl 24) or (r shl 16) or (g shl 8) or b
         }
+        if (nb) nettoyerNb(px, w, h, max(w, h) / 11.69f / 300f)
         bm.setPixels(px, 0, w, 0, 0, w, h)
         return bm
+    }
+
+    /**
+     * Noir et blanc : bords noirs (bord de la feuille, ombre) et taches isolees retires, comme sous Windows
+     * (moteur/nettoyage.py). k : resolution / 300 dpi. Une tache proche des lettres (point du i, accent) reste.
+     * Renvoie (taches, bords) retires.
+     */
+    fun nettoyerNb(px: IntArray, w: Int, h: Int, k: Float): Pair<Int, Int> {
+        val n = w * h
+        val lab = IntArray(n)                                   // 0 : blanc ; sinon numero de la tache d'encre
+        val noir = { i: Int -> (px[i] and 255) < 128 }
+        val pile = IntArray(n)
+        val aire = ArrayList<Int>(); val x0 = ArrayList<Int>(); val y0 = ArrayList<Int>(); val x1 = ArrayList<Int>(); val y1 = ArrayList<Int>()
+        aire += 0; x0 += 0; y0 += 0; x1 += 0; y1 += 0
+        var nb = 0
+        for (dep in 0 until n) {
+            if (lab[dep] != 0 || !noir(dep)) continue
+            nb++
+            var sp = 0; pile[sp++] = dep; lab[dep] = nb
+            var a = 0; var ax = w; var ay = h; var bx = 0; var by = 0
+            while (sp > 0) {
+                val i = pile[--sp]; val x = i % w; val y = i / w
+                a++; if (x < ax) ax = x; if (y < ay) ay = y; if (x > bx) bx = x; if (y > by) by = y
+                for (dy in -1..1) for (dx in -1..1) {
+                    val xx = x + dx; val yy = y + dy
+                    if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue
+                    val j = yy * w + xx
+                    if (lab[j] == 0 && noir(j)) { lab[j] = nb; pile[sp++] = j }
+                }
+            }
+            aire += a; x0 += ax; y0 += ay; x1 += bx; y1 += by
+        }
+        if (nb == 0) return 0 to 0
+        val effacer = BooleanArray(nb + 1)
+        // 1. bords : ce qui touche le bord et ressemble a un bord (trait le long du bord, bande noire)
+        val m = max(2, (0.004f * max(w, h)).toInt())
+        val bxw = 0.045f * w; val byh = 0.035f * h
+        var bords = 0
+        for (c in 1..nb) {
+            val bw = x1[c] - x0[c] + 1; val bh = y1[c] - y0[c] + 1
+            val touche = x0[c] <= m || y0[c] <= m || x1[c] >= w - 1 - m || y1[c] >= h - 1 - m
+            val bande = x1[c] < bxw || x0[c] > w - bxw || y1[c] < byh || y0[c] > h - byh
+            val trait = (bh > 0.08f * h && bw < 0.03f * w) || (bw > 0.08f * w && bh < 0.03f * h)
+            if ((touche && (trait || bande)) || (bande && trait)) { effacer[c] = true; bords++ }
+        }
+        // 2. taches isolees : petites, sans lettre a moins de ~2 mm (somme cumulee de l'encre « grosse »)
+        val petit = 20f * k * k
+        val r = max(3, (24 * k).toInt())
+        val cum = IntArray((w + 1) * (h + 1))
+        for (y in 0 until h) {
+            var ligne = 0
+            for (x in 0 until w) {
+                val c = lab[y * w + x]
+                if (c != 0 && !effacer[c] && aire[c] > petit) ligne++
+                cum[(y + 1) * (w + 1) + x + 1] = cum[y * (w + 1) + x + 1] + ligne
+            }
+        }
+        fun somme(ax: Int, ay: Int, bx: Int, by: Int): Int {
+            val a = ax.coerceIn(0, w); val b = ay.coerceIn(0, h); val c = (bx + 1).coerceIn(0, w); val d = (by + 1).coerceIn(0, h)
+            return cum[d * (w + 1) + c] - cum[b * (w + 1) + c] - cum[d * (w + 1) + a] + cum[b * (w + 1) + a]
+        }
+        var taches = 0
+        for (c in 1..nb) {
+            if (effacer[c] || aire[c] > petit) continue
+            if (somme(x0[c] - r, y0[c] - r, x1[c] + r, y1[c] + r) == 0) { effacer[c] = true; taches++ }
+        }
+        val blanc = (0xFF shl 24) or 0xFFFFFF
+        for (i in 0 until n) { val c = lab[i]; if (c != 0 && effacer[c]) px[i] = blanc }
+        return taches to bords
     }
 
     /** Octets de l'image pour le PDF : PNG pour le noir et blanc, JPEG sinon. */

@@ -19,7 +19,7 @@ from . import coffre
 
 COMMUNS = ["auteur", "langue", "outils_epingles", "barre_rapide", "volet", "vignettes", "fixer_objets",
            "filigranes_perso", "ia_moteur", "maj_source", "maj_auto", "synchro", "comptes", "comptes_icone", "theme", "synchro_secrets", "barre", "couleurs_annotations",
-           "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "agenda", "messagerie", "ia_styles_perso",
+           "style_souligne", "opacite_surlignage", "ia_consignes_resume", "orthographe", "orthographe_langue", "barre_style", "accueil_style", "agenda", "messagerie", "ia_styles_perso",
            "identites", "certificats_approuves", "signature_reglages", "identites_supprimees", "certificats_retires",
            "formulaire_detection", "formulaire_types_auto", "comptes_mail", "courriel", "courriel_recents", "ordre_outils",
            "carnet", "comptes_mail_retires", "carnet_retires", "imprimante", "imprimante_nom", "ordre_predefinis", "parcourir_tri"]
@@ -327,7 +327,7 @@ def libelle_commun(k):
             "ia_consignes_resume": _("Consignes personnelles pour le résumé IA"),
             "agenda": _("Agenda pour les rendez-vous"), "messagerie": _("Messagerie pour les e-mails"),
             "orthographe": _("Correcteur d'orthographe"), "orthographe_langue": _("Langue du correcteur"),
-            "barre_style": _("Boutons de la barre (icône, nom)"), "ia_styles_perso": _("Mes styles d'image pour l'IA"),
+            "barre_style": _("Boutons de la barre (icône, nom)"), "accueil_style": _("Boutons de l'Accueil (icône, nom)"), "ia_styles_perso": _("Mes styles d'image pour l'IA"),
             "identites": _("Identités numériques (signature)"), "certificats_approuves": _("Certificats approuvés"),
             "signature_reglages": _("Réglages de la signature numérique"),
             "formulaire_detection": _("Repérage des champs en mode Formulaire"),

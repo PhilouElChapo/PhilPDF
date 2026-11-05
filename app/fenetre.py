@@ -942,15 +942,45 @@ class Fenetre(MixinCoteACote, QMainWindow):
                                                                                              + EXTENSIONS_OFFICE)
                                           for u in e.mimeData().urls()):
             e.acceptProposedAction()
+            self._voile_depot(e.mimeData())
         else:
             e.ignore()
+            self._voile_depot(None)
 
     def dragMoveEvent(self, e):
-        self.dragEnterEvent(e)
+        if e.mimeData().hasUrls():
+            e.acceptProposedAction() if getattr(self, "_voile", None) is not None and self._voile.isVisible() else e.ignore()
+
+    def dragLeaveEvent(self, e):
+        self._voile_depot(None)
+
+    def _voile_depot(self, mime):
+        """Pendant qu'on glisse des fichiers : « Deposer ici pour ouvrir » sur toute la fenetre (le petit « Copier »
+        a cote du curseur est ecrit par Windows ; le fichier n'est pas copie, il est ouvert)."""
+        if mime is None:
+            if getattr(self, "_voile", None) is not None:
+                self._voile.hide()
+            return
+        if getattr(self, "_voile", None) is None:
+            self._voile = QLabel(self)
+            self._voile.setAlignment(Qt.AlignCenter)
+            self._voile.setWordWrap(True)
+            self._voile.setAttribute(Qt.WA_TransparentForMouseEvents)
+            self._voile.setStyleSheet("background:rgba(201,37,45,0.10);border:3px dashed #c9252d;border-radius:18px;"
+                                      "color:#c9252d;font-size:26px;font-weight:600")
+        fichiers = [u.toLocalFile() for u in mime.urls() if u.isLocalFile()]
+        images = [f for f in fichiers if f.lower().endswith(EXTENSIONS_OUVRABLES[1:])]
+        detail = _("{n} images : assemblées en un seul PDF", n=len(images)) if len(images) > 1 else \
+            _("{n} fichiers", n=len(fichiers)) if len(fichiers) > 1 else os.path.basename(fichiers[0]) if fichiers else ""
+        self._voile.setText(_("Déposer ici pour ouvrir") + (f"<br><span style='font-size:15px;font-weight:400'>{detail}</span>" if detail else ""))
+        self._voile.setGeometry(self.rect().adjusted(24, 24, -24, -24))
+        self._voile.raise_()
+        self._voile.show()
 
     def dropEvent(self, e):
         """Fichiers deposes : PDF ouverts ; Word, Excel, PowerPoint convertis ; une image ouverte comme PDF ;
         plusieurs images assemblees en un seul PDF (pas encore enregistre, dossier des images propose)."""
+        self._voile_depot(None)
         fichiers = [u.toLocalFile() for u in e.mimeData().urls() if u.isLocalFile()]
         images = [f for f in fichiers if f.lower().endswith(EXTENSIONS_OUVRABLES[1:])]
         for f in fichiers:
@@ -1673,7 +1703,10 @@ class Fenetre(MixinCoteACote, QMainWindow):
             self.alleger(o)
         elif oid == "motdepasse":
             self.mot_de_passe(o)
-        elif oid in ("ocr", "nettoyer"):
+        elif oid == "nettoyer":
+            from .dialogue_nettoyage import DialogueNettoyerScan
+            DialogueNettoyerScan(self, o).exec()
+        elif oid == "ocr":
             self.ocr(o)
 
     def ouvrir_office(self, f):
@@ -1967,6 +2000,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
         if d.exec() != QDialog.Accepted:
             return
         doc = fitz.open()
+        ajuster = False
         while True:
             # une passe (vitre : une page ; chargeur : toutes ses pages), puis on propose d'enchainer
             prog = QProgressDialog(_('Numérisation en cours...'), None, 0, 0, self)
@@ -1991,12 +2025,18 @@ class Fenetre(MixinCoteACote, QMainWindow):
                             _("{n} page(s) numérisée(s). Placez la feuille suivante sur la vitre (ou dans le chargeur) "
                               "pour la mettre à la suite dans le même PDF.", n=len(doc)), parent=self)
             b_suite = m.addButton(_("Numériser la suite"), QMessageBox.AcceptRole)
+            b_ajuster = m.addButton(_("Terminer et ajuster le nettoyage..."), QMessageBox.ActionRole)
+            b_ajuster.setToolTip(_("Avant / après : redresser, bords noirs, taches et grain, contraste, page par page."))
             m.addButton(_("Terminer"), QMessageBox.RejectRole)
             m.setDefaultButton(b_suite)
             m.exec()
+            ajuster = m.clickedButton() is b_ajuster
             if m.clickedButton() is not b_suite:
                 break
         o = self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=doc, nom="Numérisation.pdf"))
+        if ajuster:
+            from .dialogue_nettoyage import DialogueNettoyerScan
+            DialogueNettoyerScan(self, o).exec()
         if d.ocr.isChecked():
             self.statusBar().showMessage(_('Enregistrez la numérisation pour lancer la reconnaissance du texte.'), 10000)
 

@@ -30,27 +30,76 @@ WIA_INTENT = {"couleur": 1, "auto": 1, "gris": 2, "nb": 4}
 FORMAT_PNG = "{B96B3CAF-0728-11D3-9D7B-0000F81EF32E}"
 
 
-def scanners():
-    """[(identifiant, nom)] des scanners disponibles."""
-    if sys.platform == "win32":
+def _journal(t):
+    try:
+        from app.journal import ecrire
+        ecrire("scanner", t)
+    except Exception:                                   # noqa: BLE001
+        pass
+
+
+def scanners_wia():
+    """[(identifiant, nom)] des scanners WIA de Windows. Un appareil illisible (debranche, fax, sans nom) est laisse
+    de cote SANS cacher les autres ; tout est note dans le journal."""
+    out = []
+    try:
+        import pythoncom
+        pythoncom.CoInitialize()                        # appel possible hors du fil principal
+    except Exception:                                   # noqa: BLE001
+        pass
+    try:
+        import win32com.client
+        dm = win32com.client.Dispatch("WIA.DeviceManager")
+        n = dm.DeviceInfos.Count
+    except Exception as e:                              # noqa: BLE001
+        _journal(f"WIA indisponible : {e}")
+        return out
+    for i in range(1, n + 1):
         try:
-            import win32com.client
-            dm = win32com.client.Dispatch("WIA.DeviceManager")
-            out = []
-            for i in range(1, dm.DeviceInfos.Count + 1):
-                info = dm.DeviceInfos.Item(i)
-                if info.Type == 1:   # scanner
-                    out.append((info.DeviceID, info.Properties("Name").Value))
-            return out
-        except Exception:
-            return []
-    if shutil.which("scanimage"):
+            info = dm.DeviceInfos.Item(i)
+            typ, ident = info.Type, info.DeviceID
+            nom = None
+            for p in ("Name", "Description", "Manufacturer"):
+                try:
+                    nom = info.Properties(p).Value
+                    if nom:
+                        break
+                except Exception:                       # noqa: BLE001
+                    continue
+            _journal(f"WIA appareil {i}/{n} : type {typ}, {nom or ident}")
+            if typ == 1:                                # 1 scanner, 2 appareil photo, 3 video
+                out.append((ident, nom or ident))
+        except Exception as e:                          # noqa: BLE001
+            _journal(f"WIA appareil {i}/{n} illisible : {e}")
+    return out
+
+
+def scanners_reseau():
+    """[("escl:<adresse>", nom)] des scanners reseau sans pilote (eSCL / AirScan)."""
+    try:
+        from . import escl
+        l = escl.chercher()
+        _journal(f"réseau (eSCL) : {len(l)} scanner(s) " + ", ".join(f"{n} ({u})" for u, n in l))
+        return [("escl:" + u, n + " " + _("(réseau, sans pilote)")) for u, n in l]
+    except Exception as e:                              # noqa: BLE001
+        _journal(f"recherche réseau (eSCL) impossible : {e}")
+        return []
+
+
+def scanners(reseau=True):
+    """[(identifiant, nom)] des scanners disponibles : WIA (Windows) ou SANE (Linux), puis ceux du reseau (eSCL)."""
+    out = []
+    if sys.platform == "win32":
+        out = scanners_wia()
+    elif shutil.which("scanimage"):
         try:
             r = subprocess.run(["scanimage", "-f", "%d|%v %m%n"], capture_output=True, text=True, timeout=30)
-            return [tuple(l.split("|", 1)) for l in r.stdout.splitlines() if "|" in l]
-        except Exception:
-            return []
-    return []
+            out = [tuple(l.split("|", 1)) for l in r.stdout.splitlines() if "|" in l]
+        except Exception:                               # noqa: BLE001
+            out = []
+    if reseau:
+        out += scanners_reseau()
+    return out
 
 
 def _prop(props, ident, valeur):
@@ -64,6 +113,11 @@ def _prop(props, ident, valeur):
 
 
 def _numeriser_windows(device_id, mode, dpi, source):
+    try:
+        import pythoncom
+        pythoncom.CoInitialize()
+    except Exception:                                   # noqa: BLE001
+        pass
     import win32com.client
     dm = win32com.client.Dispatch("WIA.DeviceManager")
     dev = None
@@ -108,7 +162,10 @@ def _numeriser_linux(device_id, mode, dpi, source):
 
 
 def numeriser(device_id, mode="auto", dpi=300, source="chargeur"):
-    """Renvoie la liste des images (PNG) numerisees."""
+    """Renvoie la liste des images (PNG ou JPEG) numerisees."""
+    if device_id.startswith("escl:"):
+        from . import escl
+        return escl.numeriser(device_id[5:], mode, dpi, source, _journal)
     if sys.platform == "win32":
         return _numeriser_windows(device_id, mode, dpi, source)
     return _numeriser_linux(device_id, mode, dpi, source)
@@ -147,7 +204,7 @@ def assembler(images, mode, dpi, supprimer_blanches=True, redresser=True):
         couleurs = np.abs(coul.astype(int) - coul.mean(axis=2, keepdims=True)).mean()
         buf = io.BytesIO()
         if mode == "nb" or (mode == "auto" and couleurs < 6):
-            Image.fromarray(nettoyer(gris)).convert("1").save(buf, "TIFF", compression="group4", dpi=(dpi, dpi))
+            Image.fromarray(nettoyer(gris, dpi)).convert("1").save(buf, "TIFF", compression="group4", dpi=(dpi, dpi))
         elif mode == "gris":
             Image.fromarray(gris).save(buf, "JPEG", quality=70, dpi=(dpi, dpi))
         else:

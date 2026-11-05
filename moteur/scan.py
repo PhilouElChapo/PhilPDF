@@ -19,20 +19,9 @@ def tesseract_exe():
 
 
 def angle_inclinaison(gris):
-    """Angle (degres) qui rend les lignes de texte les plus horizontales.
-    Methode : profil de projection, recherche grossiere puis fine."""
-    h, w = gris.shape
-    k = 1000 / max(h, w)
-    petit = cv2.resize(gris, None, fx=k, fy=k, interpolation=cv2.INTER_AREA)
-    enc = (petit < 160).astype(np.uint8) * 255
-    def score(a):
-        M = cv2.getRotationMatrix2D((enc.shape[1] / 2, enc.shape[0] / 2), a, 1)
-        r = cv2.warpAffine(enc, M, (enc.shape[1], enc.shape[0]))
-        p = r.sum(axis=1).astype(float)
-        return np.var(p)
-    best = max(np.arange(-5, 5.01, 0.5), key=score)
-    best = max(np.arange(best - 0.5, best + 0.51, 0.05), key=score)
-    return float(best)
+    """Angle (degres) qui rend les lignes de texte les plus horizontales (bords de la page laisses de cote)."""
+    from .nettoyage import angle
+    return angle(gris)
 
 
 def redresser(gris, angle):
@@ -41,15 +30,14 @@ def redresser(gris, angle):
     return cv2.warpAffine(gris, M, (w, h), flags=cv2.INTER_CUBIC, borderValue=255)
 
 
-def nettoyer(gris):
-    # fond : division par un flou large (efface jaunissement, ombres)
-    fond = cv2.medianBlur(cv2.dilate(gris, np.ones((7, 7), np.uint8)), 31)
-    norm = cv2.divide(gris, fond, scale=255)
-    nb = cv2.adaptiveThreshold(norm, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 41, 18)
-    n, lab, st, _ = cv2.connectedComponentsWithStats(255 - nb, 8)
-    petits = np.where(st[:, cv2.CC_STAT_AREA] < 5)[0]
-    nb[np.isin(lab, petits[petits > 0])] = 255
-    return nb
+def nettoyer(gris, dpi=300, reglages=None):
+    """Noir et blanc net : fond eclairci, bords noirs effaces, taches et grain isoles retires (moteur/nettoyage.py)."""
+    from . import nettoyage as N
+    r = dict(N.REGLAGES, **(reglages or {}))
+    nb = N.noir_blanc(gris, r["contraste"])
+    if r["bords"]:
+        nb, _n = N.bords(nb)
+    return N.taches(nb, dpi, r["taches"])[0]
 
 
 def image_de_page(d, p, dpi_defaut=300):
@@ -342,7 +330,7 @@ def ocr_image(gris, dpi, base, mots_perso=None, tourne=True):
     from concurrent.futures import ThreadPoolExecutor
     a = angle_inclinaison(gris)
     droit = redresser(gris, a) if abs(a) > 0.05 else gris
-    nb = nettoyer(droit)
+    nb = nettoyer(droit, dpi)
     echelle = min(1.0, DPI_LECTURE / dpi)
     dpi_l = int(round(dpi * echelle))
 
