@@ -97,6 +97,7 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var organiser by mutableStateOf(false)                  // ecran « Organiser les pages »
     var lectureFluide by mutableStateOf(false)              // ecran « Lecture fluide »
     var ocr by mutableStateOf<Int?>(null)                   // reconnaissance du texte proposee (page de depart)
+    var ocrAuto = false                                     // document numerise : reconnaissance lancee d'office
     var choixPartage by mutableStateOf(false)               // envoyer le fichier ou un lien
     var detecter by mutableStateOf(false)                   // creer un formulaire : champs reperes a choisir
     var champOptions by mutableStateOf<InfoChamp?>(null)    // appui long sur un champ : renommer, supprimer
@@ -159,7 +160,8 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
         if (deverrouille) {
             val t = doc.tailles()
             tailles = t
-            Recents.ajouter(ctx, doc.uri, doc.nom, t.size)
+            if (!doc.neuf) Recents.ajouter(ctx, doc.uri, doc.nom, t.size)
+            if (doc.ocrAuto) { doc.ocrAuto = false; etat.ocrAuto = true; etat.ocr = 0 }
             val p = PagesLues.lire(ctx, doc.uri.toString())        // on reprend la ou on s'etait arrete
             if (p in 1 until t.size) etat.liste.scrollToItem(p)
             Miniatures.fabriquer(ctx, doc)
@@ -225,12 +227,12 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
             text = { Text(stringResource(R.string.ou_enregistrer, doc.nom)) },
             confirmButton = {
                 Column(horizontalAlignment = Alignment.End) {
-                    TextButton(onClick = { etat.demandeEnregistrer = false; quitter = false; ecrireVers(doc.uri, q) }) {
+                    if (!doc.neuf) TextButton(onClick = { etat.demandeEnregistrer = false; quitter = false; ecrireVers(doc.uri, q) }) {
                         Text(stringResource(R.string.meme_fichier))
                     }
                     TextButton(onClick = {
                         etat.demandeEnregistrer = false; quitter = false; fermerApres = q
-                        autreNom.launch(doc.nom.removeSuffix(".pdf").removeSuffix(".PDF") + Textes.t(R.string.suffixe_modifie) + ".pdf")
+                        autreNom.launch(if (doc.neuf) doc.nom else doc.nom.removeSuffix(".pdf").removeSuffix(".PDF") + Textes.t(R.string.suffixe_modifie) + ".pdf")
                     }) { Text(stringResource(R.string.autre_nom)) }
                     if (q) TextButton(onClick = { quitter = false; fermer() }) {
                         Text(stringResource(R.string.ne_pas_enregistrer), color = Color(0xFFC62828))
@@ -1095,6 +1097,7 @@ private fun DialogueOcr(etat: EtatLecteur, page: Int, fermer: () -> Unit) {
     var tourne by remember { mutableStateOf(Ocr.tourne(ctx)) }
     var travail by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val aTelecharger = Ocr.LANGUES.filter { it.code in langues && !Ocr.disponible(ctx, it.code) }
+    var lancerAuto by remember { mutableStateOf(etat.ocrAuto) }
     fun lancer(pages: List<Int>?) {
         occupe = true; erreur = null
         travail = portee.launch {
@@ -1121,6 +1124,8 @@ private fun DialogueOcr(etat: EtatLecteur, page: Int, fermer: () -> Unit) {
             }
         }
     }
+    // document numerise : la reconnaissance de tout le document part d'office (langues habituelles)
+    LaunchedEffect(Unit) { if (lancerAuto) { lancerAuto = false; etat.ocrAuto = false; lancer(null) } }
     AlertDialog(onDismissRequest = { if (!occupe) fermer() }, title = { Text(stringResource(R.string.ocr_titre)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {

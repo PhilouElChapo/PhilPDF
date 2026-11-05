@@ -467,4 +467,34 @@ class TestsMoteur {
             assertEquals(1, d.etapes().retablissables.size)
         }
     }
+
+    /** Numeriser : bords du document trouves sur une photo (fond sombre, feuille penchee), page redressee, noir et
+     *  blanc net, PDF cree, puis le texte reconnu. */
+    @Test fun numeriserUnePhoto() {
+        val photo = Bitmap.createBitmap(1200, 1600, Bitmap.Config.ARGB_8888)
+        val c = Canvas(photo)
+        c.drawColor(android.graphics.Color.rgb(60, 50, 40))                  // table sombre
+        c.save(); c.rotate(6f, 600f, 800f)
+        c.drawRect(200f, 250f, 1000f, 1350f, Paint().apply { color = android.graphics.Color.rgb(235, 232, 225) })
+        c.drawText("FACTURE", 300f, 600f, Paint().apply { textSize = 110f; isAntiAlias = true; typeface = Typeface.DEFAULT_BOLD; color = android.graphics.Color.rgb(40, 40, 40) })
+        c.restore()
+        val k = Numerisation.coins(photo)
+        assertEquals(4, k.size)
+        // la feuille fait environ 800 x 1100 : les coins trouves l'entourent (et pas toute la photo)
+        val largeur = kotlin.math.hypot(k[1].x - k[0].x, k[1].y - k[0].y)
+        assertTrue("largeur $largeur", largeur in 700f..950f)
+        val page = Numerisation.redresser(photo, k)
+        assertTrue(page.height > page.width)
+        val nb = Numerisation.ameliorer(page, Numerisation.Modele.NOIR_BLANC)
+        val px = IntArray(nb.width * nb.height).also { nb.getPixels(it, 0, nb.width, 0, 0, nb.width, nb.height) }
+        assertTrue("noir et blanc", px.all { (it and 0xFFFFFF) == 0 || (it and 0xFFFFFF) == 0xFFFFFF })
+        assertTrue("surtout blanc (fond)", px.count { (it and 0xFFFFFF) == 0xFFFFFF } > px.size * 0.8)
+        val f = Numerisation.fabriquerPdf(listOf(Numerisation.octets(nb, Numerisation.Modele.NOIR_BLANC)), File(dossier, "scan.pdf"))
+        val d = ouvrir(f)
+        assertEquals(1, runBlocking { d.tailles() }.size)
+        val r = runBlocking { d.reconnaitre(ctx, null, "fra") { _, _ -> } }
+        assertTrue("mots reconnus : ${r.mots}", r.mots >= 1)
+        val t = enregistrer(d, "scan_ocr.pdf").let { texte(it) }
+        assertTrue(t, t.contains("FACTURE"))
+    }
 }

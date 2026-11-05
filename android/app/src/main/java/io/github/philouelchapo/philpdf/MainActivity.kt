@@ -118,9 +118,20 @@ fun Application(recu: MutableState<Uri?>) {
         Ouvrir.demande.value?.let { ouvrir(it); Ouvrir.demande.value = null }
     }
 
+    var numeriser by remember { mutableStateOf(false) }
     val d = doc
+    if (numeriser) EcranNumerisation(fermer = { numeriser = false }) { f ->
+        numeriser = false
+        portee.launch {
+            try {
+                val nd = DocumentPdf.ouvrir(ctx, Uri.fromFile(f))
+                nd.neuf = true; nd.modifie = true; nd.ocrAuto = true
+                doc?.fermer(); doc = nd
+            } catch (e: Exception) { erreur = ctx.getString(R.string.illisible, e.message ?: e.javaClass.simpleName) }
+        }
+    }
     if (d == null) {
-        Accueil(ouvrir = { ouvrir(it) }, choisir = { selecteur.launch(arrayOf("application/pdf")) })
+        Accueil(ouvrir = { ouvrir(it) }, choisir = { selecteur.launch(arrayOf("application/pdf")) }, numeriser = { numeriser = true })
     } else {
         Lecteur(d) { d.fermer(); doc = null }
     }

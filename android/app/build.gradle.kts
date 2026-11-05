@@ -105,6 +105,9 @@ dependencies {
     implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
     // reconnaissance du texte des pages scannees (Tesseract, comme PhilPDF Windows), sur le telephone, sans Internet
     implementation("cz.adaptech.tesseract4android:tesseract4android:4.9.0")
+    // numeriser un document : le scanner de Google s'il est sur le telephone (sinon appareil photo + recadrage maison)
+    implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 }
 
 // Nouveautes (readme.txt du depot) livrees dans l'APK : Accueil > Aide > Nouveautes

@@ -40,7 +40,7 @@ import java.util.Locale
 val ROUGE = Color(0xFFC9252D)
 
 @Composable
-fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit) {
+fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = {}) {
     val ctx = LocalContext.current
     var recents by remember { mutableStateOf(Recents.liste(ctx)) }
     var maj by remember { mutableStateOf<NouvelleVersion?>(null) }
@@ -76,8 +76,16 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit) {
                 }
             }
             val bouton: @Composable () -> Unit = {
-                Button(onClick = choisir, colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) {
-                    Text(stringResource(R.string.ouvrir_fichier))
+                // ouvrir un PDF, ou photographier un document (numeriser) : les deux cote a cote, a la ligne si besoin
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Button(onClick = choisir, colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) {
+                        Text(stringResource(R.string.ouvrir_fichier))
+                    }
+                    OutlinedButton(onClick = numeriser) {
+                        Icon(Icones.get("numeriser", ROUGE), null, tint = Color.Unspecified)
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.scan_bouton))
+                    }
                 }
             }
             if (etroit) {

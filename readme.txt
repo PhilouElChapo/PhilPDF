@@ -10,6 +10,16 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.14.0
+- Numeriser un document (bouton a l'Accueil) : le scanner de Google quand il est sur le telephone (bords trouves en
+  direct), sinon l'appareil photo et le recadrage de PhilPDF (les quatre coins se reperent seuls et s'ajustent du
+  doigt, la page est redressee). Pages a la suite (Page suivante, ou Importer des photos), a ranger, tourner ou
+  retirer avant de valider.
+- Quatre modeles : Noir et blanc (texte net, fichier tres leger), Couleur (fond eclairci, ombres retirees), Pour
+  e-mail (allege au maximum), Photo (sans retouche). Le choix est garde pour la fois suivante.
+- Le PDF cree s'ouvre et son texte est reconnu tout de suite (OCR) ; ensuite Enregistrer (nom propose « Scan date
+  heure »), Partager, ou toute autre action.
+
 1.13.0
 - PhilPDF Android en allemand, espagnol et italien (en plus du francais et de l'anglais), selon la langue du
   telephone. Un essai automatique verifie a chaque fabrication qu'aucun texte ne manque dans aucune langue.

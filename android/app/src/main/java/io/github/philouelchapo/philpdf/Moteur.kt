@@ -60,6 +60,10 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
     /** Augmente a chaque modification : les pages et vignettes se redessinent. */
     var version by mutableIntStateOf(0)
     var modifie by mutableStateOf(false)
+    /** Document cree sur le telephone (numerisation) : pas encore de fichier a lui, « Autre nom » pour l'enregistrer. */
+    var neuf = false
+    /** Reconnaitre le texte des l'ouverture (document numerise). */
+    var ocrAuto = false
     var peutAnnuler by mutableStateOf(false)
     var peutRetablir by mutableStateOf(false)
     val modifiable: Boolean get() = pdf != null
