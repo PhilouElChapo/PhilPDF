@@ -111,7 +111,7 @@ object Combiner {
 /** Ecran « Combiner des fichiers » (Accueil). */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun EcranCombiner(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
+fun EcranCombiner(fermer: () -> Unit, dOffice: Boolean = true, ouvrirPdf: (File) -> Unit) {   // dOffice : choix des fichiers a l'ouverture (essais : non)
     val ctx = LocalContext.current
     val portee = rememberCoroutineScope()
     val liste = remember { mutableStateListOf<Combiner.Element>() }
@@ -124,7 +124,7 @@ fun EcranCombiner(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
             liste += Combiner.Element.Fichier(u, nom, Combiner.estImage(ctx, u, nom))
         }
     }
-    LaunchedEffect(Unit) { choix.launch(arrayOf("application/pdf", "image/*")) }
+    LaunchedEffect(Unit) { if (dOffice) choix.launch(arrayOf("application/pdf", "image/*")) }
     Fenetre(fermer) {
         Surface(Modifier.fillMaxSize(), color = Color(0xFFF3F3F3)) {
             Column(Modifier.fillMaxSize()) {

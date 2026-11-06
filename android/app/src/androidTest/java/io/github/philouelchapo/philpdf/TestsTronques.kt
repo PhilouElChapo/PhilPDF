@@ -1,7 +1,6 @@
 package io.github.philouelchapo.philpdf
 
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -18,7 +17,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -28,8 +26,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -66,6 +62,7 @@ class TestsTronques {
     private val instr = InstrumentationRegistry.getInstrumentation()
     private val ctx: Context = instr.targetContext
     private val problemes = linkedMapOf<String, MutableList<String>>()
+    private var echantillon = 12                         // quelques mesures au journal, pour juger l'essai lui-meme
 
     private class Cadre(val nom: String, val px: String, val police: String)
     private val petit = Cadre("petit téléphone 320×600 dp, police +15 %", "640x1200", "1.15")
@@ -82,6 +79,7 @@ class TestsTronques {
     }
 
     @After fun remettre() {
+        instr.runOnMainSync { ctx.getSystemService(android.app.LocaleManager::class.java).applicationLocales = android.os.LocaleList.getEmptyLocaleList() }
         shell("wm size reset"); shell("wm density reset"); shell("settings put system font_scale 1.0")
     }
 
@@ -129,6 +127,7 @@ class TestsTronques {
         val out = mutableListOf<String>()
         val textes = regle.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.GetTextLayoutResult), useUnmergedTree = true)
             .fetchSemanticsNodes(atLeastOneRootRequired = false)
+        if (textes.isEmpty()) out += "rien d'affiché : l'écran a été perdu (autre application ouverte ?)"
         for (n in textes) {
             if (n.config.getOrNull(SemanticsProperties.EditableText) != null) continue      // champ de saisie : il defile
             val l = mutableListOf<TextLayoutResult>()
@@ -137,7 +136,14 @@ class TestsTronques {
             val t = r.layoutInput.text.text
             if (t.isBlank()) continue
             val court = t.replace('\n', ' ').take(60)
-            if (r.hasVisualOverflow) out += "« $court » déborde (${r.size.width}×${r.size.height} px pour ${r.multiParagraph.width.toInt()}×${r.multiParagraph.height.toInt()})"
+            // la place reelle du texte (taille du noeud) contre ses lignes : plus large = coupe a droite, plus haut = coupe en bas
+            val w = n.size.width; val h = n.size.height
+            var large = 0f
+            for (i in 0 until r.lineCount) large = maxOf(large, r.getLineRight(i) - r.getLineLeft(i))
+            val bas = if (r.lineCount > 0) r.getLineBottom(r.lineCount - 1) else 0f
+            if (large > w + 2) out += "« $court » coupé à droite : ${large.toInt()} px pour ${w} px"
+            if (bas > h + 2) out += "« $court » coupé en bas : ${bas.toInt()} px pour ${h} px (${r.lineCount} ligne(s))"
+            if (echantillon-- > 0) Log.i("PhilTronque", "mesure « $court » : noeud ${w}×${h}, lignes ${r.lineCount}, plus large ${large.toInt()}, bas ${bas.toInt()}")
             for (i in 0 until r.lineCount - 1) {
                 val e = r.getLineEnd(i)
                 if (e in 1 until t.length && t[e - 1].isLetterOrDigit() && t[e].isLetterOrDigit()) {
@@ -212,6 +218,14 @@ class TestsTronques {
         return ctx.createConfigurationContext(c)
     }
 
+    private fun appliquerLangue(lg: String) {
+        langue = lg
+        instr.runOnMainSync {
+            ctx.getSystemService(android.app.LocaleManager::class.java).applicationLocales = android.os.LocaleList.forLanguageTags(lg)
+        }
+        Thread.sleep(1200)
+    }
+
     private fun explorerLecteur(doc: DocumentPdf, nom: String) {
         val lecteur: @Composable () -> Unit = { Lecteur(doc) {} }
         montrer(nom, lecteur); lecteurCharge(); verifier(nom)
@@ -246,7 +260,8 @@ class TestsTronques {
         e("Aide") { EcranAide {} },
         e("Comptes") { EcranComptes({}, {}) },
         e("Réglages IA") { ReglagesIa {} },
-        e("Numériser") { EcranNumerisation({}, {}) },
+        e("Numériser") { EcranNumerisation({}, dOffice = false) {} },
+        e("Combiner") { EcranCombiner({}, dOffice = false) {} },
         e("Redresser") { RedresserImage(img, ctxLangue().getString(R.string.redresser_page_n, 1), {}, toutes = false) { _, _, _ -> } },
         e("Signer à la main") { PadSignature("signature", {}) {} },
         e("Nommer le scan") { NommerScan(f, img) {} },
@@ -262,23 +277,15 @@ class TestsTronques {
         e("Historique") { AvecEtat(doc) { et -> Box { MenuHistorique(et) {} } } },
     )
 
-    private fun lancer(cadre: Cadre, bloc: () -> Unit) {
-        shell("wm size ${cadre.px}"); shell("wm density 320"); shell("settings put system font_scale ${cadre.police}")
-        Thread.sleep(1500)
+    private fun lancer(cadre: Cadre, lg: String, bloc: () -> Unit) {
+        appliquerLangue(lg)
         ActivityScenario.launch(ComponentActivity::class.java).use { sc ->
+            var vue = ""
             sc.onActivity { a ->
-                a.setContent {
-                    val base = LocalContext.current
-                    val conf = remember(langue) { Configuration(base.resources.configuration).apply { setLocale(Locale.forLanguageTag(langue)) } }
-                    val loc = remember(conf) {
-                        val r = base.createConfigurationContext(conf).resources
-                        object : ContextWrapper(base) { override fun getResources() = r }
-                    }
-                    CompositionLocalProvider(LocalContext provides loc, LocalConfiguration provides conf) {
-                        key(version, langue) { ecran?.invoke() }
-                    }
-                }
+                vue = a.resources.configuration.locales[0].language
+                a.setContent { key(version) { ecran?.invoke() } }
             }
+            if (vue != lg) problemes.getOrPut("${cadre.nom} [$lg]") { mutableListOf() } += "langue non appliquée ($vue au lieu de $lg)"
             regle.mainClock.autoAdvance = false
             bloc()
             ecran = null; version++; attendre(1)
@@ -291,15 +298,13 @@ class TestsTronques {
         val doc = runBlocking { DocumentPdf.ouvrir(ctx, Uri.fromFile(f)) }
         val tailles = runBlocking { doc.tailles() }
         val img = image()
-        for (cadre in listOf(petit, paysage)) lancer(cadre) {
-            for (lg in langues) {
-                langue = lg
+        for (cadre in listOf(petit, paysage)) {
+            shell("wm size ${cadre.px}"); shell("wm density 320"); shell("settings put system font_scale ${cadre.police}")
+            Thread.sleep(1500)
+            for (lg in langues) lancer(cadre, lg) {
                 for ((nom, c) in ecrans(doc, tailles, img, f)) montrer("${cadre.nom} · $nom", c)
-            }
-            // le lecteur, tout ce qu'on peut y toucher : allemand (le plus long) et francais
-            for (lg in if (cadre === petit) listOf("de", "fr") else listOf("de")) {
-                langue = lg
-                explorerLecteur(doc, "${cadre.nom} · Lecteur")
+                // le lecteur, tout ce qu'on peut y toucher : allemand (le plus long) partout, francais sur petit ecran
+                if (lg == "de" || (lg == "fr" && cadre === petit)) explorerLecteur(doc, "${cadre.nom} · Lecteur")
             }
         }
         val bilan = problemes.entries.joinToString("\n") { (k, v) -> "✕ $k\n" + v.take(10).joinToString("\n") { "     $it" } }

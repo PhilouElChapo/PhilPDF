@@ -62,7 +62,7 @@ private fun Context.activite(): Activity? {
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun EcranNumerisation(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
+fun EcranNumerisation(fermer: () -> Unit, dOffice: Boolean = true, ouvrirPdf: (File) -> Unit) {   // dOffice : scanner lance a l'ouverture (essais : non)
     val ctx = LocalContext.current
     val portee = rememberCoroutineScope()
     val pages = remember { mutableStateListOf<PageScan>() }
@@ -143,7 +143,7 @@ fun EcranNumerisation(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
             Journal.ecrire("numérisation", "scanner Google indisponible ($e) : appareil photo"); prendrePhoto()
         }
     }
-    LaunchedEffect(Unit) { if (!googleEssaye) { googleEssaye = true; numeriser() } }
+    LaunchedEffect(Unit) { if (dOffice && !googleEssaye) { googleEssaye = true; numeriser() } }
     // apercus du modele choisi, page par page, sans bloquer l'ecran
     LaunchedEffect(modele, pages.size) {
         for (p in pages.toList()) if (p.modeleApercu != modele) {
