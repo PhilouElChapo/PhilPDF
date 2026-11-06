@@ -396,6 +396,12 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.76
+- Allemand, espagnol et italien complets : les 706 textes qui restaient en francais sont traduits (PDF/A,
+  commentaires, cote a cote, e-mail, imprimante PhilPDF, formulaires, Excel, Mesure, Fractionner, Parapher,
+  traitement par lot, IA, signets, synchronisation...). La fabrication echoue desormais si un texte manque dans
+  une langue.
+
 0.9.75
 - Numeriser (scanner ou photos) : case « Proposer un nom avec l'IA ». A la fin, l'IA lit le texte reconnu (ou, apres
   votre accord, l'image de la premiere page) et propose un nom : date, expediteur, objet. « Enregistrer sous ce

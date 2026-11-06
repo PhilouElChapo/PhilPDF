@@ -15,7 +15,7 @@ for f in sorted(os.listdir(os.path.join(racine, "langues"))):
         print("   manque :", t[:80])
     for t in faux[:10]:
         print("   {noms} :", t[:80])
-    ok &= f != "en.json" or (not manquants and not faux)     # l'anglais doit etre complet
+    ok &= not manquants and not faux                    # toutes les langues completes (plus de francais au milieu)
 # en anglais, l'interface se construit
 os.environ["PHILPDF_LANGUE"] = "en"
 sys.path.insert(0, racine)
