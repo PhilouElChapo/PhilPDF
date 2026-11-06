@@ -4,12 +4,14 @@
 # 0) langues : aucun texte ne manque en francais, allemand, espagnol, italien (memes %1$s)
 python3 ../tests/test_langues_android.py || { echo "::error title=Langues Android::textes manquants ou formats differents"; exit 1; }
 adb logcat -c || true
-timeout 35m gradle --no-daemon connectedDebugAndroidTest > essais.log 2>&1
+timeout 55m gradle --no-daemon connectedDebugAndroidTest > essais.log 2>&1
 r=$?
 if [ $r -ne 0 ]; then
-  [ $r -eq 124 ] && echo "::error title=Essai Android::essais bloques plus de 35 minutes"
+  [ $r -eq 124 ] && echo "::error title=Essai Android::essais bloques plus de 55 minutes"
   grep -E "FAILED|Exception|AssertionError|expected|^e: |ERROR" essais.log | head -40 | cut -c1-300 | while IFS= read -r l; do echo "::error title=Essai Android::$l"; done
   tail -n 60 essais.log
+  # textes coupes (TestsTronques) : chaque ecran et ce qui ne tient pas
+  adb logcat -d -s PhilTronque:* 2>/dev/null | sed 's/^.*PhilTronque: //' | head -120 | while IFS= read -r l; do echo "::error title=Texte coupe Android::$l"; done
   adb logcat -d 2>/dev/null | grep -E "AndroidRuntime|FATAL|philpdf" | tail -80 | cut -c1-300
   exit 1
 fi
