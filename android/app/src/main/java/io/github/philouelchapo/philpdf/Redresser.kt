@@ -102,11 +102,12 @@ fun RedresserImage(image: Bitmap?, titre: String, fermer: () -> Unit, toutes: Bo
     Fenetre(fermer) {
         Surface(Modifier.fillMaxSize(), color = Color(0xFFF3F3F3)) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
+                val largeur = maxWidth
                 if (maxWidth > maxHeight) {
                     // telephone a l'horizontale : apercu a gauche, reglages a droite (ils defilent), boutons toujours visibles
                     Row(Modifier.fillMaxSize()) {
                         apercu(Modifier.weight(1f).fillMaxHeight())
-                        Column(Modifier.width(minOf(360.dp, maxWidth * 0.55f)).fillMaxHeight()) {
+                        Column(Modifier.width(minOf(360.dp, largeur * 0.55f)).fillMaxHeight()) {
                             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { entete(); reglages() }
                             boutons()
                         }
