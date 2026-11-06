@@ -295,7 +295,7 @@ fun FeuilleAnnotation(etat: EtatLecteur, info: InfoAnnot, fermer: () -> Unit) {
                     minLines = 2)
             }
             Spacer(Modifier.height(14.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {   // passe a la ligne, jamais coupe
                 TextButton(onClick = fermer) { Text(stringResource(R.string.annuler)) }
                 Button(onClick = {
                     portee.launch {

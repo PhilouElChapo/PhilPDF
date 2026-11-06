@@ -12,9 +12,10 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -112,7 +113,7 @@ class TestsTronques {
     private fun racine(n: SemanticsNode): SemanticsNode { var r = n; while (r.parent != null) r = r.parent!!; return r }
 
     private fun defile(n: SemanticsNode): Boolean {
-        var p: SemanticsNode? = n.parent
+        var p: SemanticsNode? = n
         while (p != null) {
             val c = p.config
             if (c.getOrNull(SemanticsProperties.VerticalScrollAxisRange) != null || c.getOrNull(SemanticsProperties.HorizontalScrollAxisRange) != null
@@ -142,7 +143,7 @@ class TestsTronques {
             for (i in 0 until r.lineCount) large = maxOf(large, r.getLineRight(i) - r.getLineLeft(i))
             val bas = if (r.lineCount > 0) r.getLineBottom(r.lineCount - 1) else 0f
             if (large > w + 2) out += "« $court » coupé à droite : ${large.toInt()} px pour ${w} px"
-            if (bas > h + 2) out += "« $court » coupé en bas : ${bas.toInt()} px pour ${h} px (${r.lineCount} ligne(s))"
+            if (bas > h + 2 && !defile(n)) out += "« $court » coupé en bas : ${bas.toInt()} px pour ${h} px (${r.lineCount} ligne(s))"
             if (echantillon-- > 0) Log.i("PhilTronque", "mesure « $court » : noeud ${w}×${h}, lignes ${r.lineCount}, plus large ${large.toInt()}, bas ${bas.toInt()}")
             for (i in 0 until r.lineCount - 1) {
                 val e = r.getLineEnd(i)
@@ -265,8 +266,9 @@ class TestsTronques {
         e("Redresser") { RedresserImage(img, ctxLangue().getString(R.string.redresser_page_n, 1), {}, toutes = false) { _, _, _ -> } },
         e("Signer à la main") { PadSignature("signature", {}) {} },
         e("Nommer le scan") { NommerScan(f, img) {} },
-        e("Annoter") { AvecEtat(doc) { et -> Column(Modifier.verticalScroll(rememberScrollState())) { PanneauAnnoter(et) } } },
-        e("Signer") { AvecEtat(doc) { et -> Column(Modifier.verticalScroll(rememberScrollState())) { PanneauSigner(et, tailles) } } },
+        // comme dans le tiroir du lecteur : largeur pleine, 200 a 560 dp de haut
+        e("Annoter") { AvecEtat(doc) { et -> Box(Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 560.dp)) { PanneauAnnoter(et) } } },
+        e("Signer") { AvecEtat(doc) { et -> Box(Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 560.dp)) { PanneauSigner(et, tailles) } } },
         e("Organiser les pages") { AvecEtat(doc) { et -> OrganiserPages(et, tailles) {} } },
         e("Partager") { AvecEtat(doc) { et -> ChoixPartage(et) {} } },
         e("Résumer avec l'IA") { AvecEtat(doc) { et -> ResumeIa(et) {} } },

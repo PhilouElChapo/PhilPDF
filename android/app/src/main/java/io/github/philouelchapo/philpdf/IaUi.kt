@@ -103,7 +103,7 @@ fun ReglagesIa(fermer: () -> Unit) {
                     if (occupe) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 6.dp))
                 }
                 Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {   // passe a la ligne, jamais coupe
                     TextButton(onClick = fermer, enabled = !occupe) { Text(stringResource(R.string.annuler)) }
                     Button(onClick = { garder(); Journal.ecrire("IA", "réglages : ${Ia.nom(moteur)}, clefs ${listOfNotNull(
                         "Claude".takeIf { kc.isNotBlank() }, "Gemini".takeIf { kg.isNotBlank() }).joinToString().ifEmpty { "aucune" }}"); fermer() },
@@ -242,7 +242,7 @@ fun ConsigneIa(titre: String, sujet: String, consignePhilpdf: String, obligatoir
                     if (voir) Text(consignePhilpdf, fontSize = 12.sp, color = Color.Gray)
                 }
                 Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {   // passe a la ligne, jamais coupe
                     TextButton(onClick = annuler) { Text(stringResource(R.string.annuler)) }
                     Button(onClick = {
                         val t = texte.trim()

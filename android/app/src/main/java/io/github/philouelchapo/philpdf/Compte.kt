@@ -275,7 +275,7 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
                     }
                     SectionMiseAJour()
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {   // passe a la ligne, jamais coupe
                     TextButton(onClick = fermer) { Text(stringResource(R.string.fermer)) }
                 }
             }

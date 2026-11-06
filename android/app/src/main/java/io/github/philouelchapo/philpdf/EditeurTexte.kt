@@ -102,7 +102,7 @@ fun EditeurTexte(etat: EtatLecteur, par: Paragraphe, fermer: () -> Unit) {
                 Text(stringResource(R.string.aide_texte_fenetre), fontSize = 12.sp, color = Color.Gray)
               }
                 Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {   // passe a la ligne, jamais coupe
                     TextButton(onClick = fermer, enabled = !occupe) { Text(stringResource(R.string.annuler)) }
                     Button(onClick = {
                         occupe = true

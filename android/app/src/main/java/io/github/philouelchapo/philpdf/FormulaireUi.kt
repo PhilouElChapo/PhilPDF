@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package io.github.philouelchapo.philpdf
 
 import androidx.compose.foundation.layout.*
@@ -62,7 +64,7 @@ fun DetectionChamps(etat: EtatLecteur, fermer: () -> Unit) {
                 }
                 Spacer(Modifier.height(10.dp))
                 val n = liste?.count { it.garder } ?: 0
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {   // passe a la ligne, jamais coupe
                     TextButton(onClick = fermer, enabled = !occupe) { Text(stringResource(R.string.annuler)) }
                     Button(onClick = {
                         occupe = true
@@ -283,7 +285,7 @@ fun DialogueProprietes(etat: EtatLecteur, c: InfoChamp, fermer: () -> Unit) {
                     SectionJavaScript(js, perso, r) { f -> maj(f) }
                 } }
                 Spacer(Modifier.height(10.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {   // passe a la ligne, jamais coupe
                     TextButton(onClick = fermer) { Text(stringResource(R.string.annuler)) }
                     Button(onClick = {
                         r.remove("_philpdf")

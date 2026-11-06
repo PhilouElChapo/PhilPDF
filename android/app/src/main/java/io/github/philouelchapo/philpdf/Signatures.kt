@@ -448,6 +448,7 @@ fun ApercuTrace(t: Trace, modifier: Modifier) {
 }
 
 /** Grand cadre pour dessiner sa signature (ou son paraphe) au doigt. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun PadSignature(genre: String, fermer: () -> Unit, valider: (Trace) -> Unit) {
     var traits by remember { mutableStateOf<List<List<Offset>>>(emptyList()) }
@@ -473,7 +474,8 @@ fun PadSignature(genre: String, fermer: () -> Unit, valider: (Trace) -> Unit) {
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            // boutons : passent a la ligne sur un petit ecran plutot que d'etre coupes
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {
                 TextButton(onClick = { traits = emptyList() }) { Text(stringResource(R.string.effacer)) }
                 TextButton(onClick = fermer) { Text(stringResource(R.string.annuler)) }
                 Button(onClick = {
