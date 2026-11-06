@@ -90,25 +90,40 @@ def scanners_reseau():
 # Beaucoup de scanners USB (Avision, Fujitsu, Plustek...) n'ont qu'un pilote TWAIN, sans WIA : la fenetre de Windows
 # ne les voit pas, les logiciels de numerisation passent par TWAIN. PhilPDF est un programme 64 bits : il lui faut le
 # gestionnaire TWAIN 64 bits (TWAINDSM.dll, installe par les pilotes recents) et un pilote 64 bits du scanner.
-def _dsm():
+_SM = None            # gestionnaire TWAIN : ouvert UNE fois pour toute la session (le rouvrir apres l'avoir ferme
+_SM_ERREUR = None    # fait planter certains pilotes : « access violation », puis « ConditionCode = 0 »)
+
+
+def _dsm(fenetre=None):
+    """Le gestionnaire TWAIN de la session, ouvert avec la fenetre de PhilPDF (les pilotes y attachent leurs
+    fenetres et leurs messages). Une premiere ouverture ratee n'est pas retentee (elle laisse le pilote instable)."""
+    global _SM, _SM_ERREUR
+    if _SM is not None:
+        if fenetre and not _SM._hwnd:
+            _SM._hwnd = int(fenetre)
+        return _SM
+    if _SM_ERREUR:
+        raise RuntimeError(_SM_ERREUR)
     import twain
     erreurs = []
-    for nom in (None, os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "System32", "TWAINDSM.dll"),
-                os.path.join(os.path.dirname(sys.executable), "TWAINDSM.dll")):
+    for nom in (None, os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "System32", "TWAINDSM.dll")):
         try:
-            return twain.SourceManager(None, dsm_name=nom, ProductName="PhilPDF", Manufacturer="PhilPDF",
-                                       ProductFamily="PhilPDF")
+            _SM = twain.SourceManager(int(fenetre) if fenetre else None, dsm_name=nom, ProductName="PhilPDF",
+                                      Manufacturer="PhilPDF", ProductFamily="PhilPDF")
+            _journal(f"TWAIN : gestionnaire ouvert ({nom or 'twaindsm.dll'}, fenêtre {'oui' if fenetre else 'non'})")
+            return _SM
         except Exception as e:                          # noqa: BLE001
             erreurs.append(f"{nom or 'twaindsm.dll'} : {e}")
-    raise RuntimeError("; ".join(erreurs))
+    _SM_ERREUR = "; ".join(erreurs)
+    raise RuntimeError(_SM_ERREUR)
 
 
-def scanners_twain():
-    """[("twain:<nom>", nom)] des sources TWAIN (Windows)."""
+def scanners_twain(fenetre=None):
+    """[("twain:<nom>", nom)] des sources TWAIN (Windows). fenetre : identifiant (HWND) de la fenetre de PhilPDF."""
     if sys.platform != "win32":
         return []
     try:
-        sm = _dsm()
+        sm = _dsm(fenetre)
     except ImportError:
         _journal("TWAIN : module absent de ce paquet")
         return []
@@ -120,11 +135,6 @@ def scanners_twain():
     except Exception as e:                              # noqa: BLE001
         _journal(f"TWAIN : liste des sources illisible : {e}")
         noms = []
-    finally:
-        try:
-            sm.close()
-        except Exception:                               # noqa: BLE001
-            pass
     _journal(f"TWAIN : {len(noms)} source(s) " + ", ".join(noms) + ("" if noms else
              " (un pilote 32 bits seulement n'est pas visible d'un programme 64 bits)"))
     return [("twain:" + n, n + " " + _("(TWAIN)")) for n in noms]
@@ -134,9 +144,7 @@ def _numeriser_twain(nom, mode, dpi, source, fenetre=None, interface=False):
     """Images (octets BMP) numerisees par la source TWAIN « nom ». interface : la fenetre du pilote du scanner."""
     import twain
     from twain.lowlevel import constants as C
-    sm = _dsm()
-    if fenetre:
-        sm._hwnd = int(fenetre)                         # le pilote ouvre ses fenetres au-dessus de PhilPDF
+    sm = _dsm(fenetre)                                  # le meme gestionnaire que pour la liste (jamais rouvert)
     images = []
     try:
         src = sm.open_source(nom)
@@ -170,23 +178,27 @@ def _numeriser_twain(nom, mode, dpi, source, fenetre=None, interface=False):
                     raise twain.exceptions.CancelAll
             try:
                 src.acquire_natively(after=apres, show_ui=interface, modal=interface)
-            except twain.exceptions.DSTransferCancelled:
+            except (twain.exceptions.DSTransferCancelled, twain.exceptions.CancelAll):
                 pass
         finally:
-            src.close()
-    finally:
-        sm.close()
+            try:
+                src.close()                             # la source se ferme ; le gestionnaire reste ouvert
+            except Exception as e:                      # noqa: BLE001
+                _journal(f"TWAIN {nom} : fermeture de la source : {e}")
+    except Exception as e:
+        _journal(f"TWAIN {nom} : {type(e).__name__} : {e}")
+        raise
     _journal(f"TWAIN {nom} : {len(images)} page(s)")
     return images
 
 
-def scanners(reseau=True):
+def scanners(reseau=True, fenetre=None):
     """[(identifiant, nom)] des scanners disponibles : WIA (Windows) ou SANE (Linux), puis ceux du reseau (eSCL)."""
     out = []
     if sys.platform == "win32":
         out = scanners_wia()
         noms = {n for _i, n in out}
-        out += [(i, n) for i, n in scanners_twain() if n.rsplit(" (", 1)[0] not in noms]
+        out += [(i, n) for i, n in scanners_twain(fenetre) if n.rsplit(" (", 1)[0] not in noms]
     elif shutil.which("scanimage"):
         try:
             r = subprocess.run(["scanimage", "-f", "%d|%v %m%n"], capture_output=True, text=True, timeout=30)

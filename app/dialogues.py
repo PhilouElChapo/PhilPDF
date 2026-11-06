@@ -1185,7 +1185,11 @@ class DialogueNumeriser(QDialog):
         v = QVBoxLayout(self)
         f = QFormLayout()
         self.app = QComboBox()
-        self.liste = scanner.scanners(reseau=False)
+        try:
+            fen = int(parent.winId()) if parent is not None else None
+        except Exception:                               # noqa: BLE001
+            fen = None
+        self.liste = scanner.scanners(reseau=False, fenetre=fen)
         for i, n in self.liste:
             self.app.addItem(n, i)
         if sys.platform == "win32":
