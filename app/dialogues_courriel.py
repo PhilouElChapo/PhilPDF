@@ -12,6 +12,11 @@ from .langue import _
 from . import courriel as C, coffre, agenda
 
 
+def _poids(chemin):
+    """Taille d'une piece jointe, ou de toutes (plusieurs fichiers)."""
+    return sum(os.path.getsize(c) for c in C.liste(chemin))
+
+
 def _taille(n):
     return f"{n / 1048576:.1f} Mo".replace(".", ",") if n >= 1048576 else f"{max(1, n // 1024)} Ko"
 
@@ -1079,8 +1084,8 @@ class PanneauEnvoyer(QWidget):
         if calculer:
             for kk in ("tel_quel", k):
                 if kk != "protege" and self.radios[kk].isEnabled():
-                    self.l_tailles[kk].setText(_taille(os.path.getsize(self._fichier(kk))))
-            t = os.path.getsize(self._fichier(k if k != "protege" else "tel_quel"))
+                    self.l_tailles[kk].setText(_taille(_poids(self._fichier(kk))))
+            t = _poids(self._fichier(k if k != "protege" else "tel_quel"))
             trop = t > C.LIMITE_MO * 1048576
             self.l_poids.setText(("<span style='color:#b3261e'>" + _(
                 "{t} : trop lourd pour la plupart des messageries (limite vers {l} Mo). Choisissez « Allégé » ou "
@@ -1152,7 +1157,7 @@ class PanneauEnvoyer(QWidget):
             if mdp is None:
                 return
             self.b_ok.setEnabled(False)
-            self.etat.setText(_("Envoi en cours ({t})...", t=_taille(os.path.getsize(chemin))) if direct else
+            self.etat.setText(_("Envoi en cours ({t})...", t=_taille(_poids(chemin))) if direct else
                               _("Dépôt dans vos Brouillons..."))
             QApplication.setOverrideCursor(Qt.WaitCursor)
             if direct:
@@ -1176,7 +1181,7 @@ class PanneauEnvoyer(QWidget):
                                               cc=", ".join(C.adresses(cc)), cci=", ".join(C.adresses(cci))))
             C.montrer_fichier(chemin)
             self._dire(_("Glissez « {f} » (sélectionné dans le dossier ouvert) dans le message.",
-                         f=os.path.basename(chemin)))
+                         f=", ".join(os.path.basename(c) for c in C.liste(chemin))))
 
     def _dire(self, t):
         self.etat.setText("<span style='color:#1e6b34'>✓ " + t + "</span>")
@@ -1197,3 +1202,61 @@ class PanneauEnvoyer(QWidget):
             w = C.webmail_de(c)
             if w:
                 agenda.ouvrir(w)
+
+
+class _Groupe:
+    """Plusieurs fichiers a joindre (fichiers coches a l'Accueil, traitement par lot) : tient la place de l'onglet."""
+
+    def __init__(self, fichiers, params):
+        self.fichiers, self.params, self.octets_signes = list(fichiers), params, None
+        self.nom = os.path.basename(fichiers[0]) if len(fichiers) == 1 else _("{n} documents", n=len(fichiers))
+
+
+class PanneauEnvoyerFichiers(PanneauEnvoyer):
+    """Le volet « Envoyer par e-mail » pour plusieurs fichiers : tous joints au meme message, chacun dans la
+    version choisie (tel quel, allege, fige, protege ; un fichier signe part tel quel)."""
+
+    def __init__(self, fichiers, fenetre, fermer):
+        self._liste, self._fermer = list(fichiers), fermer
+        super().__init__(_Groupe(self._liste, fenetre.params), fenetre)
+        self.nom.hide()
+        noms = [os.path.basename(c) for c in self._liste]
+        lst = QLabel("<b>" + _("{n} pièce(s) jointe(s)", n=len(noms)) + "</b><br>" + "<br>".join(
+            "• " + __import__("html").escape(n) for n in noms[:20]) + ("<br>• ..." if len(noms) > 20 else ""))
+        lst.setWordWrap(True)
+        self._corps.layout().insertWidget(1, lst)
+        if len(noms) > 1:
+            self.sujet.setText(_("{n} documents", n=len(noms)))
+            self.corps.setPlainText(_("Bonjour,\n\nVeuillez trouver ci-joints les documents suivants :\n{l}\n\n"
+                                      "Cordialement,\n{a}", l="\n".join("- " + n for n in noms),
+                                      a=self.params.get("auteur", "")).rstrip() + "\n")
+
+    def _fichier(self, k=None):
+        k = k or self.version()
+        cle = (k, self.mdp.text() if k == "protege" else "")
+        if cle not in self.cache:
+            from .dialogues_ia import en_tache
+            self.cache[cle] = en_tache(self, self.windowTitle(), _("Préparation des pièces jointes..."),
+                                       C.preparer_fichiers, self._liste, k, self.mdp.text())
+        return self.cache[cle]
+
+    def fermer(self):
+        self._fermer()
+
+
+def envoyer_fichiers(fenetre, fichiers):
+    """Fenetre « Envoyer par e-mail » pour plusieurs fichiers (Accueil, traitement par lot)."""
+    fichiers = [f for f in fichiers if os.path.exists(f)]
+    if not fichiers:
+        return None
+    from PySide6.QtWidgets import QDialog
+    d = QDialog(fenetre)
+    d.setWindowTitle(_("Envoyer {n} fichier(s) par e-mail", n=len(fichiers)))
+    ecran = d.screen().availableGeometry()
+    d.resize(min(560, ecran.width() - 40), min(820, ecran.height() - 60))
+    lay = QVBoxLayout(d)
+    lay.setContentsMargins(0, 0, 0, 0)
+    lay.addWidget(PanneauEnvoyerFichiers(fichiers, fenetre, d.close))
+    d.setAttribute(Qt.WA_DeleteOnClose)
+    d.show()
+    return d

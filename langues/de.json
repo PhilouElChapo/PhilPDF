@@ -2969,5 +2969,15 @@
  "Imprimer tous ces fichiers": "Alle diese Dateien drucken",
  "Envoyer une copie...": "Kopie senden...",
  "Vers un Drive, un NAS ou un FTP, dans le dossier choisi": "An ein Drive, ein NAS oder einen FTP-Server, in den gewählten Ordner",
- "Les fichiers ne sont pas supprimés": "Die Dateien werden nicht gelöscht"
+ "Les fichiers ne sont pas supprimés": "Die Dateien werden nicht gelöscht",
+ "Envoyer {n} fichier(s) par e-mail": "{n} Datei(en) per E-Mail senden",
+ "{n} documents": "{n} Dokumente",
+ "Préparation des pièces jointes...": "Anhänge werden vorbereitet...",
+ "{n} pièce(s) jointe(s)": "{n} Anhang/Anhänge",
+ "Bonjour,\n\nVeuillez trouver ci-joints les documents suivants :\n{l}\n\nCordialement,\n{a}": "Guten Tag,\n\nanbei finden Sie folgende Dokumente:\n{l}\n\nMit freundlichen Grüßen\n{a}",
+ "Redresser la page (lignes et verticales)...": "Seite begradigen (Linien und Senkrechte)...",
+ "Redresser...": "Begradigen...",
+ "Envoyer par e-mail à la fin (les fichiers produits, joints au même message)": "Am Ende per E-Mail senden (die erzeugten Dateien, an dieselbe Nachricht angehängt)",
+ "Les fichiers produits, joints au même message (avant de lancer : les fichiers de la liste, tels quels)": "Die erzeugten Dateien, an dieselbe Nachricht angehängt (vor dem Start: die Dateien der Liste, unverändert)",
+ "Tous ces fichiers joints au même message": "Alle diese Dateien an dieselbe Nachricht angehängt"
 }

@@ -112,5 +112,18 @@ sm = [x for x in lignes if x.text(1) == "Saint Martin"]
 verif(len(sm) == 1 and len(sm[0].data(0, Qt.UserRole + 1)) == 2 and sm[0].text(0) == "Claude",
       "même personne, deux adresses : une ligne (Saint Martin, Claude)")
 verif(any(x.text(1) == "Dal Moro" and x.text(0) == "Christian" for x in lignes), "nom composé gardé : Dal Moro, Christian")
+# plusieurs fichiers (Accueil coche, traitement par lot) : joints au meme message, version allegee de chacun
+d1 = fitz.open(); d1.new_page().insert_text((72, 72), "Deuxieme"); d1.save(SP + "/deux.pdf")
+f.action_plusieurs([SP + "/img.pdf", SP + "/deux.pdf"], "courriel"); app.processEvents()
+pm = f._envoi_plusieurs.findChildren(DC.PanneauEnvoyerFichiers)[0]
+pm.radios["allege"].setChecked(True); app.processEvents()
+pm.r_compte.setChecked(True); pm.cb_compte.setCurrentIndex(0); pm.r_direct.setChecked(True)
+pm.a.setText("dest@exemple.fr"); envoyes.clear(); pm.valider()
+for _ in range(100):
+    app.processEvents()
+    if any(e[0] == "send" for e in envoyes): break
+    import time; time.sleep(0.05)
+env = next((e for e in envoyes if e[0] == "send"), None)
+verif(env and env[3] == ["img.pdf", "deux.pdf"] and env[2] == "2 documents", f"deux fichiers joints au même message ({env})")
 if len(sys.argv) > 1: f.grab().save(sys.argv[1] + "/mail.png")
 print(); print(f"{sum(R)}/{len(R)} vérifications d'envoi par e-mail réussies"); sys.exit(0 if all(R) else 1)

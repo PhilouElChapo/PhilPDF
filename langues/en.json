@@ -2978,5 +2978,15 @@
  "Imprimer tous ces fichiers": "Print all these files",
  "Envoyer une copie...": "Send a copy...",
  "Vers un Drive, un NAS ou un FTP, dans le dossier choisi": "To a Drive, a NAS or an FTP server, in the chosen folder",
- "Les fichiers ne sont pas supprimés": "The files are not deleted"
+ "Les fichiers ne sont pas supprimés": "The files are not deleted",
+ "Envoyer {n} fichier(s) par e-mail": "Send {n} file(s) by e-mail",
+ "{n} documents": "{n} documents",
+ "Préparation des pièces jointes...": "Preparing the attachments...",
+ "{n} pièce(s) jointe(s)": "{n} attachment(s)",
+ "Bonjour,\n\nVeuillez trouver ci-joints les documents suivants :\n{l}\n\nCordialement,\n{a}": "Hello,\n\nPlease find attached the following documents:\n{l}\n\nKind regards,\n{a}",
+ "Redresser la page (lignes et verticales)...": "Straighten the page (lines and verticals)...",
+ "Redresser...": "Straighten...",
+ "Envoyer par e-mail à la fin (les fichiers produits, joints au même message)": "Send by e-mail at the end (the produced files, attached to the same message)",
+ "Les fichiers produits, joints au même message (avant de lancer : les fichiers de la liste, tels quels)": "The produced files, attached to the same message (before starting: the files in the list, as they are)",
+ "Tous ces fichiers joints au même message": "All these files attached to the same message"
 }

@@ -555,6 +555,7 @@ class PageAccueil(QWidget):
                  _("Traitement par lot : nom proposé par l'IA (date, expéditeur, objet) et tri en sous-dossiers ; vous voyez les noms avant")),
                 ("ocr", _("Traitement par lot..."), "lot", _("OCR, alléger, filigrane, numérotation Bates, PDF/A, renommer")),
                 ("imprimer", _("Imprimer"), "imprimer", _("Imprimer tous ces fichiers")),
+                ("courriel", _("Envoyer par e-mail..."), "courriel", _("Tous ces fichiers joints au même message")),
                 ("archiver", _("Envoyer une copie..."), "envoyer_copie", _("Vers un Drive, un NAS ou un FTP, dans le dossier choisi")),
                 ("fermer", _("Retirer de la liste"), "retirer", _("Les fichiers ne sont pas supprimés"))):
             b = QPushButton(icone(ic, "#2b6cb0"), texte)

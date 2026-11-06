@@ -525,6 +525,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
         m = mb.addMenu(_('&Affichage'))
         act(m, _('Pivoter la page (90°, sens horaire)'), lambda: self.doc_courant() and self.doc_courant().pivoter_courante(90), "Shift+Ctrl++", "pivoter")
         act(m, _('Pivoter la page (90°, sens anti-horaire)'), lambda: self.doc_courant() and self.doc_courant().pivoter_courante(-90), "Shift+Ctrl+-", "annuler")
+        act(m, _('Redresser la page (lignes et verticales)...'), lambda: self.doc_courant() and self.lancer_outil("redresser"), None, "pivoter")
         act(m, _('Zoom avant'), lambda: self.doc_courant() and self.doc_courant().changer_zoom(self.doc_courant().zoom * 1.2), "Ctrl++", "zoom_plus")
         act(m, _('Zoom arrière'), lambda: self.doc_courant() and self.doc_courant().changer_zoom(self.doc_courant().zoom / 1.2), "Ctrl+-", "zoom_moins")
         act(m, _('Taille réelle'), lambda: self.doc_courant() and self.doc_courant().changer_zoom(1.0), "Ctrl+1", "taille_reelle")
@@ -1949,6 +1950,9 @@ class Fenetre(MixinCoteACote, QMainWindow):
             self._lot.show()
         elif action == "imprimer":
             self.imprimer(fichiers)
+        elif action == "courriel":
+            from .dialogues_courriel import envoyer_fichiers
+            self._envoi_plusieurs = envoyer_fichiers(self, fichiers)
         elif action == "envoyer_copie":
             self.envoyer_copie(fichiers)
         elif action == "retirer":

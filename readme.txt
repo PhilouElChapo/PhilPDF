@@ -396,6 +396,15 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.78
+- Envoyer plusieurs fichiers par e-mail, joints au meme message : depuis l'Accueil (fichiers coches, « Envoyer par
+  e-mail... ») et depuis le traitement par lot (action « Envoyer par e-mail a la fin » : les fichiers produits ;
+  ou bouton « Envoyer par e-mail... »). Memes moyens que pour un document : logiciel de messagerie, votre adresse
+  (envoi direct ou brouillon), messagerie web ; version tel quel, allegee, figee ou protegee de chaque fichier (un
+  fichier signe part tel quel).
+- Redresser la page (lignes et verticales) : aussi dans le menu Affichage, a cote de Pivoter, et dans Organiser
+  les pages (bouton « Redresser... » et clic droit sur une page).
+
 0.9.77
 - Traitement par lot, Renommer : nom « Proposé par l'IA : date, expediteur, objet » et tri en sous-dossiers par
   expediteur, par type ou par annee. « Proposer les noms avec l'IA... » remplit la colonne « Sera enregistre sous »

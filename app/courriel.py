@@ -122,6 +122,49 @@ def preparer_fichier(onglet, version, nom, mdp=""):
     return chemin
 
 
+def liste(chemin):
+    """Un chemin ou une liste de chemins (plusieurs pieces jointes) -> liste."""
+    return [chemin] if isinstance(chemin, str) else list(chemin or [])
+
+
+def preparer_fichiers(chemins, version, mdp=""):
+    """Plusieurs pieces jointes (fichiers coches, traitement par lot) : tel quel = les fichiers eux-memes ; sinon une
+    copie allegee, figee ou protegee de chacun, sous son nom. Un fichier signe part tel quel (signatures valides)."""
+    import pymupdf as fitz
+    if version == "tel_quel":
+        return list(chemins)
+    dossier = tempfile.mkdtemp(prefix="philpdf-envoi-")
+    out = []
+    for c in chemins:
+        with open(c, "rb") as f:
+            octets = f.read()
+        d = fitz.open("pdf", octets)
+        try:
+            signe = any(w.field_type == fitz.PDF_WIDGET_TYPE_SIGNATURE and w.is_signed for p in d for w in p.widgets())
+        except Exception:                            # noqa: BLE001
+            signe = False
+        if signe or d.needs_pass:
+            out.append(c)
+            continue
+        if version == "allege":
+            from .alleger import alleger, PREREGLAGES
+            _n, dpi, qual, seuil = PREREGLAGES[0]
+            octets = alleger(octets, {"images": True, "dpi": dpi, "qualite": qual, "seuil": seuil, "gris": False,
+                                      "polices": True, "nettoyer": True, "infos": False, "jbig2": True,
+                                      "noir_blanc": False, "polices_formulaire": True})
+        elif version == "fige":
+            d.bake(annots=True, widgets=True)
+            octets = d.tobytes(garbage=3, deflate=True)
+        elif version == "protege" and mdp:
+            octets = d.tobytes(garbage=3, deflate=True, encryption=fitz.PDF_ENCRYPT_AES_256, user_pw=mdp,
+                               owner_pw=mdp, permissions=-1)
+        cible = os.path.join(dossier, os.path.basename(c))
+        with open(cible, "wb") as f:
+            f.write(octets)
+        out.append(cible)
+    return out
+
+
 # ------------------------------------------------------------------ logiciel de messagerie
 def _mapi(chemin, a, sujet, corps, cc="", cci=""):
     """Nouveau message du logiciel de messagerie par defaut, PDF joint. 0 = ouvert ; autre = code d'erreur MAPI."""
@@ -146,9 +189,10 @@ def _mapi(chemin, a, sujet, corps, cc="", cci=""):
     recips = (Recip * max(1, len(dests)))()
     for i, (genre, x) in enumerate(dests):                 # 1 = A, 2 = Cc, 3 = Cci
         recips[i] = Recip(0, genre, x, "SMTP:" + x, 0, None)
-    fichiers = (Fichier * 1)(Fichier(0, 0, 0xFFFFFFFF, chemin, os.path.basename(chemin), None))
+    cs = liste(chemin)
+    fichiers = (Fichier * len(cs))(*[Fichier(0, 0, 0xFFFFFFFF, c, os.path.basename(c), None) for c in cs])
     m = Message(0, sujet, corps.replace("\n", "\r\n"), None, None, None, 0, None, len(dests),
-                recips if dests else None, 1, fichiers)
+                recips if dests else None, len(cs), fichiers)
     mapi = ctypes.WinDLL("mapi32.dll")
     f = mapi.MAPISendMailW
     f.argtypes = [ctypes.c_size_t, ctypes.c_size_t, ctypes.POINTER(Message), W.ULONG, W.ULONG]
@@ -174,7 +218,8 @@ def _outlook(chemin, a, sujet, corps, cc="", cci=""):
         i = h.lower().find("<body")
         j = h.find(">", i) + 1 if i >= 0 else 0
         m.HTMLBody = h[:j] + f"<div style='font-family:Calibri,Arial;font-size:11pt'>{texte}</div>" + h[j:]
-        m.Attachments.Add(chemin)
+        for c in liste(chemin):
+            m.Attachments.Add(c)
     finally:
         pythoncom.CoUninitialize()
 
@@ -206,7 +251,9 @@ def par_logiciel(chemin, a, sujet, corps, rappel, cc="", cci=""):
 
 def _xdg_email(chemin, a, sujet, corps, cc="", cci=""):
     try:
-        args = ["xdg-email", "--subject", sujet, "--body", corps, "--attach", chemin]
+        args = ["xdg-email", "--subject", sujet, "--body", corps]
+        for c in liste(chemin):
+            args += ["--attach", c]
         for x in adresses(cc):
             args += ["--cc", x]
         for x in adresses(cci):
@@ -219,6 +266,7 @@ def _xdg_email(chemin, a, sujet, corps, cc="", cci=""):
 
 def montrer_fichier(chemin):
     """Ouvre le dossier du fichier, le fichier selectionne (pour le glisser dans un message web)."""
+    chemin = liste(chemin)[0]
     if sys.platform == "win32":
         subprocess.Popen(["explorer", "/select,", os.path.normpath(chemin)])
     else:
@@ -289,8 +337,9 @@ def _message(compte, a, cc, sujet, corps, chemin, copie_moi=False, cci=""):
     m["Message-ID"] = make_msgid(domain=compte["adresse"].rsplit("@", 1)[-1])
     sig = (compte.get("signature") or "").strip()
     m.set_content(corps + (("\n\n-- \n" + sig) if sig else ""))
-    with open(chemin, "rb") as f:
-        m.add_attachment(f.read(), maintype="application", subtype="pdf", filename=os.path.basename(chemin))
+    for c in liste(chemin):
+        with open(c, "rb") as f:
+            m.add_attachment(f.read(), maintype="application", subtype="pdf", filename=os.path.basename(c))
     return m
 
 

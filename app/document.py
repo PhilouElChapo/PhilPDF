@@ -2279,6 +2279,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         h.addStretch()
         for txt, f in [(_('Pivoter ↺'), lambda: self._sel_grille(lambda p: self.pivoter(p, -90, demander=False))),
                        (_('Pivoter ↻'), lambda: self._sel_grille(lambda p: self.pivoter(p, 90, demander=False))),
+                       (_('Redresser...'), lambda: self._sel_grille(lambda p: self._redresser(p[0]))),
                        (_('Supprimer'), lambda: self._sel_grille(self.supprimer_pages)),
                        (_('Extraire'), lambda: self._sel_grille(self.extraire)),
                        (_('Insérer un fichier...'), lambda: self.inserer_fichier(self._apres_selection())),
@@ -4594,6 +4595,11 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
                 self.page_widgets[n].maj_taille()
             self.construire_vignettes()
 
+    def _redresser(self, n):
+        """Redresser une page penchee (lignes et verticales) ; la fenetre propose aussi « toutes les pages »."""
+        from .dialogue_redresser import redresser_page
+        redresser_page(self.window(), self, n)
+
     def _menu_pages(self, liste, pos):
         pages = sorted(it.data(Qt.UserRole) for it in liste.selectedItems())
         if not pages:
@@ -4601,6 +4607,7 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         m = QMenu(self)
         m.addAction(icone("pivoter"), _('Pivoter à droite (90°)'), lambda: self.pivoter(pages, 90, demander=False))
         m.addAction(_('Pivoter à gauche (90°)'), lambda: self.pivoter(pages, -90, demander=False))
+        m.addAction(icone("pivoter", "#444444"), _('Redresser la page (lignes et verticales)...'), lambda: self._redresser(pages[0]))
         m.addSeparator()
         m.addAction(_('Déplacer au début'), lambda: self.reordonner(pages + [i for i in range(len(self.doc)) if i not in pages]))
         m.addAction(_('Déplacer à la fin'), lambda: self.reordonner([i for i in range(len(self.doc)) if i not in pages] + pages))

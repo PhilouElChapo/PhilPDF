@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, Q
 
 from .langue import _
 
-ACTIONS = ("ocr", "alleger", "filigrane", "bates", "pdfa", "renommer")
+ACTIONS = ("ocr", "alleger", "filigrane", "bates", "pdfa", "renommer", "courriel")
 
 
 def fichiers_du_dossier(dossier, sous_dossiers=False):
@@ -257,7 +257,8 @@ class DialogueLot(QDialog):
         self.cases = {}
         libelles = {"ocr": _("Reconnaître le texte (OCR) des pages scannées"),
                     "alleger": _("Alléger"), "filigrane": _("Filigrane"), "bates": _("Numérotation Bates"),
-                    "pdfa": _("Archiver en PDF/A"), "renommer": _("Renommer")}
+                    "pdfa": _("Archiver en PDF/A"), "renommer": _("Renommer"),
+                    "courriel": _("Envoyer par e-mail à la fin (les fichiers produits, joints au même message)")}
         for a in ACTIONS:
             c = QCheckBox(libelles[a])
             c.setObjectName("lot_" + a)
@@ -334,6 +335,7 @@ class DialogueLot(QDialog):
             w.textChanged.connect(self.maj_apercu)
             hr.addWidget(w)
         fa.addRow("", hr)
+        fa.addRow(self.cases["courriel"])
         g.addWidget(ga)
         gs = QGroupBox(_("Où mettre les fichiers produits"))
         fs = QVBoxLayout(gs)
@@ -383,6 +385,10 @@ class DialogueLot(QDialog):
         self.b_arreter.clicked.connect(self.arreter)
         self.b_arreter.setEnabled(False)
         hb.addWidget(self.b_arreter)
+        self.b_mail = QPushButton(_("Envoyer par e-mail..."))
+        self.b_mail.setToolTip(_("Les fichiers produits, joints au même message (avant de lancer : les fichiers de la liste, tels quels)"))
+        self.b_mail.clicked.connect(self.envoyer_mail)
+        hb.addWidget(self.b_mail)
         self.b_ouvrir = QPushButton(_("Ouvrir le dossier"))
         self.b_ouvrir.clicked.connect(self.ouvrir_dossier)
         self.b_ouvrir.setEnabled(False)
@@ -582,6 +588,8 @@ class DialogueLot(QDialog):
         n = len(self.fichiers)
         acts = r["actions"]
         self.b_lancer.setEnabled(bool(n and acts))
+        if hasattr(self, "b_mail"):
+            self.b_mail.setEnabled(bool(n or self.produits))
         self.bilan.setText(_("{n} fichier(s) PDF.", n=n) + " " +
                            (_("Cochez au moins une action.") if not acts else
                             _("Vérifiez les noms à droite, puis « Lancer ». Les originaux restent intacts.")
@@ -591,6 +599,9 @@ class DialogueLot(QDialog):
     def lancer(self):
         r = self.reglages()
         if not self.fichiers or not r["actions"]:
+            return
+        if r["actions"] == ["courriel"]:                    # rien a transformer : les fichiers partent tels quels
+            self.envoyer_mail()
             return
         if "renommer" in r["actions"] and r["mode_nom"] == "ia":
             manquent = [f for f in self.fichiers if f not in self.noms_ia]
@@ -640,6 +651,13 @@ class DialogueLot(QDialog):
         self.b_ouvrir.setEnabled(bool(self.produits))
         self.bilan.setText(_("Terminé : {n} fichier(s) produit(s) sur {t}.", n=len(self.produits), t=len(self.fichiers))
                            + (" " + _("{k} Ko gagnés.", k=self.gain // 1024) if self.gain > 0 else ""))
+        if self.produits and self.cases["courriel"].isChecked() and not (self.tache and self.tache.stop):
+            self.envoyer_mail()                            # « Envoyer par e-mail a la fin » : le message s'ouvre
+
+    def envoyer_mail(self):
+        from .dialogues_courriel import envoyer_fichiers
+        fen = self.parent() if self.parent() is not None and hasattr(self.parent(), "statusBar") else self.window()
+        self._mail = envoyer_fichiers(fen, self.produits or self.fichiers)
 
     def arreter(self):
         if self.tache:

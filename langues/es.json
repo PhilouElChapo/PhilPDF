@@ -2969,5 +2969,15 @@
  "Imprimer tous ces fichiers": "Imprimir todos estos archivos",
  "Envoyer une copie...": "Enviar una copia...",
  "Vers un Drive, un NAS ou un FTP, dans le dossier choisi": "A un Drive, un NAS o un FTP, en la carpeta elegida",
- "Les fichiers ne sont pas supprimés": "Los archivos no se eliminan"
+ "Les fichiers ne sont pas supprimés": "Los archivos no se eliminan",
+ "Envoyer {n} fichier(s) par e-mail": "Enviar {n} archivo(s) por correo",
+ "{n} documents": "{n} documentos",
+ "Préparation des pièces jointes...": "Preparando los archivos adjuntos...",
+ "{n} pièce(s) jointe(s)": "{n} archivo(s) adjunto(s)",
+ "Bonjour,\n\nVeuillez trouver ci-joints les documents suivants :\n{l}\n\nCordialement,\n{a}": "Buenos días:\n\nLe adjunto los siguientes documentos:\n{l}\n\nAtentamente,\n{a}",
+ "Redresser la page (lignes et verticales)...": "Enderezar la página (líneas y verticales)...",
+ "Redresser...": "Enderezar...",
+ "Envoyer par e-mail à la fin (les fichiers produits, joints au même message)": "Enviar por correo al final (los archivos producidos, adjuntos al mismo mensaje)",
+ "Les fichiers produits, joints au même message (avant de lancer : les fichiers de la liste, tels quels)": "Los archivos producidos, adjuntos al mismo mensaje (antes de iniciar: los archivos de la lista, tal cual)",
+ "Tous ces fichiers joints au même message": "Todos estos archivos adjuntos al mismo mensaje"
 }
