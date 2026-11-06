@@ -571,7 +571,7 @@ private fun Recherche(etat: EtatLecteur, aller: (Int) -> Unit) {
     }
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         OutlinedTextField(texte, { texte = it }, Modifier.fillMaxWidth(), singleLine = true,
-            placeholder = { Text(stringResource(R.string.rechercher_texte)) },
+            placeholder = { TexteAjuste(stringResource(R.string.rechercher_texte), 15.sp) },   // tient aussi en allemand
             trailingIcon = { IconButton(onClick = { lancer() }) { Icon(Icones.get("rechercher"), stringResource(R.string.rechercher)) } },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { lancer() }))

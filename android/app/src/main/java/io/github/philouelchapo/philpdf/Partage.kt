@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,7 +31,8 @@ fun ChoixPartage(etat: EtatLecteur, fermer: () -> Unit) {
     AlertDialog(onDismissRequest = { if (!occupe) fermer() },
         title = { Text(stringResource(R.string.partager)) },
         text = {
-            Column {
+            // defile si l'ecran est bas (telephone a l'horizontale) : rien d'ecrase
+            Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
                 Ligne("courriel", stringResource(R.string.partage_fichier), stringResource(R.string.partage_fichier_aide), !occupe) {
                     fermer(); portee.launch { partager(ctx, etat.doc) }
                 }

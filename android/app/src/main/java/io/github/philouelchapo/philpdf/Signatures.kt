@@ -458,7 +458,10 @@ fun PadSignature(genre: String, fermer: () -> Unit, valider: (Trace) -> Unit) {
         Column(Modifier.fillMaxWidth(0.95f).background(Color.White, RoundedCornerShape(12.dp)).padding(12.dp)) {
             Text(stringResource(if (genre == "signature") R.string.dessinez_signature else R.string.dessinez_paraphe), fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
-            Box(Modifier.fillMaxWidth().aspectRatio(if (genre == "signature") 2.6f else 1.4f)
+            // telephone a l'horizontale : le cadre laisse la place au titre et aux boutons (il devient moins large)
+            val hauteurMax = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp - 170).coerceAtLeast(90).dp
+            Box(Modifier.align(Alignment.CenterHorizontally).heightIn(max = hauteurMax)   // pleine largeur si la hauteur le permet
+                .aspectRatio(if (genre == "signature") 2.6f else 1.4f)
                 .background(Color(0xFFFAFAFA)).border(1.dp, Color(0xFFBDBDBD))
                 .pointerInput(Unit) {
                     taille = size

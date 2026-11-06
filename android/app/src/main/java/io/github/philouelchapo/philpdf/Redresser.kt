@@ -5,6 +5,8 @@ package io.github.philouelchapo.philpdf
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -46,53 +48,74 @@ fun RedresserImage(image: Bitmap?, titre: String, fermer: () -> Unit, toutes: Bo
         trouve = t; angle = t.first; vertical = t.second
     }
     fun deg(a: Float) = String.format(Locale.FRANCE, "%+.1f°", a)
+    // apercu transforme en direct, grille fixe par-dessus
+    val apercu: @Composable (Modifier) -> Unit = { m ->
+        Box(m.padding(10.dp).clipToBounds(), contentAlignment = Alignment.Center) {
+            if (image == null) CircularProgressIndicator()
+            Canvas(Modifier.fillMaxSize()) {
+                val bm = image
+                if (bm != null) {
+                    val e = minOf(size.width / bm.width, size.height / bm.height)
+                    val mx = Numerisation.matrice(angle, vertical, bm.width.toFloat(), bm.height.toFloat())
+                    mx.postScale(e, e)
+                    mx.postTranslate((size.width - bm.width * e) / 2, (size.height - bm.height * e) / 2)
+                    drawIntoCanvas { it.nativeCanvas.drawBitmap(bm, mx, android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)) }
+                }
+                val pas = 28.dp.toPx()
+                var y = pas
+                while (y < size.height) { drawLine(Color(0x551A73E8), Offset(0f, y), Offset(size.width, y), 1.5f); y += pas }
+                var x = pas
+                while (x < size.width) { drawLine(Color(0x441A73E8), Offset(x, 0f), Offset(x, size.height), 1f); x += pas * 2 }
+            }
+        }
+    }
+    val entete: @Composable () -> Unit = {
+        Column(Modifier.fillMaxWidth().background(Color.White).padding(12.dp)) {
+            TexteAjuste(titre, 17.sp)
+            Text(stringResource(R.string.redresser_aide), fontSize = 12.sp, color = Color.Gray)
+        }
+    }
+    val reglages: @Composable () -> Unit = {
+        Column(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 10.dp, vertical = 4.dp)) {
+            Reglage(stringResource(R.string.redresser_lignes), angle) { angle = it }
+            Reglage(stringResource(R.string.redresser_verticales), vertical) { vertical = it }
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
+                OutlinedButton(onClick = { trouve?.let { angle = it.first; vertical = it.second } }, enabled = trouve != null) {
+                    Text(stringResource(R.string.redresser_auto) + (trouve?.let { " (" + deg(it.first) + " / " + deg(it.second) + ")" } ?: ""))
+                }
+                OutlinedButton(onClick = { angle = 0f; vertical = 0f }) { Text("0°") }
+            }
+            if (toutes != null) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(!surToutes, { surToutes = false }, label = { Text(stringResource(R.string.redresser_cette_page)) })
+                FilterChip(surToutes, { surToutes = true }, label = { Text(stringResource(R.string.redresser_toutes)) })
+            }
+        }
+    }
+    val boutons: @Composable () -> Unit = {
+        FlowRow(Modifier.fillMaxWidth().background(Color.White).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {
+            TextButton(onClick = fermer) { Text(stringResource(R.string.annuler)) }
+            Button(onClick = { valider(angle, vertical, surToutes) }, colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) {
+                Text(stringResource(R.string.appliquer))
+            }
+        }
+    }
     Fenetre(fermer) {
         Surface(Modifier.fillMaxSize(), color = Color(0xFFF3F3F3)) {
-            Column(Modifier.fillMaxSize()) {
-                Column(Modifier.fillMaxWidth().background(Color.White).padding(12.dp)) {
-                    TexteAjuste(titre, 17.sp)
-                    Text(stringResource(R.string.redresser_aide), fontSize = 12.sp, color = Color.Gray)
-                }
-                // apercu transforme en direct, grille fixe par-dessus
-                Box(Modifier.weight(1f).fillMaxWidth().padding(10.dp).clipToBounds(), contentAlignment = Alignment.Center) {
-                    if (image == null) CircularProgressIndicator()
-                    Canvas(Modifier.fillMaxSize()) {
-                        val bm = image
-                        if (bm != null) {
-                            val e = minOf(size.width / bm.width, size.height / bm.height)
-                            val m = Numerisation.matrice(angle, vertical, bm.width.toFloat(), bm.height.toFloat())
-                            m.postScale(e, e)
-                            m.postTranslate((size.width - bm.width * e) / 2, (size.height - bm.height * e) / 2)
-                            drawIntoCanvas { it.nativeCanvas.drawBitmap(bm, m, android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)) }
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                if (maxWidth > maxHeight) {
+                    // telephone a l'horizontale : apercu a gauche, reglages a droite (ils defilent), boutons toujours visibles
+                    Row(Modifier.fillMaxSize()) {
+                        apercu(Modifier.weight(1f).fillMaxHeight())
+                        Column(Modifier.width(minOf(360.dp, maxWidth * 0.55f)).fillMaxHeight()) {
+                            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { entete(); reglages() }
+                            boutons()
                         }
-                        val pas = 28.dp.toPx()
-                        var y = pas
-                        while (y < size.height) { drawLine(Color(0x551A73E8), Offset(0f, y), Offset(size.width, y), 1.5f); y += pas }
-                        var x = pas
-                        while (x < size.width) { drawLine(Color(0x441A73E8), Offset(x, 0f), Offset(x, size.height), 1f); x += pas * 2 }
                     }
-                }
-                Column(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 10.dp, vertical = 4.dp)) {
-                    Reglage(stringResource(R.string.redresser_lignes), angle) { angle = it }
-                    Reglage(stringResource(R.string.redresser_verticales), vertical) { vertical = it }
-                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
-                        OutlinedButton(onClick = { trouve?.let { angle = it.first; vertical = it.second } }, enabled = trouve != null) {
-                            Text(stringResource(R.string.redresser_auto) + (trouve?.let { " (" + deg(it.first) + " / " + deg(it.second) + ")" } ?: ""))
-                        }
-                        OutlinedButton(onClick = { angle = 0f; vertical = 0f }) { Text("0°") }
-                    }
-                    if (toutes != null) Row(verticalAlignment = Alignment.CenterVertically) {
-                        FilterChip(!surToutes, { surToutes = false }, label = { Text(stringResource(R.string.redresser_cette_page)) })
-                        Spacer(Modifier.width(8.dp))
-                        FilterChip(surToutes, { surToutes = true }, label = { Text(stringResource(R.string.redresser_toutes)) })
-                    }
-                }
-                // boutons fixes en bas
-                Row(Modifier.fillMaxWidth().background(Color.White).padding(6.dp), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = fermer) { Text(stringResource(R.string.annuler)) }
-                    Button(onClick = { valider(angle, vertical, surToutes) }, colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) {
-                        Text(stringResource(R.string.appliquer))
-                    }
+                } else Column(Modifier.fillMaxSize()) {
+                    entete()
+                    apercu(Modifier.weight(1f).fillMaxWidth())
+                    reglages()
+                    boutons()     // fixes en bas
                 }
             }
         }
