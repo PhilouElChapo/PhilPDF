@@ -214,13 +214,20 @@ class DialogueExcel(QDialog):
 
     # ------------------------------------------------------------ reperage
     def reperer(self, *_x):
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        from .dialogues_ia import executer_suivi
+        strategie, assembler = self.strategie.currentData(), self.assembler.isChecked()
+
+        def travail(tache):
+            tache.avancer(_("Recherche des tableaux dans {n} page(s)...", n=len(self.doc)))
+            t = TB.trouver(self.doc, strategie=strategie)
+            return TB.assembler(t) if assembler else t
         try:
-            t = TB.trouver(self.doc, strategie=self.strategie.currentData())
-            if self.assembler.isChecked():
-                t = TB.assembler(t)
-        finally:
-            QApplication.restoreOverrideCursor()
+            t = executer_suivi(self, self.windowTitle() or _("Tableaux vers Excel"), travail)
+        except InterruptedError:
+            t = []
+        except Exception as e:                          # noqa: BLE001
+            QMessageBox.warning(self, self.windowTitle(), _("Recherche des tableaux impossible : {e}", e=e))
+            t = []
         manuels = [x for x in self.tableaux if x.get("manuel")]
         self.tableaux = [dict(x, coche=True, page_fin=x.get("page_fin", x["page"])) for x in t] + manuels
         self._remplir_liste()

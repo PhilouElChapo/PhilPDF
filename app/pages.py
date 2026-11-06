@@ -1032,6 +1032,7 @@ class PageAccueil(QWidget):
         act("imprimer", _("Imprimer..."), "imprimer", existe)
         m.addSeparator()
         act("copier", _("Copier le chemin"), "copier_chemin")
+        act("archiver", _("Envoyer une copie vers un Drive, un NAS ou un FTP..."), "envoyer_copie", existe)
         act("fermer", _("Retirer de la liste"), "retirer")
         m.exec(self.liste.viewport().mapToGlobal(pos))
 

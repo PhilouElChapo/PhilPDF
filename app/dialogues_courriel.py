@@ -1061,11 +1061,9 @@ class PanneauEnvoyer(QWidget):
         k = k or self.version()
         cle = (k, self.mdp.text() if k == "protege" else "", self.nom.text())
         if cle not in self.cache:
-            QApplication.setOverrideCursor(Qt.WaitCursor)
-            try:
-                self.cache[cle] = C.preparer_fichier(self.o, k, self.nom.text(), self.mdp.text())
-            finally:
-                QApplication.restoreOverrideCursor()
+            from .dialogues_ia import en_tache
+            self.cache[cle] = en_tache(self, self.windowTitle(), _("Préparation de la pièce jointe..."),
+                                       C.preparer_fichier, self.o, k, self.nom.text(), self.mdp.text())
         return self.cache[cle]
 
     def oublier(self):

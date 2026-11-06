@@ -48,26 +48,28 @@ class DialogueArchiver(QDialog):
         h.addWidget(b)
         v.addLayout(h)
         self.resultat = None
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        try:
-            self.preparer()
-        finally:
-            QApplication.restoreOverrideCursor()
+        self.preparer()
 
     def preparer(self):
-        d = fitz.open("pdf", self.o.doc.tobytes())
-        try:
+        from .dialogues_ia import executer_suivi
+        source = self.o.doc.tobytes()
+
+        def travail(t):
+            t.avancer(_("Conversion en PDF/A (polices incorporées, couleurs, métadonnées)..."))
+            d = fitz.open("pdf", source)
             journal = pdfa.convertir(d)
-        except Exception as e:
+            octets = pdfa.octets(d)
+            t.avancer(_("Vérification du résultat..."))
+            return journal, octets, pdfa.verifier(fitz.open("pdf", octets))
+        try:
+            journal, self.resultat, res = executer_suivi(self, _("Archiver (PDF/A)"), travail)
+        except Exception as e:                          # noqa: BLE001 (InterruptedError compris : arret demande)
             self.bilan.setText("<span style='color:#c9252d'>" + _("Conversion impossible : {e}", e=e) + "</span>")
             self.b_copie.setEnabled(False)
             self.b_appli.setEnabled(False)
             return
-        self.resultat = pdfa.octets(d)
         for l in journal or [_("Rien à changer : le document était presque prêt.")]:
             self.changes.addItem("•  " + l)
-        d2 = fitz.open("pdf", self.resultat)
-        res = pdfa.verifier(d2)
         for regle, ok, detail in res:
             it = QListWidgetItem(("✓  " if ok else "✕  ") + regle + (f" — {detail}" if detail else ""))
             it.setForeground(Qt.darkGreen if ok else Qt.red)

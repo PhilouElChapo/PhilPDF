@@ -754,4 +754,11 @@
     <string name="redresser_lignes">Zeilen (Seite drehen)</string>
     <string name="redresser_verticales">Senkrechte (schiefe Ränder, Spalten)</string>
     <string name="inserer_scan">Scan einfügen</string>
+    <string name="ia_nommer_titre">Namen vorschlagen</string>
+    <string name="ia_nommer_accord">Das Bild der ersten Seite wird an die KI (%1$s) gesendet, um einen Namen vorzuschlagen (Absender, Betreff, Datum). Senden?</string>
+    <string name="ia_nommer_nom">Vorgeschlagener Name (änderbar)</string>
+    <string name="ia_nommer_verifier">Von der KI vorgeschlagen: Absender und Datum prüfen.</string>
+    <string name="ia_nommer_garder">Diesen Namen behalten</string>
+    <string name="ia_nommer_origine">Ursprünglicher Name</string>
+    <string name="ia_nommer_case">Namen mit KI vorschlagen (Absender, Betreff, Datum)</string>
 </resources>

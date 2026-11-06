@@ -185,6 +185,12 @@ class DialogueScanPhotos(QDialog):
         self.ocr = QCheckBox(_("Reconnaître le texte (OCR) aussitôt le PDF créé"))
         self.ocr.setChecked(params.get("scan_photo_ocr", True))
         v.addWidget(self.ocr)
+        from . import ia as _ia
+        self.nommer = QCheckBox(_("Proposer un nom avec l'IA (expéditeur, objet, date)"))
+        self.nommer.setToolTip(_("A la fin, l'IA lit le document et propose un nom ; rien n'est envoyé sans votre accord."))
+        self.nommer.setChecked(_ia.disponible(params) and params.get("scan_nommer", True))
+        self.nommer.setVisible(_ia.disponible(params))
+        v.addWidget(self.nommer)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.button(QDialogButtonBox.Ok).setText(_("Créer le PDF"))
         bb.button(QDialogButtonBox.Cancel).setText(_("Annuler"))
@@ -210,19 +216,28 @@ class DialogueScanPhotos(QDialog):
             self._ajouter_fichiers(fs)
 
     def _ajouter_fichiers(self, fs):
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        from .dialogues_ia import executer_suivi
         refus = []
-        try:
-            for f in fs:
+
+        def travail(t):
+            lues = []
+            for k, f in enumerate(fs):
+                t.avancer(_("Photo {i} sur {n} : recherche des bords de la feuille...", i=k + 1, n=len(fs)), k, len(fs))
                 try:
                     img = P.lire(f)
                 except Exception:                    # noqa: BLE001
                     refus.append(os.path.basename(f))
+                    t.noter(_("Illisible : {f}", f=os.path.basename(f)))
                     continue
-                self.pages.append({"img": img, "coins": P.coins(img).tolist()})
-                self.liste.addItem(self._item(len(self.pages) - 1))
-        finally:
-            QApplication.restoreOverrideCursor()
+                lues.append({"img": img, "coins": P.coins(img).tolist()})
+            return lues
+        try:
+            lues = executer_suivi(self, self.windowTitle(), travail)
+        except InterruptedError:
+            lues = []
+        for pg in lues:
+            self.pages.append(pg)
+            self.liste.addItem(self._item(len(self.pages) - 1))
         if refus:
             QMessageBox.warning(self, self.windowTitle(), _("Ces images ne peuvent pas être lues :") + "\n" + "\n".join(refus))
         if self.liste.currentRow() < 0 and self.pages:
@@ -314,16 +329,23 @@ class DialogueScanPhotos(QDialog):
             self.doc = P.pdf(pages)
             self.accept()
             return
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        from .dialogues_ia import executer_suivi
+        photos = [(p["img"], np.array(p["coins"], dtype=np.float32)) for p in self.pages]
+
+        def travail(t):
+            out = []
+            for k, (img, c) in enumerate(photos):
+                t.avancer(_("Page {i} sur {n} : redressement et amélioration...", i=k + 1, n=len(photos)), k, len(photos))
+                out.append(P.octets(P.ameliorer(P.redresser(img, c), m), m))
+            t.avancer(_("Création du PDF..."), len(photos), len(photos))
+            return P.pdf(out)
         try:
-            pages = [P.octets(P.ameliorer(P.redresser(p["img"], np.array(p["coins"], dtype=np.float32)), m), m)
-                     for p in self.pages]
-            self.doc = P.pdf(pages)
+            self.doc = executer_suivi(self, self.windowTitle(), travail)
+        except InterruptedError:
+            return
         except Exception as e:                      # noqa: BLE001
-            QApplication.restoreOverrideCursor()
             QMessageBox.warning(self, self.windowTitle(), _("Création du PDF impossible : {e}", e=e))
             return
-        QApplication.restoreOverrideCursor()
         self.accept()
 
 

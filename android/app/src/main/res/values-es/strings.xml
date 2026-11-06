@@ -754,4 +754,11 @@
     <string name="redresser_lignes">Líneas (girar la página)</string>
     <string name="redresser_verticales">Verticales (bordes, columnas inclinados)</string>
     <string name="inserer_scan">Insertar un escaneo</string>
+    <string name="ia_nommer_titre">Proponer un nombre</string>
+    <string name="ia_nommer_accord">La imagen de la primera página se enviará a la IA (%1$s) para proponer un nombre (remitente, asunto, fecha). ¿Enviar?</string>
+    <string name="ia_nommer_nom">Nombre propuesto (modificable)</string>
+    <string name="ia_nommer_verifier">Propuesto por la IA: compruebe el remitente y la fecha.</string>
+    <string name="ia_nommer_garder">Mantener este nombre</string>
+    <string name="ia_nommer_origine">Nombre original</string>
+    <string name="ia_nommer_case">Proponer un nombre con IA (remitente, asunto, fecha)</string>
 </resources>

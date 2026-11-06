@@ -3039,8 +3039,8 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
             self._ecoute_biblio = self._maj_volet_biblio
             _bib.CHANGEMENTS.append(self._ecoute_biblio)
             self.destroyed.connect(lambda *_a, f=self._ecoute_biblio: f in _bib.CHANGEMENTS and _bib.CHANGEMENTS.remove(f))
-        if genre == "signatures" and not self.biblio.elements("signatures"):
-            self._gerer_biblio()
+        if genre == "signatures" and not self.biblio.elements("signatures") and not getattr(self, "_dans_gerer", False):
+            self._gerer_biblio()                       # une seule fois : si on ferme sans en creer, le volet reste vide
 
     def _maj_volet_biblio(self):
         if self.pile_volet.currentIndex() != 2 or not getattr(self, "genre_biblio", None):
@@ -3181,7 +3181,11 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
     def _gerer_biblio(self):
         d = DialogueBibliotheque(self, self.biblio, self.genre_biblio, self.params.get("auteur", ""))
         ok = d.exec() == QDialog.Accepted
-        self.ouvrir_bibliotheque(self.genre_biblio)
+        self._dans_gerer = True
+        try:
+            self.ouvrir_bibliotheque(self.genre_biblio)
+        finally:
+            self._dans_gerer = False
         if ok:
             e, pdf = d.choisi()
             if pdf:

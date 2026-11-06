@@ -40,6 +40,7 @@ class DialogueCreer(QDialog):
             b.clicked.connect(lambda _c=False, g=genre: self._choisir(g))
             v.addWidget(b)
             l = QLabel(aide)
+            l.setWordWrap(True)                          # langues plus longues : passe a la ligne
             l.setStyleSheet("color:#666;margin-left:40px;margin-bottom:4px")
             v.addWidget(l)
         bb = QDialogButtonBox(QDialogButtonBox.Cancel)
@@ -214,11 +215,11 @@ class DialogueImprimante(QDialog):
             self.b_inst.setEnabled(False)
             self.b_desinst.setEnabled(False)
             return
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        from .dialogues_ia import en_tache
         try:
-            e = self.I.etat()
-        finally:
-            QApplication.restoreOverrideCursor()
+            e = en_tache(self, self.windowTitle(), _("Vérification de l'imprimante PhilPDF..."), self.I.etat, lecture=True)
+        except InterruptedError:
+            return
         ok = bool(e["nom"])
         if ok:
             lignes = ["<span style='color:#1e6b34'>✓ " + _("Installée dans Windows sous le nom « {n} ».", n=e["nom"]) + "</span>"]
@@ -240,11 +241,9 @@ class DialogueImprimante(QDialog):
         self.b_renommer.setVisible(ok)
 
     def installer(self):
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        try:
-            ok, msg = self.I.installer(self.nom.text().strip() or None)
-        finally:
-            QApplication.restoreOverrideCursor()
+        from .dialogues_ia import en_tache
+        ok, msg = en_tache(self, self.windowTitle(), _("Installation de l'imprimante PhilPDF (Windows peut demander "
+                                                       "l'autorisation)..."), self.I.installer, self.nom.text().strip() or None)
         if ok:
             self.params["imprimante_installee"] = True
             self.params.enregistrer()
@@ -255,11 +254,8 @@ class DialogueImprimante(QDialog):
         self._maj()
 
     def renommer(self):
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        try:
-            ok, msg = self.I.renommer(self.nom.text().strip())
-        finally:
-            QApplication.restoreOverrideCursor()
+        from .dialogues_ia import en_tache
+        ok, msg = en_tache(self, self.windowTitle(), _("Renommage de l'imprimante..."), self.I.renommer, self.nom.text().strip())
         if not ok and msg:
             QMessageBox.warning(self, self.windowTitle(), msg)
         self.params["imprimante_nom"] = self.nom.text().strip()
@@ -278,11 +274,8 @@ class DialogueImprimante(QDialog):
     def desinstaller(self):
         if QMessageBox.question(self, self.windowTitle(), _("Retirer l'imprimante PhilPDF ?")) != QMessageBox.Yes:
             return
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        try:
-            self.I.desinstaller()
-        finally:
-            QApplication.restoreOverrideCursor()
+        from .dialogues_ia import en_tache
+        en_tache(self, self.windowTitle(), _("Retrait de l'imprimante PhilPDF..."), self.I.desinstaller)
         self.params["imprimante_installee"] = False
         self.params.enregistrer()
         self._maj()

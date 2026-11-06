@@ -71,6 +71,14 @@ fun EcranNumerisation(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
     var aCadrer by remember { mutableStateOf<Pair<Bitmap, List<PointF>>?>(null) }
     var aRemplacer by remember { mutableStateOf<PageScan?>(null) }       // recadrer une page deja prise
     var aTourner by remember { mutableStateOf<PageScan?>(null) }         // redresser une page (angle)
+    // nom propose par l'IA a la fin (case gardee d'une fois sur l'autre ; seulement si une clef est reglee)
+    val prefsScan = remember { ctx.getSharedPreferences("scan", android.content.Context.MODE_PRIVATE) }
+    val iaPrete = remember { Ia.disponible(ctx) }
+    var nommer by remember { mutableStateOf(iaPrete && prefsScan.getBoolean("nommer", true)) }
+    var aNommer by remember { mutableStateOf<Pair<File, Bitmap>?>(null) }
+    fun terminer(f: File, premiere: Bitmap?) {
+        if (nommer && iaPrete && premiere != null) aNommer = f to premiere else ouvrirPdf(f)
+    }
     var occupe by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var googleEssaye by remember { mutableStateOf(false) }
@@ -230,6 +238,10 @@ fun EcranNumerisation(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
                             }
                         }
                     }
+                    if (iaPrete) Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(nommer, { nommer = it; prefsScan.edit().putBoolean("nommer", it).apply() })
+                        Text(stringResource(R.string.ia_nommer_case), fontSize = 13.sp)
+                    }
                     // boutons fixes en bas (jamais sous les barres d'Android : Fenetre s'arrete au-dessus)
                     FlowRow(Modifier.fillMaxWidth().background(Color.White).padding(6.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
@@ -251,7 +263,7 @@ fun EcranNumerisation(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
                                     }
                                     Journal.ecrire("numérisation", "${l.size} page(s), modèle $m, ${f.length() / 1024} Ko")
                                     occupe = null
-                                    ouvrirPdf(f)
+                                    terminer(f, l.firstOrNull())
                                 } catch (e: Exception) {
                                     occupe = null; message = ctx.getString(R.string.scan_echec, e.message ?: e.toString())
                                     Journal.ecrire("numérisation", "échec : $e")
@@ -274,6 +286,7 @@ fun EcranNumerisation(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
             }
         }
     }
+    aNommer?.let { (f, b) -> NommerScan(f, b) { final -> aNommer = null; ouvrirPdf(final) } }
     magnifier?.let { l ->
         if (!accordMagnifier) AlertDialog(onDismissRequest = { magnifier = null },
             title = { Text(stringResource(R.string.scan_magnificence)) },
@@ -296,7 +309,7 @@ fun EcranNumerisation(fermer: () -> Unit, ouvrirPdf: (File) -> Unit) {
             Journal.ecrire("numérisation", "${l.size} page(s), Magnificence IA (${Ia.dernier?.second}), ${locales.size} améliorée(s) ici, ${f.length() / 1024} Ko")
             magnifier = null; accordMagnifier = false; avanceMagnifier = ""
             if (locales.isNotEmpty()) android.widget.Toast.makeText(ctx, ctx.getString(R.string.scan_magnificence_locales, locales.joinToString(", ")), android.widget.Toast.LENGTH_LONG).show()
-            ouvrirPdf(f)
+            terminer(f, l.firstOrNull())
         }, { magnifier = null; accordMagnifier = false; avanceMagnifier = "" }, gemini = true)
     }
     message?.let { m ->

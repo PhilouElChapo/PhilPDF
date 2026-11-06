@@ -107,6 +107,18 @@ jobs:
 
       - name: Test des preferences (export, import)
         run: python tests/test_reglages.py
+      - name: Aucun texte coupe (chaque outil et chaque menu, 5 langues)
+        timeout-minutes: 40
+        shell: bash
+        run: |
+          for lg in fr en de es it; do
+            echo "=== $lg"
+            PHILPDF_LANGUE=$lg TRONQ_DUMP=480 python tests/test_tronques.py | grep -v "^…"
+            test ${PIPESTATUS[0]} -eq 0 || exit 1
+          done
+        env:
+          QT_QPA_PLATFORM: offscreen
+          PYTHONIOENCODING: utf-8
       - name: Signature numerique
         run: python tests/test_signature.py
         env:

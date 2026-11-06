@@ -755,4 +755,11 @@
     <string name="redresser_lignes">Lines (rotate the page)</string>
     <string name="redresser_verticales">Verticals (leaning edges, columns)</string>
     <string name="inserer_scan">Insert a scan</string>
+    <string name="ia_nommer_titre">Suggest a name</string>
+    <string name="ia_nommer_accord">The image of the first page will be sent to the AI (%1$s) to suggest a name (sender, subject, date). Send?</string>
+    <string name="ia_nommer_nom">Suggested name (editable)</string>
+    <string name="ia_nommer_verifier">Suggested by AI: check the sender and the date.</string>
+    <string name="ia_nommer_garder">Keep this name</string>
+    <string name="ia_nommer_origine">Original name</string>
+    <string name="ia_nommer_case">Suggest a name with AI (sender, subject, date)</string>
 </resources>

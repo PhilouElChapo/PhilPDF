@@ -179,14 +179,15 @@ class DialogueFractionner(QDialog):
                                         "plages": self.plages.text(), "sous_dossier": self.sous.isChecked(),
                                         "ouvrir": self.ouvrir.isChecked()}
         self.o.params.enregistrer()
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        from .dialogues_ia import en_tache
         try:
-            self.faits = F.ecrire(self.doc, dossier, self.morceaux)
-        except OSError as e:
-            QApplication.restoreOverrideCursor()
+            self.faits = en_tache(self, self.windowTitle(), _("Écriture de {n} fichier(s)...", n=len(self.morceaux)),
+                                  F.ecrire, self.doc, dossier, self.morceaux)
+        except InterruptedError:
+            return
+        except Exception as e:                          # noqa: BLE001
             QMessageBox.warning(self, self.windowTitle(), _("Écriture impossible : {e}", e=e))
             return
-        QApplication.restoreOverrideCursor()
         self.dossier_fait = dossier
         if self.ouvrir.isChecked():
             from PySide6.QtGui import QDesktopServices

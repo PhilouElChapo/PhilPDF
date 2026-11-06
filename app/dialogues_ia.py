@@ -119,25 +119,53 @@ class Avancement(QDialog):
         self.journal.appendPlainText(time.strftime("%H:%M:%S  ") + texte)
 
 
-def executer_suivi(parent, titre, fonction):
+_ABANDONNEES = []          # taches arretees qui finissent en arriere-plan (leur resultat est ignore)
+
+
+def executer_suivi(parent, titre, fonction, abandonner=False):
     """Comme executer(), avec une fenetre d'avancement : fonction(tache) appelle tache.avancer(texte, n, total)
-    et tache.noter(detail). Leve l'erreur de fonction, ou InterruptedError si l'utilisateur arrete."""
+    et tache.noter(detail). Leve l'erreur de fonction, ou InterruptedError si l'utilisateur arrete.
+    abandonner : « Arreter » rend la main tout de suite (reseau qui ne repond pas...) ; la tache finit seule, ignoree."""
     dlg = Avancement(parent, titre)
     t = _TacheSuivie(fonction)
     res = {}
     boucle = QEventLoop()
     t.etape.connect(dlg.etape)
     t.detail.connect(dlg.noter)
-    t.fini.connect(lambda r, e: (res.update(r=r, e=e), boucle.quit()))
-    dlg.b_stop.clicked.connect(lambda: (setattr(t, "stop", True), dlg.etat.setText(_("Arrêt en cours..."))))
+    t.fini.connect(lambda r, e: (res.setdefault("r", r), res.setdefault("e", e), boucle.quit()))
+
+    def arreter():
+        t.stop = True
+        dlg.etat.setText(_("Arrêt en cours..."))
+        if abandonner:
+            res.update(r=None, e=InterruptedError(_("Arrêté à votre demande.")))
+            boucle.quit()
+    dlg.b_stop.clicked.connect(arreter)
     t.start()
-    dlg.show()
+    # la fenetre ne s'ouvre que si la tache dure : pas de clignotement pour une tache de quelques millisecondes
+    from PySide6.QtCore import QTimer
+    QTimer.singleShot(400, lambda: (not res) and dlg.show())
     boucle.exec()
-    t.wait()
+    if t.isRunning():
+        if abandonner:
+            _ABANDONNEES.append(t)
+            t.finished.connect(lambda t=t: t in _ABANDONNEES and _ABANDONNEES.remove(t))
+        else:
+            t.wait()
     dlg.close()
     if res.get("e"):
         raise res["e"]
     return res.get("r")
+
+
+def en_tache(parent, titre, texte, fonction, *args, lecture=False):
+    """Longue tache sans etapes : fenetre d'avancement (texte, barre animee, Arreter) si elle dure, erreur levee.
+    lecture : la tache ne change rien (lire, lister, tester) ; « Arreter » rend alors la main tout de suite. Une tache
+    qui ecrit va au bout de ce qu'elle a commence : rien ne continue en cachette."""
+    def travail(t):
+        t.avancer(texte)
+        return fonction(*args)
+    return executer_suivi(parent, titre, travail, abandonner=lecture)
 
 
 def verifier_cle(parent, params):
@@ -1061,3 +1089,81 @@ def ocr_ia(fenetre, onglet):
         c=corrige, n=len(lignes), m=appris_mots, r=appris_regles, f=os.path.basename(sortie)) if lignes else
         _("Tesseract et l'IA ont lu la même chose. Fichier : {f}", f=os.path.basename(sortie)))
     return sortie
+
+
+# ------------------------------------------------------------------ nom propose apres une numerisation
+CONSIGNES_NOMMER = """Tu aides à nommer un document qui vient d'être numérisé. Lis-le et réponds en JSON :
+{"date": "AAAA-MM-JJ (date du document)", "expediteur": "<organisme ou personne qui l'envoie, nom court usuel,
+ex. CPAM, URSSAF, DGFiP, EDF, Maître Dupont>", "objet": "<objet en 2 à 6 mots>",
+"type": "<facture, courrier, contrat, relevé, avis, attestation, ordonnance...>"}"""
+
+
+def proposer_nom_scan(fenetre, onglet):
+    """L'IA lit le document numerise (son texte reconnu, sinon l'image de sa premiere page) et propose
+    « Date Expediteur – objet » ; l'utilisateur corrige, puis enregistre sous ce nom ou le garde pour l'onglet.
+    Renvoie le nom choisi, ou None."""
+    params = fenetre.params
+    if not verifier_cle(fenetre, params):
+        return None
+    texte = ia.texte_document(onglet.doc, max_car=20000)
+    images = None
+    if texte.strip():
+        if not ia.confirmer_envoi(fenetre, texte, ia.nom_moteur(params)):
+            return None
+    else:
+        if QMessageBox.question(fenetre, _("Proposer un nom"), _(
+                "Le texte du document n'est pas encore reconnu : l'image de la première page va être envoyée à "
+                "l'IA ({ia}) pour proposer un nom.\n\nEnvoyer ?", ia=ia.nom_moteur(params))) != QMessageBox.Yes:
+            return None
+        import pymupdf as fitz
+        pm = onglet.doc[0].get_pixmap(dpi=110, colorspace=fitz.csGRAY)
+        images = [pm.tobytes("png")]
+        texte = _("Document numérisé : la première page est en image.")
+    consignes = CONSIGNES_NOMMER + f"\nDate du jour : {datetime.date.today().isoformat()}."
+    try:
+        r = executer(fenetre, _("L'IA lit le document..."),
+                     lambda: ia.demander(params, consignes, texte, images=images, json_attendu=True))
+    except Exception as e:                              # noqa: BLE001
+        montrer_erreur(fenetre, e)
+        return None
+    if not isinstance(r, dict):
+        return None
+    d = QDialog(fenetre)
+    d.setWindowTitle(_("Proposer un nom"))
+    d.setMinimumWidth(560)
+    v = QVBoxLayout(d)
+    info = QLabel(_("<b>{exp}</b> — {type} du {date}<br>{objet}", exp=r.get("expediteur") or "?",
+                    type=r.get("type") or _("document"), date=_date_fr(r.get("date") or ""), objet=r.get("objet") or ""))
+    info.setWordWrap(True)
+    v.addWidget(info)
+    nom = QLineEdit(nom_propose(r))
+    v.addWidget(QLabel(_("Nom proposé (modifiable) :")))
+    v.addWidget(nom)
+    note = QLabel(_("Proposé par l'IA : vérifiez l'expéditeur et la date avant d'enregistrer."))
+    note.setWordWrap(True)
+    note.setStyleSheet("color:#666")
+    v.addWidget(note)
+    bb = QDialogButtonBox()
+    b_enr = bb.addButton(_("Enregistrer sous ce nom..."), QDialogButtonBox.AcceptRole)
+    b_garder = bb.addButton(_("Garder ce nom pour l'onglet"), QDialogButtonBox.ActionRole)
+    bb.addButton(_("Annuler"), QDialogButtonBox.RejectRole)
+    choix = {}
+    b_enr.clicked.connect(lambda: (choix.update(k="enr"), d.accept()))
+    b_garder.clicked.connect(lambda: (choix.update(k="garder"), d.accept()))
+    bb.rejected.connect(d.reject)
+    v.addWidget(bb)
+    if d.exec() != QDialog.Accepted:
+        return None
+    n = nom.text().strip() or nom_propose(r)
+    if not n.lower().endswith(".pdf"):
+        n += ".pdf"
+    onglet.nom = n
+    try:
+        fenetre._maj_titre(onglet)
+    except Exception:                                   # noqa: BLE001
+        pass
+    from .journal import ecrire
+    ecrire("IA", f"nom proposé après numérisation : {n}")
+    if choix.get("k") == "enr":
+        fenetre.enregistrer(onglet, sous=True, nom_propose=n)
+    return n

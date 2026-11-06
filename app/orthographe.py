@@ -227,11 +227,12 @@ def verifier_document(fenetre, onglet):
     from .apprentissage import ajouter_mot
     from moteur.modifier import Editeur
     params = fenetre.params
-    QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+    from .dialogues_ia import en_tache
     try:
-        liste = mots_douteux(onglet.doc, params)
-    finally:
-        QApplication.restoreOverrideCursor()
+        liste = en_tache(fenetre, _("Orthographe"), _("Vérification de l'orthographe de « {nom} »...", nom=onglet.nom),
+                         mots_douteux, onglet.doc, params, lecture=True)
+    except InterruptedError:
+        return
     if not liste:
         QMessageBox.information(fenetre, _("Orthographe"), _("Aucun mot douteux dans ce document."))
         return

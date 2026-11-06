@@ -603,16 +603,15 @@ class PanneauBibliotheque(QWidget):
             f.synchro_manuelle(parent=self.window(), apres=self.rafraichir)
             return
         if c:                           # Drive en direct, NAS, FTP : on envoie et on recoit tout de suite
-            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+            from .dialogues_ia import en_tache
             try:
-                self.b.synchroniser_drive()
-                miroir.synchroniser(self.b.params, c)
+                en_tache(self, _("Synchronisation"), _("Envoi et réception avec {lieu}...", lieu=miroir.libelle_compte(c)),
+                         lambda: (self.b.synchroniser_drive(), miroir.synchroniser(self.b.params, c)))
+            except InterruptedError:
+                return
             except distant.ErreurDistant as ex:
-                QApplication.restoreOverrideCursor()
                 QMessageBox.warning(self, "Drive", _("Emplacement de synchronisation injoignable : {raison}", raison=ex))
                 return
-            finally:
-                QApplication.restoreOverrideCursor()
         r = self.b.synchroniser_drive()
         if r is None:
             QMessageBox.information(self, "Drive", _("Choisissez d'abord votre Drive (Préférences › Drive et dossiers)."))
@@ -1241,7 +1240,13 @@ class DialogueNumeriser(QDialog):
         self.redresser.setChecked(True)
         self.interface = QCheckBox(_("Ouvrir la fenêtre du pilote du scanner (réglages du fabricant)"))
         self.interface.setToolTip(_("Pour un scanner TWAIN : si la numérisation directe ne marche pas, la fenêtre de son pilote s'ouvre."))
-        for c in (self.ocr, self.blanches, self.redresser, self.interface):
+        from . import ia as _ia
+        self.nommer = QCheckBox(_("Proposer un nom avec l'IA (expéditeur, objet, date)"))
+        self.nommer.setToolTip(_("A la fin, l'IA lit le document et propose un nom ; rien n'est envoyé sans votre accord."))
+        self.nommer.setChecked(_ia.disponible(parent.params) and parent.params.get("scan_nommer", True)
+                               if hasattr(parent, "params") else False)
+        self.nommer.setVisible(hasattr(parent, "params") and _ia.disponible(parent.params))
+        for c in (self.ocr, self.blanches, self.redresser, self.interface, self.nommer):
             v.addWidget(c)
         self.app.currentIndexChanged.connect(lambda _i: self.interface.setVisible(str(self.app.currentData() or "").startswith("twain:")))
         self.interface.setVisible(str(self.app.currentData() or "").startswith("twain:"))

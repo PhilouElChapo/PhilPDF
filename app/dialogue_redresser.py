@@ -77,7 +77,7 @@ class DialogueRedresser(QDialog):
         """Une ligne : nom, angle au dixieme, curseur, -1 / -0,1 / +0,1 / +1."""
         h = QHBoxLayout()
         lb = QLabel(nom)
-        lb.setMinimumWidth(80)
+        lb.setMinimumWidth(max(80, lb.fontMetrics().horizontalAdvance(nom) + 4))   # jamais coupe
         lb.setToolTip(aide)
         h.addWidget(lb)
         sp = QDoubleSpinBox()

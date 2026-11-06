@@ -67,6 +67,9 @@ class _Calcul(QThread):
             self.fini.emit(None, str(e))
 
 
+from .cases import CaseLongue                     # noqa: E402
+
+
 class DialogueAlleger(QDialog):
     def __init__(self, parent, onglet):
         super().__init__(parent)
@@ -106,7 +109,7 @@ class DialogueAlleger(QDialog):
         self.qualite = QSpinBox()
         self.qualite.setRange(20, 100)
         self.qualite.setSuffix(" %")
-        self.gris = QCheckBox(_("Passer les images en niveaux de gris"))
+        self.gris = CaseLongue(_("Passer les images en niveaux de gris"))
         fi.addRow(_("Ne retoucher que les images au-delà de"), self.seuil)
         fi.addRow(_("Les ramener à"), self.dpi)
         fi.addRow(_("Qualité JPEG"), self.qualite)
@@ -114,13 +117,13 @@ class DialogueAlleger(QDialog):
         g.addWidget(bi)
         bn = QGroupBox(_("Scans noir et blanc"))
         fn = QVBoxLayout(bn)
-        self.jbig2 = QCheckBox(_("Compression JBIG2 sans perte des images noir et blanc (2 à 10 fois plus léger)"))
+        self.jbig2 = CaseLongue(_("Compression JBIG2 sans perte des images noir et blanc (2 à 10 fois plus léger)"))
         self.jbig2.setObjectName("al_jbig2")
         self.jbig2.setToolTip(_("Chaque point est gardé : aucune lettre ni aucun chiffre ne peut changer (contrairement "
                                 "au JBIG2 « avec perte » de certains scanners)."))
         self.jbig2.setChecked(True)
         fn.addWidget(self.jbig2)
-        self.noir_blanc = QCheckBox(_("Passer en noir et blanc les scans de texte en gris ou en couleur "
+        self.noir_blanc = CaseLongue(_("Passer en noir et blanc les scans de texte en gris ou en couleur "
                                       "(avec perte : les gris et couleurs disparaissent)"))
         self.noir_blanc.setObjectName("al_noir_blanc")
         self.noir_blanc.setToolTip(_("Seulement les pages qui ne sont que du texte foncé sur fond clair ; les photos "
@@ -129,10 +132,10 @@ class DialogueAlleger(QDialog):
         g.addWidget(bn)
         bs = QGroupBox(_("Sans perte (le document reste identique à l'œil)"))
         fs = QVBoxLayout(bs)
-        self.polices = QCheckBox(_("Polices : ne garder que les lettres utilisées"))
-        self.nettoyer = QCheckBox(_("Nettoyer le fichier (objets inutiles, compression maximale)"))
-        self.infos = QCheckBox(_("Retirer les informations du fichier (auteur, logiciel, métadonnées)"))
-        self.polices_form = QCheckBox(_("Polices des champs : garder les lettres du clavier (é, à, ç, €...) et "
+        self.polices = CaseLongue(_("Polices : ne garder que les lettres utilisées"))
+        self.nettoyer = CaseLongue(_("Nettoyer le fichier (objets inutiles, compression maximale)"))
+        self.infos = CaseLongue(_("Retirer les informations du fichier (auteur, logiciel, métadonnées)"))
+        self.polices_form = CaseLongue(_("Polices des champs : garder les lettres du clavier (é, à, ç, €...) et "
                                         "retirer les autres alphabets"))
         self.polices_form.setObjectName("al_polices_form")
         fs.addWidget(self.polices_form)

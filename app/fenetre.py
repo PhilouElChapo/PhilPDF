@@ -479,6 +479,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
         act(m, _('Enregistrer'), lambda: self.enregistrer(), "Ctrl+S", "enregistrer")
         act(m, _('Enregistrer sous...'), lambda: self.enregistrer(sous=True), "Shift+Ctrl+S", "enregistrer_sous")
         act(m, _("Enregistrer vers un emplacement (NAS, FTP, Drive)..."), lambda: self.enregistrer_distant(), None, "archiver")
+        act(m, _("Envoyer une copie vers un emplacement (NAS, FTP, Drive)..."), lambda: self.envoyer_copie(), None, "archiver")
         act(m, _('Enregistrer une copie...'), self.enregistrer_copie, None, "enregistrer_sous")
         act(m, _('Enregistrer une copie allégée...'), lambda: self.lancer_outil("alleger"), None, "alleger")
         sm = m.addMenu(icone("exporter"), _('Exporter vers'))
@@ -1062,6 +1063,8 @@ class Fenetre(MixinCoteACote, QMainWindow):
         """Menu clic droit d'un fichier recent de l'Accueil."""
         if action == "emplacement":
             montrer_dans_explorateur(chemin)
+        elif action == "envoyer_copie":
+            self.envoyer_copie([chemin])
         elif action == "copier_chemin":
             QApplication.clipboard().setText(chemin)
             self.statusBar().showMessage(_("Chemin copié : {chemin}", chemin=chemin), 5000)
@@ -1292,11 +1295,17 @@ class Fenetre(MixinCoteACote, QMainWindow):
         secondes), sinon vous l'indiquez ; PhilPDF retient le dossier pour la suite."""
         from .session import retenir_trouve
         s = session_de(self.params)
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        from .dialogues_ia import executer_suivi
+
+        def chercher(t):
+            t.avancer(_("Recherche de « {nom} » sur ce poste...", nom=e.get("nom", "")))
+            return s.retrouver_tous(machine, [e], arret=lambda: t.stop, delai=8)
         try:
-            res = s.retrouver_tous(machine, [e], delai=8)
-        finally:
-            QApplication.restoreOverrideCursor()
+            res = executer_suivi(self, _("Fichier d'un autre poste"), chercher)
+        except InterruptedError:
+            return
+        if not res:                                  # arretee par vous
+            return
         doublons = getattr(s, "doublons", {}).get(0)
         trouve = res[0][0]
         if doublons:
@@ -1487,12 +1496,12 @@ class Fenetre(MixinCoteACote, QMainWindow):
             if not e:
                 return None
         local = distant.cache(dossier_donnees(), c, chemin)
+        from .dialogues_ia import en_tache
         try:
-            QApplication.setOverrideCursor(Qt.WaitCursor)
-            try:
-                e.telecharger(chemin, local)
-            finally:
-                QApplication.restoreOverrideCursor()
+            en_tache(self, _("Ouvrir"), _("Téléchargement depuis {lieu} : {nom}...", lieu=distant.libelle(c),
+                                          nom=os.path.basename(chemin)), e.telecharger, chemin, local)
+        except InterruptedError:
+            return None
         except distant.ErreurDistant as ex:
             erreur_distant(self, distant.libelle(c), ex, e)
             return None
@@ -1515,12 +1524,13 @@ class Fenetre(MixinCoteACote, QMainWindow):
         if not e:
             QMessageBox.warning(self, "PhilPDF", _("Copie gardée sur ce PC : {chemin}", chemin=o.chemin))
             return False
+        from .dialogues_ia import en_tache
         try:
-            QApplication.setOverrideCursor(Qt.WaitCursor)
-            try:
-                e.envoyer(o.chemin, o.distant["chemin"])
-            finally:
-                QApplication.restoreOverrideCursor()
+            en_tache(self, _("Enregistrer"), _("Envoi vers {lieu} : {nom}...", lieu=distant.libelle(c),
+                                               nom=os.path.basename(o.distant["chemin"])), e.envoyer, o.chemin, o.distant["chemin"])
+        except InterruptedError:
+            QMessageBox.information(self, "PhilPDF", _("Envoi arrêté. Copie gardée sur ce PC : {chemin}", chemin=o.chemin))
+            return False
         except distant.ErreurDistant as ex:
             erreur_distant(self, distant.libelle(c), _("Envoi impossible ({erreur}). Copie gardée sur ce PC : {chemin}",
                                                      erreur=ex, chemin=o.chemin), e)
@@ -1551,6 +1561,76 @@ class Fenetre(MixinCoteACote, QMainWindow):
         o.distant = {"compte": c["id"], "cle": distant.cle_compte(c), "chemin": d.choisi, "lieu": distant.libelle(c)}
         self._maj_titre(o)
         return self._renvoyer(o)
+
+    def envoyer_copie(self, fichiers=None):
+        """Envoie une COPIE de PDF dans un dossier choisi d'un Drive, d'un NAS ou d'un FTP : le document ouvert garde
+        son adresse. fichiers : chemins sur ce PC (Accueil) ; rien = le document ouvert, tel qu'il est a l'ecran.
+        Le dernier dossier utilise est repris ; un fichier du meme nom n'est jamais remplace sans accord."""
+        import posixpath
+        import tempfile
+        if not self.params.get("comptes"):
+            self.preferences(onglet="comptes")
+            return False
+        if fichiers is None:
+            o = self.doc_courant()
+            if not o:
+                return False
+            nom = o.nom if o.nom.lower().endswith(".pdf") else o.nom + ".pdf"
+            tmp = os.path.join(tempfile.mkdtemp(prefix="philpdf_envoi_"), nom)
+            o.doc.save(tmp, garbage=3, deflate=True)
+            fichiers = [tmp]
+        fichiers = [f for f in fichiers if f and os.path.isfile(f)]
+        if not fichiers:
+            QMessageBox.information(self, "PhilPDF", _("Ce fichier est introuvable sur ce poste."))
+            return False
+        dernier = self.params.get("envoi_dernier") or {}
+        d = DialogueParcourir(self, self.params, "enregistrer", nom=os.path.basename(fichiers[0]),
+                              compte_id=dernier.get("compte"))
+        d.setWindowTitle(_("Envoyer une copie vers un emplacement"))
+        d.b_ok.setText(_("Envoyer ici"))
+        if len(fichiers) > 1:
+            d.nom.setEnabled(False)
+            d.nom.setText(_("{n} fichiers, sous leur nom", n=len(fichiers)))
+        if d.e and dernier.get("dossier") and d.comptes.currentData() == dernier.get("compte"):
+            try:
+                d.aller(dernier["dossier"])
+            except Exception:                            # noqa: BLE001
+                pass
+        if d.exec() != QDialog.Accepted or not d.choisi:
+            return False
+        c, e = d.compte(), d.e
+        dossier = posixpath.dirname(d.choisi) or "/"
+        cibles = [(f, d.choisi if len(fichiers) == 1 else posixpath.join(dossier, os.path.basename(f))) for f in fichiers]
+        try:
+            existants = {posixpath.basename(x.chemin) for x in e.lister(dossier)}
+        except Exception:                                # noqa: BLE001
+            existants = set()
+        deja = [posixpath.basename(dest) for _f, dest in cibles if posixpath.basename(dest) in existants]
+        if deja and QMessageBox.question(self, d.windowTitle(), _(
+                "Déjà présent(s) dans ce dossier : {l}.\n\nRemplacer ?", l=", ".join(deja))) != QMessageBox.Yes:
+            return False
+        from .dialogues_ia import executer_suivi
+
+        def travail(t):
+            for k, (f, dest) in enumerate(cibles):
+                t.avancer(_("Envoi de {nom} ({i} sur {n})...", nom=os.path.basename(dest), i=k + 1, n=len(cibles)), k, len(cibles))
+                e.envoyer(f, dest)
+                t.noter(_("Envoyé : {chemin}", chemin=dest))
+            return len(cibles)
+        try:
+            n = executer_suivi(self, d.windowTitle(), travail)
+        except InterruptedError:
+            return False
+        except distant.ErreurDistant as ex:
+            erreur_distant(self, distant.libelle(c), ex, e)
+            return False
+        self.params["envoi_dernier"] = {"compte": c["id"], "dossier": dossier}
+        self.params.enregistrer()
+        from .journal import ecrire
+        ecrire("envoi", f"{n} copie(s) vers {distant.libelle(c)} : {dossier}")
+        self.statusBar().showMessage(_("{n} copie(s) envoyée(s) vers {lieu} : {dossier}", n=n, lieu=distant.libelle(c),
+                                       dossier=dossier), 10000)
+        return True
 
     # ------------------------------------------------------------ outils
     def lancer_outil(self, oid):
@@ -2057,6 +2137,10 @@ class Fenetre(MixinCoteACote, QMainWindow):
         if ajuster:
             from .dialogue_nettoyage import DialogueNettoyerScan
             DialogueNettoyerScan(self, o).exec()
+        self.params["scan_nommer"] = d.nommer.isChecked() if d.nommer.isVisible() else self.params.get("scan_nommer", True)
+        if d.nommer.isVisible() and d.nommer.isChecked():
+            from .dialogues_ia import proposer_nom_scan
+            proposer_nom_scan(self, o)
         if d.ocr.isChecked():
             self.statusBar().showMessage(_('Enregistrez la numérisation pour lancer la reconnaissance du texte.'), 10000)
 
@@ -2130,6 +2214,11 @@ class Fenetre(MixinCoteACote, QMainWindow):
         if inserer:
             return doc
         o = self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=doc, nom=nom))
+        if d.nommer.isVisible():
+            self.params["scan_nommer"] = d.nommer.isChecked()
+        if d.nommer.isVisible() and d.nommer.isChecked():
+            from .dialogues_ia import proposer_nom_scan
+            proposer_nom_scan(self, o)
         self.statusBar().showMessage(_("Document numérisé : {n} page(s). Enregistrez-le pour le garder.", n=len(doc)), 10000)
         return o
 
@@ -3230,16 +3319,14 @@ class Fenetre(MixinCoteACote, QMainWindow):
         langue_changee = dl.appliquer()
         c = miroir.compte_drive(self.params)
         if c:                                        # premiere synchro tout de suite, pour trouver l'existant
-            from PySide6.QtWidgets import QApplication
-            from PySide6.QtGui import QCursor
-            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+            from .dialogues_ia import en_tache
             try:
-                miroir.synchroniser(self.params, c)
+                en_tache(self, _("Synchronisation"), _("Première synchronisation avec {lieu}...", lieu=miroir.libelle_compte(c)),
+                         miroir.synchroniser, self.params, c)
+            except InterruptedError:
+                pass
             except distant.ErreurDistant as ex:
-                QApplication.restoreOverrideCursor()
                 erreur_distant(self, _("Synchronisation"), ex)
-            else:
-                QApplication.restoreOverrideCursor()
         trouve = None
         p = reglages.chemin_drive(self.params)
         if p:

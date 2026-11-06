@@ -79,11 +79,12 @@ def ouvrir_emplacement(parent, compte):
     e = distant.emplacement(compte)
     for _essai in range(2):
         try:
-            QApplication.setOverrideCursor(Qt.WaitCursor)
+            from .dialogues_ia import en_tache
             try:
-                e.lister(e.racine())
-            finally:
-                QApplication.restoreOverrideCursor()
+                en_tache(parent, distant.libelle(compte), _("Connexion à {lieu}...", lieu=distant.libelle(compte)),
+                         e.lister, e.racine(), lecture=True)
+            except InterruptedError:
+                return None
             return e
         except distant.BesoinCode:
             code, ok = QInputDialog.getText(parent, distant.libelle(compte),
@@ -451,11 +452,12 @@ class DialogueCompte(QDialog):
         e = distant.emplacement(c, self.mdp.text())
         for _essai in range(2):
             try:
-                QApplication.setOverrideCursor(Qt.WaitCursor)
+                from .dialogues_ia import en_tache
                 try:
-                    msg = e.tester()
-                finally:
-                    QApplication.restoreOverrideCursor()
+                    msg = en_tache(self, _("Tester la connexion"), _("Connexion à {lieu}...", lieu=c.get("nom", "")),
+                                   e.tester, lecture=True)
+                except InterruptedError:
+                    return
                 erreur(self, _("Tester la connexion"), msg, e, info=True)
                 return
             except distant.BesoinCode:
@@ -712,11 +714,12 @@ class DialogueParcourir(QDialog):
 
     def aller(self, dossier):
         try:
-            QApplication.setOverrideCursor(Qt.WaitCursor)
+            from .dialogues_ia import en_tache
             try:
-                elems = self.e.lister(dossier)
-            finally:
-                QApplication.restoreOverrideCursor()
+                elems = en_tache(self, self.windowTitle(), _("Lecture du dossier {d}...", d=dossier or "/"),
+                                 self.e.lister, dossier, lecture=True)
+            except InterruptedError:
+                return
         except distant.ErreurDistant as ex:
             erreur(self, self.windowTitle(), ex, self.e)
             return

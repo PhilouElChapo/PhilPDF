@@ -10,6 +10,41 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.18.0
+- Numeriser : case « Proposer un nom avec l'IA » en bas de l'ecran. A la fin, apres votre accord, l'IA lit la
+  premiere page et propose un nom (date, expediteur, objet, ex. « 2026-11-05 CPAM - Attestation de droits.pdf ») ;
+  vous le corrigez si besoin, « Garder ce nom » renomme le fichier, sinon il garde le nom d'origine.
+
+1.17.2
+- Organiser les pages (« Inserer un scan ») et Combiner des fichiers (« Numeriser ») : une page numerisee peut etre
+  inseree comme un fichier.
+
+1.17.1
+- Redresser : deux reglages, « Lignes » (rotation) et « Verticales » (bords et colonnes qui penchent, feuille
+  photographiee de biais), mesures tous les deux par « Auto », apercu en direct.
+
+1.17.0
+- Numerisation : par page, « Redresser » (apercu tourne sur une grille, angle au dixieme, Auto, 0°) et « Recadrer »
+  (quatre coins : corrige la perspective d'une feuille photographiee de biais).
+- Document : Plus > Redresser la page (cette page ou toutes) : le contenu tourne, texte, couleurs et qualite gardes,
+  une etape annulable.
+- Nettoyage : bandes noires collees au bord (table autour de la feuille) effacees.
+
+1.16.1
+- Numerisation en noir et blanc : sans taches ni bords noirs.
+
+1.16.0
+- Reglages IA (Accueil > IA, et menu Plus du document) : Claude ou Gemini, clefs gardees chiffrees sur le telephone,
+  essai de chaque clef, reprise des clefs de vos postes Windows (fichier chiffre secrets.philpdf, phrase secrete).
+- Resumer avec l'IA : consigne personnelle facultative (gardee sur demande), resume, points clefs, dates reperees
+  (agenda pre-rempli), copier, partager, note sur la page 1.
+- Modifier le texte : Ameliorer avec l'IA (corriger, reformuler, formel, simple, raccourcir, consigne libre), retour
+  au texte d'avant.
+- Lecture fluide : traduction page par page (11 langues ou une autre).
+- Numeriser : modele Magnificence IA (page nettoyee par Gemini, accord demande).
+- Avant chaque envoi a l'IA : donnees sensibles signalees (IBAN, carte, securite sociale, numero fiscal, mot de
+  passe), attente annulable, erreur claire avec Reessayer.
+
 1.15.1
 - Accueil : Ouvrir, Numeriser et Combiner sur une seule ligne (icone et nom court), la liste des recents a plus de place.
 - Numeriser : apres le recadrage, les lignes de texte sont remises a l'horizontale (page legerement penchee redressee),
@@ -360,6 +395,62 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.75
+- Numeriser (scanner ou photos) : case « Proposer un nom avec l'IA ». A la fin, l'IA lit le texte reconnu (ou, apres
+  votre accord, l'image de la premiere page) et propose un nom : date, expediteur, objet. « Enregistrer sous ce
+  nom... », « Garder ce nom pour l'onglet » ou « Annuler ».
+- Fichier > Envoyer une copie vers un emplacement (NAS, FTP, Drive)... : choisir le compte et le dossier precis ;
+  PhilPDF retient le dernier choix et demande avant de remplacer un fichier du meme nom.
+- Longues taches : fenetre d'avancement avec « Arreter » (elle n'apparait que si la tache dure) pour les
+  telechargements et envois, la synchronisation, la recherche d'un fichier d'un autre poste, la connexion aux
+  emplacements, l'imprimante PhilPDF, l'orthographe, la piece jointe d'un e-mail, Excel, Archiver, Fractionner et
+  les photos. Pour une lecture (lister, tester, chercher), « Arreter » rend la main tout de suite ; une ecriture va
+  au bout de ce qu'elle a commence, rien ne continue en cachette.
+- Textes coupes : un essai ouvre chaque outil et chaque menu, en francais, anglais, allemand, espagnol et italien,
+  a la taille d'ouverture puis reduite ; toute fenetre ou un texte ne tient pas fait echouer la fabrication.
+  Corriges : Alleger (cases dont le texte passe a la ligne), Redresser, Nettoyer un scan, Creer un PDF.
+- Mes signatures sans signature enregistree : fermer la fenetre « Gerer » la rouvrait sans fin.
+
+0.9.74
+- Scanners TWAIN (Avision...) : gestionnaire ouvert une seule fois, avec la fenetre de PhilPDF ; le rouvrir faisait
+  planter le pilote (« access violation », puis « ConditionCode = 0 »). Erreur notee au journal.
+
+0.9.73
+- Partout ou l'on insere des pages, un document numerise peut etre choisi (scanner ou photos) : Organiser les pages
+  (« Inserer un scan... »), clic droit sur des pages (inserer apres, remplacer), Combiner (« Numeriser... »).
+- Organiser : « Inserer un fichier... » insere apres les pages choisies (il inserait toujours au debut).
+- Redresser : boutons -1 / -0,1 / +0,1 / +1 a la largeur de leur texte.
+
+0.9.72
+- Scanners USB sans WIA (Avision, Fujitsu, Plustek...) : pilotes TWAIN 64 bits listes et utilises (reglages directs,
+  ou fenetre du pilote du fabricant) ; chaque source notee au journal, avec la raison si rien n'est visible.
+- Scanner reseau trouve : choisi d'office. Fenetre de numerisation de Windows sans scanner WIA : message clair.
+- Redresser : « Lignes » (rotation) et « Verticales » (bords et colonnes qui penchent), mesures par « Auto ».
+
+0.9.71
+- Outils > Redresser une page, clic droit sur la page > Redresser la page..., et en mode Modifier, clic droit sur une
+  image > Redresser l'image. Bandes noires collees au bord effacees au nettoyage.
+
+0.9.70
+- Deplacer un texte pose sur un autre (texte ajoute sur des pointilles) : c'est bien lui qui bouge, seules ses
+  lettres sont effacees, les lettres voisines perdues sont reecrites a l'identique.
+- Double-clic sur une petite etiquette (« Mme », « M. ») : elle s'ouvre seule ; une ligne courte au-dessus d'une plus
+  longue n'est plus collee au paragraphe du dessous.
+- Ajouter du texte : un clic ailleurs valide comme Ctrl+Entree, sans poser un nouveau champ.
+
+0.9.69
+- Nettoyage des scans : bords noirs et traits du bord effaces, taches et grain isoles retires (le point du i et les
+  accents restent), inclinaison mesuree sans les bords ; applique a la numerisation et a la reconnaissance du texte.
+- Outils > Nettoyer un scan : avant / apres page par page, redresser, bords, taches, contraste ; Ctrl+Z revient.
+- Scanners : un appareil WIA illisible ne cache plus les autres (Windows 11) ; scanners reseau sans pilote (eSCL /
+  AirScan) trouves et utilises directement.
+- Glisser des fichiers sur la fenetre : « Deposer ici pour ouvrir ».
+- Accueil : reglage a part pour ses boutons (clic droit : automatique, icone et nom, icone).
+
+0.9.68
+- Numeriser depuis des photos : modele Magnificence IA (meme consigne qu'Android).
+- Lecture fluide : Traduire (page par page, le PDF n'est pas modifie).
 
 0.9.67
 - Numeriser depuis des photos : apres le recadrage, les lignes de texte sont remises a l'horizontale (comme sur

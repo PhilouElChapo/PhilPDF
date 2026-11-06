@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QListWidget, Q
                                QGroupBox, QFormLayout, QMessageBox, QApplication, QPushButton)
 
 from .langue import _
+from .cases import CaseLongue
 from moteur import nettoyage as N, scan as S
 
 
@@ -55,8 +56,9 @@ class DialogueNettoyerScan(QDialog):
             h.addLayout(c, 1)
         # reglages
         g = QGroupBox(_("Réglages"))
-        g.setMaximumWidth(330)
+        g.setMaximumWidth(430)
         fl = QFormLayout(g)
+        fl.setRowWrapPolicy(QFormLayout.WrapLongRows)     # nom au-dessus du reglage s'il manque de place : rien de coupe
         self.redr = QButtonGroup(self)
         rv = QVBoxLayout()
         for k, t in enumerate((_("Automatique"), _("Ne pas tourner"), _("Angle choisi :"))):
@@ -73,7 +75,7 @@ class DialogueNettoyerScan(QDialog):
         self.angle_trouve.setStyleSheet("color:#666")
         rv.addWidget(self.angle_trouve)
         fl.addRow(_("Redresser"), rv)
-        self.bords = QCheckBox(_("Effacer les bords noirs et les traits du bord"))
+        self.bords = CaseLongue(_("Effacer les bords noirs et les traits du bord"))
         self.bords.setChecked(True)
         fl.addRow(self.bords)
         self.taches = QComboBox()
@@ -81,6 +83,7 @@ class DialogueNettoyerScan(QDialog):
         self.taches.addItem(_("Petites taches isolées (conseillé)"), 1)
         self.taches.addItem(_("Fort : aussi les taches moyennes"), 2)
         self.taches.setCurrentIndex(1)
+        self.taches.setSizeAdjustPolicy(QComboBox.AdjustToContents)
         self.taches.setToolTip(_("« Fort » peut effacer un trait de crayon très pâle : regardez l'aperçu."))
         fl.addRow(_("Taches et grain"), self.taches)
         self.contraste = QSlider(Qt.Horizontal)

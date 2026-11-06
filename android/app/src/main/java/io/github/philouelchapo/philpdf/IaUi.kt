@@ -428,3 +428,64 @@ fun markdownSimple(t: String): AnnotatedString = buildAnnotatedString {
 
 /** Le meme texte, sans les signes du Markdown (pour copier, partager, la note). */
 fun texteSimple(t: String): String = markdownSimple(t).text
+
+
+// ================================================================ nom propose apres une numerisation
+private const val CONSIGNES_NOMMER = """Tu aides à nommer un document qui vient d'être numérisé. Lis-le et réponds en JSON :
+{"date": "AAAA-MM-JJ (date du document)", "expediteur": "<organisme ou personne qui l'envoie, nom court usuel,
+ex. CPAM, URSSAF, DGFiP, EDF, Maître Dupont>", "objet": "<objet en 2 à 6 mots>",
+"type": "<facture, courrier, contrat, relevé, avis, attestation, ordonnance...>"}"""
+
+/** « Date Expediteur – objet.pdf », comme sous Windows (dialogues_ia.nom_propose). */
+fun nomPropose(j: JSONObject): String {
+    val d = dateValide(j.optString("date")) ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).format(java.util.Date())
+    val exp = j.optString("expediteur").trim(); val obj = j.optString("objet").trim()
+    val n = listOf(d, exp).filter { it.isNotEmpty() }.joinToString(" ") + if (obj.isNotEmpty()) " – $obj" else ""
+    return n.replace(Regex("[\\\\/:*?\"<>|]+"), " ").replace(Regex("\\s+"), " ").trim().take(150) + ".pdf"
+}
+
+/**
+ * Apres une numerisation (case cochee) : accord pour envoyer l'image de la premiere page, puis l'IA propose
+ * « Date Expediteur – objet » ; l'utilisateur corrige. fini(fichier) : le PDF, renomme ou non.
+ */
+@Composable
+fun NommerScan(pdf: java.io.File, premiere: android.graphics.Bitmap, fini: (java.io.File) -> Unit) {
+    val ctx = LocalContext.current
+    var accord by remember { mutableStateOf(false) }
+    var propose by remember { mutableStateOf<String?>(null) }
+    when {
+        !accord -> AlertDialog(onDismissRequest = { fini(pdf) },
+            title = { Text(stringResource(R.string.ia_nommer_titre)) },
+            text = { Text(stringResource(R.string.ia_nommer_accord, Ia.nom(Ia.moteurs(ctx).firstOrNull()?.first))) },
+            confirmButton = { TextButton(onClick = { accord = true }) { Text(stringResource(R.string.ia_envoyer)) } },
+            dismissButton = { TextButton(onClick = { fini(pdf) }) { Text(stringResource(R.string.annuler)) } })
+        propose == null -> EnvoiIa("", stringResource(R.string.ia_lit_document), {
+            val petite = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                val k = maxOf(1f, maxOf(premiere.width, premiere.height) / 1400f)
+                val b = android.graphics.Bitmap.createScaledBitmap(premiere, (premiere.width / k).toInt(), (premiere.height / k).toInt(), true)
+                java.io.ByteArrayOutputStream().also { b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, it) }.toByteArray()
+            }
+            val jour = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(java.util.Date())
+            nomPropose(Ia.lireJson(Ia.demander(ctx, CONSIGNES_NOMMER + "\nDate du jour : $jour.", "Document numérisé : la première page est en image.",
+                images = listOf(petite), json = true, maxJetons = 400)))
+        }, { propose = it }, { fini(pdf) })
+        else -> {
+            var nom by remember { mutableStateOf(propose!!) }
+            AlertDialog(onDismissRequest = { fini(pdf) },
+                title = { Text(stringResource(R.string.ia_nommer_titre)) },
+                text = { Column {
+                    OutlinedTextField(nom, { nom = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.ia_nommer_nom)) })
+                    Spacer(Modifier.height(6.dp))
+                    Text(stringResource(R.string.ia_nommer_verifier), fontSize = 12.sp, color = Color.Gray)
+                } },
+                confirmButton = { TextButton(onClick = {
+                    val n = nom.trim().replace(Regex("[\\\\/:*?\"<>|]+"), " ").let { if (it.lowercase().endsWith(".pdf")) it else "$it.pdf" }
+                    val cible = java.io.File(pdf.parentFile, n)
+                    val ok = n.length > 4 && (cible == pdf || pdf.renameTo(cible))
+                    Journal.ecrire("IA", "nom proposé après numérisation : $n${if (ok) "" else " (renommage impossible)"}")
+                    fini(if (ok) cible else pdf)
+                }) { Text(stringResource(R.string.ia_nommer_garder)) } },
+                dismissButton = { TextButton(onClick = { fini(pdf) }) { Text(stringResource(R.string.ia_nommer_origine)) } })
+        }
+    }
+}
