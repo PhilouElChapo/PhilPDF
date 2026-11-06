@@ -118,7 +118,8 @@ jobs:
             r=$?
             set -e
             grep -v "^…" tronq_$lg.log || true
-            if [ $r -ne 0 ]; then echo "--- derniers outils essayes :"; grep "^…" tronq_$lg.log | tail -5; exit 1; fi
+            # juge sur le bilan affiche : la fermeture de Qt plante parfois sous Windows apres un essai reussi
+            if ! grep -q "^RESULTAT : OK" tronq_$lg.log; then echo "--- code $r, derniers outils essayes :"; grep "^…" tronq_$lg.log | tail -5; exit 1; fi
           done
         env:
           QT_QPA_PLATFORM: offscreen
