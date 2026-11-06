@@ -138,7 +138,7 @@ fun PanneauAnnoter(etat: EtatLecteur, choisi: () -> Unit = {}) {
                         .clickable { r.outil = o; choisi() }.padding(vertical = 6.dp),
                         horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icones.get(o.icone, if (actif) ROUGE else Color(0xFF444444)), null, tint = Color.Unspecified)
-                        Text(stringResource(o.texte), fontSize = 10.sp, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        TexteAjuste(stringResource(o.texte), 10.sp, lignes = 2, centre = true)   // « Kontrollkästchen » : plus petit, jamais coupe
                     }
                 }
             }

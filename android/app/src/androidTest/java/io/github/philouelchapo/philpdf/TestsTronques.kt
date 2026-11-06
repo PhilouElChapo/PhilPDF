@@ -139,6 +139,7 @@ class TestsTronques {
             val court = t.replace('\n', ' ').take(60)
             // la place reelle du texte (taille du noeud) contre ses lignes : plus large = coupe a droite, plus haut = coupe en bas
             val w = n.size.width; val h = n.size.height
+            if (w == 0 || h == 0) continue                    // pas encore affiche (fenetre qui s'ouvre, sous le volet)
             var large = 0f
             for (i in 0 until r.lineCount) large = maxOf(large, r.getLineRight(i) - r.getLineLeft(i))
             val bas = if (r.lineCount > 0) r.getLineBottom(r.lineCount - 1) else 0f

@@ -1077,16 +1077,22 @@ suspend fun imprimer(ctx: Context, doc: DocumentPdf) {
 }
 
 
-/** Libelle sur une ligne qui rapetisse au lieu d'etre coupe (« Commenter » et non « Comment »),
- *  meme quand le telephone est regle en grands caracteres. */
+/** Libelle qui rapetisse au lieu d'etre coupe (« Commenter » et non « Comment »), meme quand le telephone est regle
+ *  en grands caracteres. lignes : sur plusieurs lignes, coupees entre les mots seulement (libelles sous une icone). */
 @Composable
-fun TexteAjuste(texte: String, taille: androidx.compose.ui.unit.TextUnit, minimum: Float = 7f) {
+fun TexteAjuste(texte: String, taille: androidx.compose.ui.unit.TextUnit, minimum: Float = 7f, lignes: Int = 1,
+                centre: Boolean = false) {
     var t by remember(texte, taille) { mutableStateOf(taille) }
     var pret by remember(texte, taille) { mutableStateOf(false) }
-    Text(texte, fontSize = t, maxLines = 1, softWrap = false,
+    // lignes > 1 : le texte passe a la ligne entre les mots ; un mot coupe en deux compte comme « ne tient pas »
+    fun motCoupe(r: androidx.compose.ui.text.TextLayoutResult): Boolean = (0 until r.lineCount - 1).any { i ->
+        val e = r.getLineEnd(i); e in 1 until texte.length && texte[e - 1].isLetterOrDigit() && texte[e].isLetterOrDigit()
+    }
+    Text(texte, fontSize = t, maxLines = lignes, softWrap = lignes > 1,
+        textAlign = if (centre) androidx.compose.ui.text.style.TextAlign.Center else null, lineHeight = t * 1.1f,
         modifier = Modifier.drawWithContent { if (pret) drawContent() },
         onTextLayout = { r ->
-            if (r.hasVisualOverflow && t.value > minimum) t = (t.value * 0.9f).sp else pret = true
+            if ((r.hasVisualOverflow || motCoupe(r)) && t.value > minimum) t = (t.value * 0.9f).sp else pret = true
         })
 }
 
