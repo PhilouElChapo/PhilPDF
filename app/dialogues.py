@@ -1216,7 +1216,8 @@ class DialogueNumeriser(QDialog):
                 ("nb", _('Noir et blanc (monochrome)'), _('Courriers, factures, contrats : le plus léger')),
                 ("gris", _('Niveaux de gris'), _('Tampons, signatures, documents pâles ou tramés')),
                 ("couleur", _('Couleur'), _('Photos, plans, documents en couleur'))]):
-            r = QRadioButton(f"{titre}  —  {desc}")
+            from .cases import RadioLong
+            r = RadioLong(f"{titre}  —  {desc}")        # passe a la ligne (allemand...)
             r.setProperty("cle", cle)
             if i == 0:
                 r.setChecked(True)

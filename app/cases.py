@@ -1,10 +1,11 @@
-"""Case a cocher dont le texte passe a la ligne au lieu d'etre coupe (fenetres etroites, langues plus longues).
-S'utilise comme une QCheckBox : isChecked, setChecked, toggled, setToolTip, text..."""
+"""Case a cocher (CaseLongue) et bouton radio (RadioLong) dont le texte passe a la ligne au lieu d'etre coupe
+(fenetres etroites, langues plus longues). S'utilisent comme QCheckBox / QRadioButton : isChecked, setChecked,
+toggled, setToolTip, text..."""
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtWidgets import QCheckBox, QLabel, QHBoxLayout, QSizePolicy, QStyle, QStyleOptionButton
+from PySide6.QtWidgets import QCheckBox, QRadioButton, QLabel, QHBoxLayout, QSizePolicy, QStyle, QStyleOptionButton
 
 
-class CaseLongue(QCheckBox):
+class _Long:
     def __init__(self, texte="", parent=None):
         super().__init__(parent)
         self._lab = QLabel(texte, self)
@@ -12,8 +13,8 @@ class CaseLongue(QCheckBox):
         self._lab.setTextFormat(Qt.PlainText)
         o = QStyleOptionButton()
         o.initFrom(self)
-        retrait = (self.style().pixelMetric(QStyle.PM_IndicatorWidth, o, self)
-                   + self.style().pixelMetric(QStyle.PM_CheckBoxLabelSpacing, o, self) + 2)
+        retrait = (self.style().pixelMetric(self._indicateur, o, self)
+                   + self.style().pixelMetric(self._espace, o, self) + 2)
         h = QHBoxLayout(self)
         h.setContentsMargins(retrait, 1, 0, 1)
         h.addWidget(self._lab)
@@ -53,5 +54,19 @@ class CaseLongue(QCheckBox):
         mx, my = self._marge()
         return max(self._lab.heightForWidth(max(10, w - mx)) + my, super().sizeHint().height())
 
+    def resizeEvent(self, e):                             # assez haut pour toutes ses lignes a cette largeur
+        super().resizeEvent(e)
+        h = self.heightForWidth(self.width())
+        if h != self.minimumHeight():
+            self.setMinimumHeight(h)
+
     def hitButton(self, pos):                             # un clic sur le texte coche aussi
         return self.rect().contains(pos)
+
+
+class CaseLongue(_Long, QCheckBox):
+    _indicateur, _espace = QStyle.PM_IndicatorWidth, QStyle.PM_CheckBoxLabelSpacing
+
+
+class RadioLong(_Long, QRadioButton):
+    _indicateur, _espace = QStyle.PM_ExclusiveIndicatorWidth, QStyle.PM_RadioButtonLabelSpacing
