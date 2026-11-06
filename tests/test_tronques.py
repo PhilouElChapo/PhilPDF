@@ -13,6 +13,7 @@ os.environ["HOME"] = os.environ["APPDATA"]
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import faulthandler
+faulthandler.enable()                                     # plantage natif (pilote, DLL) : on voit ou
 faulthandler.dump_traceback_later(int(os.environ.get("TRONQ_DUMP", "0")) or 10**6, repeat=False, exit=True)   # bloque : on voit ou, et on echoue
 import pymupdf as fitz
 from PySide6.QtCore import Qt, QTimer

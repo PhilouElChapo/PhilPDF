@@ -113,8 +113,12 @@ jobs:
         run: |
           for lg in fr en de es it; do
             echo "=== $lg"
-            PHILPDF_LANGUE=$lg TRONQ_DUMP=480 python tests/test_tronques.py | grep -v "^…"
-            test ${PIPESTATUS[0]} -eq 0 || exit 1
+            set +e
+            PHILPDF_LANGUE=$lg TRONQ_DUMP=480 python -u tests/test_tronques.py > tronq_$lg.log 2>&1
+            r=$?
+            set -e
+            grep -v "^…" tronq_$lg.log || true
+            if [ $r -ne 0 ]; then echo "--- derniers outils essayes :"; grep "^…" tronq_$lg.log | tail -5; exit 1; fi
           done
         env:
           QT_QPA_PLATFORM: offscreen
