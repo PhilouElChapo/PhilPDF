@@ -1,5 +1,6 @@
 """Traitement par lot : une ou plusieurs actions sur tout un dossier (OCR, allegement, filigrane, numerotation Bates,
-PDF/A, renommage). Avant de lancer, PhilPDF montre la liste des fichiers et les noms de sortie ; les originaux ne
+PDF/A, renommage selon un modele ou propose par l'IA, tri en sous-dossiers par expediteur, type ou annee). Avant de
+lancer, PhilPDF montre la liste des fichiers et les noms de sortie (ceux de l'IA se corrigent) ; les originaux ne
 sont jamais ecrases sans copie, les fichiers signes ou proteges sont signales et laisses de cote."""
 import datetime
 import os
@@ -30,10 +31,17 @@ def fichiers_du_dossier(dossier, sous_dossiers=False):
     return sorted(out, key=lambda f: f.lower())
 
 
+def _propre(t):
+    return re.sub(r"\s+", " ", re.sub(r'[<>:"/\\|?*]', "-", t or "")).strip(" .")
+
+
 def nom_sortie(chemin, regl, n):
     """Nom du fichier produit (sans le dossier). n : rang du fichier dans le lot (1 pour le premier)."""
     base = os.path.splitext(os.path.basename(chemin))[0]
-    if "renommer" in regl["actions"]:
+    ia_nom = (regl.get("noms_ia") or {}).get(chemin) if regl.get("mode_nom") == "ia" else None
+    if "renommer" in regl["actions"] and ia_nom:
+        base = os.path.splitext(_propre(ia_nom.get("nom", "")))[0] or base
+    elif "renommer" in regl["actions"]:
         try:
             st = os.stat(chemin)
             date_f = datetime.date.fromtimestamp(st.st_mtime)
@@ -60,12 +68,29 @@ def nom_sortie(chemin, regl, n):
     return base + ".pdf"
 
 
+def sous_dossier_tri(chemin, regl):
+    """Tri par l'IA : sous-dossier selon l'expediteur, le type ou l'annee lus par l'IA ("" sans tri ou sans reponse)."""
+    tri = regl.get("tri") or ""
+    r = (regl.get("noms_ia") or {}).get(chemin)
+    if "renommer" not in regl["actions"] or not tri or not r:
+        return ""
+    infos = r.get("infos") or {}
+    if tri == "annee":
+        v = (infos.get("date") or "")[:4]
+        return v if re.fullmatch(r"(19|20)\d\d", v) else _("Sans date")
+    v = _propre(infos.get("expediteur" if tri == "expediteur" else "type") or "")
+    return (v[:1].upper() + v[1:])[:60] if v else _("Non classés")
+
+
 def dossier_sortie(chemin, regl):
     if regl["sortie"] == "sous_dossier":
-        return os.path.join(os.path.dirname(chemin), _("Traités"))
-    if regl["sortie"] == "dossier" and regl.get("dossier"):
-        return regl["dossier"]
-    return os.path.dirname(chemin)
+        d = os.path.join(os.path.dirname(chemin), _("Traités"))
+    elif regl["sortie"] == "dossier" and regl.get("dossier"):
+        d = regl["dossier"]
+    else:
+        d = os.path.dirname(chemin)
+    t = sous_dossier_tri(chemin, regl)
+    return os.path.join(d, t) if t else d
 
 
 def _filigrane(doc, texte, opacite=0.18):
@@ -106,6 +131,8 @@ def traiter_fichier(chemin, regl, rang, numero_bates, journal):
     except Exception:
         signe = False
     modifie = any(a in regl["actions"] for a in ("ocr", "alleger", "filigrane", "bates", "pdfa"))
+    if "renommer" in regl["actions"] and regl.get("mode_nom") == "ia" and chemin not in (regl.get("noms_ia") or {}):
+        journal.append(_("pas de nom proposé par l'IA : nom selon le modèle"))
     if signe and modifie and not regl.get("signes"):
         journal.append(_("signé : laissé tel quel (le modifier rendrait la signature invalide)"))
         return None, numero_bates, avant, avant
@@ -153,7 +180,7 @@ def traiter_fichier(chemin, regl, rang, numero_bates, journal):
     os.makedirs(dossier, exist_ok=True)
     cible = os.path.join(dossier, nom_sortie(chemin, regl, rang))
     if regl["sortie"] == "remplacer":
-        cible = os.path.join(os.path.dirname(chemin), nom_sortie(chemin, regl, rang))
+        cible = os.path.join(dossier, nom_sortie(chemin, regl, rang))
         sauvegarde = os.path.join(os.path.dirname(chemin), _("Originaux"))
         os.makedirs(sauvegarde, exist_ok=True)
         shutil.copy2(chemin, os.path.join(sauvegarde, os.path.basename(chemin)))
@@ -264,6 +291,31 @@ class DialogueLot(QDialog):
         fa.addRow("      " + _("Préfixe, début, chiffres"), hb)
         fa.addRow(self.cases["pdfa"])
         fa.addRow(self.cases["renommer"])
+        # nom : selon un modele, ou propose par l'IA (date, expediteur, objet) ; tri en sous-dossiers
+        self.mode_nom = QComboBox()
+        self.mode_nom.setObjectName("lot_mode_nom")
+        self.mode_nom.addItem(_("Selon le modèle ci-dessous"), "modele")
+        self.mode_nom.addItem(_("Proposé par l'IA : date, expéditeur, objet"), "ia")
+        self.mode_nom.currentIndexChanged.connect(self._mode_nom_change)
+        fa.addRow("      " + _("Nom"), self.mode_nom)
+        self.tri = QComboBox()
+        self.tri.setObjectName("lot_tri")
+        self.tri.addItem(_("Pas de tri"), "")
+        self.tri.addItem(_("Un sous-dossier par expéditeur (CPAM, EDF...)"), "expediteur")
+        self.tri.addItem(_("Un sous-dossier par type (facture, courrier...)"), "type")
+        self.tri.addItem(_("Un sous-dossier par année"), "annee")
+        self.tri.setToolTip(_("Lu par l'IA dans chaque document, avec le nom proposé"))
+        self.tri.currentIndexChanged.connect(self.maj_apercu)
+        fa.addRow("      " + _("Trier"), self.tri)
+        self.b_ia = QPushButton(_("Proposer les noms avec l'IA..."))
+        self.b_ia.setObjectName("lot_ia")
+        self.b_ia.setToolTip(_("L'IA lit chaque document et propose son nom (et son sous-dossier) ; vous les "
+                               "voyez et les corrigez à droite avant « Lancer ». Rien n'est envoyé sans votre accord."))
+        self.b_ia.clicked.connect(self.proposer_noms)
+        hia = QHBoxLayout()                         # bouton seul : garde sa taille, aligne a gauche
+        hia.addWidget(self.b_ia)
+        hia.addStretch(1)
+        fa.addRow("      ", hia)
         self.modele = QLineEdit("{date} {nom}")
         self.modele.setObjectName("lot_modele")
         self.modele.setToolTip(_("{nom} nom actuel, {n} numéro (001, 002...), {date} date du fichier, "
@@ -310,7 +362,8 @@ class DialogueLot(QDialog):
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setEditTriggers(QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed)
+        self.table.itemChanged.connect(self._nom_corrige)
         dv.addWidget(self.table, 1)
         self.barre = QProgressBar()
         self.barre.hide()
@@ -342,9 +395,113 @@ class DialogueLot(QDialog):
             (w.textChanged if isinstance(w, QLineEdit) else w.currentIndexChanged if isinstance(w, QComboBox)
              else w.toggled if isinstance(w, QCheckBox) else w.valueChanged).connect(self._coche_action(w))
         self.fichiers, self.tache, self.produits = [], None, []
+        self.noms_ia = {}                         # chemin -> {"nom": ..., "infos": reponse de l'IA}
+        self._mode_nom_change()
         self._sortie_change()
         if dossier:
             self.lister()
+
+    def _mode_nom_change(self, *_a):
+        ia_choisie = self.mode_nom.currentData() == "ia"
+        if ia_choisie:
+            self.cases["renommer"].setChecked(True)
+        for w in (self.tri, self.b_ia):
+            w.setEnabled(ia_choisie)
+        for w in (self.modele, self.chercher, self.remplacer):
+            w.setEnabled(not ia_choisie)
+        self.maj_apercu()
+
+    def _nom_corrige(self, it):
+        """Double-clic sur « Sera enregistre sous » (noms de l'IA) : le nom corrige est garde."""
+        if getattr(self, "_remplissage", False) or it.column() != 1 or self.mode_nom.currentData() != "ia":
+            return
+        f = it.data(Qt.UserRole)
+        if f in self.noms_ia:
+            n = os.path.basename(it.text().strip())
+            if n:
+                self.noms_ia[f]["nom"] = n if n.lower().endswith(".pdf") else n + ".pdf"
+            self.maj_apercu()
+
+    def proposer_noms(self):
+        """L'IA lit chaque fichier (son texte, sinon l'image de sa premiere page) et propose nom et sous-dossier.
+        Un seul accord pour tout le lot ; les fichiers aux donnees sensibles sont signales et peuvent etre exclus."""
+        from . import ia
+        from .dialogues_ia import verifier_cle, executer_suivi, CONSIGNES_NOMMER, nom_propose
+        if not self.fichiers or not verifier_cle(self, self.params):
+            return
+        a_faire = [f for f in self.fichiers if f not in self.noms_ia] or list(self.fichiers)
+        textes, sans_texte, sensibles = {}, [], {}
+        for f in a_faire:
+            try:
+                with fitz.open(f) as d:
+                    if d.needs_pass:
+                        continue
+                    t = ia.texte_document(d, max_car=8000)
+            except Exception:                            # noqa: BLE001
+                continue
+            textes[f] = t
+            if not t.strip():
+                sans_texte.append(f)
+            else:
+                trouves = ia.donnees_sensibles(t)
+                if trouves:
+                    sensibles[f] = sorted({g for g, _x in trouves})
+        if not textes:
+            return
+        moteur = ia.nom_moteur(self.params)
+        detail = _("{n} document(s) vont être envoyés à l'IA ({ia}) pour proposer leur nom.", n=len(textes), ia=moteur)
+        if sans_texte:
+            detail += "\n\n" + _("{n} n'ont pas de texte reconnu : l'image de leur première page sera envoyée.", n=len(sans_texte))
+        if sensibles:
+            detail += "\n\n" + _("Données sensibles repérées dans {n} fichier(s) :", n=len(sensibles)) + "\n" + "\n".join(
+                f"  • {os.path.basename(f)} : {', '.join(g)}" for f, g in list(sensibles.items())[:12])
+            if len(sensibles) > 12:
+                detail += "\n  • ..."
+        q = QMessageBox(QMessageBox.Question, _("Proposer les noms avec l'IA"), detail, parent=self)
+        b_tous = q.addButton(_("Envoyer"), QMessageBox.AcceptRole)
+        b_sans = q.addButton(_("Envoyer, sans les fichiers sensibles"), QMessageBox.AcceptRole) if sensibles else None
+        q.addButton(_("Annuler"), QMessageBox.RejectRole)
+        q.exec()
+        if q.clickedButton() not in (b_tous, b_sans):
+            return
+        envoi = [f for f in textes if not (q.clickedButton() is b_sans and f in sensibles)]
+        consignes = CONSIGNES_NOMMER + f"\nDate du jour : {datetime.date.today().isoformat()}."
+        rates = []
+
+        def travail(t):
+            for k, f in enumerate(envoi):
+                t.avancer(_("Lecture de « {f} » par l'IA...", f=os.path.basename(f)), k, len(envoi))
+                images = None
+                texte = textes[f]
+                if f in sans_texte:
+                    with fitz.open(f) as d:
+                        images = [d[0].get_pixmap(dpi=110, colorspace=fitz.csGRAY).tobytes("png")]
+                    texte = _("Document numérisé : la première page est en image.")
+                try:
+                    r = ia.demander(self.params, consignes, texte, images=images, json_attendu=True, max_jetons=400)
+                except InterruptedError:
+                    raise
+                except Exception as e:                   # noqa: BLE001
+                    rates.append(os.path.basename(f))
+                    t.noter(f"✕ {os.path.basename(f)} : {e}")
+                    continue
+                if isinstance(r, dict):
+                    self.noms_ia[f] = {"nom": nom_propose(r), "infos": r}   # garde au fur et a mesure (Arreter)
+                    t.noter(f"✓ {os.path.basename(f)} → {self.noms_ia[f]['nom']}")
+            t.avancer(_("Terminé."), len(envoi), len(envoi))
+        try:
+            executer_suivi(self, _("Proposer les noms avec l'IA"), travail)
+        except InterruptedError:
+            pass
+        except Exception as e:                           # noqa: BLE001
+            QMessageBox.warning(self, _("Proposer les noms avec l'IA"), str(e))
+        from .journal import ecrire
+        ecrire("IA", f"traitement par lot : {len([f for f in envoi if f in self.noms_ia])} nom(s) proposé(s) sur {len(envoi)}")
+        self.maj_apercu()
+        if rates:
+            QMessageBox.information(self, _("Proposer les noms avec l'IA"), _(
+                "Pas de nom proposé pour {n} fichier(s) (ils gardent le nom selon le modèle) :\n{l}",
+                n=len(rates), l="\n".join(rates[:15])))
 
     def _coche_action(self, w):
         cible = {self.prereglage: "alleger", self.noir_blanc: "alleger", self.t_filigrane: "filigrane",
@@ -379,6 +536,7 @@ class DialogueLot(QDialog):
         d = self.dossier.text().strip()
         if d and os.path.isdir(d):
             self.fichiers = fichiers_du_dossier(d, self.sous.isChecked())
+        self.noms_ia = {f: v for f, v in self.noms_ia.items() if f in self.fichiers}
         self.maj_apercu()
 
     def reglages(self):
@@ -389,21 +547,38 @@ class DialogueLot(QDialog):
                 "modele": self.modele.text().strip() or "{nom}", "chercher": self.chercher.text(),
                 "remplacer": self.remplacer.text(), "sortie": self.sortie.currentData(),
                 "dossier": getattr(self, "autre_dossier", ""), "suffixe": self.suffixe.text(),
-                "signes": self.signes.isChecked()}
+                "signes": self.signes.isChecked(), "mode_nom": self.mode_nom.currentData(),
+                "tri": self.tri.currentData() if self.mode_nom.currentData() == "ia" else "", "noms_ia": dict(self.noms_ia)}
 
     def maj_apercu(self, *_a):
         if self.tache and self.tache.isRunning():
             return
         r = self.reglages()
+        self._remplissage = True
         self.table.setRowCount(len(self.fichiers))
         base = self.dossier.text().strip()
+        par_ia = "renommer" in r["actions"] and r["mode_nom"] == "ia"
         for i, f in enumerate(self.fichiers):
             rel = os.path.relpath(f, base) if base and f.startswith(base) else f
-            self.table.setItem(i, 0, QTableWidgetItem(rel))
+            it0 = QTableWidgetItem(rel)
+            it0.setFlags(it0.flags() & ~Qt.ItemIsEditable)
+            self.table.setItem(i, 0, it0)
             sortie = os.path.join(dossier_sortie(f, r), nom_sortie(f, r, i + 1))
             rel2 = os.path.relpath(sortie, base) if base and sortie.startswith(base) else sortie
-            self.table.setItem(i, 1, QTableWidgetItem(rel2))
-            self.table.setItem(i, 2, QTableWidgetItem(""))
+            it1 = QTableWidgetItem(rel2)
+            it1.setData(Qt.UserRole, f)
+            if par_ia and f in self.noms_ia:
+                it1.setToolTip(_("Proposé par l'IA : double-clic pour corriger"))
+            else:
+                it1.setFlags(it1.flags() & ~Qt.ItemIsEditable)
+                if par_ia:
+                    it1.setForeground(Qt.gray)
+                    it1.setToolTip(_("Pas encore de nom proposé par l'IA : « Proposer les noms avec l'IA... »"))
+            self.table.setItem(i, 1, it1)
+            it2 = QTableWidgetItem("")
+            it2.setFlags(it2.flags() & ~Qt.ItemIsEditable)
+            self.table.setItem(i, 2, it2)
+        self._remplissage = False
         n = len(self.fichiers)
         acts = r["actions"]
         self.b_lancer.setEnabled(bool(n and acts))
@@ -417,6 +592,18 @@ class DialogueLot(QDialog):
         r = self.reglages()
         if not self.fichiers or not r["actions"]:
             return
+        if "renommer" in r["actions"] and r["mode_nom"] == "ia":
+            manquent = [f for f in self.fichiers if f not in self.noms_ia]
+            if manquent:
+                q = QMessageBox.question(self, self.windowTitle(), _(
+                    "{n} fichier(s) n'ont pas encore de nom proposé par l'IA. Les proposer maintenant ?\n\n"
+                    "Non : ils sont renommés selon le modèle.", n=len(manquent)),
+                    QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+                if q == QMessageBox.Cancel:
+                    return
+                if q == QMessageBox.Yes:
+                    self.proposer_noms()
+                    return                                   # on revoit les noms avant de lancer
         if r["sortie"] == "remplacer" and QMessageBox.question(
                 self, self.windowTitle(), _("Remplacer {n} fichier(s) ? Une copie de chacun est gardée dans le "
                                             "dossier « Originaux ».", n=len(self.fichiers))) != QMessageBox.Yes:

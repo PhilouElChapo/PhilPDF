@@ -161,6 +161,14 @@ for i in range(3):
     p.insert_text((72, 100), f"Page {i + 1} : texte pour les essais", fontsize=14)
 chemin = os.path.join(os.environ["APPDATA"], "essai.pdf")
 d.save(chemin)
+# Accueil avec des fichiers coches : la barre des commandes groupees
+w.params["recents"] = [chemin]
+w.accueil.rafraichir()
+for _ in range(10):
+    app.processEvents()
+w.accueil._cocher_tout(True)
+app.processEvents()
+verifier(w, "Accueil, fichiers cochés")
 w.ouvrir(chemin)
 app.processEvents()
 

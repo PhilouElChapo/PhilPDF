@@ -393,6 +393,7 @@ class PageAccueil(QWidget):
     ouvrir_dialogue = Signal()
     ouvrir_distant = Signal()
     action_fichier = Signal(str, str)     # chemin, action (menu clic droit des fichiers recents)
+    action_plusieurs = Signal(list, str)  # fichiers coches, action (barre des fichiers coches, comme Adobe)
     reprendre = Signal()          # reprendre la session proposee (remplace les fichiers ouverts)
     synchroniser = Signal()       # fenetre de synchronisation manuelle
     synchro_drive = Signal()
@@ -538,6 +539,37 @@ class PageAccueil(QWidget):
         r = QLabel(_('Récents'))
         r.setStyleSheet("font-size:18px;font-weight:600")
         v.addWidget(r)
+        # fichiers coches (comme Adobe) : une meme commande sur tous
+        self._coches = []
+        self.barre_coches = QFrame()
+        self.barre_coches.setObjectName("barre_coches")
+        self.barre_coches.setStyleSheet("#barre_coches{background:#eef4fc;border:1px solid #c9dcf3;border-radius:8px}")
+        bc = FlowLayout(self.barre_coches) if "FlowLayout" in globals() else QHBoxLayout(self.barre_coches)
+        self.lbl_coches = QLabel()
+        self.lbl_coches.setStyleSheet("font-weight:600;background:transparent")
+        bc.addWidget(self.lbl_coches)
+        for ic, texte, action, aide in (
+                ("ouvrir", _("Ouvrir"), "ouvrir", _("Chaque fichier dans son onglet")),
+                ("combiner", _("Combiner"), "combiner", _("Assembler ces fichiers en un seul PDF (ordre modifiable)")),
+                ("archiver", _("Renommer et classer avec l'IA..."), "classer",
+                 _("Traitement par lot : nom proposé par l'IA (date, expéditeur, objet) et tri en sous-dossiers ; vous voyez les noms avant")),
+                ("ocr", _("Traitement par lot..."), "lot", _("OCR, alléger, filigrane, numérotation Bates, PDF/A, renommer")),
+                ("imprimer", _("Imprimer"), "imprimer", _("Imprimer tous ces fichiers")),
+                ("archiver", _("Envoyer une copie..."), "envoyer_copie", _("Vers un Drive, un NAS ou un FTP, dans le dossier choisi")),
+                ("fermer", _("Retirer de la liste"), "retirer", _("Les fichiers ne sont pas supprimés"))):
+            b = QPushButton(icone(ic, "#2b6cb0"), texte)
+            b.setToolTip(aide)
+            b.setObjectName("coches_" + action)
+            b.clicked.connect(lambda _c=False, a=action: self._action_coches(a))
+            bc.addWidget(b)
+        b = QPushButton(_("Tout cocher"))
+        b.clicked.connect(lambda: self._cocher_tout(True))
+        bc.addWidget(b)
+        b = QPushButton(_("Tout décocher"))
+        b.clicked.connect(lambda: self._cocher_tout(False))
+        bc.addWidget(b)
+        self.barre_coches.hide()
+        v.addWidget(self.barre_coches)
         self.liste = QListWidget()
         self.liste.setIconSize(QSize(40, 52))
         self.liste.setStyleSheet("QListWidget{background:#fff;border:1px solid #e2e2e2;border-radius:10px;font-size:14px}"
@@ -550,6 +582,7 @@ class PageAccueil(QWidget):
         self.liste.setContextMenuPolicy(Qt.CustomContextMenu)
         self.liste.customContextMenuRequested.connect(self._menu_fichier)
         self.liste.itemClicked.connect(self._clic_recent)
+        self.liste.itemChanged.connect(self._coche_changee)
         self.liste.setMouseTracking(True)
         self.liste.viewport().setMouseTracking(True)
         self.liste.viewport().installEventFilter(self)
@@ -715,6 +748,7 @@ class PageAccueil(QWidget):
     def _afficher_recents(self, lignes):
         self._sig_affichee = self._signature(lignes)
         from .session import date_fr
+        self._remplissage = True                      # les cases cochees sont gardees d'un affichage a l'autre
         self.liste.clear()
         moi = self.params.get("machine", "")
         section = "ici"
@@ -758,7 +792,14 @@ class PageAccueil(QWidget):
                 it.setForeground(Qt.gray)
             else:
                 self._a_vignetter.append(it)
+                if not str(ici).startswith("distant:"):  # fichier de ce poste : case a cocher (une commande sur plusieurs)
+                    it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
+                    it.setCheckState(Qt.Checked if ici in self._coches else Qt.Unchecked)
             self.liste.addItem(it)
+        self._remplissage = False
+        presents = {self.liste.item(i).data(Qt.UserRole) for i in range(self.liste.count())}
+        self._coches = [c for c in self._coches if c in presents]
+        self._maj_barre_coches()
         self._vignetter()
         self.bandeau.setText(_('Poste : <b>{machine}</b>. ', machine=self.params['machine']) + (
                 _('Synchronisation : ') + self._lieu_synchro() + self._etat_synchro() + " &nbsp;<a href='changer_synchro'>" + _("changer") + "</a>"
@@ -986,7 +1027,47 @@ class PageAccueil(QWidget):
             return libelle_compte(c)
         return self.params.get("drive", "")
 
+    # ---- fichiers coches
+    def _coche_changee(self, it):
+        if getattr(self, "_remplissage", False) or not (it.flags() & Qt.ItemIsUserCheckable):
+            return
+        c = it.data(Qt.UserRole)
+        if it.checkState() == Qt.Checked and c not in self._coches:
+            self._coches.append(c)
+        elif it.checkState() != Qt.Checked and c in self._coches:
+            self._coches.remove(c)
+        self._coche_juste = it                     # le clic sur la case n'ouvre pas le fichier
+        self._maj_barre_coches()
+
+    def _maj_barre_coches(self):
+        n = len(self._coches)
+        self.lbl_coches.setText(_("{n} fichier(s) coché(s) :", n=n))
+        self.barre_coches.setVisible(n > 0)
+
+    def _cocher_tout(self, oui):
+        self._remplissage = True
+        for i in range(self.liste.count()):
+            it = self.liste.item(i)
+            if it.flags() & Qt.ItemIsUserCheckable:
+                it.setCheckState(Qt.Checked if oui else Qt.Unchecked)
+        self._remplissage = False
+        self._coches = [self.liste.item(i).data(Qt.UserRole) for i in range(self.liste.count())
+                        if self.liste.item(i).flags() & Qt.ItemIsUserCheckable and self.liste.item(i).checkState() == Qt.Checked]
+        self._maj_barre_coches()
+
+    def _action_coches(self, action):
+        fichiers = [c for c in self._coches if c and os.path.exists(c)]
+        if fichiers:
+            self.action_plusieurs.emit(fichiers, action)
+        if action == "retirer":
+            self._coches = []
+            self._maj_barre_coches()
+
     def _clic_recent(self, it):
+        if getattr(self, "_coche_juste", None) is it:  # clic sur la case : cocher seulement
+            self._coche_juste = None
+            return
+        self._coche_juste = None
         chemin = it.data(Qt.UserRole)
         if chemin:
             self.ouvrir.emit(chemin)
@@ -1286,6 +1367,8 @@ class DelegueRecent(_Delegue):
         if not html or w is None:
             return base
         icone = (option.decorationSize.width() if option.decorationSize.isValid() else 40) + 28
+        if index.flags() & Qt.ItemIsUserCheckable:      # la case a cocher prend sa place a gauche
+            icone += 26
         larg = w.viewport().width() - icone - 12
         h = self._doc(html, option.font, larg).size().height()
         from PySide6.QtCore import QSize

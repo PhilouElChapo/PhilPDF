@@ -1,6 +1,8 @@
 """Traitement par lot (filigrane, Bates continu, PDF/A, renommage, signes laisses de cote) et Archiver PDF/A.
 Lancement : QT_QPA_PLATFORM=offscreen python tests/test_lot.py"""
 import os, sys, tempfile
+import faulthandler
+faulthandler.dump_traceback_later(int(os.environ.get("LOT_DUMP", "0")) or 10**6, exit=True)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ["PHILPDF_LANGUE"] = "fr"
@@ -12,6 +14,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 app = QApplication.instance() or QApplication([])
 from app.config import Parametres
 from app import lot as L
+from app.langue import _
 from moteur import pdfa
 
 ok = []
@@ -61,6 +64,57 @@ verif("COPIE" in textes[0], "filigrane posé")
 verif(pdfa.conforme(d1), "PDF/A-2b conforme aux vérifications")
 verif("signé" in dl.table.item(3, 2).text(), "fichier signé laissé tel quel")
 verif(sorted(f for f in os.listdir(T) if f.endswith(".pdf"))[0] == "facture_0.pdf", "originaux intacts")
+# nom propose par l'IA et tri par expediteur (IA simulee) : donnees sensibles exclues sur demande, scan envoye en image
+T2 = tempfile.mkdtemp()
+for nom, texte in (("a_edf.pdf", "EDF - Facture d'électricité du 12/10/2026"), ("b_banque.pdf", "RIB : IBAN FR76 3000 6000 0112 3456 7890 189"),
+                   ("c_scan.pdf", None)):
+    d = fitz.open()
+    p = d.new_page()
+    if texte:
+        p.insert_text((72, 100), texte, fontsize=12)
+    else:                                                  # scan : une image, pas de texte
+        pm = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 200, 100), False)
+        pm.clear_with(200)
+        p.insert_image(fitz.Rect(72, 72, 272, 172), pixmap=pm)
+    d.save(os.path.join(T2, nom))
+import app.dialogues_ia as DI
+from app import ia as IA
+appels = []
+
+
+def faux_demander(params, consignes, texte, images=None, json_attendu=False, max_jetons=4000):
+    appels.append((texte, bool(images)))
+    if "EDF" in texte:
+        return {"date": "2026-10-12", "expediteur": "EDF", "objet": "Facture électricité", "type": "facture"}
+    return {"date": "2026-09-01", "expediteur": "CPAM", "objet": "Attestation de droits", "type": "attestation"}
+
+
+IA.demander = faux_demander
+DI.verifier_cle = lambda *a, **k: True
+choisi = _("Envoyer, sans les fichiers sensibles")
+QMessageBox.exec = lambda self, *a: None
+QMessageBox.clickedButton = lambda self: next(b for b in self.buttons() if b.text() == choisi)
+dl2 = L.DialogueLot(None, Parametres(), T2)
+dl2.mode_nom.setCurrentIndex(1)
+dl2.tri.setCurrentIndex(1)                                  # par expediteur
+verif(dl2.cases["renommer"].isChecked() and not dl2.modele.isEnabled(), "nom par l'IA : Renommer coché, modèle grisé")
+dl2.proposer_noms()
+app.processEvents()
+verif(len(appels) == 2 and not any("IBAN" in t for t, _i in appels), f"fichier sensible exclu de l'envoi ({len(appels)} envoi(s))")
+verif(any(i for _t, i in appels), "scan sans texte : image de la première page envoyée")
+noms = [dl2.table.item(i, 1).text() for i in range(3)]
+verif(noms[0].replace("\\", "/") == "Traités/EDF/2026-10-12 EDF – Facture électricité.pdf", f"nom et sous-dossier proposés ({noms[0]})")
+dl2.table.item(2, 1).setText("2026-09-01 CPAM – Attestation corrigée")
+verif(dl2.noms_ia[dl2.fichiers[2]]["nom"] == "2026-09-01 CPAM – Attestation corrigée.pdf", "nom corrigé à la main gardé")
+QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.No)   # l'exclu : nom selon le modele
+dl2.lancer()
+dl2.tache.wait(120000)
+app.processEvents()
+produits = sorted(os.path.relpath(os.path.join(r, f), os.path.join(T2, "Traités")).replace("\\", "/")
+                  for r, _d, fs in os.walk(os.path.join(T2, "Traités")) for f in fs)
+verif(produits == sorted([f"{L.datetime.date.today():%Y-%m-%d} b_banque.pdf", "CPAM/2026-09-01 CPAM – Attestation corrigée.pdf",
+                          "EDF/2026-10-12 EDF – Facture électricité.pdf"]),
+      f"fichiers rangés par expéditeur, l'exclu garde le modèle ({produits})")
 # archiver : dialogue
 from app.document import OngletDocument
 from app.archiver import DialogueArchiver

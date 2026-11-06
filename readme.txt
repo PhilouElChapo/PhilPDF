@@ -396,6 +396,17 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.77
+- Traitement par lot, Renommer : nom « Proposé par l'IA : date, expediteur, objet » et tri en sous-dossiers par
+  expediteur, par type ou par annee. « Proposer les noms avec l'IA... » remplit la colonne « Sera enregistre sous »
+  avant de lancer : vous corrigez un nom d'un double-clic. Un seul accord pour tout le lot ; les fichiers aux
+  donnees sensibles sont nommes et peuvent etre laisses de cote ; pour un scan sans texte, seule l'image de la
+  premiere page est envoyee. Arreter garde les noms deja proposes.
+- Accueil : une case a cocher sur chaque fichier recent (comme Adobe). Des qu'un fichier est coche, une barre
+  propose la meme commande pour tous : Ouvrir, Combiner, Renommer et classer avec l'IA, Traitement par lot,
+  Imprimer, Envoyer une copie (Drive, NAS, FTP), Retirer de la liste, Tout cocher / Tout decocher. Un clic sur le
+  nom ouvre toujours le fichier.
+
 0.9.76
 - Allemand, espagnol et italien complets : les 706 textes qui restaient en francais sont traduits (PDF/A,
   commentaires, cote a cote, e-mail, imprimante PhilPDF, formulaires, Excel, Mesure, Fractionner, Parapher,

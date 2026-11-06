@@ -364,6 +364,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
         self.accueil.rechercher.connect(lambda: self.lancer_outil("ia_recherche"))
         self.accueil.numeriser.connect(lambda g: self.numeriser_photos() if g == "photos" else self.lancer_outil("numeriser"))
         self.accueil.action_fichier.connect(self.action_fichier)
+        self.accueil.action_plusieurs.connect(self.action_plusieurs)
         self.accueil.reprendre.connect(self.reprendre_proposee)
         self.accueil.synchroniser.connect(self.synchroniser)
         self.accueil.session_vue.connect(self.marquer_session_vue)
@@ -1924,7 +1925,38 @@ class Fenetre(MixinCoteACote, QMainWindow):
             doc.new_page(width=595, height=842)
         self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=doc, nom="Nouveau.pdf"))
 
-    def combiner(self):
+    def action_plusieurs(self, fichiers, action):
+        """Accueil, fichiers coches : la meme commande sur tous."""
+        fichiers = [f for f in fichiers if os.path.exists(f)]
+        if not fichiers:
+            return
+        if action == "ouvrir":
+            for f in fichiers:
+                self.ouvrir(f)
+        elif action == "combiner":
+            self.combiner(fichiers)
+        elif action in ("lot", "classer"):
+            from .lot import DialogueLot
+            dossiers = {os.path.dirname(f) for f in fichiers}
+            self._lot = DialogueLot(self, self.params, "")
+            if len(dossiers) == 1:
+                self._lot.dossier.setText(dossiers.pop())  # pour l'affichage ; la liste reste celle des fichiers coches
+            self._lot.fichiers = list(fichiers)
+            if action == "classer":
+                self._lot.mode_nom.setCurrentIndex(1)        # nom propose par l'IA
+                self._lot.tri.setCurrentIndex(1)             # un sous-dossier par expediteur
+            self._lot.maj_apercu()
+            self._lot.show()
+        elif action == "imprimer":
+            self.imprimer(fichiers)
+        elif action == "envoyer_copie":
+            self.envoyer_copie(fichiers)
+        elif action == "retirer":
+            for f in fichiers:
+                self.action_fichier(f, "retirer")
+
+    def combiner(self, fichiers=None):
+        """fichiers : liste de depart (fichiers coches a l'Accueil) ; sinon les documents ouverts."""
         d = QDialog(self)
         d.setWindowTitle(_('Combiner des fichiers'))
         d.resize(560, 420)
@@ -1933,11 +1965,11 @@ class Fenetre(MixinCoteACote, QMainWindow):
         lst = QListWidget()
         lst.setDragDropMode(QListWidget.InternalMove)
         v.addWidget(lst, 1)
-        for o in self.documents():
-            if o.chemin:
-                it = QListWidgetItem(icone("creer", "#c9252d"), os.path.basename(o.chemin))
-                it.setData(Qt.UserRole, o.chemin)
-                lst.addItem(it)
+        depart = list(fichiers) if isinstance(fichiers, (list, tuple)) else [o.chemin for o in self.documents() if o.chemin]
+        for c in depart:
+            it = QListWidgetItem(icone("creer", "#c9252d"), os.path.basename(c))
+            it.setData(Qt.UserRole, c)
+            lst.addItem(it)
         h = QHBoxLayout()
         b = QPushButton(_('Ajouter des fichiers...'))
         b.clicked.connect(lambda: [lst.addItem(self._item(f)) for f in QFileDialog.getOpenFileNames(d, _('Ajouter'), self.dossier_depart(), _('PDF et images (*.pdf *.png *.jpg *.jpeg *.tif)'))[0]])
