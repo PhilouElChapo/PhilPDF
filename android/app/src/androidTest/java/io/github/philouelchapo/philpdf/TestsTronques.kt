@@ -159,11 +159,12 @@ class TestsTronques {
             }
             if (r.lineCount > 0 && r.isLineEllipsized(r.lineCount - 1)) out += "« $court » se termine par des points de suspension"
         }
-        // bas utile de l'ecran : au-dessus de la barre d'Android (retour, accueil, geste) ; un bouton dessous se touche mal
+        // bas utile de l'ecran : au-dessus de la barre d'Android (retour, accueil, geste) ; un bouton dessous se touche mal.
+        // Le clavier n'est pas compte : il couvre l'ecran de fond, et Android remonte (ou agrandit) le champ en cours.
         var basUtile = Float.MAX_VALUE
         instr.runOnMainSync {
             val v = activite?.window?.decorView
-            val ins = v?.rootWindowInsets?.getInsets(android.view.WindowInsets.Type.navigationBars() or android.view.WindowInsets.Type.ime())
+            val ins = v?.rootWindowInsets?.getInsets(android.view.WindowInsets.Type.navigationBars())
             if (v != null && ins != null && v.height > 0) basUtile = (v.height - ins.bottom).toFloat()
         }
         // boutons hors de l'ecran, sans defilement pour les atteindre
