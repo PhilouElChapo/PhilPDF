@@ -197,6 +197,7 @@
     <string name="couleur_origine">Originalfarbe</string>
     <string name="aide_texte_fenetre">„Rechtsbündig“ behält den rechten Rand der Zeile bei (Beträge, Daten in einer Spalte). „Rückgängig“ (Pfeil oben) macht die Änderung rückgängig.</string>
     <string name="texte_ok_origine">Text geändert, Originalschrift beibehalten (%1$s).</string>
+    <string name="texte_deborde_cadre">Der Text passt nicht mehr in seinen Rahmen (Band, Zelle): kürzen Sie ihn oder verkleinern Sie die Schrift; Rückgängig stellt ihn wieder her.</string>
     <string name="texte_ok_secours">Text geändert, in %1$s geschrieben.</string>
     <string name="texte_echec">Text kann nicht geändert werden: %1$s</string>
     <string name="organiser_pages">Seiten organisieren</string>

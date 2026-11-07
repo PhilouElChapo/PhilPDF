@@ -197,6 +197,7 @@
     <string name="couleur_origine">Colore originale</string>
     <string name="aide_texte_fenetre">«Allinea a destra» mantiene il bordo destro della riga (importi, date in colonna). «Annulla» (freccia in alto) annulla la modifica.</string>
     <string name="texte_ok_origine">Testo modificato, carattere originale mantenuto (%1$s).</string>
+    <string name="texte_deborde_cadre">Il testo non entra più nella sua cornice (fascia, cella): accorciatelo o riducete la dimensione; Annulla lo ripristina.</string>
     <string name="texte_ok_secours">Testo modificato, scritto in %1$s.</string>
     <string name="texte_echec">Impossibile modificare il testo: %1$s</string>
     <string name="organiser_pages">Organizza le pagine</string>

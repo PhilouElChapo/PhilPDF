@@ -65,7 +65,8 @@ data class Paragraphe(val page: Int, val lignes: List<LigneTexte>, val table: Ta
 }
 
 /** Ce qui a ete fait, a dire a l'utilisateur. */
-data class ResultatTexte(val ok: Boolean, val originale: Boolean, val police: String, val message: String = "")
+data class ResultatTexte(val ok: Boolean, val originale: Boolean, val police: String, val message: String = "",
+                         val deborde: Boolean = false)
 
 object TexteModif {
     // ------------------------------------------------------------ lecture de la page
@@ -312,9 +313,51 @@ object TexteModif {
      * Remplace les lignes du paragraphe par le nouveau texte (une ligne tapee = une ligne de la page, a la meme
      * place ; les lignes en plus continuent avec le meme interligne). Renvoie ce qui a ete fait.
      */
+    /** Plus petit rectangle dessine (bandeau, cellule) qui contient la ligne, ou null. */
+    fun cadreLigne(page: PDFPage, l: LigneTexte): Rect? {
+        val rects = ArrayList<Rect>()
+        val dev = object : DeviceMuet() {
+            fun lire(path: com.artifex.mupdf.fitz.Path?, ctm: Matrix?) {
+                if (path == null || ctm == null) return
+                var x0 = Float.MAX_VALUE; var y0 = Float.MAX_VALUE; var x1 = -Float.MAX_VALUE; var y1 = -Float.MAX_VALUE
+                fun pt(x: Float, y: Float) { val q = Point(x, y).transform(ctm); x0 = minOf(x0, q.x); y0 = minOf(y0, q.y); x1 = maxOf(x1, q.x); y1 = maxOf(y1, q.y) }
+                try {
+                    path.walk(object : com.artifex.mupdf.fitz.PathWalker {
+                        override fun moveTo(x: Float, y: Float) = pt(x, y)
+                        override fun lineTo(x: Float, y: Float) = pt(x, y)
+                        override fun curveTo(cx1: Float, cy1: Float, cx2: Float, cy2: Float, ex: Float, ey: Float) { pt(cx1, cy1); pt(cx2, cy2); pt(ex, ey) }
+                        override fun closePath() {}
+                    })
+                } catch (_: Exception) { return }
+                if (x1 > x0 && y1 > y0) rects += Rect(x0, y0, x1, y1)
+            }
+            override fun fillPath(path: com.artifex.mupdf.fitz.Path?, evenOdd: Boolean, ctm: Matrix?, cs: com.artifex.mupdf.fitz.ColorSpace?,
+                                  color: FloatArray?, alpha: Float, cp: Int) = lire(path, ctm)
+            override fun strokePath(path: com.artifex.mupdf.fitz.Path?, stroke: com.artifex.mupdf.fitz.StrokeState?, ctm: Matrix?,
+                                    cs: com.artifex.mupdf.fitz.ColorSpace?, color: FloatArray?, alpha: Float, cp: Int) = lire(path, ctm)
+        }
+        try { page.run(dev, Matrix(), null as com.artifex.mupdf.fitz.Cookie?) } catch (_: Exception) { return null } finally { try { dev.close() } catch (_: Exception) {} }
+        val pw = page.bounds.x1 - page.bounds.x0
+        val h = l.bas - l.haut
+        return rects.filter { q -> q.x1 - q.x0 < pw * 0.98f && q.x1 - q.x0 >= l.x1 - l.gauche - 1 && q.y1 - q.y0 >= h * 0.6f &&
+            q.x0 - 1 <= l.gauche && q.x1 + 1 >= l.x1 && q.y0 - 2 <= l.haut + h * 0.3f && q.y1 + 2 >= l.bas - h * 0.3f }
+            .minByOrNull { (it.x1 - it.x0) * (it.y1 - it.y0) }
+    }
+
+    /** Ligne seule centree dans son cadre (bandeau rouge, cellule) : le cadre, pour garder le nouveau texte centre. */
+    private fun cadreCentre(page: PDFPage, par: Paragraphe, nouvelles: List<String>, droite: Boolean): Rect? {
+        if (droite || par.lignes.size != 1 || nouvelles.size != 1) return null
+        val l = par.lignes.first()
+        if (kotlin.math.abs(l.dy) > 0.05f || l.dx < 0) return null
+        val c = cadreLigne(page, l) ?: return null
+        val milieu = (l.gauche + l.x1) / 2
+        return c.takeIf { kotlin.math.abs(milieu - (c.x0 + c.x1) / 2) < maxOf(3f, (c.x1 - c.x0) * 0.02f) && l.gauche - c.x0 > 6 }
+    }
+
     fun reecrire(pdf: PDFDocument, page: PDFPage, par: Paragraphe, nouvelles: List<String>, taille: Float, argb: Int,
                  gras: Boolean, italique: Boolean, droite: Boolean): ResultatTexte {
         val l0 = par.lignes.first()
+        val centrer = try { cadreCentre(page, par, nouvelles, droite) } catch (_: Exception) { null }
         val t = par.table
         val styleChange = gras != l0.gras || italique != l0.italique
         val texteTotal = nouvelles.joinToString("")
@@ -346,7 +389,7 @@ object TexteModif {
         // qu'elle avait (le texte tape prend celle du texte qu'il remplace)
         val nomsFontes = par.lignes.flatMap { it.fontes }.filter { it.isNotEmpty() }.toSet()
         if (!styleChange && nomsFontes.size > 1 && par.tables.isNotEmpty())
-            return ecrireMixte(pdf, page, par, nouvelles, taille, argb, droite, fonts)
+            return ecrireMixte(pdf, page, par, nouvelles, taille, argb, droite, fonts, centrer)
         val nomPolice: String
         val nomAffiche: String
         val coder: (String) -> String
@@ -390,6 +433,7 @@ object TexteModif {
         val r = ((argb shr 16) and 255) / 255f; val g = ((argb shr 8) and 255) / 255f; val b = (argb and 255) / 255f
         val flux = StringBuilder("q BT /$nomPolice ${f(taille)} Tf ${f(r)} ${f(g)} ${f(b)} rg\n")
         val fonteMesure = if (originale) null else try { Font(policeSecours(l0, gras, italique)) } catch (_: Exception) { null }
+        var deborde = false
         nouvelles.forEachIndexed { i, s ->
             val ref = par.lignes.getOrNull(i)
             val base = ref?.base ?: (par.lignes.last().base + pas * (i - par.lignes.size + 1))
@@ -400,6 +444,14 @@ object TexteModif {
                     s.sumOf { c -> fm.advanceGlyph(fm.encodeCharacter(c.code), false).toDouble() }.toFloat() * taille
                 }
                 if (larg != null) x = droiteRef - larg
+            } else if (centrer != null && i == 0) {
+                val larg = if (originale) t?.largeur(s, taille) else fonteMesure?.let { fm ->
+                    s.sumOf { c -> fm.advanceGlyph(fm.encodeCharacter(c.code), false).toDouble() }.toFloat() * taille
+                }
+                if (larg != null) {
+                    x = maxOf(centrer.x0 + 2f, (centrer.x0 + centrer.x1) / 2 - larg / 2)
+                    deborde = larg > centrer.x1 - centrer.x0 - 4f
+                }
             }
             // repere de la page -> repere PDF : axe des x (a,b), axe des y vers le haut (-c,-d)
             val ox = x * inv.a + base * inv.c + inv.e
@@ -417,7 +469,7 @@ object TexteModif {
         tableau.ajouter(pdf.addStream("Q\n"))
         tableau.ajouter(pdf.addStream(flux.toString()))
         pobj.put("Contents", tableau)
-        return ResultatTexte(true, originale, nomAffiche)
+        return ResultatTexte(true, originale, nomAffiche, deborde = deborde)
     }
 
     /** Police de chaque lettre de la nouvelle ligne, d'apres l'ancienne : debut et fin inchanges gardent la leur ; le
@@ -439,7 +491,7 @@ object TexteModif {
     }
 
     private fun ecrireMixte(pdf: PDFDocument, page: PDFPage, par: Paragraphe, nouvelles: List<String>, taille: Float, argb: Int,
-                            droite: Boolean, fonts: PDFObject): ResultatTexte {
+                            droite: Boolean, fonts: PDFObject, centrer: Rect? = null): ResultatTexte {
         val l0 = par.lignes.first()
         val noms = HashMap<PDFObject, String>()
         // la police d'origine, rattachee aux ressources sous un nom sur (le caviardage peut les avoir reecrites)
@@ -482,6 +534,7 @@ object TexteModif {
         val pas = if (par.lignes.size > 1) (par.lignes.last().base - par.lignes.first().base) / (par.lignes.size - 1) else taille * 1.2f
         val r = ((argb shr 16) and 255) / 255f; val g = ((argb shr 8) and 255) / 255f; val b = (argb and 255) / 255f
         val flux = StringBuilder("q BT ${f(r)} ${f(g)} ${f(b)} rg\n")
+        var debordeMixte = false
         val derniere = par.lignes.last().fontes.lastOrNull { it.isNotEmpty() } ?: l0.police
         nouvelles.forEachIndexed { i, s ->
             val ref = par.lignes.getOrNull(i)
@@ -492,7 +545,12 @@ object TexteModif {
             for (k in 1..s.length) if (k == s.length || fs[k] != fs[debut]) { morceaux += morceau(s.substring(debut, k), fs[debut]); debut = k }
             val base = ref?.base ?: (par.lignes.last().base + pas * (i - par.lignes.size + 1))
             var x = ref?.x0 ?: l0.x0
-            if (droite) x = (ref?.x1 ?: l0.x1) - morceaux.sumOf { it.second.toDouble() }.toFloat()
+            val largLigne = morceaux.sumOf { it.second.toDouble() }.toFloat()
+            if (droite) x = (ref?.x1 ?: l0.x1) - largLigne
+            else if (centrer != null && i == 0) {
+                x = maxOf(centrer.x0 + 2f, (centrer.x0 + centrer.x1) / 2 - largLigne / 2)
+                debordeMixte = largLigne > centrer.x1 - centrer.x0 - 4f
+            }
             val ox = x * inv.a + base * inv.c + inv.e
             val oy = x * inv.b + base * inv.d + inv.f
             flux.append("${axes(inv, ref ?: l0)} ${f(ox)} ${f(oy)} Tm ")
@@ -511,7 +569,7 @@ object TexteModif {
         tableau.ajouter(pdf.addStream(flux.toString()))
         pobj.put("Contents", tableau)
         val affiche = par.tables.values.map { it.nomBase.substringAfter('+') }.distinct().joinToString(" + ")
-        return ResultatTexte(true, !secoursUtilise, affiche)
+        return ResultatTexte(true, !secoursUtilise, affiche, deborde = debordeMixte)
     }
 
     /** Axes du texte (debut de Tm) dans le sens de la ligne d'origine : a l'endroit, ou a l'envers (livret plie). */

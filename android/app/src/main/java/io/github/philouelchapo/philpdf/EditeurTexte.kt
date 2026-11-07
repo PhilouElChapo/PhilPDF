@@ -113,6 +113,7 @@ fun EditeurTexte(etat: EtatLecteur, par: Paragraphe, fermer: () -> Unit) {
                                 if (!r.ok) ctx.getString(R.string.texte_echec, r.message)
                                 else if (r.originale) ctx.getString(R.string.texte_ok_origine, r.police)
                                 else ctx.getString(R.string.texte_ok_secours, r.police), android.widget.Toast.LENGTH_LONG).show()
+                            if (r.ok && r.deborde) etat.message = ctx.getString(R.string.texte_deborde_cadre)
                             occupe = false
                             fermer()
                         }

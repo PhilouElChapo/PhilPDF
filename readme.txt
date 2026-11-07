@@ -10,6 +10,10 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.18.5
+- Modifier le texte : un titre centre dans un bandeau ou une cellule (bandeau rouge d'un releve, par exemple) reste
+  centre quand son texte change de longueur ; s'il ne tient plus dans le cadre, un message le dit.
+
 1.18.4
 - Lecteur (telephone) : le haut de la premiere page n'est plus cache par la barre du haut, ni la fin de la derniere
   par la barre du bas (leur hauteur est mesuree : elle grandit avec la police) ; le numero de page reste au-dessus
@@ -412,6 +416,13 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.84
+- Modifier le texte, paragraphe d'une seule ligne (titre, bandeau, cellule de tableau) : un texte plus long
+  s'allonge sur la ligne, dans la place libre (jusqu'au bord du cadre, au texte voisin ou a la marge), et reste
+  centre s'il l'etait ; la zone de saisie s'allonge de meme pendant la frappe. Avant, il passait sur une 2e ligne
+  hors du bandeau (texte blanc sur fond blanc : perdu, et impossible a reprendre). S'il ne tient vraiment pas, un
+  message le dit (Ctrl+Z annule). La poignee de droite garde la largeur choisie a la main.
 
 0.9.83
 - Scanner au pilote 32 bits (ex. Avision AD225WN en reseau) : une fois que le pilote 64 bits a plante a l'ouverture,

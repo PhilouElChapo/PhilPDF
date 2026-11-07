@@ -87,6 +87,9 @@ jobs:
       - name: Test de l'aide TWAIN 32 bits (scanners au pilote 32 bits seulement)
         run: python tests/test_twain32.py
 
+      - name: Test de la ligne allongee (titre de bandeau modifie)
+        run: python tests/test_ligne_allongee.py
+
       - name: Test de la session partagee
         run: python tests/test_session.py
 

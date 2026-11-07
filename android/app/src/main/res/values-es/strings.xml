@@ -197,6 +197,7 @@
     <string name="couleur_origine">Color original</string>
     <string name="aide_texte_fenetre">«Alinear a la derecha» conserva el borde derecho de la línea (importes, fechas en columna). «Deshacer» (flecha de arriba) anula el cambio.</string>
     <string name="texte_ok_origine">Texto cambiado, fuente original conservada (%1$s).</string>
+    <string name="texte_deborde_cadre">El texto ya no cabe en su marco (franja, celda): acórtelo o reduzca el tamaño; Deshacer lo restablece.</string>
     <string name="texte_ok_secours">Texto cambiado, escrito en %1$s.</string>
     <string name="texte_echec">No se puede cambiar el texto: %1$s</string>
     <string name="organiser_pages">Organizar las páginas</string>

@@ -767,6 +767,17 @@ class EditeurParagraphe(QFrame):
             pass
         self.largeur = max(80.0, r.width() + 6)
         self.x, self.y = r.x() - 3, r.y() - 3
+        # paragraphe d'une ligne : la zone s'allonge avec le texte (dans la place libre, centree si la ligne l'etait),
+        # comme le fera la page, au lieu de passer a la ligne
+        self._largeur_tiree = False
+        self._ligne = None
+        if para and len(para.get("lignes", [])) == 1:
+            try:
+                lo, hi, centre, _c = Editeur(o.doc).limites_ligne(pw.num, para)
+                a = pw.vers_ecran(fitz.Rect(lo, para["rect"].y0, hi, para["rect"].y1))
+                self._ligne = (self.largeur, self.x, a.x() - 3, a.x() + a.width() + 3, centre, self.x + self.largeur / 2)
+            except Exception:                           # noqa: BLE001
+                self._ligne = None
         self.zone.document().contentsChanged.connect(self._ajuster)
         self._ajuster()
         self.show()
@@ -1144,6 +1155,17 @@ class EditeurParagraphe(QFrame):
         if not hasattr(self, "largeur") or not hasattr(self, "fmt"):
             return
         doc = self.zone.document()
+        if self._ligne and not self._largeur_tiree:
+            l0, x_0, lo, hi, centre, milieu = self._ligne
+            t = self.zone.toPlainText()
+            if "\n" not in t:
+                besoin = self.zone.fontMetrics().horizontalAdvance(t) + 14
+                if centre:
+                    self.largeur = max(l0, min(besoin, hi - lo))
+                    self.x = max(lo, min(milieu - self.largeur / 2, hi - self.largeur))
+                else:
+                    self.largeur = max(l0, min(besoin, hi - x_0))
+                    self.x = x_0
         doc.setTextWidth(self.largeur - 6)
         lignes = 0                                    # hauteur : nombre de lignes affichees x interligne
         b = doc.begin()
@@ -1189,6 +1211,7 @@ class EditeurParagraphe(QFrame):
                 return True
             if t == ev.Type.MouseMove and getattr(self, "_tire", None):
                 self.largeur = max(60.0, self._tire[1] + ev.globalPosition().x() - self._tire[0])
+                self._largeur_tiree = True
                 self._ajuster()
                 return True
             if t == ev.Type.MouseButtonRelease:
@@ -1225,7 +1248,10 @@ class EditeurParagraphe(QFrame):
         if self.para:
             elargi = abs(largeur_pt - (self.para["x1"] - self.para["x0"])) > 2
             if texte != self.initial or elargi or police or taille or couleur:
-                if elargi:
+                if elargi and getattr(self, "_largeur_tiree", False):
+                    self.para["x1"] = self.para["x0"] + largeur_pt
+                    self.para["largeur_choisie"] = True     # largeur voulue : on n'allonge pas la ligne au-dela
+                elif elargi and len(self.para.get("lignes", [])) != 1:
                     self.para["x1"] = self.para["x0"] + largeur_pt
                 o.modifier_paragraphe(self.pw.num, self.para, texte, taille=taille, couleur=couleur, police=police)
                 if self.annots_souligne or self.annots_barre or souligne_change:
@@ -4027,7 +4053,12 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         self.apres_modif(ed.journal)
         if not res.get("ocr"):                     # texte d'un scan : l'autre methode ne s'applique pas
             self._proposer_autre_methode(n, para, texte, taille, couleur)
-        if res["en_plus"] > 0:                     # le texte descend : touche-t-il ce qui est en dessous ?
+        if res.get("deborde_cadre"):               # passe sur une 2e ligne hors du bandeau ou de la cellule
+            QMessageBox.information(self, _("Modifier"), _(
+                "Le texte ne tient plus sur une ligne dans son cadre (bandeau, cellule) : la fin passe en dessous, "
+                "hors du cadre, et peut être invisible (texte blanc sur fond blanc). Réduisez la taille ou "
+                "raccourcissez le texte ; Ctrl+Z annule."))
+        elif res["en_plus"] > 0:                   # le texte descend : touche-t-il ce qui est en dessous ?
             bas_avant = para["rect"].y1
             dessous = [l for l in ed._infos_lignes(self.doc[n]) if bas_avant + 1 < l["base"] <= res["bas"] + 2
                        and min(l["x1"], para["x1"]) - max(l["x0"], para["x0"]) > 5

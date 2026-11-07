@@ -198,6 +198,7 @@
     <string name="couleur_origine">Original color</string>
     <string name="aide_texte_fenetre">“Align right” keeps the right edge of the line (amounts, dates in a column). “Undo” (arrow at the top) reverts the change.</string>
     <string name="texte_ok_origine">Text changed, original font kept (%1$s).</string>
+    <string name="texte_deborde_cadre">The text no longer fits in its frame (banner, cell): shorten it or reduce the size; Undo puts it back.</string>
     <string name="texte_ok_secours">Text changed, written in %1$s.</string>
     <string name="texte_echec">Cannot change the text: %1$s</string>
     <string name="organiser_pages">Organize pages</string>

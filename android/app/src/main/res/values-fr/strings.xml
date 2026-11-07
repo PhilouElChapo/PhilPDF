@@ -198,6 +198,7 @@
     <string name="couleur_origine">Couleur d\'origine</string>
     <string name="aide_texte_fenetre">« Aligner à droite » garde le bord droit de la ligne (montants, dates en colonne). « Annuler » (flèche en haut) défait la modification.</string>
     <string name="texte_ok_origine">Texte modifié, police d\'origine gardée (%1$s).</string>
+    <string name="texte_deborde_cadre">Le texte ne tient plus dans son cadre (bandeau, cellule) : raccourcissez-le ou réduisez la taille ; Annuler le remet.</string>
     <string name="texte_ok_secours">Texte modifié, écrit en %1$s.</string>
     <string name="texte_echec">Modification impossible : %1$s</string>
     <string name="organiser_pages">Organiser les pages</string>

@@ -756,6 +756,22 @@ class Editeur:
             lettres.append((ch, cible, sz, coul, av))
         # coupure en lignes a la largeur du paragraphe
         x0, x1 = para["x0"], para["x1"] + 0.5
+        # paragraphe d'une seule ligne (titre, bandeau, cellule) : un texte plus long s'allonge sur la ligne, dans
+        # la place libre (cadre qui l'entoure, texte voisin, marges), centre s'il l'etait ; il ne passe a la ligne
+        # que si la place manque. Sinon la 2e ligne tombait hors du bandeau (texte blanc sur blanc : perdu).
+        etendu = None
+        if len(para["lignes"]) == 1 and "\n" not in nouveau and not para.get("largeur_choisie"):
+            besoin = sum(l[4] for l in lettres) + para.get("retrait", 0) + 0.5
+            if besoin > x1 - x0:
+                lo, hi, centre, cadre = self.limites_ligne(num_page, para)
+                if centre:
+                    c = (x0 + x1) / 2
+                    x0 = max(lo, c - besoin / 2)
+                    x1 = min(hi, x0 + besoin)
+                    x0 = max(lo, x1 - besoin)
+                else:
+                    x1 = min(hi, x0 + besoin)
+                etendu = (x0, x1, cadre)
         lignes, ligne, mot, larg_ligne, larg_mot = [], [], [], 0.0, 0.0
         retrait = para["retrait"]
 
@@ -816,8 +832,44 @@ class Editeur:
         self._retenir_paragraphe(num_page, fitz.Rect(x0, haut, x1, y - pas + tmax * 0.3), nouveau.rstrip("\n"), para["rect"])
         en_plus = len(lignes) - len(para["lignes"])
         self.journal.append(f"paragraphe réécrit : {len(lignes)} ligne(s)" +
-                            (f" ({en_plus:+d} par rapport à avant)" if en_plus else ""))
-        return {"lignes": len(lignes), "en_plus": en_plus, "bas": y - pas}
+                            (f" ({en_plus:+d} par rapport à avant)" if en_plus else "") +
+                            (f", ligne allongée ({etendu[0]:.0f}–{etendu[1]:.0f} pt)" if etendu else ""))
+        # le texte sort-il du cadre (bandeau, cellule) qui contenait la ligne ?
+        cadre = etendu[2] if etendu else (self.limites_ligne(num_page, para)[3] if en_plus > 0 else None)
+        deborde = bool(cadre and en_plus > 0 and y - pas + 1 > cadre.y1)
+        return {"lignes": len(lignes), "en_plus": en_plus, "bas": y - pas, "deborde_cadre": deborde, "x0": x0, "x1": x1}
+
+    def limites_ligne(self, num_page, para):
+        """Place libre sur la ligne d'un paragraphe d'une ligne : (gauche, droite, centre, cadre).
+        cadre : plus petit rectangle dessine (bandeau, cellule) qui contient la ligne, ou None ; centre : la ligne y
+        est centree. Les limites s'arretent au texte voisin de la meme ligne et aux marges de la page."""
+        page = self.doc[num_page]
+        r = fitz.Rect(para["lignes"][0]["rect"])
+        base = para["lignes"][0]["base"]
+        P = page.rect
+        cadre = None
+        try:
+            for d in page.get_drawings():
+                q = fitz.Rect(d.get("rect"))
+                if q.is_empty or q.width > P.width * 0.98 or q.width < r.width - 1 or q.height < r.height * 0.6:
+                    continue
+                if q.x0 - 1 <= r.x0 and q.x1 + 1 >= r.x1 and q.y0 - 2 <= r.y0 + r.height * 0.3 and q.y1 + 2 >= r.y1 - r.height * 0.3:
+                    if cadre is None or q.get_area() < cadre.get_area():
+                        cadre = q
+        except Exception:                               # noqa: BLE001
+            cadre = None
+        marge = 18.0
+        lo, hi = (cadre.x0 + 2, cadre.x1 - 2) if cadre else (min(r.x0, P.x0 + marge), max(r.x1, P.x1 - marge))
+        for l in self._infos_lignes(page):              # texte voisin sur la meme ligne
+            if abs(l["base"] - base) > max(2.0, para["taille"] * 0.4):
+                continue
+            if l["x0"] >= r.x1 - 0.5:
+                hi = min(hi, l["x0"] - 4)
+            elif l["x1"] <= r.x0 + 0.5:
+                lo = max(lo, l["x1"] + 4)
+        centre = bool(cadre) and abs((r.x0 + r.x1) / 2 - (cadre.x0 + cadre.x1) / 2) < max(3.0, cadre.width * 0.02) \
+            and r.x0 - cadre.x0 > 6
+        return max(lo, P.x0), min(hi, P.x1), centre, cadre
 
     def images(self, num_page):
         """[(xref, rect)] des images visibles de la page."""
