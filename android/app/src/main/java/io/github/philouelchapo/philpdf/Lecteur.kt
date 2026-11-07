@@ -50,6 +50,12 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
@@ -638,26 +644,59 @@ private fun Recherche(etat: EtatLecteur, aller: (Int) -> Unit) {
 private fun Pages(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, modifier: Modifier, auToucher: (() -> Unit)? = null,
                   haut: androidx.compose.ui.unit.Dp = 0.dp, bas: androidx.compose.ui.unit.Dp = 0.dp) {
     val lire = etat.annot.outil == Outil.MAIN && etat.deplacement == null
+    val portee = rememberCoroutineScope()
+    val hs = rememberScrollState()
+    // zoom : les pages sont vraiment mises en page plus larges (nettes, pas une image agrandie) ; un doigt fait
+    // defiler dans les deux sens, deux doigts zooment autour du point pince. Le pincement est lu AVANT la liste
+    // (passe Initial) : il marche des le premier geste, meme quand la liste aurait commence a defiler.
     BoxWithConstraints(modifier
         .pointerInput(lire) {
-            // deux doigts : zoom de 1x a 5x, et deplacement quand on est zoome (en lecture seulement :
-            // avec un outil, le doigt dessine)
-            if (lire) detectTransformGestures { _, pan, zoom, _ ->
-                etat.echelle = (etat.echelle * zoom).coerceIn(1f, 5f)
-                etat.decalage = if (etat.echelle == 1f) Offset.Zero else etat.decalage + pan
+            if (!lire) return@pointerInput
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                while (true) {
+                    val ev = awaitPointerEvent(PointerEventPass.Initial)
+                    if (ev.changes.none { it.pressed }) break
+                    if (ev.changes.count { it.pressed } < 2) continue
+                    val zoom = ev.calculateZoom()
+                    val c = ev.calculateCentroid(useCurrent = true)
+                    if (zoom != 1f && c.isSpecified) {
+                        val avant = etat.echelle
+                        val apres = (avant * zoom).coerceIn(1f, 5f)
+                        if (apres != avant) {
+                            val f = apres / avant
+                            etat.echelle = apres
+                            val x = (hs.value + c.x) * f - c.x
+                            val dy = (etat.liste.firstVisibleItemScrollOffset + c.y) * (f - 1f)
+                            portee.launch {
+                                androidx.compose.runtime.withFrameNanos { }          // apres la nouvelle mise en page
+                                hs.scrollTo(x.toInt().coerceIn(0, hs.maxValue))
+                                etat.liste.scrollBy(dy)
+                            }
+                        }
+                    }
+                    ev.changes.forEach { it.consume() }
+                }
             }
         }) {
-        val largeurPx = with(LocalDensity.current) { (maxWidth - 16.dp).toPx().toInt() }
-        LazyColumn(state = etat.liste, userScrollEnabled = lire, modifier = Modifier.fillMaxSize().graphicsLayer(
-            scaleX = etat.echelle, scaleY = etat.echelle, translationX = etat.decalage.x, translationY = etat.decalage.y),
-            // haut, bas : place des barres posees par-dessus (telephone) : le debut de la premiere page et la fin de
-            // la derniere ne passent jamais dessous
-            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp + haut, bottom = 8.dp + bas),
-            verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            itemsIndexed(tailles) { n, (w, h) ->
-                ImagePage(etat, n, largeurPx, w, h, Modifier.fillMaxWidth(), auToucher = auToucher)
+        val dens = LocalDensity.current
+        val largeurVue = maxWidth
+        val largeur = largeurVue * etat.echelle
+        // rendu : a la largeur affichee, plafonne (une page a 5x ferait une image enorme) ; au-dela, agrandie
+        val largeurPx = with(dens) { minOf((largeur - 16.dp).toPx(), (largeurVue - 16.dp).toPx() * 2.5f).toInt() }
+        Box(Modifier.fillMaxSize().horizontalScroll(hs, enabled = lire && etat.echelle > 1.01f)) {
+            LazyColumn(state = etat.liste, userScrollEnabled = lire, modifier = Modifier.width(largeur).fillMaxHeight(),
+                // haut, bas : place des barres posees par-dessus (telephone) : le debut de la premiere page et la fin de
+                // la derniere ne passent jamais dessous
+                contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp + haut, bottom = 8.dp + bas),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                itemsIndexed(tailles) { n, (w, h) ->
+                    ImagePage(etat, n, largeurPx, w, h, Modifier.fillMaxWidth(), auToucher = auToucher)
+                }
             }
         }
+        // retour a la largeur de l'ecran : plus de decalage de cote
+        LaunchedEffect(etat.echelle <= 1.01f) { if (etat.echelle <= 1.01f) hs.scrollTo(0) }
     }
 }
 

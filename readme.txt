@@ -10,6 +10,11 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.22.1
+- Lecteur : zoom a deux doigts fiable des le premier geste (le pincement passe avant le defilement) et centre sur
+  le point pince ; les pages zoomees sont vraiment redessinees plus grandes (texte net) ; un doigt fait defiler
+  dans les deux sens, sans jamais faire sortir la page de l'ecran (avant, elle glissait et laissait du vide).
+
 1.22.0
 - IA, comme sous Windows (menu Plus) :
   - Expliquer simplement : de quoi il s'agit, ce qu'on vous demande, avant quand, ce qu'il faut savoir, les mots
