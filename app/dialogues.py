@@ -1298,8 +1298,9 @@ class DialogueNumeriser(QDialog):
             fen = int(self.parent().winId()) if self.parent() is not None else None
             try:
                 images = self.sc.numeriser(ident, self.mode(), dpi, src, fenetre=fen, interface=self.interface.isChecked())
-            except Exception:
-                if not str(ident).startswith("twain:") or self.interface.isChecked():
+            except Exception as e:
+                from moteur.scanner import OuvertureImpossible
+                if isinstance(e, OuvertureImpossible) or not str(ident).startswith("twain:") or self.interface.isChecked():
                     raise
                 # pilote TWAIN qui refuse la numerisation directe : on reessaie avec sa propre fenetre
                 images = self.sc.numeriser(ident, self.mode(), dpi, src, fenetre=fen, interface=True)

@@ -140,6 +140,11 @@ def scanners_twain(fenetre=None):
     return [("twain:" + n, n + " " + _("(TWAIN)")) for n in noms]
 
 
+class OuvertureImpossible(RuntimeError):
+    """Le pilote TWAIN plante des l'ouverture de la source : scanner eteint, debranche, ou scanner reseau pas encore
+    relie (Avision : Virtual Scanner Link). Reessayer avec la fenetre du pilote n'y change rien."""
+
+
 def _numeriser_twain(nom, mode, dpi, source, fenetre=None, interface=False):
     """Images (octets BMP) numerisees par la source TWAIN « nom ». interface : la fenetre du pilote du scanner.
     Transfert PAR FICHIER d'abord (le pilote ecrit chaque page dans un BMP : aucune memoire du pilote a lire, le plus
@@ -230,6 +235,12 @@ def _numeriser_twain(nom, mode, dpi, source, fenetre=None, interface=False):
         _journal(f"TWAIN {nom} : {type(e).__name__} : {e}")
         _journal(f"TWAIN {nom} : dernières étapes : " + " > ".join(etapes[-6:] or ["aucune"]))
         _journal(f"TWAIN {nom} : endroit : " + " > ".join(pile))
+        if any("MSG_OPENDS" in x for x in etapes[-3:]) and not any("MSG_ENABLEDS" in x or "MSG_ENALEDS" in x for x in etapes):
+            raise OuvertureImpossible(_(
+                "Le scanner « {n} » n'a pas pu être ouvert : son pilote s'est arrêté dès l'ouverture, avant de "
+                "numériser.\n\n• Vérifiez qu'il est allumé et branché.\n• Scanner en Wi-Fi ou réseau : reliez-le "
+                "d'abord avec l'outil du fabricant (Avision : « Virtual Scanner Link », sélectionnez le scanner puis "
+                "reliez-le), puis réessayez.\n• Sinon, branchez-le en USB.", n=nom)) from e
         raise
     finally:
         lg.removeHandler(suivi)
