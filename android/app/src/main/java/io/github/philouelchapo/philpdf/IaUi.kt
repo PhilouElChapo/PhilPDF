@@ -317,7 +317,7 @@ fun ResumeIa(etat: EtatLecteur, fermer: () -> Unit) {
 }
 
 @Composable
-private fun EcranResume(etat: EtatLecteur, r: ResultatResume, fermer: () -> Unit) {
+private fun EcranResume(etat: EtatLecteur, r: ResultatResume, fermer: () -> Unit, titre: Int = R.string.ia_resume_titre) {
     val ctx = LocalContext.current
     val portee = rememberCoroutineScope()
     val brut = remember(r) { texteSimple(r.texte) }
@@ -327,7 +327,7 @@ private fun EcranResume(etat: EtatLecteur, r: ResultatResume, fermer: () -> Unit
                 Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = fermer) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.retour)) }
                     Column(Modifier.weight(1f)) {
-                        TexteAjuste(stringResource(R.string.ia_resume_titre), 17.sp)
+                        TexteAjuste(stringResource(titre), 17.sp)
                         Text(etat.doc.nom, fontSize = 12.sp, color = Color.Gray, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
                 }
@@ -488,5 +488,45 @@ fun NommerScan(pdf: java.io.File, premiere: android.graphics.Bitmap, fini: (java
                 }) { Text(stringResource(R.string.ia_nommer_garder)) } },
                 dismissButton = { TextButton(onClick = { fini(pdf) }) { Text(stringResource(R.string.ia_nommer_origine)) } })
         }
+    }
+}
+
+// ================================================================ expliquer simplement (comme sous Windows)
+private const val CONSIGNES_EXPLIQUER = """Explique simplement ce document en LANGUE à quelqu'un qui n'est pas spécialiste (courrier
+administratif, contrat, avis d'imposition, ordonnance, facture...). Réponds en JSON :
+{"resume": "<texte en Markdown>", "echeances": [{"date": "AAAA-MM-JJ", "heure": "HH:MM ou vide", "libelle": "<ce qu'il faut faire>"}]}
+Le Markdown suit exactement ce plan, avec ces titres (traduits dans la langue demandée) :
+### De quoi s'agit-il
+2 ou 3 phrases : qui écrit, à qui, pourquoi.
+### Ce qu'on vous demande
+Les actions concrètes, en liste (payer, répondre, signer, envoyer une pièce, prendre rendez-vous...), ou « Rien à faire ».
+### Avant quand
+Les dates limites, ou « Pas de date limite indiquée ».
+### Ce qu'il faut savoir
+Montants, ce qui se passe si rien n'est fait, droits et recours mentionnés.
+### Mots compliqués
+Au plus 5 mots ou sigles du document, chacun expliqué en une phrase (rubrique absente s'il n'y en a pas).
+Phrases courtes, vouvoiement, pas de jargon. N'invente rien : si une information manque, dis-le. Pour une ordonnance,
+reprends les médicaments, doses et durées tels qu'écrits, sans conseil médical en plus. « echeances » : seulement les
+dates où l'on doit faire quelque chose."""
+
+/** Plus > Expliquer simplement : que me demande-t-on, avant quand. Meme ecran que le resume (agenda, copier...). */
+@Composable
+fun ExpliquerIa(etat: EtatLecteur, fermer: () -> Unit) {
+    val ctx = LocalContext.current
+    val texte by produceState<String?>(null, etat.doc) { value = try { etat.doc.texteDocument() } catch (_: Exception) { "" } }
+    var resultat by remember { mutableStateOf<ResultatResume?>(null) }
+    val t = texte
+    when {
+        t == null -> Fenetre(fermer) { Surface(shape = RoundedCornerShape(16.dp)) { Column(Modifier.padding(20.dp)) { CircularProgressIndicator() } } }
+        t.isBlank() -> AlertDialog(onDismissRequest = fermer, title = { Text(stringResource(R.string.expl_titre)) },
+            text = { Text(stringResource(R.string.ia_sans_texte)) },
+            confirmButton = { if (etat.doc.modifiable) TextButton(onClick = { fermer(); etat.ocr = 0 }) { Text(stringResource(R.string.ocr_titre_menu)) } },
+            dismissButton = { TextButton(onClick = fermer) { Text(stringResource(R.string.fermer)) } })
+        resultat != null -> EcranResume(etat, resultat!!, fermer, R.string.expl_titre)
+        else -> EnvoiIa(t, stringResource(R.string.expl_attente), {
+            val jour = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(java.util.Date())
+            lireResume(Ia.lireJson(Ia.demander(ctx, CONSIGNES_EXPLIQUER.replace("LANGUE", langueTelephone()) + "\nDate du jour : $jour.", t, json = true)))
+        }, { resultat = it }, fermer)
     }
 }

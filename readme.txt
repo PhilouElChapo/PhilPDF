@@ -10,6 +10,20 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.22.0
+- IA, comme sous Windows (menu Plus) :
+  - Expliquer simplement : de quoi il s'agit, ce qu'on vous demande, avant quand, ce qu'il faut savoir, les mots
+    compliques ; dates a mettre dans l'agenda, copier, partager.
+  - Remplir avec l'IA : vous dites ce que l'IA doit savoir, elle propose une valeur pour chaque champ (rien
+    d'invente, jamais la signature), vous cochez et corrigez, puis c'est ecrit (une seule etape a annuler) ; les
+    regles des champs (format, controle) s'appliquent ; vos informations ne restent sur le telephone que si vous
+    cochez la case.
+  - Renommer et classer : nom propose (« Expediteur – objet – date »), dossier du Drive appris par vos postes
+    (PhilPDF/apprentissage/classement.json, partage avec Windows) ou un autre dossier (cree s'il le faut) ; une copie
+    y est envoyee, jamais un fichier remplace ; ou « Sur le telephone... » avec ce nom.
+  - Extraire les donnees : facture, releve, courrier ou vos champs ; valeurs a verifier, puis copier ou partager en
+    texte (colonnes separees par des tabulations : se colle dans un tableur).
+
 1.21.0
 - IA : Traduire le document (Plus > Traduire le document), comme sous Windows : chaque paragraphe est traduit et
   pose a sa place (mise en page gardee, texte reduit s'il est plus long) dans un NOUVEAU document « nom (EN).pdf »,

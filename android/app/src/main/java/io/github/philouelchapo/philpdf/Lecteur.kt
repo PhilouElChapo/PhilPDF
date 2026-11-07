@@ -106,6 +106,11 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var filigrane by mutableStateOf(false)                  // « Filigrane, en-tete et pied de page »
     var nettoyer by mutableStateOf<Int?>(null)              // « Nettoyer un scan » : page choisie
     var traduire by mutableStateOf(false)                   // « Traduire le document »
+    var expliquer by mutableStateOf(false)                  // « Expliquer simplement »
+    var remplirIa by mutableStateOf(false)                  // « Remplir avec l'IA »
+    var classer by mutableStateOf(false)                    // « Renommer et classer »
+    var extraire by mutableStateOf(false)                   // « Extraire les donnees »
+    var enregistrerSous by mutableStateOf<String?>(null)    // enregistrer une copie sous ce nom (selecteur d'Android)
     var quitterBiffage by mutableStateOf(false)
     var ocr by mutableStateOf<Int?>(null)                   // reconnaissance du texte proposee (page de depart)
     var ocrAuto = false                                     // document numerise : reconnaissance lancee d'office
@@ -162,6 +167,7 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/pdf")) { u ->
         if (u != null) ecrireVers(u, fermerApres)
     }
+    LaunchedEffect(etat.enregistrerSous) { etat.enregistrerSous?.let { n -> etat.enregistrerSous = null; autreNom.launch(n) } }
     // retour : si le document est modifie, on demande (rien ne se perd en silence)
     BackHandler { if (doc.modifie) quitter = true else fermer() }
     val fermerDemande = { if (doc.modifie) quitter = true else fermer() }
@@ -228,6 +234,10 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
     if (etat.filigrane) FiligraneEnteteUi(etat) { etat.filigrane = false }
     etat.nettoyer?.let { n -> NettoyerScanUi(etat, n) { etat.nettoyer = null } }
     if (etat.traduire) TraduireUi(etat, ouvrirFichier) { etat.traduire = false }
+    if (etat.expliquer) ExpliquerIa(etat) { etat.expliquer = false }
+    if (etat.remplirIa) RemplirIa(etat) { etat.remplirIa = false }
+    if (etat.classer) ClasserIa(etat) { etat.classer = false }
+    if (etat.extraire) ExtraireIa(etat) { etat.extraire = false }
     etat.message?.let { m ->
         val txt = if (m == "aucun_texte") stringResource(R.string.aucun_texte) else m
         LaunchedEffect(m) { android.widget.Toast.makeText(ctx, txt, android.widget.Toast.LENGTH_LONG).show(); etat.message = null }
@@ -468,7 +478,11 @@ private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, 
                 else -> Column(Modifier.padding(8.dp)) {
                     LigneAction("oeil", stringResource(R.string.lecture_fluide)) { etat.lectureFluide = true }
                     LigneAction("ia", stringResource(R.string.ia_resumer)) { etat.resumeIa = true }
+                    LigneAction("aide", stringResource(R.string.expl_menu)) { etat.expliquer = true }
                     LigneAction("langue", stringResource(R.string.trad_menu)) { etat.traduire = true }
+                    LigneAction("archiver", stringResource(R.string.cls_menu)) { etat.classer = true }
+                    LigneAction("excel", stringResource(R.string.don_menu)) { etat.extraire = true }
+                    if (etat.doc.modifiable) LigneAction("formulaire", stringResource(R.string.rempl_menu)) { etat.remplirIa = true }
                     if (etat.doc.modifiable) Box { LigneAction("annuler", stringResource(R.string.historique_menu)) { historique = true }
                         if (historique) MenuHistorique(etat) { historique = false } }
                     LigneAction("suivante", stringResource(R.string.aller_page)) { allerA = true }

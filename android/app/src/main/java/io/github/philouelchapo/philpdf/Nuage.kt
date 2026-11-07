@@ -570,6 +570,62 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
         if (code !in 200..299) throw ErreurCompte(Textes.t(R.string.err_depot_refuse, f.nom, nom, code, String(b).take(160)))
     }
 
+    /** Envoie un fichier dans un dossier du compte designe par son chemin (« /Factures/EDF »), dossiers crees s'il le
+     *  faut. Un fichier du meme nom n'est jamais remplace : le nouveau prend « (2) ». Renvoie le chemin final. */
+    suspend fun envoyerChemin(ctx: Context, dossier: String, nom0: String, octets: ByteArray): String {
+        val f = fournisseur(ctx)
+        val parts = dossier.split("/").filter { it.isNotEmpty() }
+        suspend fun libre(existe: suspend (String) -> Boolean): String {
+            if (!existe(nom0)) return nom0
+            val base = nom0.substringBeforeLast('.'); val ext = nom0.substringAfterLast('.', "pdf")
+            var i = 2
+            while (existe("$base ($i).$ext")) i++
+            return "$base ($i).$ext"
+        }
+        var nom = nom0
+        val (code, b, _) = when (f.cle) {
+            "gdrive" -> {
+                var d = "root"
+                for (n in parts) d = gEnfant(ctx, d, n)?.getString("id")
+                    ?: json(ctx, "POST", "$GOOGLE/files?fields=id", JSONObject().put("name", n)
+                        .put("mimeType", "application/vnd.google-apps.folder").put("parents", JSONArray().put(d)))?.getString("id")
+                    ?: throw ErreurCompte(Textes.t(R.string.err_dossier_creer, f.nom, n))
+                nom = libre { gEnfant(ctx, d, it) != null }
+                val bord = "PhilPDF" + java.util.UUID.randomUUID().toString().replace("-", "")
+                val meta = JSONObject().put("name", nom).put("parents", JSONArray().put(d)).toString()
+                val corps = ("--$bord\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n$meta\r\n" +
+                    "--$bord\r\nContent-Type: application/pdf\r\n\r\n").toByteArray() + octets + "\r\n--$bord--\r\n".toByteArray()
+                appel(ctx, "POST", "$GOOGLE_ENVOI/files?uploadType=multipart&fields=id", corps, mapOf("Content-Type" to "multipart/related; boundary=$bord"))
+            }
+            "onedrive" -> {
+                val ch = (parts + nom0).joinToString("/") { enc(it) }
+                appel(ctx, "PUT", "$GRAPH/me/drive/root:/$ch:/content?@microsoft.graph.conflictBehavior=rename", octets,
+                    mapOf("Content-Type" to "application/pdf"))
+            }
+            "dropbox" -> appel(ctx, "POST", "$DBX_CONTENU/files/upload", octets, mapOf("Content-Type" to "application/octet-stream",
+                "Dropbox-API-Arg" to ascii(JSONObject().put("path", "/" + (parts + nom0).joinToString("/")).put("mode", "add")
+                    .put("autorename", true).put("mute", true).toString())))
+            "box" -> {
+                var d = "0"
+                for (n in parts) d = bEnfant(ctx, d, n)
+                    ?: json(ctx, "POST", "$BOX/folders", JSONObject().put("name", n).put("parent", JSONObject().put("id", d)))?.optString("id")
+                    ?: throw ErreurCompte(Textes.t(R.string.err_dossier_creer, "Box", n))
+                nom = libre { bEnfant(ctx, d, it) != null }
+                val bord = "PhilPDF" + java.util.UUID.randomUUID().toString().replace("-", "")
+                val attr = JSONObject().put("name", nom).put("parent", JSONObject().put("id", d)).toString()
+                val corps = ("--$bord\r\nContent-Disposition: form-data; name=\"attributes\"\r\n\r\n$attr\r\n" +
+                    "--$bord\r\nContent-Disposition: form-data; name=\"file\"; filename=\"${nom.replace("\"", "")}\"\r\n" +
+                    "Content-Type: application/octet-stream\r\n\r\n").toByteArray() + octets + "\r\n--$bord--\r\n".toByteArray()
+                appel(ctx, "POST", "$BOX_ENVOI/files/content", corps, mapOf("Content-Type" to "multipart/form-data; boundary=$bord"))
+            }
+            else -> Triple(0, ByteArray(0), null)
+        }
+        if (code !in 200..299) throw ErreurCompte(Textes.t(R.string.err_depot_refuse, f.nom, nom, code, String(b).take(160)))
+        val final = "/" + (parts + nom).joinToString("/")
+        Journal.ecrire("classer", "${f.nom} : $final")
+        return final
+    }
+
     // ------------------------------------------------------------ dossier PhilPDF (synchronisation) et lecture de ses fichiers
     /** Trouve le dossier PhilPDF (a la racine d'abord, sinon ailleurs) ; renvoie false s'il n'existe pas. */
     suspend fun trouverRacine(ctx: Context): Boolean {

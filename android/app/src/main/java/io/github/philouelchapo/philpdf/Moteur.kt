@@ -654,6 +654,65 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         return erreur
     }
 
+    /** Champs a remplir (texte, liste, case a cocher ; ni signature, ni bouton, ni lecture seule), pour l'IA. */
+    suspend fun champsARemplir(): List<ChampIa> = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val out = ArrayList<ChampIa>()
+            for (n in 0 until doc.countPages()) {
+                val page = doc.loadPage(n) as? PDFPage ?: continue
+                try {
+                    (page.widgets ?: emptyArray()).forEachIndexed { i, w ->
+                        val g = w.fieldType
+                        if (g != PDFWidget.TYPE_TEXT && g != PDFWidget.TYPE_COMBOBOX && g != PDFWidget.TYPE_LISTBOX && g != PDFWidget.TYPE_CHECKBOX) return@forEachIndexed
+                        if (try { w.isReadOnly } catch (_: Exception) { false }) return@forEachIndexed
+                        val ch = try { Regles.champDe(w.getObject()) } catch (_: Exception) { null }
+                        val libelle = try { ch?.get("TU")?.takeIf { it.isString }?.asString() ?: "" } catch (_: Exception) { "" }
+                        val v = try { w.value ?: "" } catch (_: Exception) { "" }
+                        out += ChampIa(n, i, g, try { w.name ?: "" } catch (_: Exception) { "" }, libelle,
+                            try { w.options?.toList() ?: emptyList() } catch (_: Exception) { emptyList() },
+                            if (g == PDFWidget.TYPE_CHECKBOX) (if (v.isEmpty() || v == "Off") "non" else "oui") else v)
+                    }
+                } finally { page.destroy() }
+            }
+            out
+        }
+    }
+
+    /** Ecrit les valeurs choisies (une seule etape d'annulation) ; renvoie (remplis, refuses par les regles du champ). */
+    suspend fun remplirIa(valeurs: List<Pair<ChampIa, String>>): Pair<Int, List<String>> {
+        var n = 0
+        val refus = ArrayList<String>()
+        operation("Remplir avec l'IA") { p ->
+            for ((c, val0) in valeurs) {
+                var nom = ""
+                val ok = surPage(p, c.page) { page ->
+                    val w = page.widgets?.getOrNull(c.index) ?: return@surPage false
+                    nom = w.name ?: ""
+                    when (c.genre) {
+                        PDFWidget.TYPE_TEXT -> {
+                            val regles = Regles.lire(w.getObject())
+                            val (v, err) = Regles.saisie(regles, val0)
+                            if (err != null || v == null) { refus += (c.libelle.ifEmpty { c.nom }) + " : " + messageSaisie(err ?: "", regles, val0); false }
+                            else { ecrireValeur(p, w, v, regles); true }
+                        }
+                        PDFWidget.TYPE_COMBOBOX, PDFWidget.TYPE_LISTBOX -> w.setChoiceValue(val0).also { w.update() }
+                        PDFWidget.TYPE_CHECKBOX -> {
+                            val voulu = val0.trim().lowercase() in setOf("oui", "yes", "true", "1", "x", "ja", "sí", "si", "sì")
+                            val actuel = (w.value ?: "Off").let { it.isNotEmpty() && it != "Off" }
+                            if (voulu != actuel) { w.toggle(); w.update() }
+                            true
+                        }
+                        else -> false
+                    }
+                }
+                if (ok) { n++; apresValeur(p, nom) }
+            }
+            n > 0
+        }
+        Journal.ecrire("formulaire", "remplir avec l'IA : $n champ(s)" + if (refus.isNotEmpty()) ", ${refus.size} refusé(s)" else "")
+        return n to refus
+    }
+
     /** Liste ouverte a plusieurs choix : les choix faits (dans l'ordre de la liste), et leurs numeros (/I). */
     suspend fun remplirPlusieurs(c: InfoChamp, choix: List<String>): Boolean = operation("Remplir") { p ->
         var nom = ""
@@ -1310,6 +1369,12 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
     }
 
     /** Etat actuel du document ecrit dans un fichier (pour enregistrer, partager, imprimer). */
+    /** Octets du document tel qu'il est a l'ecran (modifications comprises), pour l'envoyer ailleurs. */
+    suspend fun octetsActuels(ctx: Context): ByteArray {
+        val f = ecrire(File(ctx.cacheDir, "ouverts/envoi/" + nom.replace('/', '_')))
+        return withContext(Dispatchers.IO) { f.readBytes() }
+    }
+
     suspend fun ecrire(dest: File): File = verrou.withLock {
         withContext(Dispatchers.IO) {
             dest.parentFile?.mkdirs()
@@ -1679,6 +1744,10 @@ data class InfoAnnot(val page: Int, val index: Int, val genre: Int, val couleur:
     /** Signature, paraphe ou tampon (image, texte encadre ou trace) : deplacable, redimensionnable, remplacable. */
     val objet: Boolean get() = genre == PDFAnnotation.TYPE_STAMP || genre == PDFAnnotation.TYPE_FREE_TEXT || genre == PDFAnnotation.TYPE_INK
 }
+/** Champ du formulaire decrit a l'IA (« Remplir avec l'IA »). valeur : « oui » / « non » pour une case. */
+data class ChampIa(val page: Int, val index: Int, val genre: Int, val nom: String, val libelle: String, val choix: List<String>,
+                   val valeur: String)
+
 data class InfoChamp(val page: Int, val index: Int, val genre: Int, val valeur: String, val options: List<String>,
                      val lectureSeule: Boolean, val nom: String = "", val regles: String = "",
                      /** liste deroulante ou l'on peut aussi taper sa propre valeur (« saisie libre ») */
