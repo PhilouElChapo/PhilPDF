@@ -1,6 +1,7 @@
 package io.github.philouelchapo.philpdf
 
 import android.content.Context
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -195,7 +196,7 @@ fun TraduireUi(etat: EtatLecteur, ouvrirFichier: (File) -> Unit, fermer: () -> U
             confirmButton = { if (etat.doc.modifiable) TextButton(onClick = { fermer(); etat.ocr = 0 }) { Text(stringResource(R.string.ocr_titre_menu)) } },
             dismissButton = { TextButton(onClick = fermer) { Text(stringResource(R.string.fermer)) } })
         !lancer -> Fenetre(fermer) {
-            Column(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().background(Color.White)) {
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
                     Text(stringResource(R.string.trad_titre), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     Text(stringResource(R.string.trad_aide), fontSize = 13.sp, color = Color.Gray)

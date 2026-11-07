@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -122,7 +123,7 @@ fun ClasserIa(etat: EtatLecteur, fermer: () -> Unit) {
         }, fermer)
         else -> Fenetre({ if (!occupe) fermer() }) {
             val j = r!!
-            Column(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().background(Color.White)) {
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
                     Text(stringResource(R.string.cls_titre), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     Text(listOf(j.optString("expediteur"), j.optString("type"), j.optString("objet")).filter { it.isNotBlank() }.joinToString(" · "),
@@ -226,7 +227,7 @@ fun ExtraireIa(etat: EtatLecteur, fermer: () -> Unit) {
             confirmButton = { if (etat.doc.modifiable) TextButton(onClick = { fermer(); etat.ocr = 0 }) { Text(stringResource(R.string.ocr_titre_menu)) } },
             dismissButton = { TextButton(onClick = fermer) { Text(stringResource(R.string.fermer)) } })
         valeurs != null -> Fenetre(fermer) {
-            Column(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().background(Color.White)) {
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
                     Text(stringResource(R.string.don_resultat), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     Text(stringResource(R.string.don_verifier), fontSize = 13.sp, color = Color.Gray)
@@ -271,7 +272,7 @@ fun ExtraireIa(etat: EtatLecteur, fermer: () -> Unit) {
             }, fermer)
         }
         else -> Fenetre(fermer) {
-            Column(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().background(Color.White)) {
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
                     Text(stringResource(R.string.don_titre), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     Text(stringResource(R.string.don_aide), fontSize = 13.sp, color = Color.Gray)

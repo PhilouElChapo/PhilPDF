@@ -60,7 +60,7 @@ fun RemplirIa(etat: EtatLecteur, fermer: () -> Unit) {
             confirmButton = { TextButton(onClick = fermer) { Text(stringResource(R.string.ok)) } })
         proposes != null -> Fenetre(fermer) {
             val l = proposes!!
-            Column(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().background(Color.White)) {
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
                     Text(stringResource(R.string.rempl_titre), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     Text(stringResource(R.string.rempl_verifier), fontSize = 13.sp, color = Color.Gray)
@@ -126,7 +126,7 @@ fun RemplirIa(etat: EtatLecteur, fermer: () -> Unit) {
             }, fermer)
         }
         else -> Fenetre(fermer) {
-            Column(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().background(Color.White)) {
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
                     Text(stringResource(R.string.rempl_titre), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     Text(stringResource(R.string.rempl_aide, cs.size), fontSize = 13.sp, color = Color.Gray)

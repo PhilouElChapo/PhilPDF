@@ -23,6 +23,8 @@ ANDROID
     y est envoyee, jamais un fichier remplace ; ou « Sur le telephone... » avec ce nom.
   - Extraire les donnees : facture, releve, courrier ou vos champs ; valeurs a verifier, puis copier ou partager en
     texte (colonnes separees par des tabulations : se colle dans un tableur).
+- Fenetres ouvertes depuis le menu Plus (filigrane, nettoyer un scan, traduire, IA) : fond blanc, et le menu se
+  ferme ; avant, la fenetre etait transparente et le menu restait par-dessus (illisible).
 
 1.21.0
 - IA : Traduire le document (Plus > Traduire le document), comme sous Windows : chaque paragraphe est traduit et

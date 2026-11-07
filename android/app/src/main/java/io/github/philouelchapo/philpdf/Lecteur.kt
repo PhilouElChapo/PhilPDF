@@ -393,6 +393,10 @@ private fun DispositionTelephone(etat: EtatLecteur, tailles: List<Pair<Float, Fl
     var hHaut by remember { mutableStateOf(56.dp) }
     var hBas by remember { mutableStateOf(80.dp) }
     LaunchedEffect(etat.ouvrirSigner) { if (etat.ouvrirSigner) { tiroir = Volet.SIGNER; etat.ouvrirSigner = false } }
+    // un ecran ouvert depuis le menu Plus (filigrane, nettoyer, IA...) : le menu se ferme, rien ne reste par-dessus
+    val ecranOuvert = etat.filigrane || etat.nettoyer != null || etat.traduire || etat.expliquer || etat.remplirIa ||
+        etat.classer || etat.extraire || etat.redresser != null || etat.resumeIa || etat.lectureFluide || etat.organiser
+    LaunchedEffect(ecranOuvert) { if (ecranOuvert) tiroir = null }
     val portee = rememberCoroutineScope()
     // en faisant defiler vers le bas, les barres se cachent ; vers le haut, elles reviennent
     val defilement = remember {

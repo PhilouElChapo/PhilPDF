@@ -95,7 +95,7 @@ fun NettoyerScanUi(etat: EtatLecteur, n0: Int, fermer: () -> Unit) {
 
     verifie?.let { (pages, texte) -> ConfirmerTexte(pages, texte, { p -> verifie = null; nettoyer(p) }) { verifie = null } }
     Fenetre({ if (travail == null) fermer() }) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
+        BoxWithConstraints(Modifier.fillMaxSize().background(Color.White)) {
             val large = maxWidth > maxHeight && maxWidth >= 560.dp
             val hauteur = maxHeight
             Column(Modifier.fillMaxSize()) {

@@ -198,7 +198,7 @@ fun FiligraneEnteteUi(etat: EtatLecteur, fermer: () -> Unit) {
     fun fini(msg: String) { occupe = false; etat.message = msg; fermer() }
 
     Fenetre(fermer) {
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().background(Color.White)) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
                 Text(stringResource(R.string.fil_titre), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))
