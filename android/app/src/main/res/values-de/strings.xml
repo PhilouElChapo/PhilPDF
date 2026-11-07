@@ -803,4 +803,24 @@
     <string name="ent_retirer">Kopf- und Fußzeile entfernen</string>
     <string name="ent_retires">Kopf- und Fußzeile von %1$d Seite(n) entfernt.</string>
     <string name="ent_pose">Kopf- und Fußzeile auf allen Seiten gesetzt.</string>
+    <string name="net_menu">Scan bereinigen...</string>
+    <string name="net_titre">Scan bereinigen</string>
+    <string name="net_page_n">Seite %1$d</string>
+    <string name="net_aide">Stellen Sie es anhand der Vorschau ein, dann „Bereinigen“: Die gewählten Seiten werden durch ihre bereinigte Fassung ersetzt. Die Texterkennung (OCR) wird danach angeboten; Rückgängig stellt alles wieder her.</string>
+    <string name="net_avant">VORHER</string>
+    <string name="net_apres">NACHHER</string>
+    <string name="net_nb">Schwarzweiß (scharf, klein)</string>
+    <string name="net_couleur">Farbe (aufgehellter Hintergrund)</string>
+    <string name="net_redresser">Automatisch gerade richten</string>
+    <string name="net_bords">Schwarze Ränder und Striche am Rand entfernen</string>
+    <string name="net_taches">Kleine einzelne Flecken entfernen</string>
+    <string name="net_en_cours">Bereinigen: Seite %1$d von %2$d...</string>
+    <string name="net_arreter">Anhalten</string>
+    <string name="net_arrete">Angehalten: nichts wurde geändert.</string>
+    <string name="net_nettoyer">Bereinigen</string>
+    <string name="net_fait">%1$d Seite(n) bereinigt.</string>
+    <string name="net_echec">Bereinigen nicht möglich (Details im Protokoll).</string>
+    <string name="net_vrai_texte">%1$d Seite(n) enthalten echten Text (kein Scan): Bereinigt werden sie zu einem Bild; ihr Text ist nach der Texterkennung (OCR) wieder auffindbar.</string>
+    <string name="net_seulement_scans">Nur die Scans (%1$d)</string>
+    <string name="net_quand_meme">Trotzdem bereinigen</string>
 </resources>

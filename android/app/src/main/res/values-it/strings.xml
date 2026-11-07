@@ -803,4 +803,24 @@
     <string name="ent_retirer">Rimuovi intestazione e piè di pagina</string>
     <string name="ent_retires">Intestazione e piè rimossi da %1$d pagina/e.</string>
     <string name="ent_pose">Intestazione e piè aggiunti su tutte le pagine.</string>
+    <string name="net_menu">Pulisci una scansione...</string>
+    <string name="net_titre">Pulisci una scansione</string>
+    <string name="net_page_n">pagina %1$d</string>
+    <string name="net_aide">Regolate guardando l\'anteprima, poi «Pulisci»: le pagine scelte sono sostituite dalla versione pulita. Il riconoscimento del testo (OCR) viene proposto dopo; Annulla torna indietro.</string>
+    <string name="net_avant">PRIMA</string>
+    <string name="net_apres">DOPO</string>
+    <string name="net_nb">Bianco e nero (nitido, leggero)</string>
+    <string name="net_couleur">Colore (sfondo schiarito)</string>
+    <string name="net_redresser">Raddrizza automaticamente</string>
+    <string name="net_bords">Cancella i bordi neri e le righe del bordo</string>
+    <string name="net_taches">Cancella le piccole macchie isolate</string>
+    <string name="net_en_cours">Pulizia: pagina %1$d di %2$d...</string>
+    <string name="net_arreter">Ferma</string>
+    <string name="net_arrete">Fermato: non è stato cambiato nulla.</string>
+    <string name="net_nettoyer">Pulisci</string>
+    <string name="net_fait">%1$d pagina/e pulita/e.</string>
+    <string name="net_echec">Pulizia impossibile (dettagli nel registro).</string>
+    <string name="net_vrai_texte">%1$d pagina/e hanno vero testo (non una scansione): pulite, diventeranno un\'immagine; il loro testo si ritrova dopo il riconoscimento (OCR).</string>
+    <string name="net_seulement_scans">Solo le scansioni (%1$d)</string>
+    <string name="net_quand_meme">Pulisci comunque</string>
 </resources>

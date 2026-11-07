@@ -104,6 +104,7 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     val biffage = androidx.compose.runtime.mutableStateListOf<Pair<Int, com.artifex.mupdf.fitz.Rect>>()
     var confirmerBiffage by mutableStateOf(false)
     var filigrane by mutableStateOf(false)                  // « Filigrane, en-tete et pied de page »
+    var nettoyer by mutableStateOf<Int?>(null)              // « Nettoyer un scan » : page choisie
     var quitterBiffage by mutableStateOf(false)
     var ocr by mutableStateOf<Int?>(null)                   // reconnaissance du texte proposee (page de depart)
     var ocrAuto = false                                     // document numerise : reconnaissance lancee d'office
@@ -224,6 +225,7 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
     if (etat.reglagesIa) ReglagesIa { etat.reglagesIa = false }
     etat.redresser?.let { n -> RedresserPage(etat, n) { etat.redresser = null } }
     if (etat.filigrane) FiligraneEnteteUi(etat) { etat.filigrane = false }
+    etat.nettoyer?.let { n -> NettoyerScanUi(etat, n) { etat.nettoyer = null } }
     etat.message?.let { m ->
         val txt = if (m == "aucun_texte") stringResource(R.string.aucun_texte) else m
         LaunchedEffect(m) { android.widget.Toast.makeText(ctx, txt, android.widget.Toast.LENGTH_LONG).show(); etat.message = null }
@@ -472,6 +474,7 @@ private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, 
                     if (etat.doc.modifiable) LigneAction("organiser", stringResource(R.string.organiser_pages)) { etat.organiser = true }
                     if (etat.doc.modifiable) LigneAction("pivoter", stringResource(R.string.redresser_menu)) { etat.redresser = etat.page }
                     if (etat.doc.modifiable) LigneAction("filigrane", stringResource(R.string.fil_menu)) { etat.filigrane = true }
+                    if (etat.doc.modifiable) LigneAction("nettoyer", stringResource(R.string.net_menu)) { etat.nettoyer = etat.page }
                     if (etat.doc.modifiable) LigneAction("ocr", stringResource(R.string.ocr_titre_menu)) { etat.ocr = etat.page }
                     LigneAction("certificat", stringResource(R.string.sig_verifier)) { etat.verifierSignatures = true }
                     LigneAction("enregistrer", stringResource(R.string.enregistrer)) { etat.demandeEnregistrer = true }

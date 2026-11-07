@@ -252,7 +252,7 @@ object Numerisation {
     fun reduirePourApercu(bm: Bitmap): Bitmap = reduire(bm, 1000)
 
     /** Applique le modele : fond eclairci (ombres et lumiere inegale retirees), noir et blanc net, ou rien (photo). */
-    fun ameliorer(source: Bitmap, m: Modele): Bitmap {
+    fun ameliorer(source: Bitmap, m: Modele, bords: Boolean = true, taches: Boolean = true): Bitmap {
         val bm = reduire(source, m.grandCote).copy(Bitmap.Config.ARGB_8888, true)
         if (m == Modele.PHOTO) return bm
         val w = bm.width; val h = bm.height
@@ -293,7 +293,7 @@ object Numerisation {
                 (0xFF shl 24) or (v shl 16) or (v shl 8) or v
             } else (0xFF shl 24) or (r shl 16) or (g shl 8) or b
         }
-        if (nb) nettoyerNb(px, w, h, max(w, h) / 11.69f / 300f)
+        if (nb) nettoyerNb(px, w, h, max(w, h) / 11.69f / 300f, bords, taches)
         bm.setPixels(px, 0, w, 0, 0, w, h)
         return bm
     }
@@ -303,7 +303,7 @@ object Numerisation {
      * (moteur/nettoyage.py). k : resolution / 300 dpi. Une tache proche des lettres (point du i, accent) reste.
      * Renvoie (taches, bords) retires.
      */
-    fun nettoyerNb(px: IntArray, w: Int, h: Int, k: Float): Pair<Int, Int> {
+    fun nettoyerNb(px: IntArray, w: Int, h: Int, k: Float, avecBords: Boolean = true, avecTaches: Boolean = true): Pair<Int, Int> {
         val n = w * h
         val lab = IntArray(n)                                   // 0 : blanc ; sinon numero de la tache d'encre
         val noir = { i: Int -> (px[i] and 255) < 128 }
@@ -341,7 +341,7 @@ object Numerisation {
             val trait = (bh > 0.08f * h && bw < 0.03f * w) || (bw > 0.08f * w && bh < 0.03f * h)
             // bande noire le long d'un bord (table ou ombre autour de la feuille) : haute et etroite, ou l'inverse
             val bandeBord = touche && ((bh > 0.5f * h && bw < 0.2f * w) || (bw > 0.5f * w && bh < 0.2f * h))
-            if ((touche && (trait || bande)) || (bande && trait) || bandeBord) { effacer[c] = true; bords++ }
+            if (avecBords && ((touche && (trait || bande)) || (bande && trait) || bandeBord)) { effacer[c] = true; bords++ }
         }
         // 2. taches isolees : petites, sans lettre a moins de ~2 mm (somme cumulee de l'encre « grosse »)
         val petit = 20f * k * k
@@ -361,7 +361,7 @@ object Numerisation {
         }
         var taches = 0
         for (c in 1..nb) {
-            if (effacer[c] || aire[c] > petit) continue
+            if (!avecTaches || effacer[c] || aire[c] > petit) continue
             if (somme(x0[c] - r, y0[c] - r, x1[c] + r, y1[c] + r) == 0) { effacer[c] = true; taches++ }
         }
         val blanc = (0xFF shl 24) or 0xFFFFFF

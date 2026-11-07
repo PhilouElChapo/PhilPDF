@@ -804,4 +804,24 @@
     <string name="ent_retirer">Remove the header and footer</string>
     <string name="ent_retires">Header and footer removed from %1$d page(s).</string>
     <string name="ent_pose">Header and footer added to every page.</string>
+    <string name="net_menu">Clean up a scan...</string>
+    <string name="net_titre">Clean up a scan</string>
+    <string name="net_page_n">page %1$d</string>
+    <string name="net_aide">Adjust while watching the preview, then “Clean up”: the chosen pages are replaced by their cleaned version. Text recognition (OCR) is offered afterwards; Undo goes back.</string>
+    <string name="net_avant">BEFORE</string>
+    <string name="net_apres">AFTER</string>
+    <string name="net_nb">Black and white (sharp, light)</string>
+    <string name="net_couleur">Colour (lightened background)</string>
+    <string name="net_redresser">Straighten automatically</string>
+    <string name="net_bords">Erase black edges and lines along the edge</string>
+    <string name="net_taches">Erase small isolated specks</string>
+    <string name="net_en_cours">Cleaning up: page %1$d of %2$d...</string>
+    <string name="net_arreter">Stop</string>
+    <string name="net_arrete">Stopped: nothing was changed.</string>
+    <string name="net_nettoyer">Clean up</string>
+    <string name="net_fait">%1$d page(s) cleaned up.</string>
+    <string name="net_echec">Clean-up impossible (details in the log).</string>
+    <string name="net_vrai_texte">%1$d page(s) have real text (not a scan): once cleaned up, they become an image; their text can be found again after text recognition (OCR).</string>
+    <string name="net_seulement_scans">Only the scans (%1$d)</string>
+    <string name="net_quand_meme">Clean up anyway</string>
 </resources>

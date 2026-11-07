@@ -803,4 +803,24 @@
     <string name="ent_retirer">Quitar el encabezado y el pie</string>
     <string name="ent_retires">Encabezado y pie quitados de %1$d página(s).</string>
     <string name="ent_pose">Encabezado y pie añadidos en todas las páginas.</string>
+    <string name="net_menu">Limpiar un escaneo...</string>
+    <string name="net_titre">Limpiar un escaneo</string>
+    <string name="net_page_n">página %1$d</string>
+    <string name="net_aide">Ajuste mirando la vista previa y luego «Limpiar»: las páginas elegidas se sustituyen por su versión limpia. Después se propone el reconocimiento de texto (OCR); Deshacer vuelve atrás.</string>
+    <string name="net_avant">ANTES</string>
+    <string name="net_apres">DESPUÉS</string>
+    <string name="net_nb">Blanco y negro (nítido, ligero)</string>
+    <string name="net_couleur">Color (fondo aclarado)</string>
+    <string name="net_redresser">Enderezar automáticamente</string>
+    <string name="net_bords">Borrar los bordes negros y las líneas del borde</string>
+    <string name="net_taches">Borrar las pequeñas manchas aisladas</string>
+    <string name="net_en_cours">Limpiando: página %1$d de %2$d...</string>
+    <string name="net_arreter">Detener</string>
+    <string name="net_arrete">Detenido: no se ha cambiado nada.</string>
+    <string name="net_nettoyer">Limpiar</string>
+    <string name="net_fait">%1$d página(s) limpiada(s).</string>
+    <string name="net_echec">No se pudo limpiar (detalles en el registro).</string>
+    <string name="net_vrai_texte">%1$d página(s) tienen texto real (no es un escaneo): al limpiarlas se convertirán en una imagen; su texto vuelve a encontrarse tras el reconocimiento (OCR).</string>
+    <string name="net_seulement_scans">Solo los escaneos (%1$d)</string>
+    <string name="net_quand_meme">Limpiar de todos modos</string>
 </resources>

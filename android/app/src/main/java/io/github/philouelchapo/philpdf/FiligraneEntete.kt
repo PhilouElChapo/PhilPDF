@@ -146,7 +146,7 @@ object Pagination {
                 if (!o.isStream) continue
                 val s = String(o.readStream(), Charsets.ISO_8859_1)
                 if (!motif.containsMatchIn(s)) continue
-                o.writeStream(motif.replace(s, "").toByteArray(Charsets.ISO_8859_1))
+                o.writeStream(com.artifex.mupdf.fitz.Buffer().also { it.writeBytes(motif.replace(s, "").toByteArray(Charsets.ISO_8859_1)) })
                 touche = true
             }
             if (touche) n++

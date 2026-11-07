@@ -17,6 +17,11 @@ ANDROID
   {page}, {pages}, {date}. Memes marquages que sous Windows et Acrobat : « Retirer les filigranes » enleve aussi
   ceux d'Acrobat, et un en-tete pose sur le telephone se retire sous Windows (et inversement). L'en-tete deja pose
   par PhilPDF est remplace, pas double. Une seule etape a annuler.
+- Nettoyer un scan (Plus > Nettoyer un scan), comme sous Windows : apercu avant / apres, noir et blanc net ou
+  couleur (fond eclairci), redresser automatiquement, effacer les bords noirs et les petites taches ; cette page ou
+  toutes. Les pages sont preparees d'abord (avancement affiche, « Arreter » ne change rien), puis remplacees en une
+  seule etape d'annulation ; une page avec du vrai texte (pas un scan) est signalee avant (« Seulement les scans »).
+  La reconnaissance du texte (OCR) est proposee ensuite.
 - Google Play : l'appareil photo et l'ecran tactile ne sont plus exiges (Numeriser utilise l'appareil photo s'il
   y en a un) ; les tablettes, ecrans et bornes sans appareil photo ne sont plus ecartes.
 

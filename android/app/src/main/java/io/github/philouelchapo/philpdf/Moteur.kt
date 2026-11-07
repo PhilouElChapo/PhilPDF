@@ -1207,6 +1207,52 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         true
     }
 
+    // ---------------------------------------------------------------- nettoyer un scan
+    /** Image du contenu de la page seul (sans les annotations, qui restent par-dessus), largeur en pixels. */
+    suspend fun imageContenu(n: Int, largeurPx: Int): Bitmap = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            val page = doc.loadPage(n)
+            try {
+                val b = page.bounds
+                val z = largeurPx.coerceAtLeast(1) / (b.x1 - b.x0).coerceAtLeast(1f)
+                val bm = Bitmap.createBitmap(largeurPx.coerceAtLeast(1), ((b.y1 - b.y0) * z).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+                bm.eraseColor(Color.WHITE)
+                val dev = AndroidDrawDevice(bm, 0, 0)
+                try { page.runPageContents(dev, Matrix(z, z), null as Cookie?); dev.close() } finally { dev.destroy() }
+                bm
+            } finally { page.destroy() }
+        }
+    }
+
+    /** Remplace le contenu des pages par leur image nettoyee, a la meme taille (annotations gardees, une seule
+     *  etape d'annulation). Le texte reconnu (OCR) de ces pages disparait avec l'ancienne image. */
+    suspend fun remplacerParImages(images: Map<Int, ByteArray>): Boolean = if (images.isEmpty()) false else operation("Nettoyer un scan") { p ->
+        for ((n, octets) in images) {
+            val pobj = p.findPage(n)
+            val rot = try { pobj.getInheritable("Rotate").asInteger() } catch (_: Exception) { 0 }
+            val boite = pobj.getInheritable("CropBox").takeIf { it.isArray } ?: pobj.getInheritable("MediaBox")
+            var x0 = boite.get(0).asFloat(); var y0 = boite.get(1).asFloat()
+            var w = boite.get(2).asFloat() - x0; var h = boite.get(3).asFloat() - y0
+            if (((rot % 360) + 360) % 360 != 0) {
+                // page tournee : l'image est deja droite ; nouvelle page sans rotation, a la taille affichee
+                if (((rot % 180) + 180) % 180 == 90) { val t = w; w = h; h = t }
+                x0 = 0f; y0 = 0f
+                pobj.put("Rotate", 0)
+                pobj.delete("CropBox")
+                pobj.put("MediaBox", p.newArray().also { a -> a.push(0f); a.push(0f); a.push(w); a.push(h) })
+            }
+            val res = p.newDictionary()
+            val xo = p.newDictionary()
+            xo.put("PhilNet", p.addImage(com.artifex.mupdf.fitz.Image(octets)))
+            res.put("XObject", xo)
+            pobj.put("Resources", res)
+            fun f(v: Float) = String.format(java.util.Locale.US, "%.3f", v)
+            pobj.put("Contents", p.addStream("q ${f(w)} 0 0 ${f(h)} ${f(x0)} ${f(y0)} cm /PhilNet Do Q\n"))
+            pobj.delete("PhilPDF_OCR")
+        }
+        true
+    }
+
     // ---------------------------------------------------------------- filigrane, en-tete / pied de page
     suspend fun poserFiligrane(pages: List<Int>, r: ReglagesFiligrane): Boolean = operation("Filigrane") { p ->
         val fonte = Font("Helvetica-Bold")
@@ -1323,6 +1369,16 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
             val pg = doc.loadPage(n)
             try { val st = pg.toStructuredText(); try { st.asText().isBlank() } finally { st.destroy() } }
             catch (_: Exception) { false } finally { pg.destroy() }
+        }
+    }
+
+    /** Vrai pour une page scannee : sans texte, ou dont le texte vient de la reconnaissance (OCR) de PhilPDF. */
+    suspend fun pageScannee(n: Int): Boolean {
+        if (pageSansTexte(n)) return true
+        return verrou.withLock {
+            withContext(Dispatchers.IO) {
+                try { pdf?.findPage(n)?.get("PhilPDF_OCR")?.let { !it.isNull && it.asBoolean() } ?: false } catch (_: Exception) { false }
+            }
         }
     }
 

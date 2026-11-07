@@ -804,4 +804,24 @@
     <string name="ent_retirer">Retirer l\'en-tête et le pied de page</string>
     <string name="ent_retires">En-tête et pied de page retirés de %1$d page(s).</string>
     <string name="ent_pose">En-tête et pied de page posés sur toutes les pages.</string>
+    <string name="net_menu">Nettoyer un scan...</string>
+    <string name="net_titre">Nettoyer un scan</string>
+    <string name="net_page_n">page %1$d</string>
+    <string name="net_aide">Réglez en regardant l\'aperçu, puis « Nettoyer » : les pages choisies sont remplacées par leur version nettoyée. La reconnaissance du texte (OCR) est proposée ensuite ; « Annuler » revient en arrière.</string>
+    <string name="net_avant">AVANT</string>
+    <string name="net_apres">APRES</string>
+    <string name="net_nb">Noir et blanc (net, léger)</string>
+    <string name="net_couleur">Couleur (fond éclairci)</string>
+    <string name="net_redresser">Redresser automatiquement</string>
+    <string name="net_bords">Effacer les bords noirs et les traits du bord</string>
+    <string name="net_taches">Effacer les petites taches isolées</string>
+    <string name="net_en_cours">Nettoyage : page %1$d sur %2$d...</string>
+    <string name="net_arreter">Arrêter</string>
+    <string name="net_arrete">Arrêté : rien n\'a été changé.</string>
+    <string name="net_nettoyer">Nettoyer</string>
+    <string name="net_fait">%1$d page(s) nettoyée(s).</string>
+    <string name="net_echec">Nettoyage impossible (détails dans le journal).</string>
+    <string name="net_vrai_texte">%1$d page(s) ont du vrai texte (pas un scan) : nettoyées, elles deviendront une image ; leur texte se retrouve après la reconnaissance (OCR).</string>
+    <string name="net_seulement_scans">Seulement les scans (%1$d)</string>
+    <string name="net_quand_meme">Nettoyer quand même</string>
 </resources>
