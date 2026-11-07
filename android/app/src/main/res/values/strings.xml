@@ -824,4 +824,9 @@
     <string name="net_vrai_texte">%1$d page(s) have real text (not a scan): once cleaned up, they become an image; their text can be found again after text recognition (OCR).</string>
     <string name="net_seulement_scans">Only the scans (%1$d)</string>
     <string name="net_quand_meme">Clean up anyway</string>
+    <string name="autres_postes_titre">On your other computers (on a Drive)</string>
+    <string name="autres_ouvert_sur">Open on %1$s</string>
+    <string name="autres_vu_sur">Recent on %1$s</string>
+    <string name="autres_telechargement">Downloading “%1$s” from %2$s...</string>
+    <string name="autres_echec">“%1$s” could not be opened: %2$s</string>
 </resources>

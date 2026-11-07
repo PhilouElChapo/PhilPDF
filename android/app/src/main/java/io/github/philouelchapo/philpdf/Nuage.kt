@@ -396,6 +396,23 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
         return Uri.fromFile(f)
     }
 
+    /** Fichier designe par son chemin depuis la racine du compte (« /Factures/facture.pdf »), comme sous Windows ;
+     *  copie sur le telephone, ouverte ensuite comme un fichier du compte (« Meme fichier » l'y renvoie). */
+    suspend fun ouvrirChemin(ctx: Context, chemin: String): Uri {
+        val parts = chemin.split("/").filter { it.isNotEmpty() }
+        val nom = parts.lastOrNull() ?: throw ErreurCompte(Textes.t(R.string.err_fichier_introuvable, fournisseur(ctx).nom))
+        val fid: String? = when (fournisseur(ctx).cle) {
+            "gdrive" -> { var x: String? = "root"; for (n in parts) x = x?.let { gEnfant(ctx, it, n)?.getString("id") }; x }
+            "onedrive" -> json(ctx, "GET", "$GRAPH/me/drive/root:/" + parts.joinToString("/") { enc(it) } + "?\$select=id")
+                ?.optString("id")?.takeIf { it.isNotEmpty() }
+            "dropbox" -> "/" + parts.joinToString("/")
+            "box" -> { var x: String? = "0"; for (n in parts) x = x?.let { bEnfant(ctx, it, n) }; x }
+            else -> null
+        }
+        if (fid == null) throw ErreurCompte(Textes.t(R.string.err_fichier_introuvable, fournisseur(ctx).nom))
+        return ouvrirFichier(ctx, Entree(fid, nom, false, 0, ""))
+    }
+
     suspend fun contenuFichier(ctx: Context, fid: String): ByteArray? = when (fournisseur(ctx).cle) {
         "gdrive" -> telecharger(ctx, "GET", "$GOOGLE/files/$fid?alt=media")
         "onedrive" -> telecharger(ctx, "GET", "$GRAPH/me/drive/items/$fid/content")
@@ -925,5 +942,53 @@ object Bibliotheque {
     fun nomGenre(g: String) = when (g) {
         "signatures" -> "Signatures"; "tampons" -> "Tampons"; "filigranes" -> "Filigranes"; "paraphes" -> "Paraphes"
         else -> g.replaceFirstChar { it.uppercase() }
+    }
+}
+
+
+// ================================================================ fichiers de vos autres postes (sur un Drive)
+/** Fichier ouvert recemment sur un autre poste depuis un Drive relie dans PhilPDF (session.json du dossier PhilPDF). */
+data class FichierPoste(val nom: String, val poste: String, val date: String, val ouvert: Boolean, val chemin: String,
+                        val lieu: String, val compte: Nuage)
+
+object AutresPostes {
+    @Volatile private var cache: Pair<Long, List<FichierPoste>>? = null
+
+    /** Lus une fois par quart d'heure au plus (rien de lent a l'ouverture de l'Accueil) ; seulement les fichiers d'un
+     *  Drive que ce telephone connait aussi (meme genre de compte ; le meme e-mail s'il y en a plusieurs). */
+    suspend fun lire(ctx: Context, forcer: Boolean = false): List<FichierPoste> {
+        cache?.let { (t, l) -> if (!forcer && System.currentTimeMillis() - t < 15 * 60_000) return l }
+        val sync = Nuage.synchro(ctx) ?: return emptyList()
+        val sess = try { sync.lire(ctx, "session.json")?.let { JSONObject(String(it)) } } catch (e: Exception) {
+            Journal.ecrire("autres postes", "session illisible ($e)"); null } ?: return emptyList()
+        val comptes = Nuage.liste(ctx)
+        val vus = HashSet<String>()
+        val out = ArrayList<FichierPoste>()
+        for (m in sess.keys()) {
+            val v = sess.optJSONObject(m) ?: continue
+            val maj = v.optString("maj")
+            fun lister(a: JSONArray?, ouvert: Boolean) {
+                if (a == null) return
+                for (i in 0 until a.length()) {
+                    val e = a.optJSONObject(i) ?: continue
+                    val d = e.optJSONObject("distant") ?: continue
+                    val genre = d.optString("cle").substringBefore("|")
+                    val chemin = d.optString("chemin")
+                    if (genre !in setOf("gdrive", "onedrive", "dropbox", "box") || chemin.isEmpty()) continue
+                    val lieu = d.optString("lieu")
+                    val memes = comptes.filter { it.fournisseur(ctx).cle == genre }
+                    val c = memes.firstOrNull { n -> n.email(ctx)?.let { lieu.contains(it, true) } == true } ?: memes.singleOrNull() ?: continue
+                    if (!vus.add("$genre|${chemin.lowercase()}")) continue
+                    out += FichierPoste(e.optString("nom").ifEmpty { chemin.substringAfterLast('/') }, m,
+                        if (ouvert) maj else e.optString("date").ifEmpty { maj }, ouvert, chemin, lieu, c)
+                }
+            }
+            lister(v.optJSONArray("fichiers"), true)
+            lister(v.optJSONArray("recents"), false)
+        }
+        val l = out.sortedByDescending { it.date }.take(30)
+        Journal.ecrire("autres postes", "${l.size} fichier(s) de vos autres postes sur un Drive")
+        cache = System.currentTimeMillis() to l
+        return l
     }
 }

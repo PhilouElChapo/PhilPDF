@@ -824,4 +824,9 @@
     <string name="net_vrai_texte">%1$d page(s) ont du vrai texte (pas un scan) : nettoyées, elles deviendront une image ; leur texte se retrouve après la reconnaissance (OCR).</string>
     <string name="net_seulement_scans">Seulement les scans (%1$d)</string>
     <string name="net_quand_meme">Nettoyer quand même</string>
+    <string name="autres_postes_titre">Sur vos autres postes (sur un Drive)</string>
+    <string name="autres_ouvert_sur">Ouvert sur %1$s</string>
+    <string name="autres_vu_sur">Récent sur %1$s</string>
+    <string name="autres_telechargement">Téléchargement de « %1$s » depuis %2$s...</string>
+    <string name="autres_echec">« %1$s » n\'a pas pu être ouvert : %2$s</string>
 </resources>

@@ -823,4 +823,9 @@
     <string name="net_vrai_texte">%1$d pagina/e hanno vero testo (non una scansione): pulite, diventeranno un\'immagine; il loro testo si ritrova dopo il riconoscimento (OCR).</string>
     <string name="net_seulement_scans">Solo le scansioni (%1$d)</string>
     <string name="net_quand_meme">Pulisci comunque</string>
+    <string name="autres_postes_titre">Sugli altri vostri computer (su un Drive)</string>
+    <string name="autres_ouvert_sur">Aperto su %1$s</string>
+    <string name="autres_vu_sur">Recente su %1$s</string>
+    <string name="autres_telechargement">Scaricamento di «%1$s» da %2$s...</string>
+    <string name="autres_echec">Impossibile aprire «%1$s»: %2$s</string>
 </resources>

@@ -1510,10 +1510,19 @@ class Fenetre(MixinCoteACote, QMainWindow):
         o = self.ouvrir(local)
         if o:
             o.distant = {"compte": c["id"], "cle": distant.cle_compte(c), "chemin": chemin, "lieu": distant.libelle(c)}
+            self._retenir_distant(o)
             self._maj_titre(o)
             self.statusBar().showMessage(_("Ouvert depuis {lieu} : {chemin}", lieu=distant.libelle(c), chemin=chemin), 8000)
             self._session(toucher=True)
         return o
+
+    def _retenir_distant(self, o):
+        """Copie de travail d'un fichier d'un Drive : son origine est gardee avec les recents. La session la donne a
+        vos autres postes (et au telephone), qui rouvrent le fichier directement sur le Drive."""
+        m = dict(self.params.get("recents_distants") or {})
+        m[o.chemin] = {k: o.distant.get(k) for k in ("cle", "chemin", "lieu")}
+        garder = set(self.params.get("recents", [])) | {o.chemin}
+        self.params["recents_distants"] = {k: v for k, v in m.items() if k in garder}
 
     def _renvoyer(self, o):
         """Renvoie la copie de travail a son emplacement d'origine."""
@@ -1561,6 +1570,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
             return False
         o.chemin, o.nom = local, os.path.basename(local)
         o.distant = {"compte": c["id"], "cle": distant.cle_compte(c), "chemin": d.choisi, "lieu": distant.libelle(c)}
+        self._retenir_distant(o)
         self._maj_titre(o)
         return self._renvoyer(o)
 

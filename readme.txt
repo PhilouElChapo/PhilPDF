@@ -22,6 +22,11 @@ ANDROID
   toutes. Les pages sont preparees d'abord (avancement affiche, « Arreter » ne change rien), puis remplacees en une
   seule etape d'annulation ; une page avec du vrai texte (pas un scan) est signalee avant (« Seulement les scans »).
   La reconnaissance du texte (OCR) est proposee ensuite.
+- Accueil : « Sur vos autres postes (sur un Drive) », sous vos recents : les PDF ouverts recemment sur vos PC
+  depuis un Drive relie dans PhilPDF (Google Drive, OneDrive, Dropbox, Box), avec le poste et la date. Un toucher
+  le telecharge depuis le Drive et l'ouvre (« Meme fichier » l'y renvoie). Lus en arriere-plan, au plus tous les
+  quarts d'heure : l'Accueil ne ralentit pas. Les fichiers du NAS ou du disque d'un PC n'y sont pas (inaccessibles
+  depuis le telephone). Il faut PhilPDF 0.9.85 sur les PC pour les recents (avant : seulement les fichiers ouverts).
 - Google Play : l'appareil photo et l'ecran tactile ne sont plus exiges (Numeriser utilise l'appareil photo s'il
   y en a un) ; les tablettes, ecrans et bornes sans appareil photo ne sont plus ecartes.
 
@@ -439,6 +444,11 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.85
+- Fichier ouvert depuis un Drive (Google Drive, OneDrive, Dropbox, Box) : son origine est gardee avec les recents
+  et passe dans la session ; votre telephone (PhilPDF Android 1.20.0) le voit dans « Sur vos autres postes » et le
+  rouvre directement sur le Drive.
 
 0.9.84
 - Modifier le texte, paragraphe d'une seule ligne (titre, bandeau, cellule de tableau) : un texte plus long

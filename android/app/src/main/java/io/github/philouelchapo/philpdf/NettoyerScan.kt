@@ -58,15 +58,6 @@ fun NettoyerScanUi(etat: EtatLecteur, n0: Int, fermer: () -> Unit) {
         apres = withContext(Dispatchers.Default) { try { Nettoyage.page(a, r) } catch (_: Exception) { null } }
     }
 
-    // pages qui ont du vrai texte (pas un scan) : elles deviendraient une image ; on le demande d'abord
-    fun verifier() {
-        portee.launch {
-            val pages = if (toutes) (0 until etat.doc.nombrePages()).toList() else listOf(n0)
-            val texte = pages.filter { !etat.doc.pageScannee(it) }
-            if (texte.isEmpty()) nettoyer(pages) else verifie = pages to texte
-        }
-    }
-
     fun nettoyer(pages: List<Int>) {
         travail = portee.launch {
             val images = LinkedHashMap<Int, ByteArray>()
@@ -90,6 +81,15 @@ fun NettoyerScanUi(etat: EtatLecteur, n0: Int, fermer: () -> Unit) {
             etat.message = ctx.getString(if (ok) R.string.net_fait else R.string.net_echec, images.size)
             fermer()
             if (ok) etat.ocr = pages.first()          // proposer de reconnaitre le texte des pages nettoyees
+        }
+    }
+
+    // pages qui ont du vrai texte (pas un scan) : elles deviendraient une image ; on le demande d'abord
+    fun verifier() {
+        portee.launch {
+            val pages = if (toutes) (0 until etat.doc.nombrePages()).toList() else listOf(n0)
+            val texte = pages.filter { !etat.doc.pageScannee(it) }
+            if (texte.isEmpty()) nettoyer(pages) else verifie = pages to texte
         }
     }
 

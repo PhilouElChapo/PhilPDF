@@ -823,4 +823,9 @@
     <string name="net_vrai_texte">%1$d página(s) tienen texto real (no es un escaneo): al limpiarlas se convertirán en una imagen; su texto vuelve a encontrarse tras el reconocimiento (OCR).</string>
     <string name="net_seulement_scans">Solo los escaneos (%1$d)</string>
     <string name="net_quand_meme">Limpiar de todos modos</string>
+    <string name="autres_postes_titre">En sus otros equipos (en un Drive)</string>
+    <string name="autres_ouvert_sur">Abierto en %1$s</string>
+    <string name="autres_vu_sur">Reciente en %1$s</string>
+    <string name="autres_telechargement">Descargando «%1$s» desde %2$s...</string>
+    <string name="autres_echec">No se pudo abrir «%1$s»: %2$s</string>
 </resources>

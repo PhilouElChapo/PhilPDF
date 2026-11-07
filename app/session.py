@@ -308,6 +308,10 @@ class Session:
                 continue
             e = self._decrire(p, maison, connus)
             e["date"] = q
+            dist = (self.params.get("recents_distants") or {}).get(p)
+            if dist:                                      # copie d'un fichier d'un Drive : l'autre poste l'y rouvre
+                e["distant"] = {"cle": dist.get("cle"), "chemin": dist.get("chemin"), "lieu": dist.get("lieu")}
+                e["nom"] = os.path.basename(dist.get("chemin") or p)
             recents.append(e)
         d = self.lire()
         d[self.params["machine"]] = {"maj": datetime.datetime.now().isoformat(timespec="minutes"),

@@ -60,6 +60,24 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
             Bibliotheque.lireDrive(ctx).let { e -> e.nouveaux + Bibliotheque.locaux(ctx).count { l -> e.distants.none { it.id == l.id } } }
         } catch (_: Exception) { 0 }
     }
+    // fichiers ouverts sur vos autres postes depuis un Drive : lus en arriere-plan, l'Accueil ne les attend pas
+    var autres by remember { mutableStateOf<List<FichierPoste>>(emptyList()) }
+    var telechargement by remember { mutableStateOf<FichierPoste?>(null) }
+    var erreurAutre by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(versionCompte) { autres = try { AutresPostes.lire(ctx, versionCompte > 0) } catch (_: Exception) { emptyList() } }
+    LaunchedEffect(telechargement) {
+        val f = telechargement ?: return@LaunchedEffect
+        try {
+            val u = f.compte.ouvrirChemin(ctx, f.chemin)
+            Journal.ecrire("autres postes", "ouvert : ${f.lieu} ${f.chemin}")
+            telechargement = null
+            ouvrir(u)
+        } catch (e: Exception) {
+            Journal.ecrire("autres postes", "${f.chemin} : $e")
+            erreurAutre = (e as? ErreurCompte)?.message ?: ctx.getString(R.string.autres_echec, f.nom, e.message ?: e.javaClass.simpleName)
+            telechargement = null
+        }
+    }
     val pastille: @Composable () -> Unit = { PastilleCompte(versionCompte) { ecranCompte = true } }
 
     Column(Modifier.fillMaxSize().background(Color(0xFFF3F3F3)).padding(16.dp)) {
@@ -129,16 +147,27 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
         Spacer(Modifier.height(8.dp))
         Box(Modifier.weight(1f).fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp))
             .border(1.dp, Color(0xFFE2E2E2), RoundedCornerShape(10.dp))) {
-            if (recents.isEmpty()) {
+            if (recents.isEmpty() && autres.isEmpty()) {
                 Text(stringResource(R.string.aucun_recent), Modifier.padding(16.dp), color = Color.Gray)
             } else {
                 LazyColumn {
+                    if (recents.isEmpty()) item { Text(stringResource(R.string.aucun_recent), Modifier.padding(16.dp), color = Color.Gray) }
                     items(recents, key = { it.uri }) { r ->
                         LigneRecent(r, { ouvrir(Uri.parse(r.uri)) }, {
                             Recents.retirer(ctx, r.uri)
                             recents = Recents.liste(ctx)
                         })
                         HorizontalDivider(color = Color(0xFFEEEEEE))
+                    }
+                    if (autres.isNotEmpty()) {
+                        item {
+                            Text(stringResource(R.string.autres_postes_titre), Modifier.fillMaxWidth().background(Color(0xFFF7F7F7))
+                                .padding(horizontal = 12.dp, vertical = 6.dp), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF555555))
+                        }
+                        items(autres, key = { "autre|" + it.compte.id + it.chemin }) { f ->
+                            LigneAutrePoste(f) { telechargement = f }
+                            HorizontalDivider(color = Color(0xFFEEEEEE))
+                        }
                     }
                 }
             }
@@ -154,6 +183,16 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
         parcourir = { n -> ecranCompte = false; versionCompte++; voir(n) })
     parcourir?.let { n -> EcranFichiers(n, fermer = { parcourir = null }, ouvrir = ouvrir) }
     if (aide) EcranAide { aide = false }
+    telechargement?.let { f ->
+        AlertDialog(onDismissRequest = {}, confirmButton = {}, title = { Text(stringResource(R.string.accueil_ouvrir)) },
+            text = { Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(24.dp)); Spacer(Modifier.width(12.dp))
+                Text(stringResource(R.string.autres_telechargement, f.nom, f.lieu)) } })
+    }
+    erreurAutre?.let { m ->
+        AlertDialog(onDismissRequest = { erreurAutre = null }, confirmButton = { TextButton(onClick = { erreurAutre = null }) { Text("OK") } },
+            title = { Text(stringResource(R.string.accueil_ouvrir)) }, text = { Text(m) })
+    }
     if (reglagesIa) ReglagesIa { reglagesIa = false }
 }
 
@@ -180,6 +219,24 @@ private fun LigneRecent(r: Recent, ouvrir: () -> Unit, retirer: () -> Unit) {
         }
         IconButton(onClick = retirer) {
             Icon(Icons.Default.Close, stringResource(R.string.retirer_liste), tint = Color.Gray)
+        }
+    }
+}
+
+@Composable
+private fun LigneAutrePoste(f: FichierPoste, ouvrir: () -> Unit) {
+    val date = try { java.time.LocalDateTime.parse(f.date).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() } catch (_: Exception) { 0L }
+    Row(Modifier.fillMaxWidth().clickable(onClick = ouvrir).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(40.dp, 52.dp).border(1.dp, Color(0xFFCFCFCF)).background(Color.White), contentAlignment = Alignment.Center) {
+            Icon(Icones.get("synchro", Color(0xFF0F6CBD)), null, tint = Color.Unspecified)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(f.nom, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(stringResource(if (f.ouvert) R.string.autres_ouvert_sur else R.string.autres_vu_sur, f.poste) +
+                (if (date > 0) " · " + dateFr(date) else "") + " · " + f.lieu, fontSize = 12.sp, color = Color.Gray, maxLines = 2,
+                overflow = TextOverflow.Ellipsis)
         }
     }
 }

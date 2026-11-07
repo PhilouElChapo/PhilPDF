@@ -823,4 +823,9 @@
     <string name="net_vrai_texte">%1$d Seite(n) enthalten echten Text (kein Scan): Bereinigt werden sie zu einem Bild; ihr Text ist nach der Texterkennung (OCR) wieder auffindbar.</string>
     <string name="net_seulement_scans">Nur die Scans (%1$d)</string>
     <string name="net_quand_meme">Trotzdem bereinigen</string>
+    <string name="autres_postes_titre">Auf Ihren anderen Computern (auf einem Drive)</string>
+    <string name="autres_ouvert_sur">Geöffnet auf %1$s</string>
+    <string name="autres_vu_sur">Zuletzt auf %1$s</string>
+    <string name="autres_telechargement">„%1$s“ wird von %2$s geladen...</string>
+    <string name="autres_echec">„%1$s“ konnte nicht geöffnet werden: %2$s</string>
 </resources>
