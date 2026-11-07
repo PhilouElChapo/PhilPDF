@@ -399,7 +399,7 @@ def faux_classer(self):
 DIA.DialogueClasser.exec = faux_classer
 ancien = o.chemin
 w.lancer_outil("ia_classer")
-attendu = os.path.join(rangement, "2026-10-05 Dupontel – facture octobre.pdf")
+attendu = os.path.join(rangement, "Dupontel – facture octobre – 2026-10-05.pdf")
 verif(o.chemin == attendu and os.path.exists(attendu) and not os.path.exists(ancien), "IA : renommé et classé (fichier déplacé)")
 verif(AP.dossier_appris(w.params, "DUPONTEL") == rangement, "IA : dossier appris pour cet expéditeur")
 reponses.append({"date": "2026-11-05", "expediteur": "Dupontel", "objet": "facture novembre", "dossier": "", "echeances": []})
@@ -512,7 +512,7 @@ IA.demander = lambda params, consignes, texte, **k: {"mots": ["facture"], "exped
                                                      "date_debut": "2026-10-01", "date_fin": "2026-10-31"}
 dr.question.setText("la facture Dupontel d'octobre")
 res = dr.chercher()
-verif(res and res[0]["nom"] == "2026-10-05 Dupontel – facture octobre.pdf", f"recherche : question en français → bon document ({[r['nom'] for r in res][:3]})")
+verif(res and res[0]["nom"] == "Dupontel – facture octobre – 2026-10-05.pdf", f"recherche : question en français → bon document ({[r['nom'] for r in res][:3]})")
 capture(dr, "37_recherche.png")
 IA.demander = lambda params, consignes, texte, **k: (_ for _ in ()).throw(IA.ErreurIA("hors ligne"))
 dr.question.setText("préavis")
