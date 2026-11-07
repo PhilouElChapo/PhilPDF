@@ -1718,6 +1718,12 @@ class Fenetre(MixinCoteACote, QMainWindow):
         elif oid == "ia_classer":
             from .dialogues_ia import classer
             classer(self, o)
+        elif oid == "ia_expliquer":
+            from .dialogues_ia import expliquer
+            expliquer(self, o)
+        elif oid == "ia_remplir":
+            from .dialogues_ia import remplir_formulaire
+            remplir_formulaire(self, o)
         elif oid == "ia_traduire":
             from .dialogues_ia import traduire
             traduire(self, o)

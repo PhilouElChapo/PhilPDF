@@ -452,6 +452,15 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.86
+- IA : Expliquer simplement (Assistant IA) : courrier administratif, contrat, avis, ordonnance expliques en mots
+  simples : de quoi il s'agit, ce qu'on vous demande, avant quand, ce qu'il faut savoir, les mots compliques.
+  Meme fenetre que le resume : dates a mettre dans l'agenda ou sur l'Accueil, copier, m'envoyer, note sur la page 1.
+- IA : Remplir avec l'IA (Assistant IA) : vous dites ce que l'IA doit savoir (nom, adresse, dates...), elle propose
+  une valeur pour chaque champ du formulaire (rien d'invente, jamais la signature), vous cochez et corrigez dans un
+  tableau, puis c'est ecrit (Ctrl+Z annule). Ce qui manque pour aller plus loin est indique. Vos informations ne
+  sont gardees sur le poste que si vous cochez la case.
+
 0.9.85
 - Fichier ouvert depuis un Drive (Google Drive, OneDrive, Dropbox, Box) : son origine est gardee avec les recents
   et passe dans la session ; votre telephone (PhilPDF Android 1.20.0) le voit dans « Sur vos autres postes » et le

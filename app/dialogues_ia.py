@@ -6,8 +6,15 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, Q
                                QPushButton, QDialogButtonBox, QTextBrowser, QCheckBox, QProgressDialog, QFileDialog,
                                QMessageBox, QApplication, QListWidget, QListWidgetItem, QPlainTextEdit)
 
+import pymupdf as fitz
+
 from .langue import _
 from . import ia, apprentissage
+
+
+def boutons_fr(bb):
+    from .dialogues import boutons_fr as b
+    return b(bb)
 
 
 # ------------------------------------------------------------------ tache d'attente
@@ -1168,4 +1175,211 @@ def proposer_nom_scan(fenetre, onglet):
     ecrire("IA", f"nom proposé après numérisation : {n}")
     if choix.get("k") == "enr":
         fenetre.enregistrer(onglet, sous=True, nom_propose=n)
+    return n
+
+
+# ------------------------------------------------------------------ expliquer simplement
+CONSIGNES_EXPLIQUER = """Explique simplement ce document en {langue} à quelqu'un qui n'est pas spécialiste (courrier
+administratif, contrat, avis d'imposition, ordonnance, facture...). Réponds en JSON :
+{{"resume": "<texte en Markdown>", "echeances": [{{"date": "AAAA-MM-JJ", "heure": "HH:MM ou vide", "libelle": "<ce qu'il faut faire>"}}]}}
+Le Markdown suit exactement ce plan, avec ces titres (traduits dans la langue demandée) :
+### De quoi s'agit-il
+2 ou 3 phrases : qui écrit, à qui, pourquoi.
+### Ce qu'on vous demande
+Les actions concrètes, en liste (payer, répondre, signer, envoyer une pièce, prendre rendez-vous...), ou « Rien à faire ».
+### Avant quand
+Les dates limites, ou « Pas de date limite indiquée ».
+### Ce qu'il faut savoir
+Montants, ce qui se passe si rien n'est fait, droits et recours mentionnés.
+### Mots compliqués
+Au plus 5 mots ou sigles du document, chacun expliqué en une phrase (rubrique absente s'il n'y en a pas).
+Phrases courtes, vouvoiement, pas de jargon. N'invente rien : si une information manque, dis-le. Pour une ordonnance,
+reprends les médicaments, doses et durées tels qu'écrits, sans conseil médical en plus. « echeances » : seulement les
+dates où l'on doit faire quelque chose."""
+
+
+def expliquer(fenetre, onglet):
+    """Expliquer simplement : que me demande-t-on, avant quand. Meme fenetre que le resume (agenda, message, note)."""
+    from .langue import LANGUE, NOMS
+    params = fenetre.params
+    texte = ia.texte_document(onglet.doc)
+    if not texte.strip():
+        QMessageBox.information(fenetre, _("Expliquer simplement"), _(
+            "Ce document ne contient pas de texte (scan ?) : lancez d'abord « Reconnaître le texte »."))
+        return
+    if not preparer_envoi(fenetre, params, texte):
+        return
+    nom = {"fr": "français", "en": "anglais", "de": "allemand", "es": "espagnol", "it": "italien"}.get(LANGUE, NOMS.get(LANGUE, "français"))
+    consignes = CONSIGNES_EXPLIQUER.format(langue=nom) + f"\nDate du jour : {datetime.date.today().isoformat()}."
+    try:
+        r = executer(fenetre, _("L'IA lit le document pour vous l'expliquer..."),
+                     lambda: ia.demander(params, consignes, texte, json_attendu=True))
+    except Exception as e:
+        montrer_erreur(fenetre, e)
+        return
+    if isinstance(r, dict):
+        d = DialogueResume(fenetre, params, onglet, r)
+        d.setWindowTitle(_("Expliqué simplement — {nom}", nom=onglet.nom))
+        d.exec()
+
+
+# ------------------------------------------------------------------ remplir un formulaire avec l'IA
+CONSIGNES_REMPLIR = """Tu aides à remplir un formulaire PDF. On te donne le texte du document, la liste de ses champs
+(nom technique, libellé visible, type, choix possibles, valeur actuelle) et ce que la personne t'indique sur elle ou sur
+la démarche. Réponds en JSON : {"valeurs": {"<nom technique du champ>": "<valeur>"}, "manque": ["<information
+qu'il faudrait pour remplir un champ resté vide>"]}.
+Règles : ne remplis un champ que si l'information est donnée par la personne ou évidente d'après le document ; n'invente
+rien (ni numéro, ni date, ni adresse). Case à cocher : "oui" ou "non". Liste ou bouton radio : une des valeurs
+possibles, recopiée exactement. Dates au format du document (sinon JJ/MM/AAAA). Champ de signature : jamais."""
+
+
+def _champs_formulaire(doc):
+    out = []
+    for n, p in enumerate(doc):
+        for w in p.widgets() or []:
+            if w.field_type == fitz.PDF_WIDGET_TYPE_SIGNATURE or w.field_type == fitz.PDF_WIDGET_TYPE_BUTTON:
+                continue
+            if w.field_flags & 1:                         # lecture seule
+                continue
+            out.append({"page": n, "nom": w.field_name, "libelle": (w.field_label or "").strip(),
+                        "type": w.field_type_string, "choix": list(w.choice_values or []) if w.field_type in (
+                            fitz.PDF_WIDGET_TYPE_COMBOBOX, fitz.PDF_WIDGET_TYPE_LISTBOX) else
+                        ([w.on_state()] if w.field_type in (fitz.PDF_WIDGET_TYPE_RADIOBUTTON,) and w.on_state() else []),
+                        "valeur": w.field_value if not isinstance(w.field_value, bool) else ("oui" if w.field_value else "non"),
+                        "case": w.field_type == fitz.PDF_WIDGET_TYPE_CHECKBOX, "radio": w.field_type == fitz.PDF_WIDGET_TYPE_RADIOBUTTON})
+    return out
+
+
+class DialogueRemplirIA(QDialog):
+    """Valeurs proposees par l'IA, champ par champ : on coche ce qu'on garde, on corrige, puis « Remplir »."""
+
+    def __init__(self, parent, champs, valeurs, manque):
+        from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView
+        super().__init__(parent)
+        self.setWindowTitle(_("Remplir avec l'IA"))
+        self.resize(820, 560)
+        v = QVBoxLayout(self)
+        lb = QLabel(_("Vérifiez chaque valeur proposée : rien n'est écrit dans le formulaire avant « Remplir ». Décochez ce "
+                      "que vous ne voulez pas, corrigez dans la colonne « Valeur ». Ctrl+Z annule ensuite."))
+        lb.setWordWrap(True)
+        v.addWidget(lb)
+        self.lignes = [(c, str(valeurs[c["nom"]])) for c in champs if c["nom"] in valeurs and str(valeurs[c["nom"]]).strip()]
+        t = self.table = QTableWidget(len(self.lignes), 4)
+        t.setHorizontalHeaderLabels([_("Remplir"), _("Champ"), _("Valeur actuelle"), _("Valeur")])
+        t.verticalHeader().hide()
+        for r, (c, val) in enumerate(self.lignes):
+            k = QTableWidgetItem()
+            k.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            k.setCheckState(Qt.Checked if not str(c["valeur"] or "").strip() or str(c["valeur"]) in ("non", "Off") else Qt.Unchecked)
+            t.setItem(r, 0, k)
+            for col, x in ((1, (c["libelle"] or c["nom"]) + _(" (page {n})", n=c["page"] + 1)), (2, str(c["valeur"] or ""))):
+                it = QTableWidgetItem(x)
+                it.setFlags(Qt.ItemIsEnabled)
+                t.setItem(r, col, it)
+            t.setItem(r, 3, QTableWidgetItem(val))
+        hh = t.horizontalHeader()
+        hh.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        for col in (1, 2, 3):
+            hh.setSectionResizeMode(col, QHeaderView.Stretch)
+        v.addWidget(t, 1)
+        if not self.lignes:
+            v.addWidget(QLabel(_("L'IA n'a proposé aucune valeur.")))
+        if manque:
+            m = QLabel(_("Il manque, pour aller plus loin :") + "\n• " + "\n• ".join(str(x) for x in manque[:8]))
+            m.setWordWrap(True)
+            m.setStyleSheet("color:#8a5a00")
+            v.addWidget(m)
+        bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
+        bb.button(QDialogButtonBox.Ok).setText(_("Remplir"))
+        bb.button(QDialogButtonBox.Ok).setEnabled(bool(self.lignes))
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        v.addWidget(bb)
+
+    def choisis(self):
+        return [(c, self.table.item(r, 3).text()) for r, (c, _v) in enumerate(self.lignes)
+                if self.table.item(r, 0).checkState() == Qt.Checked]
+
+
+def remplir_formulaire(fenetre, onglet):
+    """Remplir un formulaire avec l'IA : vous dites ce qu'il faut savoir, l'IA propose, vous verifiez, puis c'est ecrit."""
+    import json as _json
+    params = fenetre.params
+    champs = _champs_formulaire(onglet.doc)
+    if not champs:
+        QMessageBox.information(fenetre, _("Remplir avec l'IA"), _(
+            "Ce document n'a pas de champs à remplir. « Créer un formulaire » (Outils) peut d'abord les ajouter."))
+        return
+    d = QDialog(fenetre)
+    d.setWindowTitle(_("Remplir avec l'IA"))
+    d.resize(640, 420)
+    v = QVBoxLayout(d)
+    lb = QLabel(_("{n} champ(s) à remplir. Dites à l'IA ce qu'elle doit savoir (nom, adresse, dates, numéros, choix...) : "
+                  "elle ne remplit que ce que vous lui donnez ou ce que le document dit clairement, et vous vérifiez "
+                  "tout avant que ce soit écrit.", n=len(champs)))
+    lb.setWordWrap(True)
+    v.addWidget(lb)
+    zone = QPlainTextEdit(params.get("ia_infos_formulaire", ""))
+    zone.setPlaceholderText(_("Ex. : Jean Martin, né le 12/03/1970 à Lyon, 3 rue des Lilas 06000 Nice, "
+                              "demande de renouvellement..."))
+    v.addWidget(zone, 1)
+    garder = QCheckBox(_("Garder ces informations sur ce poste pour la prochaine fois (jamais envoyées ailleurs qu'à l'IA)"))
+    garder.setChecked(bool(params.get("ia_infos_formulaire")))
+    v.addWidget(garder)
+    bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
+    bb.button(QDialogButtonBox.Ok).setText(_("Proposer les valeurs"))
+    bb.accepted.connect(d.accept)
+    bb.rejected.connect(d.reject)
+    v.addWidget(bb)
+    if not d.exec():
+        return
+    infos = zone.toPlainText().strip()
+    params["ia_infos_formulaire"] = infos if garder.isChecked() else ""
+    params.enregistrer()
+    texte = ia.texte_document(onglet.doc, max_car=40000)
+    description = [{k: c[k] for k in ("nom", "libelle", "type", "choix", "valeur")} for c in champs]
+    envoi = (_json.dumps({"champs": description}, ensure_ascii=False) + "\n\nCe que la personne indique :\n" + (infos or "(rien)") +
+             "\n\nTexte du document :\n" + texte)
+    if not preparer_envoi(fenetre, params, infos + "\n" + texte):
+        return
+    try:
+        r = executer(fenetre, _("L'IA lit le formulaire..."),
+                     lambda: ia.demander(params, CONSIGNES_REMPLIR, envoi, json_attendu=True, max_jetons=6000))
+    except Exception as e:
+        montrer_erreur(fenetre, e)
+        return
+    valeurs = (r or {}).get("valeurs") if isinstance(r, dict) else None
+    if not isinstance(valeurs, dict):
+        montrer_erreur(fenetre, _("Réponse de l'IA illisible."))
+        return
+    dr = DialogueRemplirIA(fenetre, champs, valeurs, (r or {}).get("manque") or [])
+    if not dr.exec():
+        return
+    choisis = dr.choisis()
+    if not choisis:
+        return
+    onglet.memoriser(_("Remplir avec l'IA"))
+    n = remplir_valeurs(onglet.doc, choisis)
+    onglet.apres_modif([_("{n} champ(s) rempli(s) avec l'IA : relisez avant d'enregistrer.", n=n)])
+
+
+def remplir_valeurs(doc, choisis):
+    """Ecrit les valeurs [(champ, valeur)] dans les champs du document ; renvoie le nombre de champs remplis."""
+    n = 0
+    for c, val in choisis:
+        for w in doc[c["page"]].widgets() or []:
+            if w.field_name != c["nom"]:
+                continue
+            if c["case"]:
+                w.field_value = w.on_state() if val.strip().lower() in ("oui", "yes", "true", "1", "x", "ja", "sí", "si", "sì") else "Off"
+            elif c["radio"]:
+                if val.strip() != str(w.on_state()):
+                    continue
+                w.field_value = w.on_state()
+            else:
+                w.field_value = val
+            w.update()
+            n += 1
+            if not c["radio"]:
+                break
     return n

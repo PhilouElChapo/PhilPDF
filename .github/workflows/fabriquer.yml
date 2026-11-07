@@ -90,6 +90,9 @@ jobs:
       - name: Test de la ligne allongee (titre de bandeau modifie)
         run: python tests/test_ligne_allongee.py
 
+      - name: Test de Remplir avec l'IA (champs lus et ecrits)
+        run: python tests/test_ia_remplir.py
+
       - name: Test de la session partagee
         run: python tests/test_session.py
 

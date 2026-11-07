@@ -84,6 +84,12 @@ OUTILS = [
     ("ia_classer", "ia", "archiver", _('Renommer et classer'), _('Nom et dossier proposés, appris'),
      _("L'IA lit le document et propose un nom (expéditeur, objet, date) et le dossier où le ranger ; "
        "PhilPDF retient vos choix pour chaque expéditeur, sur tous vos postes."), True),
+    ("ia_expliquer", "ia", "aide", _('Expliquer simplement'), _('Que me demande-t-on, avant quand'),
+     _("Courrier administratif, contrat, avis, ordonnance : l'IA l'explique en mots simples (ce qu'on vous demande, "
+       "avant quand, ce qu'il faut savoir, les mots compliqués) ; dates à mettre dans l'agenda."), True),
+    ("ia_remplir", "ia", "formulaire", _("Remplir avec l'IA"), _('Formulaire rempli, vous vérifiez'),
+     _("Dites à l'IA ce qu'elle doit savoir (nom, adresse, dates...) : elle propose une valeur pour chaque champ du "
+       "formulaire, vous vérifiez et corrigez, puis c'est écrit. Rien n'est inventé."), True),
     ("ia_comparer", "ia", "comparer_ia", _('Comparer avec explication'), _('Différences surlignées et expliquées'),
      _("Deux versions d'un document : différences surlignées, puis expliquées en français par l'IA."), True),
     ("ia_traduire", "ia", "langue", _('Traduire le document'), _('Mise en page conservée'),
