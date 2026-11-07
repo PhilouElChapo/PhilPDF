@@ -52,6 +52,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.Dispatchers
@@ -366,6 +367,10 @@ private fun libelleVolet(v: Volet): String = stringResource(when (v) {
 private fun DispositionTelephone(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, fermer: () -> Unit) {
     var barres by remember { mutableStateOf(true) }
     var tiroir by remember { mutableStateOf<Volet?>(null) }
+    // hauteur des barres du haut et du bas (mesurees : elles grandissent avec la police)
+    val densite = LocalDensity.current
+    var hHaut by remember { mutableStateOf(56.dp) }
+    var hBas by remember { mutableStateOf(80.dp) }
     LaunchedEffect(etat.ouvrirSigner) { if (etat.ouvrirSigner) { tiroir = Volet.SIGNER; etat.ouvrirSigner = false } }
     val portee = rememberCoroutineScope()
     // en faisant defiler vers le bas, les barres se cachent ; vers le haut, elles reviennent
@@ -378,9 +383,11 @@ private fun DispositionTelephone(etat: EtatLecteur, tailles: List<Pair<Float, Fl
         }
     }
     Box(Modifier.fillMaxSize().background(Color(0xFFE6E6E6))) {
-        Pages(etat, tailles, Modifier.fillMaxSize().nestedScroll(defilement), auToucher = { barres = !barres })
+        Pages(etat, tailles, Modifier.fillMaxSize().nestedScroll(defilement), auToucher = { barres = !barres }, haut = hHaut, bas = hBas)
         AnimatedVisibility(barres, Modifier.align(Alignment.TopCenter)) {
-            Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 4.dp, vertical = 2.dp),
+            Row(Modifier.fillMaxWidth().background(Color.White)
+                .onSizeChanged { if (it.height > 0) hHaut = with(densite) { it.height.toDp() } }
+                .padding(horizontal = 4.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = fermer) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.retour)) }
                 Text(etat.doc.nom, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
@@ -399,9 +406,10 @@ private fun DispositionTelephone(etat: EtatLecteur, tailles: List<Pair<Float, Fl
                 TextButton(onClick = { etat.annot.outil = Outil.MAIN; etat.fantome = null; etat.aPoser = null }) { Text(stringResource(R.string.termine), color = Color.White) }
             }
         }
-        IndicateurPage(etat, tailles.size, Modifier.align(Alignment.BottomEnd).padding(bottom = if (barres) 72.dp else 0.dp))
+        IndicateurPage(etat, tailles.size, Modifier.align(Alignment.BottomEnd).padding(bottom = if (barres) hBas else 0.dp))
         AnimatedVisibility(barres, Modifier.align(Alignment.BottomCenter)) {
-            NavigationBar(containerColor = Color.White, tonalElevation = 2.dp) {
+            NavigationBar(Modifier.onSizeChanged { if (it.height > 0) hBas = with(densite) { it.height.toDp() } },
+                containerColor = Color.White, tonalElevation = 2.dp) {
                 listOf(Volet.VIGNETTES to "organiser", Volet.RECHERCHE to "rechercher", Volet.ANNOTER to "surligner",
                     Volet.SIGNER to "signer", Volet.PLUS to "plus").forEach { (v, icone) ->
                     NavigationBarItem(selected = tiroir == v, onClick = { tiroir = v },
@@ -594,7 +602,8 @@ private fun Recherche(etat: EtatLecteur, aller: (Int) -> Unit) {
 
 // ================================================================ pages
 @Composable
-private fun Pages(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, modifier: Modifier, auToucher: (() -> Unit)? = null) {
+private fun Pages(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, modifier: Modifier, auToucher: (() -> Unit)? = null,
+                  haut: androidx.compose.ui.unit.Dp = 0.dp, bas: androidx.compose.ui.unit.Dp = 0.dp) {
     val lire = etat.annot.outil == Outil.MAIN && etat.deplacement == null
     BoxWithConstraints(modifier
         .pointerInput(lire) {
@@ -608,7 +617,10 @@ private fun Pages(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, modifier
         val largeurPx = with(LocalDensity.current) { (maxWidth - 16.dp).toPx().toInt() }
         LazyColumn(state = etat.liste, userScrollEnabled = lire, modifier = Modifier.fillMaxSize().graphicsLayer(
             scaleX = etat.echelle, scaleY = etat.echelle, translationX = etat.decalage.x, translationY = etat.decalage.y),
-            contentPadding = PaddingValues(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // haut, bas : place des barres posees par-dessus (telephone) : le debut de la premiere page et la fin de
+            // la derniere ne passent jamais dessous
+            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp + haut, bottom = 8.dp + bas),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(tailles) { n, (w, h) ->
                 ImagePage(etat, n, largeurPx, w, h, Modifier.fillMaxWidth(), auToucher = auToucher)
             }

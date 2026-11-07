@@ -10,6 +10,11 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.18.4
+- Lecteur (telephone) : le haut de la premiere page n'est plus cache par la barre du haut, ni la fin de la derniere
+  par la barre du bas (leur hauteur est mesuree : elle grandit avec la police) ; le numero de page reste au-dessus
+  de la barre du bas.
+
 1.18.3
 - Redresser : « Annuler » et « Appliquer » restent fixes en bas, au-dessus de la barre d'Android (avec une grande
   police, ils passaient dessous et se touchaient mal) ; le haut de la fenetre defile.
