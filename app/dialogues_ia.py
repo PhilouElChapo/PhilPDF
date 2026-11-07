@@ -481,10 +481,12 @@ ex. CPAM, URSSAF, DGFiP, EDF, Maître Dupont>", "objet": "<objet en 2 à 6 mots>
 
 
 def nom_propose(r):
+    """« Expediteur – objet – AAAA-MM-JJ.pdf » : la date a la fin, pour qu'un meme expediteur et un meme objet se
+    rangent ensemble, dans l'ordre chronologique."""
     d = _date_valide(r.get("date")) or datetime.date.today().isoformat()
     exp = (r.get("expediteur") or "").strip()
     obj = (r.get("objet") or "").strip()
-    nom = " ".join(x for x in (d, exp) if x) + (f" – {obj}" if obj else "")
+    nom = " – ".join(x for x in (exp, obj, d) if x)
     nom = re.sub(r'[\\/:*?"<>|]+', " ", nom)
     return re.sub(r"\s+", " ", nom).strip()[:150] + ".pdf"
 
@@ -1100,7 +1102,7 @@ ex. CPAM, URSSAF, DGFiP, EDF, Maître Dupont>", "objet": "<objet en 2 à 6 mots>
 
 def proposer_nom_scan(fenetre, onglet):
     """L'IA lit le document numerise (son texte reconnu, sinon l'image de sa premiere page) et propose
-    « Date Expediteur – objet » ; l'utilisateur corrige, puis enregistre sous ce nom ou le garde pour l'onglet.
+    « Expediteur – objet – date » ; l'utilisateur corrige, puis enregistre sous ce nom ou le garde pour l'onglet.
     Renvoie le nom choisi, ou None."""
     params = fenetre.params
     if not verifier_cle(fenetre, params):

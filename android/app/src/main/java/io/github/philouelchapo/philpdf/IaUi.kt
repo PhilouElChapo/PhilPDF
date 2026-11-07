@@ -436,11 +436,12 @@ private const val CONSIGNES_NOMMER = """Tu aides à nommer un document qui vient
 ex. CPAM, URSSAF, DGFiP, EDF, Maître Dupont>", "objet": "<objet en 2 à 6 mots>",
 "type": "<facture, courrier, contrat, relevé, avis, attestation, ordonnance...>"}"""
 
-/** « Date Expediteur – objet.pdf », comme sous Windows (dialogues_ia.nom_propose). */
+/** « Expediteur – objet – AAAA-MM-JJ.pdf » (date a la fin : un meme document se range dans l'ordre chronologique),
+ *  comme sous Windows (dialogues_ia.nom_propose). */
 fun nomPropose(j: JSONObject): String {
     val d = dateValide(j.optString("date")) ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).format(java.util.Date())
     val exp = j.optString("expediteur").trim(); val obj = j.optString("objet").trim()
-    val n = listOf(d, exp).filter { it.isNotEmpty() }.joinToString(" ") + if (obj.isNotEmpty()) " – $obj" else ""
+    val n = listOf(exp, obj, d).filter { it.isNotEmpty() }.joinToString(" – ")
     return n.replace(Regex("[\\\\/:*?\"<>|]+"), " ").replace(Regex("\\s+"), " ").trim().take(150) + ".pdf"
 }
 

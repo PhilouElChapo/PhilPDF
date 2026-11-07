@@ -712,7 +712,6 @@
  "L'autorisation est enregistrée, mais la connexion de test a échoué : {e}": "L'autorizzazione è salvata, ma la connessione di prova non è riuscita: {e}",
  "L'autorisation {nom} a expiré ou a été retirée ({raison}) : autorisez à nouveau.": "L'autorizzazione {nom} è scaduta o è stata revocata ({raison}): autorizza di nuovo.",
  "L'IA analyse les différences...": "L'IA analizza le differenze...",
- "L'IA lit le document et propose un nom (date, expéditeur, objet) et le dossier où le ranger ; PhilPDF retient vos choix pour chaque expéditeur, sur tous vos postes.": "L'IA legge il documento e propone un nome (data, mittente, oggetto) e la cartella dove archiviarlo; PhilPDF ricorda le tue scelte per ogni mittente, su tutti i computer.",
  "L'IA lit le document...": "L'IA legge il documento...",
  "L'IA lit votre question...": "L'IA legge la tua domanda...",
  "L'IA n'a pas pu répondre :\n{e}": "L'IA non ha potuto rispondere:\n{e}",
@@ -2942,7 +2941,6 @@
  "{n} document(s) vont être envoyés à l'IA ({ia}) pour proposer leur nom.": "{n} documento/i saranno inviati all'IA ({ia}) per proporne il nome.",
  "pas de nom proposé par l'IA : nom selon le modèle": "nessun nome proposto dall'IA: nome secondo il modello",
  "Selon le modèle ci-dessous": "Secondo il modello qui sotto",
- "Proposé par l'IA : date, expéditeur, objet": "Proposto dall'IA: data, mittente, oggetto",
  "Pas de tri": "Nessun ordinamento",
  "Un sous-dossier par expéditeur (CPAM, EDF...)": "Una sottocartella per mittente (Agenzia Entrate, luce...)",
  "Un sous-dossier par type (facture, courrier...)": "Una sottocartella per tipo (fattura, lettera...)",
@@ -2963,7 +2961,6 @@
  "{n} fichier(s) coché(s) :": "{n} file selezionati:",
  "Chaque fichier dans son onglet": "Ogni file nella sua scheda",
  "Assembler ces fichiers en un seul PDF (ordre modifiable)": "Unire questi file in un solo PDF (ordine modificabile)",
- "Traitement par lot : nom proposé par l'IA (date, expéditeur, objet) et tri en sous-dossiers ; vous voyez les noms avant": "Elaborazione in blocco: nome proposto dall'IA (data, mittente, oggetto) e ordinamento in sottocartelle; vede prima i nomi",
  "Traitement par lot...": "Elaborazione in blocco...",
  "OCR, alléger, filigrane, numérotation Bates, PDF/A, renommer": "OCR, alleggerire, filigrana, numerazione Bates, PDF/A, rinominare",
  "Imprimer tous ces fichiers": "Stampa tutti questi file",
@@ -2979,5 +2976,8 @@
  "Redresser...": "Raddrizza...",
  "Envoyer par e-mail à la fin (les fichiers produits, joints au même message)": "Invia per e-mail alla fine (i file prodotti, allegati allo stesso messaggio)",
  "Les fichiers produits, joints au même message (avant de lancer : les fichiers de la liste, tels quels)": "I file prodotti, allegati allo stesso messaggio (prima di avviare: i file dell'elenco, così come sono)",
- "Tous ces fichiers joints au même message": "Tutti questi file allegati allo stesso messaggio"
+ "Tous ces fichiers joints au même message": "Tutti questi file allegati allo stesso messaggio",
+ "Proposé par l'IA : expéditeur, objet, date": "Proposto dall'IA: mittente, oggetto, data",
+ "L'IA lit le document et propose un nom (expéditeur, objet, date) et le dossier où le ranger ; PhilPDF retient vos choix pour chaque expéditeur, sur tous vos postes.": "L'IA legge il documento e propone un nome (mittente, oggetto, data) e la cartella dove archiviarlo; PhilPDF ricorda le tue scelte per ogni mittente, su tutti i computer.",
+ "Traitement par lot : nom proposé par l'IA (expéditeur, objet, date) et tri en sous-dossiers ; vous voyez les noms avant": "Elaborazione in blocco: nome proposto dall'IA (mittente, oggetto, data) e ordinamento in sottocartelle; vede prima i nomi"
 }

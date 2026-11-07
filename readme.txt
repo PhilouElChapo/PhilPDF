@@ -10,6 +10,12 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.18.2
+- Nom propose par l'IA apres une numerisation : « Expediteur - objet - date » (la date a la fin, comme sous
+  Windows : un meme document se range dans l'ordre chronologique).
+- Petit telephone et telephone a l'horizontale : aucun texte coupe (essai automatique a chaque version, 5 langues) ;
+  Signer a la main, Redresser, Partager, Organiser, outils Commenter et Formulaire corriges.
+
 1.18.0
 - Numeriser : case « Proposer un nom avec l'IA » en bas de l'ecran. A la fin, apres votre accord, l'IA lit la
   premiere page et propose un nom (date, expediteur, objet, ex. « 2026-11-05 CPAM - Attestation de droits.pdf ») ;
@@ -395,6 +401,11 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.80
+- Nom propose par l'IA (apres une numerisation, Renommer et classer, traitement par lot) : « Expediteur - objet -
+  date » (ex. « EDF - Facture electricite - 2026-10-12.pdf ») : la date a la fin, un meme document se range dans
+  l'ordre chronologique. Traitement par lot : modele de nom par defaut « {nom} {date} ».
 
 0.9.79
 - Scanners TWAIN (Avision AD225WN...) : les pages passent par un fichier ecrit par le pilote (transfert « par

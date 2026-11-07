@@ -120,7 +120,7 @@ except ia.ErreurIA as e:
 # --- renommer et classer : JSON, nom, apprentissage partage, echeances
 from app.dialogues_ia import nom_propose, CONSIGNES_CLASSER
 r = ia.demander(p, CONSIGNES_CLASSER, "Courrier CPAM", json_attendu=True)
-verifie(nom_propose(r) == "2026-10-20 CPAM des Alpes-Maritimes – rejet de facturation.pdf", "nom proposé : date, expéditeur, objet")
+verifie(nom_propose(r) == "CPAM des Alpes-Maritimes – rejet de facturation – 2026-10-20.pdf", "nom proposé : expéditeur, objet, date, objet")
 class Params(dict):
     def enregistrer(self): pass
 docs = os.path.join(base, "Documents"); os.makedirs(docs)

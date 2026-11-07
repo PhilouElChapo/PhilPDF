@@ -296,7 +296,7 @@ class DialogueLot(QDialog):
         self.mode_nom = QComboBox()
         self.mode_nom.setObjectName("lot_mode_nom")
         self.mode_nom.addItem(_("Selon le modèle ci-dessous"), "modele")
-        self.mode_nom.addItem(_("Proposé par l'IA : date, expéditeur, objet"), "ia")
+        self.mode_nom.addItem(_("Proposé par l'IA : expéditeur, objet, date"), "ia")
         self.mode_nom.currentIndexChanged.connect(self._mode_nom_change)
         fa.addRow("      " + _("Nom"), self.mode_nom)
         self.tri = QComboBox()
@@ -317,7 +317,7 @@ class DialogueLot(QDialog):
         hia.addWidget(self.b_ia)
         hia.addStretch(1)
         fa.addRow("      ", hia)
-        self.modele = QLineEdit("{date} {nom}")
+        self.modele = QLineEdit("{nom} {date}")       # la date a la fin : ordre chronologique d'un meme document
         self.modele.setObjectName("lot_modele")
         self.modele.setToolTip(_("{nom} nom actuel, {n} numéro (001, 002...), {date} date du fichier, "
                                  "{aujourdhui} date du jour, {titre} titre du PDF"))

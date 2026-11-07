@@ -552,7 +552,7 @@ class PageAccueil(QWidget):
                 ("ouvrir", _("Ouvrir"), "ouvrir", _("Chaque fichier dans son onglet")),
                 ("combiner", _("Combiner"), "combiner", _("Assembler ces fichiers en un seul PDF (ordre modifiable)")),
                 ("archiver", _("Renommer et classer avec l'IA..."), "classer",
-                 _("Traitement par lot : nom proposé par l'IA (date, expéditeur, objet) et tri en sous-dossiers ; vous voyez les noms avant")),
+                 _("Traitement par lot : nom proposé par l'IA (expéditeur, objet, date) et tri en sous-dossiers ; vous voyez les noms avant")),
                 ("ocr", _("Traitement par lot..."), "lot", _("OCR, alléger, filigrane, numérotation Bates, PDF/A, renommer")),
                 ("imprimer", _("Imprimer"), "imprimer", _("Imprimer tous ces fichiers")),
                 ("courriel", _("Envoyer par e-mail..."), "courriel", _("Tous ces fichiers joints au même message")),

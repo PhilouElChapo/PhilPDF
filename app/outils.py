@@ -82,7 +82,7 @@ OUTILS = [
     ("ia_resume", "ia", "ia", _("Résumer avec l'IA"), _('Résumé, points clefs, échéances'),
      _('Envoie le texte à Claude ou Gemini avec votre clef API, seulement quand vous cliquez.'), True),
     ("ia_classer", "ia", "archiver", _('Renommer et classer'), _('Nom et dossier proposés, appris'),
-     _("L'IA lit le document et propose un nom (date, expéditeur, objet) et le dossier où le ranger ; "
+     _("L'IA lit le document et propose un nom (expéditeur, objet, date) et le dossier où le ranger ; "
        "PhilPDF retient vos choix pour chaque expéditeur, sur tous vos postes."), True),
     ("ia_comparer", "ia", "comparer_ia", _('Comparer avec explication'), _('Différences surlignées et expliquées'),
      _("Deux versions d'un document : différences surlignées, puis expliquées en français par l'IA."), True),

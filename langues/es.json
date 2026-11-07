@@ -712,7 +712,6 @@
  "L'autorisation est enregistrée, mais la connexion de test a échoué : {e}": "La autorización está guardada, pero la conexión de prueba ha fallado: {e}",
  "L'autorisation {nom} a expiré ou a été retirée ({raison}) : autorisez à nouveau.": "La autorización {nom} ha caducado o se ha retirado ({raison}): autorice de nuevo.",
  "L'IA analyse les différences...": "La IA analiza las diferencias...",
- "L'IA lit le document et propose un nom (date, expéditeur, objet) et le dossier où le ranger ; PhilPDF retient vos choix pour chaque expéditeur, sur tous vos postes.": "La IA lee el documento y propone un nombre (fecha, remitente, asunto) y la carpeta donde guardarlo; PhilPDF recuerda sus elecciones para cada remitente, en todos sus equipos.",
  "L'IA lit le document...": "La IA lee el documento...",
  "L'IA lit votre question...": "La IA lee su pregunta...",
  "L'IA n'a pas pu répondre :\n{e}": "La IA no ha podido responder:\n{e}",
@@ -2942,7 +2941,6 @@
  "{n} document(s) vont être envoyés à l'IA ({ia}) pour proposer leur nom.": "Se enviarán {n} documento(s) a la IA ({ia}) para proponer su nombre.",
  "pas de nom proposé par l'IA : nom selon le modèle": "la IA no ha propuesto nombre: nombre según el modelo",
  "Selon le modèle ci-dessous": "Según el modelo de abajo",
- "Proposé par l'IA : date, expéditeur, objet": "Propuesto por la IA: fecha, remitente, asunto",
  "Pas de tri": "Sin ordenar",
  "Un sous-dossier par expéditeur (CPAM, EDF...)": "Una subcarpeta por remitente (Hacienda, eléctrica...)",
  "Un sous-dossier par type (facture, courrier...)": "Una subcarpeta por tipo (factura, carta...)",
@@ -2963,7 +2961,6 @@
  "{n} fichier(s) coché(s) :": "{n} archivo(s) marcado(s):",
  "Chaque fichier dans son onglet": "Cada archivo en su pestaña",
  "Assembler ces fichiers en un seul PDF (ordre modifiable)": "Unir estos archivos en un solo PDF (orden modificable)",
- "Traitement par lot : nom proposé par l'IA (date, expéditeur, objet) et tri en sous-dossiers ; vous voyez les noms avant": "Procesamiento por lotes: nombre propuesto por la IA (fecha, remitente, asunto) y orden en subcarpetas; ve los nombres antes",
  "Traitement par lot...": "Procesamiento por lotes...",
  "OCR, alléger, filigrane, numérotation Bates, PDF/A, renommer": "OCR, aligerar, marca de agua, numeración Bates, PDF/A, renombrar",
  "Imprimer tous ces fichiers": "Imprimir todos estos archivos",
@@ -2979,5 +2976,8 @@
  "Redresser...": "Enderezar...",
  "Envoyer par e-mail à la fin (les fichiers produits, joints au même message)": "Enviar por correo al final (los archivos producidos, adjuntos al mismo mensaje)",
  "Les fichiers produits, joints au même message (avant de lancer : les fichiers de la liste, tels quels)": "Los archivos producidos, adjuntos al mismo mensaje (antes de iniciar: los archivos de la lista, tal cual)",
- "Tous ces fichiers joints au même message": "Todos estos archivos adjuntos al mismo mensaje"
+ "Tous ces fichiers joints au même message": "Todos estos archivos adjuntos al mismo mensaje",
+ "Proposé par l'IA : expéditeur, objet, date": "Propuesto por la IA: remitente, asunto, fecha",
+ "L'IA lit le document et propose un nom (expéditeur, objet, date) et le dossier où le ranger ; PhilPDF retient vos choix pour chaque expéditeur, sur tous vos postes.": "La IA lee el documento y propone un nombre (remitente, asunto, fecha) y la carpeta donde guardarlo; PhilPDF recuerda sus elecciones para cada remitente, en todos sus equipos.",
+ "Traitement par lot : nom proposé par l'IA (expéditeur, objet, date) et tri en sous-dossiers ; vous voyez les noms avant": "Procesamiento por lotes: nombre propuesto por la IA (remitente, asunto, fecha) y orden en subcarpetas; ve los nombres antes"
 }

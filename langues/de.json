@@ -712,7 +712,6 @@
  "L'autorisation est enregistrée, mais la connexion de test a échoué : {e}": "Die Autorisierung ist gespeichert, aber die Testverbindung ist fehlgeschlagen: {e}",
  "L'autorisation {nom} a expiré ou a été retirée ({raison}) : autorisez à nouveau.": "Die Autorisierung {nom} ist abgelaufen oder wurde entzogen ({raison}): bitte erneut autorisieren.",
  "L'IA analyse les différences...": "Die KI analysiert die Unterschiede...",
- "L'IA lit le document et propose un nom (date, expéditeur, objet) et le dossier où le ranger ; PhilPDF retient vos choix pour chaque expéditeur, sur tous vos postes.": "Die KI liest das Dokument und schlägt einen Namen (Datum, Absender, Betreff) und den Ablageordner vor; PhilPDF merkt sich Ihre Wahl für jeden Absender, auf allen Ihren Rechnern.",
  "L'IA lit le document...": "Die KI liest das Dokument...",
  "L'IA lit votre question...": "Die KI liest Ihre Frage...",
  "L'IA n'a pas pu répondre :\n{e}": "Die KI konnte nicht antworten:\n{e}",
@@ -2942,7 +2941,6 @@
  "{n} document(s) vont être envoyés à l'IA ({ia}) pour proposer leur nom.": "{n} Dokument(e) werden an die KI ({ia}) gesendet, um ihren Namen vorzuschlagen.",
  "pas de nom proposé par l'IA : nom selon le modèle": "kein Name von der KI vorgeschlagen: Name nach dem Muster",
  "Selon le modèle ci-dessous": "Nach dem Muster unten",
- "Proposé par l'IA : date, expéditeur, objet": "Von der KI vorgeschlagen: Datum, Absender, Betreff",
  "Pas de tri": "Nicht sortieren",
  "Un sous-dossier par expéditeur (CPAM, EDF...)": "Ein Unterordner pro Absender (Krankenkasse, Stromanbieter...)",
  "Un sous-dossier par type (facture, courrier...)": "Ein Unterordner pro Art (Rechnung, Brief...)",
@@ -2963,7 +2961,6 @@
  "{n} fichier(s) coché(s) :": "{n} Datei(en) angekreuzt:",
  "Chaque fichier dans son onglet": "Jede Datei in ihrer Registerkarte",
  "Assembler ces fichiers en un seul PDF (ordre modifiable)": "Diese Dateien zu einem PDF zusammenfügen (Reihenfolge änderbar)",
- "Traitement par lot : nom proposé par l'IA (date, expéditeur, objet) et tri en sous-dossiers ; vous voyez les noms avant": "Stapelverarbeitung: von der KI vorgeschlagener Name (Datum, Absender, Betreff) und Sortierung in Unterordner; Sie sehen die Namen vorher",
  "Traitement par lot...": "Stapelverarbeitung...",
  "OCR, alléger, filigrane, numérotation Bates, PDF/A, renommer": "OCR, verkleinern, Wasserzeichen, Bates-Nummerierung, PDF/A, umbenennen",
  "Imprimer tous ces fichiers": "Alle diese Dateien drucken",
@@ -2979,5 +2976,8 @@
  "Redresser...": "Begradigen...",
  "Envoyer par e-mail à la fin (les fichiers produits, joints au même message)": "Am Ende per E-Mail senden (die erzeugten Dateien, an dieselbe Nachricht angehängt)",
  "Les fichiers produits, joints au même message (avant de lancer : les fichiers de la liste, tels quels)": "Die erzeugten Dateien, an dieselbe Nachricht angehängt (vor dem Start: die Dateien der Liste, unverändert)",
- "Tous ces fichiers joints au même message": "Alle diese Dateien an dieselbe Nachricht angehängt"
+ "Tous ces fichiers joints au même message": "Alle diese Dateien an dieselbe Nachricht angehängt",
+ "Proposé par l'IA : expéditeur, objet, date": "Von der KI vorgeschlagen: Absender, Betreff, Datum",
+ "L'IA lit le document et propose un nom (expéditeur, objet, date) et le dossier où le ranger ; PhilPDF retient vos choix pour chaque expéditeur, sur tous vos postes.": "Die KI liest das Dokument und schlägt einen Namen (Absender, Betreff, Datum) und den Ablageordner vor; PhilPDF merkt sich Ihre Wahl für jeden Absender, auf allen Ihren Rechnern.",
+ "Traitement par lot : nom proposé par l'IA (expéditeur, objet, date) et tri en sous-dossiers ; vous voyez les noms avant": "Stapelverarbeitung: von der KI vorgeschlagener Name (Absender, Betreff, Datum) und Sortierung in Unterordner; Sie sehen die Namen vorher"
 }

@@ -712,7 +712,6 @@
  "L'autorisation est enregistrée, mais la connexion de test a échoué : {e}": "The authorization is saved, but the test connection failed: {e}",
  "L'autorisation {nom} a expiré ou a été retirée ({raison}) : autorisez à nouveau.": "The {nom} authorization expired or was revoked ({raison}): authorize again.",
  "L'IA analyse les différences...": "The AI is analyzing the differences...",
- "L'IA lit le document et propose un nom (date, expéditeur, objet) et le dossier où le ranger ; PhilPDF retient vos choix pour chaque expéditeur, sur tous vos postes.": "The AI reads the document and suggests a name (date, sender, subject) and the folder to file it in; PhilPDF remembers your choices for each sender, on all your computers.",
  "L'IA lit le document...": "The AI is reading the document...",
  "L'IA lit votre question...": "The AI is reading your question...",
  "L'IA n'a pas pu répondre :\n{e}": "The AI could not answer:\n{e}",
@@ -2951,7 +2950,6 @@
  "{n} document(s) vont être envoyés à l'IA ({ia}) pour proposer leur nom.": "{n} document(s) will be sent to the AI ({ia}) to suggest their name.",
  "pas de nom proposé par l'IA : nom selon le modèle": "no name suggested by the AI: name from the pattern",
  "Selon le modèle ci-dessous": "From the pattern below",
- "Proposé par l'IA : date, expéditeur, objet": "Suggested by the AI: date, sender, subject",
  "Pas de tri": "No sorting",
  "Un sous-dossier par expéditeur (CPAM, EDF...)": "One subfolder per sender (tax office, utility...)",
  "Un sous-dossier par type (facture, courrier...)": "One subfolder per type (invoice, letter...)",
@@ -2972,7 +2970,6 @@
  "{n} fichier(s) coché(s) :": "{n} file(s) ticked:",
  "Chaque fichier dans son onglet": "Each file in its own tab",
  "Assembler ces fichiers en un seul PDF (ordre modifiable)": "Combine these files into one PDF (order can be changed)",
- "Traitement par lot : nom proposé par l'IA (date, expéditeur, objet) et tri en sous-dossiers ; vous voyez les noms avant": "Batch processing: name suggested by the AI (date, sender, subject) and sorting into subfolders; you see the names first",
  "Traitement par lot...": "Batch processing...",
  "OCR, alléger, filigrane, numérotation Bates, PDF/A, renommer": "OCR, reduce size, watermark, Bates numbering, PDF/A, rename",
  "Imprimer tous ces fichiers": "Print all these files",
@@ -2988,5 +2985,8 @@
  "Redresser...": "Straighten...",
  "Envoyer par e-mail à la fin (les fichiers produits, joints au même message)": "Send by e-mail at the end (the produced files, attached to the same message)",
  "Les fichiers produits, joints au même message (avant de lancer : les fichiers de la liste, tels quels)": "The produced files, attached to the same message (before starting: the files in the list, as they are)",
- "Tous ces fichiers joints au même message": "All these files attached to the same message"
+ "Tous ces fichiers joints au même message": "All these files attached to the same message",
+ "Proposé par l'IA : expéditeur, objet, date": "Suggested by the AI: sender, subject, date",
+ "L'IA lit le document et propose un nom (expéditeur, objet, date) et le dossier où le ranger ; PhilPDF retient vos choix pour chaque expéditeur, sur tous vos postes.": "The AI reads the document and suggests a name (sender, subject, date) and the folder to file it in; PhilPDF remembers your choices for each sender, on all your computers.",
+ "Traitement par lot : nom proposé par l'IA (expéditeur, objet, date) et tri en sous-dossiers ; vous voyez les noms avant": "Batch processing: name suggested by the AI (sender, subject, date) and sorting into subfolders; you see the names first"
 }
