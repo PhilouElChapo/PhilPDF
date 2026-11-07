@@ -6,6 +6,11 @@
     <!-- rester eveille le temps d'accepter la connexion d'un compte dans le navigateur -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- rien d'obligatoire : PhilPDF marche sans appareil photo (Numeriser l'utilise s'il y en a un) ni ecran tactile
+         (tablette avec souris, ecran de voiture, television) ; sans cela Google Play ecartait ces appareils -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <application
         android:networkSecurityConfig="@xml/reseau"

@@ -7,6 +7,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import com.artifex.mupdf.fitz.Cookie
 import com.artifex.mupdf.fitz.Document
+import com.artifex.mupdf.fitz.Font
 import com.artifex.mupdf.fitz.Matrix
 import com.artifex.mupdf.fitz.Outline
 import com.artifex.mupdf.fitz.PDFAnnotation
@@ -1204,6 +1205,38 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
             page.applyRedactions(true, PDFPage.REDACT_IMAGE_PIXELS, PDFPage.REDACT_LINE_ART_REMOVE_IF_TOUCHED, PDFPage.REDACT_TEXT_REMOVE)
         }
         true
+    }
+
+    // ---------------------------------------------------------------- filigrane, en-tete / pied de page
+    suspend fun poserFiligrane(pages: List<Int>, r: ReglagesFiligrane): Boolean = operation("Filigrane") { p ->
+        val fonte = Font("Helvetica-Bold")
+        val obj = p.addSimpleFont(fonte, Font.SIMPLE_ENCODING_LATIN)
+        for (n in pages) surPage(p, n) { page -> Pagination.filigrane(p, page, r, fonte, obj) }
+        Journal.ecrire("filigrane", "« ${r.texte} » sur ${pages.size} page(s)")
+        pages.isNotEmpty()
+    }
+
+    /** En-tete et pied de page sur toutes les pages ; celui deja pose par PhilPDF est remplace. */
+    suspend fun poserEntete(r: ReglagesEntete): Boolean = operation("En-tête et pied de page") { p ->
+        val avant = Pagination.retirer(p, false)
+        val fonte = Font("Helvetica")
+        val obj = p.addSimpleFont(fonte, Font.SIMPLE_ENCODING_LATIN)
+        val total = p.countPages()
+        for (n in 0 until total) surPage(p, n) { page -> Pagination.entete(p, page, n, total, r, fonte, obj) }
+        Journal.ecrire("entete", "posé sur $total page(s)" + if (avant > 0) " (l'ancien, sur $avant page(s), remplacé)" else "")
+        true
+    }
+
+    suspend fun aPagination(filigrane: Boolean): Boolean = verrou.withLock {
+        withContext(Dispatchers.IO) { pdf?.let { try { Pagination.present(it, filigrane) } catch (_: Exception) { false } } ?: false }
+    }
+
+    /** Retire les filigranes (ou les en-tetes de PhilPDF) ; renvoie le nombre de pages nettoyees. */
+    suspend fun retirerPagination(filigrane: Boolean): Int {
+        var n = 0
+        operation(if (filigrane) "Retirer les filigranes" else "Retirer l'en-tête") { p -> n = Pagination.retirer(p, filigrane); n > 0 }
+        Journal.ecrire(if (filigrane) "filigrane" else "entete", "retiré de $n page(s)")
+        return n
     }
 
     /** Effacer le contenu de la page dans la zone (texte, images, traits), comme la retouche « effacer » de Windows. */

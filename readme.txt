@@ -10,6 +10,16 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.20.0
+- Filigrane, en-tete et pied de page (Plus > Filigrane, en-tete et pied de page), version allegee de Windows :
+  filigrane texte (CONFIDENTIEL, COPIE, BROUILLON ou le votre), couleur, opacite, en diagonale ou a l'horizontale,
+  sur toutes les pages ou celle-ci ; en-tete et pied de page a gauche, au centre ou a droite, avec les codes
+  {page}, {pages}, {date}. Memes marquages que sous Windows et Acrobat : « Retirer les filigranes » enleve aussi
+  ceux d'Acrobat, et un en-tete pose sur le telephone se retire sous Windows (et inversement). L'en-tete deja pose
+  par PhilPDF est remplace, pas double. Une seule etape a annuler.
+- Google Play : l'appareil photo et l'ecran tactile ne sont plus exiges (Numeriser utilise l'appareil photo s'il
+  y en a un) ; les tablettes, ecrans et bornes sans appareil photo ne sont plus ecartes.
+
 1.19.0
 - Biffer, comme sous Windows (Modifier > Effacer > Biffer) : tracez un rectangle sur chaque passage a faire
   disparaitre (texte, image, signature...) ; les zones marquees apparaissent en noir transparent bordees de rouge.
