@@ -3,6 +3,7 @@ automatique quand le pilote 64 bits plante a l'ouverture, et commande inconnue d
 import io, json, os, stat, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("PHILPDF_LANGUE", "fr")
+sys.stdout.reconfigure(encoding="utf-8")
 from moteur import scanner as S
 
 ok = 0
