@@ -10,6 +10,12 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.18.3
+- Redresser : « Annuler » et « Appliquer » restent fixes en bas, au-dessus de la barre d'Android (avec une grande
+  police, ils passaient dessous et se touchaient mal) ; le haut de la fenetre defile.
+- Essai automatique a chaque version : police agrandie de 30 %, et tout bouton place sous la barre d'Android est
+  signale.
+
 1.18.2
 - Nom propose par l'IA apres une numerisation : « Expediteur - objet - date » (la date a la fin, comme sous
   Windows : un meme document se range dans l'ordre chronologique).

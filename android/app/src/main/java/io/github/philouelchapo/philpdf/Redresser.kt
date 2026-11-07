@@ -113,10 +113,15 @@ fun RedresserImage(image: Bitmap?, titre: String, fermer: () -> Unit, toutes: Bo
                         }
                     }
                 } else Column(Modifier.fillMaxSize()) {
-                    entete()
-                    apercu(Modifier.weight(1f).fillMaxWidth())
-                    reglages()
-                    boutons()     // fixes en bas
+                    // grande police ou petit ecran : le haut defile, les boutons restent fixes en bas, au-dessus de la
+                    // barre d'Android (sinon « Appliquer » passe dessous et se touche mal)
+                    val hApercu = maxOf(160.dp, maxHeight * 0.42f)
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                        entete()
+                        apercu(Modifier.fillMaxWidth().height(hApercu))
+                        reglages()
+                    }
+                    boutons()
                 }
             }
         }

@@ -10,6 +10,9 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -51,7 +54,7 @@ import java.util.Locale
 
 /**
  * Rien de coupe sur un petit telephone ni a l'horizontale, comme tests/test_tronques.py sous Windows : chaque ecran est
- * affiche sur un ecran de 320 x 600 dp (police agrandie de 15 %) puis de 650 x 320 dp (paysage), dans les 5 langues ;
+ * affiche sur un ecran de 320 x 600 dp (police agrandie de 30 %, comme sur bien des telephones) puis de 650 x 320 dp (paysage), dans les 5 langues ;
  * dans le lecteur, chaque bouton et chaque entree des menus est touche (deux niveaux). Est signale : un texte qui deborde
  * de sa place, un mot coupe en deux d'une ligne a l'autre, des points de suspension, un bouton hors de l'ecran sans
  * defilement pour l'atteindre. Un essai qui echoue bloque la publication (le detail est dans le journal : PhilTronque).
@@ -66,7 +69,7 @@ class TestsTronques {
     private var echantillon = 12                         // quelques mesures au journal, pour juger l'essai lui-meme
 
     private class Cadre(val nom: String, val px: String, val police: String)
-    private val petit = Cadre("petit téléphone 320×600 dp, police +15 %", "640x1200", "1.15")
+    private val petit = Cadre("petit téléphone 320×600 dp, police +30 %", "640x1200", "1.3")
     private val paysage = Cadre("paysage 650×320 dp", "1300x640", "1.0")
     private val langues = listOf("fr", "en", "de", "es", "it")
 
@@ -74,6 +77,7 @@ class TestsTronques {
     private var ecran by mutableStateOf<(@Composable () -> Unit)?>(null)
     private var langue by mutableStateOf("fr")
     private var version by mutableIntStateOf(0)
+    private var activite: android.app.Activity? = null
 
     private fun shell(cmd: String) {
         instr.uiAutomation.executeShellCommand(cmd).use { java.io.FileInputStream(it.fileDescriptor).readBytes() }
@@ -155,6 +159,13 @@ class TestsTronques {
             }
             if (r.lineCount > 0 && r.isLineEllipsized(r.lineCount - 1)) out += "« $court » se termine par des points de suspension"
         }
+        // bas utile de l'ecran : au-dessus de la barre d'Android (retour, accueil, geste) ; un bouton dessous se touche mal
+        var basUtile = Float.MAX_VALUE
+        instr.runOnMainSync {
+            val v = activite?.window?.decorView
+            val ins = v?.rootWindowInsets?.getInsets(android.view.WindowInsets.Type.navigationBars() or android.view.WindowInsets.Type.ime())
+            if (v != null && ins != null && v.height > 0) basUtile = (v.height - ins.bottom).toFloat()
+        }
         // boutons hors de l'ecran, sans defilement pour les atteindre
         for (n in regle.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.OnClick)).fetchSemanticsNodes(atLeastOneRootRequired = false)) {
             val fen: Rect = racine(n).boundsInWindow
@@ -162,6 +173,8 @@ class TestsTronques {
             if (b.width <= 0f || fen.width <= 0f) continue
             if ((b.bottom > fen.bottom + 2 || b.right > fen.right + 2 || b.top < fen.top - 2 || b.left < fen.left - 2) && !defile(n))
                 out += "bouton « ${etiquette(n).take(50)} » hors de l'écran sans défilement"
+            else if (b.bottom > basUtile + 2 && !defile(n))
+                out += "bouton « ${etiquette(n).take(50)} » sous la barre d'Android (retour, accueil) : se touche mal"
         }
         if (out.isNotEmpty()) {
             val liste = problemes.getOrPut(lieu) { mutableListOf() }
@@ -285,13 +298,20 @@ class TestsTronques {
         ActivityScenario.launch(ComponentActivity::class.java).use { sc ->
             var vue = ""
             sc.onActivity { a ->
+                activite = a
                 vue = a.resources.configuration.locales[0].language
-                a.setContent { key(version) { ecran?.invoke() } }
+                // comme MainActivity : marges des barres d'Android transmises aux fenetres, contenu au-dessus des barres
+                a.setContent {
+                    val marges = androidx.compose.foundation.layout.WindowInsets.safeDrawing.asPaddingValues()
+                    androidx.compose.runtime.CompositionLocalProvider(LocalMarges provides marges) {
+                        Box(Modifier.safeDrawingPadding()) { key(version) { ecran?.invoke() } }
+                    }
+                }
             }
             if (vue != lg) problemes.getOrPut("${cadre.nom} [$lg]") { mutableListOf() } += "langue non appliquée ($vue au lieu de $lg)"
             regle.mainClock.autoAdvance = false
             bloc()
-            ecran = null; version++; attendre(1)
+            ecran = null; version++; attendre(1); activite = null
         }
     }
 
