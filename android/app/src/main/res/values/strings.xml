@@ -829,4 +829,19 @@
     <string name="autres_vu_sur">Recent on %1$s</string>
     <string name="autres_telechargement">Downloading “%1$s” from %2$s...</string>
     <string name="autres_echec">“%1$s” could not be opened: %2$s</string>
+    <string name="trad_menu">Translate the document...</string>
+    <string name="trad_titre">Translate the document</string>
+    <string name="trad_aide">The AI translates each paragraph and puts the translation in its place (layout kept, text made smaller if longer). The result is a NEW document, “name (EN).pdf”; the original does not change.</string>
+    <string name="trad_autre">Other language (Latin alphabet)</string>
+    <string name="trad_traduire">Translate</string>
+    <string name="trad_en_cours">Translating...</string>
+    <string name="trad_en_cours_lots">Translating: batch %1$d of %2$d...</string>
+    <string name="trad_enregistrer_avant">Save your changes first (floppy disk at the top), then translate: the translation is made from the saved file.</string>
+    <string name="trad_en">English</string>
+    <string name="trad_es">Spanish</string>
+    <string name="trad_it">Italian</string>
+    <string name="trad_de">German</string>
+    <string name="trad_pt">Portuguese</string>
+    <string name="trad_nl">Dutch</string>
+    <string name="trad_fr">French</string>
 </resources>

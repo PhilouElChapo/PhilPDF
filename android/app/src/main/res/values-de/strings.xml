@@ -828,4 +828,19 @@
     <string name="autres_vu_sur">Zuletzt auf %1$s</string>
     <string name="autres_telechargement">„%1$s“ wird von %2$s geladen...</string>
     <string name="autres_echec">„%1$s“ konnte nicht geöffnet werden: %2$s</string>
+    <string name="trad_menu">Dokument übersetzen...</string>
+    <string name="trad_titre">Dokument übersetzen</string>
+    <string name="trad_aide">Die KI übersetzt jeden Absatz und setzt die Übersetzung an seine Stelle (Layout bleibt, längerer Text wird verkleinert). Ergebnis ist ein NEUES Dokument „Name (EN).pdf“; das Original bleibt unverändert.</string>
+    <string name="trad_autre">Andere Sprache (lateinisches Alphabet)</string>
+    <string name="trad_traduire">Übersetzen</string>
+    <string name="trad_en_cours">Übersetzung...</string>
+    <string name="trad_en_cours_lots">Übersetzung: Teil %1$d von %2$d...</string>
+    <string name="trad_enregistrer_avant">Speichern Sie zuerst Ihre Änderungen (Diskette oben) und übersetzen Sie dann: Übersetzt wird die gespeicherte Datei.</string>
+    <string name="trad_en">Englisch</string>
+    <string name="trad_es">Spanisch</string>
+    <string name="trad_it">Italienisch</string>
+    <string name="trad_de">Deutsch</string>
+    <string name="trad_pt">Portugiesisch</string>
+    <string name="trad_nl">Niederländisch</string>
+    <string name="trad_fr">Französisch</string>
 </resources>

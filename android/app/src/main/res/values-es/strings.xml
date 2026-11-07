@@ -828,4 +828,19 @@
     <string name="autres_vu_sur">Reciente en %1$s</string>
     <string name="autres_telechargement">Descargando «%1$s» desde %2$s...</string>
     <string name="autres_echec">No se pudo abrir «%1$s»: %2$s</string>
+    <string name="trad_menu">Traducir el documento...</string>
+    <string name="trad_titre">Traducir el documento</string>
+    <string name="trad_aide">La IA traduce cada párrafo y coloca la traducción en su lugar (se conserva el diseño; el texto se reduce si es más largo). El resultado es un documento NUEVO, «nombre (EN).pdf»; el original no cambia.</string>
+    <string name="trad_autre">Otro idioma (alfabeto latino)</string>
+    <string name="trad_traduire">Traducir</string>
+    <string name="trad_en_cours">Traduciendo...</string>
+    <string name="trad_en_cours_lots">Traduciendo: lote %1$d de %2$d...</string>
+    <string name="trad_enregistrer_avant">Guarde primero sus cambios (disquete arriba) y luego traduzca: la traducción se hace a partir del archivo guardado.</string>
+    <string name="trad_en">Inglés</string>
+    <string name="trad_es">Español</string>
+    <string name="trad_it">Italiano</string>
+    <string name="trad_de">Alemán</string>
+    <string name="trad_pt">Portugués</string>
+    <string name="trad_nl">Neerlandés</string>
+    <string name="trad_fr">Francés</string>
 </resources>

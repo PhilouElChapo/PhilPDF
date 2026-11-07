@@ -10,6 +10,13 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.21.0
+- IA : Traduire le document (Plus > Traduire le document), comme sous Windows : chaque paragraphe est traduit et
+  pose a sa place (mise en page gardee, texte reduit s'il est plus long) dans un NOUVEAU document « nom (EN).pdf »,
+  ouvert ensuite (a enregistrer ou vous voulez) ; l'original ne change pas. Anglais, espagnol, italien, allemand,
+  portugais, neerlandais, francais, ou une autre langue en alphabet latin. Donnees sensibles signalees avant
+  l'envoi, avancement par lot, « Annuler » a tout moment.
+
 1.20.0
 - Filigrane, en-tete et pied de page (Plus > Filigrane, en-tete et pied de page), version allegee de Windows :
   filigrane texte (CONFIDENTIEL, COPIE, BROUILLON ou le votre), couleur, opacite, en diagonale ou a l'horizontale,

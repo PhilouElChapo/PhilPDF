@@ -105,6 +105,7 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var confirmerBiffage by mutableStateOf(false)
     var filigrane by mutableStateOf(false)                  // « Filigrane, en-tete et pied de page »
     var nettoyer by mutableStateOf<Int?>(null)              // « Nettoyer un scan » : page choisie
+    var traduire by mutableStateOf(false)                   // « Traduire le document »
     var quitterBiffage by mutableStateOf(false)
     var ocr by mutableStateOf<Int?>(null)                   // reconnaissance du texte proposee (page de depart)
     var ocrAuto = false                                     // document numerise : reconnaissance lancee d'office
@@ -131,7 +132,7 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
+fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer: () -> Unit) {
     val ctx = LocalContext.current
     val etat = remember(doc) { EtatLecteur(doc, LazyListState()) }
     var quitter by remember { mutableStateOf(false) }
@@ -226,6 +227,7 @@ fun Lecteur(doc: DocumentPdf, fermer: () -> Unit) {
     etat.redresser?.let { n -> RedresserPage(etat, n) { etat.redresser = null } }
     if (etat.filigrane) FiligraneEnteteUi(etat) { etat.filigrane = false }
     etat.nettoyer?.let { n -> NettoyerScanUi(etat, n) { etat.nettoyer = null } }
+    if (etat.traduire) TraduireUi(etat, ouvrirFichier) { etat.traduire = false }
     etat.message?.let { m ->
         val txt = if (m == "aucun_texte") stringResource(R.string.aucun_texte) else m
         LaunchedEffect(m) { android.widget.Toast.makeText(ctx, txt, android.widget.Toast.LENGTH_LONG).show(); etat.message = null }
@@ -466,6 +468,7 @@ private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, 
                 else -> Column(Modifier.padding(8.dp)) {
                     LigneAction("oeil", stringResource(R.string.lecture_fluide)) { etat.lectureFluide = true }
                     LigneAction("ia", stringResource(R.string.ia_resumer)) { etat.resumeIa = true }
+                    LigneAction("langue", stringResource(R.string.trad_menu)) { etat.traduire = true }
                     if (etat.doc.modifiable) Box { LigneAction("annuler", stringResource(R.string.historique_menu)) { historique = true }
                         if (historique) MenuHistorique(etat) { historique = false } }
                     LigneAction("suivante", stringResource(R.string.aller_page)) { allerA = true }

@@ -40,13 +40,13 @@ object Pagination {
 
     private fun f(v: Float) = String.format(java.util.Locale.US, "%.3f", v)
 
-    private fun dico(pdf: PDFDocument, parent: PDFObject, cle: String): PDFObject {
+    internal fun dico(pdf: PDFDocument, parent: PDFObject, cle: String): PDFObject {
         var d = parent.get(cle)
         if (d.isNull) { d = pdf.newDictionary(); parent.put(cle, d) }
         return d
     }
 
-    private fun ressources(pdf: PDFDocument, page: PDFPage): PDFObject {
+    internal fun ressources(pdf: PDFDocument, page: PDFPage): PDFObject {
         val pobj = page.getObject()
         var res = pobj.get("Resources")
         if (res.isNull) {
@@ -57,10 +57,10 @@ object Pagination {
         return res
     }
 
-    private fun nom(d: PDFObject, prefixe: String): String { var i = 1; while (!d.get("$prefixe$i").isNull) i++; return "$prefixe$i" }
+    internal fun nom(d: PDFObject, prefixe: String): String { var i = 1; while (!d.get("$prefixe$i").isNull) i++; return "$prefixe$i" }
 
     /** Ajoute le flux a la fin du contenu de la page (le contenu d'origine est mis entre q ... Q). */
-    private fun ajouterFlux(pdf: PDFDocument, page: PDFPage, flux: String) {
+    internal fun ajouterFlux(pdf: PDFDocument, page: PDFPage, flux: String) {
         val pobj = page.getObject()
         val contenu = pobj.get("Contents")
         val t = pdf.newArray()
@@ -73,7 +73,7 @@ object Pagination {
 
     /** Texte dans le repere de la page affichee (y vers le bas) : depart, angle en degres (sens inverse des
      *  aiguilles), converti dans le repere PDF de la page (pages tournees ou decalees comprises). */
-    private fun texte(page: PDFPage, police: String, taille: Float, x: Float, y: Float, angle: Float, s: String): String {
+    internal fun texte(page: PDFPage, police: String, taille: Float, x: Float, y: Float, angle: Float, s: String): String {
         val inv = page.getTransform().invert()
         val a = Math.toRadians(angle.toDouble())
         val dx = Math.cos(a).toFloat(); val dy = -Math.sin(a).toFloat()          // sens de la ligne (ecran)
@@ -85,10 +85,10 @@ object Pagination {
         return "BT /$police ${f(taille)} Tf ${f(xa)} ${f(xb)} ${f(ya)} ${f(yb)} ${f(ox)} ${f(oy)} Tm <$hex> Tj ET\n"
     }
 
-    private fun largeur(fonte: Font, s: String, taille: Float): Float =
+    internal fun largeur(fonte: Font, s: String, taille: Float): Float =
         String(s.toByteArray(latin), latin).sumOf { c -> fonte.advanceGlyph(fonte.encodeCharacter(c.code), false).toDouble() }.toFloat() * taille
 
-    private fun rgb(c: Int) = "${f(((c shr 16) and 255) / 255f)} ${f(((c shr 8) and 255) / 255f)} ${f((c and 255) / 255f)} rg"
+    internal fun rgb(c: Int) = "${f(((c shr 16) and 255) / 255f)} ${f(((c shr 8) and 255) / 255f)} ${f((c and 255) / 255f)} rg"
 
     fun filigrane(pdf: PDFDocument, page: PDFPage, r: ReglagesFiligrane, fonte: Font, policeObj: PDFObject) {
         if (r.texte.isBlank()) return
