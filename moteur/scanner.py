@@ -254,7 +254,46 @@ def _numeriser_twain(nom, mode, dpi, source, fenetre=None, interface=False):
 # Scanner Link), anciens pilotes. Un petit programme 32 bits livre avec PhilPDF (twain32\aide_twain32.exe) numerise a
 # sa place et rend les pages en fichiers. Rien d'autre n'est installe sur le poste.
 _SOURCES32 = None      # {nom: gestionnaire} lues une fois par session
-_PREFERER32 = set()   # sources dont le pilote 64 bits a plante a l'ouverture : 32 bits directement
+_PREFERER32 = None    # sources dont le pilote 64 bits a plante a l'ouverture : 32 bits directement (retenu d'une
+                      # session a l'autre : le plantage 64 bits n'est jamais rejoue)
+
+
+def _fichier_preferer32():
+    try:
+        from app.config import dossier_donnees
+        return os.path.join(dossier_donnees(), "twain32.json")
+    except Exception:                                   # noqa: BLE001
+        return None
+
+
+def preferer32():
+    """Ensemble des sources a numeriser directement en 32 bits (lu une fois, puis tenu a jour)."""
+    global _PREFERER32
+    if _PREFERER32 is None:
+        _PREFERER32 = set()
+        f = _fichier_preferer32()
+        try:
+            if f and os.path.exists(f):
+                import json
+                with open(f, encoding="utf-8") as fh:
+                    _PREFERER32 = set(json.load(fh).get("sources", []))
+        except Exception as e:                          # noqa: BLE001
+            _journal(f"TWAIN 32 bits : préférences illisibles ({e})")
+    return _PREFERER32
+
+
+def _retenir32(nom):
+    preferer32().add(nom)
+    f = _fichier_preferer32()
+    if not f:
+        return
+    try:
+        import json
+        with open(f, "w", encoding="utf-8") as fh:
+            json.dump({"sources": sorted(_PREFERER32)}, fh, ensure_ascii=False, indent=1)
+        _journal(f"TWAIN {nom} : retenu, les prochaines fois directement par le pilote 32 bits ({f})")
+    except Exception as e:                              # noqa: BLE001
+        _journal(f"TWAIN 32 bits : préférence non enregistrée ({e})")
 
 
 def aide32():
@@ -451,7 +490,7 @@ def numeriser(device_id, mode="auto", dpi=300, source="chargeur", fenetre=None, 
         return _numeriser_twain32(device_id[8:], mode, dpi, source, interface)
     if device_id.startswith("twain:"):
         nom = device_id[6:]
-        if nom in _PREFERER32:
+        if nom in preferer32():
             return _numeriser_twain32(nom, mode, dpi, source, interface)
         try:
             return _numeriser_twain(nom, mode, dpi, source, fenetre, interface)
@@ -461,7 +500,7 @@ def numeriser(device_id, mode="auto", dpi=300, source="chargeur", fenetre=None, 
             # le pilote 64 bits plante a l'ouverture (ex. Avision relie par Virtual Scanner Link) : son pilote
             # 32 bits, celui qu'utilise le logiciel du fabricant, prend le relais pour le reste de la session
             _journal(f"TWAIN {nom} : le pilote 64 bits s'arrête à l'ouverture : essai avec le pilote 32 bits")
-            _PREFERER32.add(nom)
+            _retenir32(nom)
             return _numeriser_twain32(nom, mode, dpi, source, interface)
     if device_id.startswith("escl:"):
         from . import escl

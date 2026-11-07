@@ -38,6 +38,7 @@ elif a[0] == "numeriser":
 os.chmod(faux, os.stat(faux).st_mode | stat.S_IEXEC)
 S.aide32 = lambda: faux
 S._journal = lambda m: JOURNAL.append(m)
+S._fichier_preferer32 = lambda: os.path.join(d, "twain32.json")
 JOURNAL = []
 
 src = S.scanners_twain32()
@@ -61,6 +62,8 @@ verif(len(im) == 2 and appels == ["AD225WN-AEG"], "pilote 64 bits planté : page
 verif(any("pilote 32 bits" in x for x in JOURNAL), "relais noté au journal")
 im = S.numeriser("twain:AD225WN-AEG", "couleur", 300, "chargeur", fenetre=1)
 verif(len(im) == 2 and appels == ["AD225WN-AEG"], "ensuite, 32 bits directement (pas de nouveau plantage)")
+S._PREFERER32 = None                                     # nouvelle session : relu du fichier
+verif("AD225WN-AEG" in S.preferer32(), "retenu d'une session à l'autre (jamais de nouveau plantage 64 bits)")
 
 # source inconnue du 32 bits : l'erreur 64 bits remonte telle quelle
 try:
@@ -84,4 +87,4 @@ b = io.StringIO(); vrai = sys.stdout; sys.stdout = b
 r = A.main(["n'importe"])
 sys.stdout = vrai
 verif(r == 2 and "erreur" in json.loads(b.getvalue()), "aide réelle : commande inconnue refusée proprement")
-print("RESULTAT : OK" if ok == 9 else "RESULTAT : ECHEC")
+print("RESULTAT : OK" if ok == 10 else "RESULTAT : ECHEC")
