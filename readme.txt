@@ -431,6 +431,9 @@ WINDOWS ET LINUX
   centre s'il l'etait ; la zone de saisie s'allonge de meme pendant la frappe. Avant, il passait sur une 2e ligne
   hors du bandeau (texte blanc sur fond blanc : perdu, et impossible a reprendre). S'il ne tient vraiment pas, un
   message le dit (Ctrl+Z annule). La poignee de droite garde la largeur choisie a la main.
+- Plusieurs lignes dans un cadre : si le texte d'un titre de bandeau ou de cellule ne tient pas sur une ligne, ou si
+  vous tapez Entree, toutes les lignes restent DANS le cadre (sur toute sa largeur, centrees si le titre l'etait,
+  le bloc centre en hauteur) ; la police est reduite si la hauteur du cadre ne suffit pas (message, jusqu'a 55 %).
 
 0.9.83
 - Scanner au pilote 32 bits (ex. Avision AD225WN en reseau) : une fois que le pilote 64 bits a plante a l'ouverture,

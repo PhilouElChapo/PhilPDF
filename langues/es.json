@@ -2985,5 +2985,7 @@
  "Pilote TWAIN 32 bits : {e}": "Controlador TWAIN de 32 bits: {e}",
  "Le scanner « {n} » n'a pas pu être ouvert, ni par son pilote 64 bits ni par son pilote 32 bits.\n\n• Vérifiez qu'il est allumé et branché.\n• Scanner en Wi-Fi ou réseau : vérifiez qu'il est bien relié dans l'outil du fabricant (Avision : « Virtual Scanner Link ») et qu'aucun autre poste ne l'utilise.\n• Sinon, branchez-le en USB.": "No se pudo abrir el escáner «{n}», ni con su controlador de 64 bits ni con el de 32 bits.\n\n• Compruebe que está encendido y conectado.\n• Escáner Wi-Fi o de red: compruebe que está vinculado en la herramienta del fabricante (Avision: «Virtual Scanner Link») y que ningún otro equipo lo está usando.\n• Si no, conéctelo por USB.",
  "L'aide TWAIN 32 bits ne répond plus (plus de {n} s).": "El asistente TWAIN de 32 bits ya no responde (más de {n} s).",
- "(TWAIN 32 bits)": "(TWAIN 32 bits)"
+ "(TWAIN 32 bits)": "(TWAIN 32 bits)",
+ "Le texte ne tient plus sur une ligne dans son cadre (bandeau, cellule) : la fin passe en dessous, hors du cadre, et peut être invisible (texte blanc sur fond blanc). Réduisez la taille ou raccourcissez le texte ; Ctrl+Z annule.": "El texto ya no cabe en su marco (franja, celda): el final pasa debajo, fuera del marco, y puede quedar invisible (texto blanco sobre fondo blanco). Reduzca el tamaño o acorte el texto; Ctrl+Z deshace.",
+ "Le texte a été réduit à {p} % de sa taille pour tenir dans son cadre (bandeau, cellule). Ctrl+Z annule.": "El texto se redujo al {p} % de su tamaño para caber en su marco (franja, celda). Ctrl+Z deshace."
 }

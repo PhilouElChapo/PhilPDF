@@ -2985,5 +2985,7 @@
  "Pilote TWAIN 32 bits : {e}": "32-Bit-TWAIN-Treiber: {e}",
  "Le scanner « {n} » n'a pas pu être ouvert, ni par son pilote 64 bits ni par son pilote 32 bits.\n\n• Vérifiez qu'il est allumé et branché.\n• Scanner en Wi-Fi ou réseau : vérifiez qu'il est bien relié dans l'outil du fabricant (Avision : « Virtual Scanner Link ») et qu'aucun autre poste ne l'utilise.\n• Sinon, branchez-le en USB.": "Der Scanner „{n}“ konnte weder mit seinem 64-Bit- noch mit seinem 32-Bit-Treiber geöffnet werden.\n\n• Prüfen Sie, ob er eingeschaltet und angeschlossen ist.\n• WLAN- oder Netzwerkscanner: Prüfen Sie, ob er im Programm des Herstellers verbunden ist (Avision: „Virtual Scanner Link“) und kein anderer Computer ihn benutzt.\n• Andernfalls schließen Sie ihn per USB an.",
  "L'aide TWAIN 32 bits ne répond plus (plus de {n} s).": "Das 32-Bit-TWAIN-Hilfsprogramm antwortet nicht mehr (über {n} s).",
- "(TWAIN 32 bits)": "(TWAIN 32 Bit)"
+ "(TWAIN 32 bits)": "(TWAIN 32 Bit)",
+ "Le texte ne tient plus sur une ligne dans son cadre (bandeau, cellule) : la fin passe en dessous, hors du cadre, et peut être invisible (texte blanc sur fond blanc). Réduisez la taille ou raccourcissez le texte ; Ctrl+Z annule.": "Der Text passt nicht mehr in seinen Rahmen (Band, Zelle): Das Ende rutscht darunter, aus dem Rahmen, und kann unsichtbar sein (weiße Schrift auf weißem Grund). Verkleinern Sie die Schrift oder kürzen Sie den Text; Strg+Z macht es rückgängig.",
+ "Le texte a été réduit à {p} % de sa taille pour tenir dans son cadre (bandeau, cellule). Ctrl+Z annule.": "Der Text wurde auf {p} % seiner Größe verkleinert, damit er in seinen Rahmen (Band, Zelle) passt. Strg+Z macht es rückgängig."
 }

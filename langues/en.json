@@ -2994,5 +2994,7 @@
  "Pilote TWAIN 32 bits : {e}": "32-bit TWAIN driver: {e}",
  "Le scanner « {n} » n'a pas pu être ouvert, ni par son pilote 64 bits ni par son pilote 32 bits.\n\n• Vérifiez qu'il est allumé et branché.\n• Scanner en Wi-Fi ou réseau : vérifiez qu'il est bien relié dans l'outil du fabricant (Avision : « Virtual Scanner Link ») et qu'aucun autre poste ne l'utilise.\n• Sinon, branchez-le en USB.": "The scanner “{n}” could not be opened, neither by its 64-bit driver nor by its 32-bit driver.\n\n• Check that it is switched on and connected.\n• Wi-Fi or network scanner: check that it is linked in the manufacturer's tool (Avision: “Virtual Scanner Link”) and that no other computer is using it.\n• Otherwise, connect it by USB.",
  "L'aide TWAIN 32 bits ne répond plus (plus de {n} s).": "The 32-bit TWAIN helper is no longer responding (more than {n} s).",
- "(TWAIN 32 bits)": "(TWAIN 32-bit)"
+ "(TWAIN 32 bits)": "(TWAIN 32-bit)",
+ "Le texte ne tient plus sur une ligne dans son cadre (bandeau, cellule) : la fin passe en dessous, hors du cadre, et peut être invisible (texte blanc sur fond blanc). Réduisez la taille ou raccourcissez le texte ; Ctrl+Z annule.": "The text no longer fits in its frame (banner, cell): the end goes below, outside the frame, and may be invisible (white text on a white background). Reduce the size or shorten the text; Ctrl+Z undoes.",
+ "Le texte a été réduit à {p} % de sa taille pour tenir dans son cadre (bandeau, cellule). Ctrl+Z annule.": "The text was reduced to {p} % of its size to fit in its frame (banner, cell). Ctrl+Z undoes."
 }

@@ -772,44 +772,74 @@ class Editeur:
                 else:
                     x1 = min(hi, x0 + besoin)
                 etendu = (x0, x1, cadre)
-        lignes, ligne, mot, larg_ligne, larg_mot = [], [], [], 0.0, 0.0
         retrait = para["retrait"]
 
-        def fin_mot():
-            nonlocal ligne, mot, larg_ligne, larg_mot
-            dispo = x1 - x0 - (retrait if not lignes else 0)
-            if ligne and larg_ligne + larg_mot > dispo:
-                while ligne and ligne[-1][0] == " ":
-                    larg_ligne -= ligne.pop()[4]
-                lignes.append((ligne, False))
-                ligne, larg_ligne = [], 0.0
-            ligne += mot
-            larg_ligne += larg_mot
-            mot, larg_mot = [], 0.0
-        for l in lettres:
-            if l[0] == "\n":
-                fin_mot()
+        def couper(lettres):
+            lignes, ligne, mot, larg_ligne, larg_mot = [], [], [], 0.0, 0.0
+
+            def fin_mot():
+                nonlocal ligne, mot, larg_ligne, larg_mot
+                dispo = x1 - x0 - (retrait if not lignes else 0)
+                if ligne and larg_ligne + larg_mot > dispo:
+                    while ligne and ligne[-1][0] == " ":
+                        larg_ligne -= ligne.pop()[4]
+                    lignes.append((ligne, False))
+                    ligne, larg_ligne = [], 0.0
+                ligne += mot
+                larg_ligne += larg_mot
+                mot, larg_mot = [], 0.0
+            for l in lettres:
+                if l[0] == "\n":
+                    fin_mot()
+                    lignes.append((ligne, True))
+                    ligne, larg_ligne = [], 0.0
+                elif l[0] == " ":
+                    fin_mot()
+                    if ligne:
+                        ligne.append(l)
+                        larg_ligne += l[4]
+                else:
+                    mot.append(l)
+                    larg_mot += l[4]
+            fin_mot()
+            if ligne:
                 lignes.append((ligne, True))
-                ligne, larg_ligne = [], 0.0
-            elif l[0] == " ":
-                fin_mot()
-                if ligne:
-                    ligne.append(l)
-                    larg_ligne += l[4]
-            else:
-                mot.append(l)
-                larg_mot += l[4]
-        fin_mot()
-        if ligne:
-            lignes.append((ligne, True))
-        # plan d'ecriture
-        plan = []
+            return lignes
+        lignes = couper(lettres)
         y = para["lignes"][0]["base"]
         pas = para["interligne"] * k
+        centrer_lignes, reduit = False, None
+        # une ligne dans un cadre (bandeau, cellule) qui devient plusieurs lignes (texte trop long, ou Entree) : toutes
+        # les lignes restent DANS le cadre, sur toute sa largeur, centrees si la ligne l'etait, le bloc centre en
+        # hauteur ; la police diminue (jusqu'a 55 %) si la hauteur du cadre ne suffit pas
+        if len(para["lignes"]) == 1 and len(lignes) > 1 and not para.get("largeur_choisie"):
+            lo, hi, centre, cadre = self.limites_ligne(num_page, para)
+            if cadre is not None:
+                x0, x1 = lo, hi
+                retrait = 0.0
+                h_dispo = cadre.height - 2
+                f = 1.0
+                while True:
+                    lt = [(c, ci, sz * f, co, av * f) for c, ci, sz, co, av in lettres]
+                    lignes = couper(lt)
+                    tm = max((l[2] for lg, _f in lignes for l in lg), default=para["taille"] * k * f)
+                    hauteur = (len(lignes) - 1) * pas * f + tm
+                    if hauteur <= h_dispo or f <= 0.551:
+                        break
+                    f -= 0.05
+                pas *= f
+                y = cadre.y0 + max(1.0, (cadre.height - hauteur) / 2) + tm * 0.8
+                centrer_lignes = centre
+                reduit = f if f < 0.999 else None
+                etendu = (x0, x1, cadre)
+        # plan d'ecriture
+        plan = []
         for n, (ligne, fin_par) in enumerate(lignes):
             while ligne and ligne[-1][0] == " ":
                 ligne = ligne[:-1]
             x = x0 + (retrait if n == 0 else 0)
+            if centrer_lignes:
+                x = (x0 + x1) / 2 - sum(l[4] for l in ligne) / 2
             extra = 0.0
             if para["justifie"] and not fin_par:
                 espaces = sum(1 for l in ligne if l[0] == " ")
@@ -826,18 +856,20 @@ class Editeur:
             page.add_redact_annot(fitz.Rect(r.x0 + 0.3, r.y0 + r.height * 0.25, r.x1 + 0.5, r.y1 - r.height * 0.25), fill=False)
         page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE,
                               text=fitz.PDF_REDACT_TEXT_REMOVE)
-        self._ecrire(page, plan, para["lignes"][0]["base"])
+        self._ecrire(page, plan, plan[0][6] if plan else para["lignes"][0]["base"])
         haut = min(l["rect"].y0 for l in para["lignes"][:1])
         tmax = max((l[2] for lg, _f in lignes for l in lg), default=para["taille"])
         self._retenir_paragraphe(num_page, fitz.Rect(x0, haut, x1, y - pas + tmax * 0.3), nouveau.rstrip("\n"), para["rect"])
         en_plus = len(lignes) - len(para["lignes"])
         self.journal.append(f"paragraphe réécrit : {len(lignes)} ligne(s)" +
                             (f" ({en_plus:+d} par rapport à avant)" if en_plus else "") +
-                            (f", ligne allongée ({etendu[0]:.0f}–{etendu[1]:.0f} pt)" if etendu else ""))
+                            (f", ligne allongée ({etendu[0]:.0f}–{etendu[1]:.0f} pt)" if etendu else "") +
+                            (f", police réduite à {reduit:.0%} pour tenir dans le cadre" if reduit else ""))
         # le texte sort-il du cadre (bandeau, cellule) qui contenait la ligne ?
         cadre = etendu[2] if etendu else (self.limites_ligne(num_page, para)[3] if en_plus > 0 else None)
         deborde = bool(cadre and en_plus > 0 and y - pas + 1 > cadre.y1)
-        return {"lignes": len(lignes), "en_plus": en_plus, "bas": y - pas, "deborde_cadre": deborde, "x0": x0, "x1": x1}
+        return {"lignes": len(lignes), "en_plus": en_plus, "bas": y - pas, "deborde_cadre": deborde, "x0": x0, "x1": x1,
+                "reduit": reduit, "dans_cadre": bool(etendu and etendu[2] is not None and en_plus > 0 and not deborde)}
 
     def limites_ligne(self, num_page, para):
         """Place libre sur la ligne d'un paragraphe d'une ligne : (gauche, droite, centre, cadre).

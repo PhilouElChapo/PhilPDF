@@ -48,8 +48,26 @@ verif(abs((x0 + x1) / 2 - bandeau.x0 - bandeau.width / 2) < 4, f"texte centré d
 d, bandeau = page_bandeau()
 ed = Editeur(d)
 para = ed.paragraphe_a(0, fitz.Point(297, 110))
-res = ed.modifier_paragraphe(0, para, "Très long titre " * 9)
-verif(res["en_plus"] > 0 and res["deborde_cadre"], "trop long : 2e ligne hors du bandeau signalée")
+long_ = "Salarié non titulaire de l'Etat du 01/12/1994 au 30/03/1995, puis contractuel jusqu'au 31/12/1996, puis pharmacien adjoint à Cannes"
+res = ed.modifier_paragraphe(0, para, long_)
+verif(not res["deborde_cadre"] and (res["dans_cadre"] or res["reduit"]), "trop long pour une ligne : tout tient DANS le bandeau")
+mots = [w for w in d[0].get_text("words") if fitz.Rect(bandeau).include_rect(fitz.Rect(0, 0, 0, 0)) or True]
+dedans = " ".join(w[4] for w in d[0].get_text("words") if fitz.Rect(w[:4]).intersects(bandeau))
+verif(dedans.split() == long_.split(), "tout le texte est dans le bandeau (police réduite si besoin)")
+verif(all(bandeau.y0 - 1 <= w[1] and w[3] <= bandeau.y1 + 1 for w in d[0].get_text("words") if fitz.Rect(w[:4]).intersects(bandeau)),
+      "aucune ligne ne dépasse en haut ou en bas")
+# Entree tapee par l'utilisateur : deux lignes voulues, dans le bandeau aussi
+d, bandeau = page_bandeau()
+ed = Editeur(d)
+para = ed.paragraphe_a(0, fitz.Point(297, 110))
+res = ed.modifier_paragraphe(0, para, "Pharmacien\ndu 01/01/1997")
+verif(res["lignes"] == 2 and res["dans_cadre"], "retour à la ligne voulu : deux lignes dans le bandeau")
+# vraiment trop long (meme a 55 %) : signale
+d, bandeau = page_bandeau()
+ed = Editeur(d)
+para = ed.paragraphe_a(0, fitz.Point(297, 110))
+res = ed.modifier_paragraphe(0, para, "Très long titre " * 30)
+verif(res["deborde_cadre"], "beaucoup trop long : débordement signalé")
 
 # largeur choisie a la poignee : respectee (pas d'allongement)
 d, bandeau = page_bandeau()
@@ -65,4 +83,4 @@ ed = Editeur(d)
 para = ed.paragraphe_a(0, fitz.Point(100, 147))
 res = ed.modifier_paragraphe(0, para, "Vous exercez la profession de pharmacien depuis le 01/01/1997, à Cannes, en officine.")
 verif(res["lignes"] == 1 and res["x1"] <= 595 - 18 + 0.5, "ligne à gauche : allongée jusqu'à la marge, une ligne")
-print("RESULTAT : OK" if ok == 9 else "RESULTAT : ECHEC")
+print("RESULTAT : OK" if ok == 13 else "RESULTAT : ECHEC")

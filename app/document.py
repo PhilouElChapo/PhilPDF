@@ -4053,6 +4053,9 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         self.apres_modif(ed.journal)
         if not res.get("ocr"):                     # texte d'un scan : l'autre methode ne s'applique pas
             self._proposer_autre_methode(n, para, texte, taille, couleur)
+        if res.get("reduit") and not res.get("deborde_cadre"):
+            self.message(_("Le texte a été réduit à {p} % de sa taille pour tenir dans son cadre (bandeau, cellule). "
+                           "Ctrl+Z annule.", p=round(res["reduit"] * 100)))
         if res.get("deborde_cadre"):               # passe sur une 2e ligne hors du bandeau ou de la cellule
             QMessageBox.information(self, _("Modifier"), _(
                 "Le texte ne tient plus sur une ligne dans son cadre (bandeau, cellule) : la fin passe en dessous, "

@@ -2985,5 +2985,7 @@
  "Pilote TWAIN 32 bits : {e}": "Driver TWAIN a 32 bit: {e}",
  "Le scanner « {n} » n'a pas pu être ouvert, ni par son pilote 64 bits ni par son pilote 32 bits.\n\n• Vérifiez qu'il est allumé et branché.\n• Scanner en Wi-Fi ou réseau : vérifiez qu'il est bien relié dans l'outil du fabricant (Avision : « Virtual Scanner Link ») et qu'aucun autre poste ne l'utilise.\n• Sinon, branchez-le en USB.": "Impossibile aprire lo scanner «{n}», né con il driver a 64 bit né con quello a 32 bit.\n\n• Verificate che sia acceso e collegato.\n• Scanner Wi-Fi o di rete: verificate che sia collegato nello strumento del produttore (Avision: «Virtual Scanner Link») e che nessun altro computer lo stia usando.\n• Altrimenti, collegatelo via USB.",
  "L'aide TWAIN 32 bits ne répond plus (plus de {n} s).": "L'assistente TWAIN a 32 bit non risponde più (oltre {n} s).",
- "(TWAIN 32 bits)": "(TWAIN 32 bit)"
+ "(TWAIN 32 bits)": "(TWAIN 32 bit)",
+ "Le texte ne tient plus sur une ligne dans son cadre (bandeau, cellule) : la fin passe en dessous, hors du cadre, et peut être invisible (texte blanc sur fond blanc). Réduisez la taille ou raccourcissez le texte ; Ctrl+Z annule.": "Il testo non entra più nella sua cornice (fascia, cella): la fine passa sotto, fuori dalla cornice, e può risultare invisibile (testo bianco su fondo bianco). Riducete la dimensione o accorciate il testo; Ctrl+Z annulla.",
+ "Le texte a été réduit à {p} % de sa taille pour tenir dans son cadre (bandeau, cellule). Ctrl+Z annule.": "Il testo è stato ridotto al {p} % della sua dimensione per entrare nella sua cornice (fascia, cella). Ctrl+Z annulla."
 }
