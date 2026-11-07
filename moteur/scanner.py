@@ -141,9 +141,25 @@ def scanners_twain(fenetre=None):
 
 
 def _numeriser_twain(nom, mode, dpi, source, fenetre=None, interface=False):
-    """Images (octets BMP) numerisees par la source TWAIN « nom ». interface : la fenetre du pilote du scanner."""
+    """Images (octets BMP) numerisees par la source TWAIN « nom ». interface : la fenetre du pilote du scanner.
+    Transfert PAR FICHIER d'abord (le pilote ecrit chaque page dans un BMP : aucune memoire du pilote a lire, le plus
+    sur en 64 bits) ; transfert « natif » (image en memoire) seulement si le pilote ne sait pas ecrire de fichier.
+    Les dernieres etapes TWAIN et l'endroit d'un plantage sont notes au journal."""
+    import logging
+    import traceback
     import twain
     from twain.lowlevel import constants as C
+    etapes = []
+
+    class _Suivi(logging.Handler):
+        def emit(self, r):
+            etapes.append(r.getMessage())
+            del etapes[:-12]
+    lg = logging.getLogger("twain")
+    suivi = _Suivi()
+    lg.addHandler(suivi)
+    niveau = lg.level
+    lg.setLevel(logging.INFO)
     sm = _dsm(fenetre)                                  # le meme gestionnaire que pour la liste (jamais rouvert)
     images = []
     try:
@@ -167,27 +183,57 @@ def _numeriser_twain(nom, mode, dpi, source, fenetre=None, interface=False):
                 cap(C.CAP_XFERCOUNT, C.TWTY_INT16, -1)
             cap(C.CAP_DUPLEXENABLED, C.TWTY_BOOL, source == "recto_verso")
             dossier = tempfile.mkdtemp(prefix="philpdf_twain_")
-
-            def apres(img, reste):
-                f = os.path.join(dossier, f"p{len(images):03d}.bmp")
-                img.save(f)
-                img.close()
-                with open(f, "rb") as fh:
-                    images.append(fh.read())
-                if source == "vitre":
-                    raise twain.exceptions.CancelAll
+            par_fichier = True
             try:
-                src.acquire_natively(after=apres, show_ui=interface, modal=interface)
-            except (twain.exceptions.DSTransferCancelled, twain.exceptions.CancelAll):
-                pass
+                _o, (_o2, _o3, mecas) = src.get_capability(C.ICAP_XFERMECH)
+                par_fichier = C.TWSX_FILE in mecas
+            except Exception as e:                      # noqa: BLE001
+                _journal(f"TWAIN {nom} : modes de transfert illisibles ({e}) : essai par fichier")
+            _journal(f"TWAIN {nom} : transfert {'par fichier' if par_fichier else 'natif (mémoire)'}, "
+                     f"fenêtre du pilote {'oui' if interface else 'non'}")
+            if par_fichier:
+                chemins = []
+
+                def avant(_info):
+                    f = os.path.join(dossier, f"p{len(chemins):03d}.bmp")
+                    chemins.append(f)
+                    return f
+
+                def apres_fichier(_reste):
+                    with open(chemins[-1], "rb") as fh:
+                        images.append(fh.read())
+                    if source == "vitre":
+                        raise twain.exceptions.CancelAll
+                try:
+                    src.acquire_file(before=avant, after=apres_fichier, show_ui=interface, modal=interface)
+                except (twain.exceptions.DSTransferCancelled, twain.exceptions.CancelAll):
+                    pass
+            else:
+                def apres(img, reste):
+                    f = os.path.join(dossier, f"p{len(images):03d}.bmp")
+                    img.save(f)                         # la memoire de l'image est rendue par pytwain (une seule fois)
+                    with open(f, "rb") as fh:
+                        images.append(fh.read())
+                    if source == "vitre":
+                        raise twain.exceptions.CancelAll
+                try:
+                    src.acquire_natively(after=apres, show_ui=interface, modal=interface)
+                except (twain.exceptions.DSTransferCancelled, twain.exceptions.CancelAll):
+                    pass
         finally:
             try:
                 src.close()                             # la source se ferme ; le gestionnaire reste ouvert
             except Exception as e:                      # noqa: BLE001
                 _journal(f"TWAIN {nom} : fermeture de la source : {e}")
     except Exception as e:
+        pile = [f"{os.path.basename(f.filename)}:{f.lineno} {f.name}" for f in traceback.extract_tb(e.__traceback__)[-4:]]
         _journal(f"TWAIN {nom} : {type(e).__name__} : {e}")
+        _journal(f"TWAIN {nom} : dernières étapes : " + " > ".join(etapes[-6:] or ["aucune"]))
+        _journal(f"TWAIN {nom} : endroit : " + " > ".join(pile))
         raise
+    finally:
+        lg.removeHandler(suivi)
+        lg.setLevel(niveau)
     _journal(f"TWAIN {nom} : {len(images)} page(s)")
     return images
 

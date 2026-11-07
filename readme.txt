@@ -396,6 +396,13 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.79
+- Scanners TWAIN (Avision AD225WN...) : les pages passent par un fichier ecrit par le pilote (transfert « par
+  fichier »), au lieu d'une image en memoire qui provoquait une « violation d'acces » avec certains pilotes
+  64 bits. Le transfert en memoire reste en secours pour les pilotes qui ne savent pas ecrire de fichier.
+- Journal (Aide > Journal) : en cas d'erreur TWAIN, les dernieres etapes echangees avec le pilote et l'endroit
+  exact de l'erreur sont notes.
+
 0.9.78
 - Envoyer plusieurs fichiers par e-mail, joints au meme message : depuis l'Accueil (fichiers coches, « Envoyer par
   e-mail... ») et depuis le traitement par lot (action « Envoyer par e-mail a la fin » : les fichiers produits ;
