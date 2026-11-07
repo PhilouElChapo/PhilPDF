@@ -413,6 +413,11 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.83
+- Scanner au pilote 32 bits (ex. Avision AD225WN en reseau) : une fois que le pilote 64 bits a plante a l'ouverture,
+  PhilPDF le retient (fichier twain32.json du dossier des donnees) et passe directement par le pilote 32 bits les
+  fois suivantes, sans rejouer le plantage.
+
 0.9.82
 - Scanners dont le pilote ne marche qu'en 32 bits (scanner reseau relie par le pont du fabricant, ex. Avision
   AD225WN avec « Virtual Scanner Link », ou ancien pilote) : PhilPDF numerise par une petite aide 32 bits livree
