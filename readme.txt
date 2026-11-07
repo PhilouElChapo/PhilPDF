@@ -402,6 +402,11 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.81
+- Numeriser avec un scanner TWAIN dont le pilote s'arrete des l'ouverture (scanner eteint, ou scanner reseau pas
+  encore relie, ex. Avision : « Virtual Scanner Link ») : message clair qui dit quoi faire, au lieu d'une erreur
+  technique ; PhilPDF ne reessaie plus inutilement avec la fenetre du pilote.
+
 0.9.80
 - Nom propose par l'IA (apres une numerisation, Renommer et classer, traitement par lot) : « Expediteur - objet -
   date » (ex. « EDF - Facture electricite - 2026-10-12.pdf ») : la date a la fin, un meme document se range dans
