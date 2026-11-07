@@ -402,6 +402,13 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.82
+- Scanners dont le pilote ne marche qu'en 32 bits (scanner reseau relie par le pont du fabricant, ex. Avision
+  AD225WN avec « Virtual Scanner Link », ou ancien pilote) : PhilPDF numerise par une petite aide 32 bits livree
+  avec lui (dossier twain32). Si le pilote 64 bits plante a l'ouverture, l'aide 32 bits prend le relais
+  automatiquement (note au journal) ; les scanners connus du seul pilote 32 bits apparaissent dans la liste
+  « (TWAIN 32 bits) ».
+
 0.9.81
 - Numeriser avec un scanner TWAIN dont le pilote s'arrete des l'ouverture (scanner eteint, ou scanner reseau pas
   encore relie, ex. Avision : « Virtual Scanner Link ») : message clair qui dit quoi faire, au lieu d'une erreur

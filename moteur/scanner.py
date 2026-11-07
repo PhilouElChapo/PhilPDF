@@ -249,13 +249,132 @@ def _numeriser_twain(nom, mode, dpi, source, fenetre=None, interface=False):
     return images
 
 
+# ------------------------------------------------------------------ Windows (TWAIN 32 bits, par l'aide)
+# Certains pilotes ne marchent qu'en 32 bits : scanners reseau relies par le « pont » du fabricant (Avision : Virtual
+# Scanner Link), anciens pilotes. Un petit programme 32 bits livre avec PhilPDF (twain32\aide_twain32.exe) numerise a
+# sa place et rend les pages en fichiers. Rien d'autre n'est installe sur le poste.
+_SOURCES32 = None      # {nom: gestionnaire} lues une fois par session
+_PREFERER32 = set()   # sources dont le pilote 64 bits a plante a l'ouverture : 32 bits directement
+
+
+def aide32():
+    """Chemin de l'aide TWAIN 32 bits, ou None (pas sous Windows, ou absente du paquet)."""
+    if sys.platform != "win32":
+        return None
+    base = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else \
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dist", "PhilPDF")
+    f = os.path.join(base, "twain32", "aide_twain32.exe")
+    return f if os.path.exists(f) else None
+
+
+def _lancer32(args, attente=None, delai=None):
+    """Lance l'aide 32 bits ; rend la liste de ses messages (dicts). attente() est appelee pendant qu'elle travaille
+    (la fenetre de progression de PhilPDF reste vivante)."""
+    import json
+    import time
+    f = aide32()
+    if not f:
+        raise RuntimeError(_("L'aide TWAIN 32 bits est absente de ce paquet de PhilPDF."))
+    sortie = tempfile.NamedTemporaryFile(prefix="philpdf_t32_", suffix=".txt", delete=False)
+    sortie.close()
+    with open(sortie.name, "w") as out:
+        p = subprocess.Popen(([sys.executable] if f.endswith(".py") else []) + [f] + args, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        debut = time.time()
+        while p.poll() is None:
+            if attente:
+                attente()
+            time.sleep(0.05)
+            if delai and time.time() - debut > delai:
+                p.kill()
+                raise RuntimeError(_("L'aide TWAIN 32 bits ne répond plus (plus de {n} s).", n=int(delai)))
+    msgs = []
+    with open(sortie.name, encoding="utf-8", errors="replace") as fh:
+        for l in fh:
+            try:
+                msgs.append(json.loads(l))
+            except ValueError:
+                if l.strip():
+                    msgs.append({"journal": l.strip()})
+    try:
+        os.remove(sortie.name)
+    except OSError:
+        pass
+    for m in msgs:
+        if "journal" in m:
+            _journal("TWAIN 32 bits : " + str(m["journal"]))
+    if p.returncode not in (0, 1, 2) and not any("erreur" in m or "fin" in m or "sources" in m for m in msgs):
+        msgs.append({"erreur": f"l'aide s'est arrêtée (code {p.returncode})", "etapes": [], "ouverture": False})
+    return msgs
+
+
+def scanners_twain32():
+    """{nom: gestionnaire} des sources TWAIN 32 bits (vide si l'aide est absente)."""
+    global _SOURCES32
+    if _SOURCES32:                                       # une liste vide est relue (pont relie entre-temps)
+        return _SOURCES32
+    _SOURCES32 = {}
+    if not aide32():
+        return _SOURCES32
+    try:
+        for m in _lancer32(["liste"], delai=30):
+            for s in m.get("sources", []):
+                _SOURCES32.setdefault(s["nom"], s["gestionnaire"])
+        _journal(f"TWAIN 32 bits : {len(_SOURCES32)} source(s) " + ", ".join(_SOURCES32))
+    except Exception as e:                              # noqa: BLE001
+        _journal(f"TWAIN 32 bits : liste impossible : {e}")
+    return _SOURCES32
+
+
+def _attente_qt():
+    try:
+        from PySide6.QtWidgets import QApplication
+        QApplication.processEvents()
+    except Exception:                                   # noqa: BLE001
+        pass
+
+
+def _numeriser_twain32(nom, mode, dpi, source, interface=False):
+    """Pages (octets BMP) numerisees par l'aide 32 bits."""
+    dossier = tempfile.mkdtemp(prefix="philpdf_twain32_")
+    g = scanners_twain32().get(nom, "")
+    _journal(f"TWAIN 32 bits {nom} : numérisation ({g or 'gestionnaire automatique'}, fenêtre du pilote "
+             f"{'oui' if interface else 'non'})")
+    msgs = _lancer32(["numeriser", dossier, nom, mode, str(dpi), source, "1" if interface else "0"] + ([g] if g else []),
+                     attente=_attente_qt)
+    images = []
+    for m in msgs:
+        if "page" in m and os.path.exists(m["page"]):
+            with open(m["page"], "rb") as fh:
+                images.append(fh.read())
+    err = next((m for m in msgs if "erreur" in m), None)
+    if err and not images:
+        _journal(f"TWAIN 32 bits {nom} : {err['erreur']}")
+        _journal(f"TWAIN 32 bits {nom} : dernières étapes : " + " > ".join(err.get("etapes") or ["aucune"]))
+        if err.get("endroit"):
+            _journal(f"TWAIN 32 bits {nom} : endroit : " + " > ".join(err["endroit"]))
+        if err.get("ouverture"):
+            raise OuvertureImpossible(_(
+                "Le scanner « {n} » n'a pas pu être ouvert, ni par son pilote 64 bits ni par son pilote 32 bits.\n\n"
+                "• Vérifiez qu'il est allumé et branché.\n• Scanner en Wi-Fi ou réseau : vérifiez qu'il est bien relié "
+                "dans l'outil du fabricant (Avision : « Virtual Scanner Link ») et qu'aucun autre poste ne l'utilise.\n"
+                "• Sinon, branchez-le en USB.", n=nom))
+        raise RuntimeError(_("Pilote TWAIN 32 bits : {e}", e=err["erreur"]))
+    _journal(f"TWAIN 32 bits {nom} : {len(images)} page(s)")
+    return images
+
+
 def scanners(reseau=True, fenetre=None):
     """[(identifiant, nom)] des scanners disponibles : WIA (Windows) ou SANE (Linux), puis ceux du reseau (eSCL)."""
     out = []
     if sys.platform == "win32":
         out = scanners_wia()
         noms = {n for _i, n in out}
-        out += [(i, n) for i, n in scanners_twain(fenetre) if n.rsplit(" (", 1)[0] not in noms]
+        tw = [(i, n) for i, n in scanners_twain(fenetre) if n.rsplit(" (", 1)[0] not in noms]
+        out += tw
+        noms |= {i[6:] for i, _n in tw}
+        # sources que seul un pilote 32 bits connait (scanner reseau relie par le pont du fabricant, ancien pilote)
+        out += [("twain32:" + n, n + " " + _("(TWAIN 32 bits)")) for n in scanners_twain32() if n not in noms]
     elif shutil.which("scanimage"):
         try:
             r = subprocess.run(["scanimage", "-f", "%d|%v %m%n"], capture_output=True, text=True, timeout=30)
@@ -328,8 +447,22 @@ def _numeriser_linux(device_id, mode, dpi, source):
 
 def numeriser(device_id, mode="auto", dpi=300, source="chargeur", fenetre=None, interface=False):
     """Renvoie la liste des images (PNG, JPEG ou BMP) numerisees."""
+    if device_id.startswith("twain32:"):
+        return _numeriser_twain32(device_id[8:], mode, dpi, source, interface)
     if device_id.startswith("twain:"):
-        return _numeriser_twain(device_id[6:], mode, dpi, source, fenetre, interface)
+        nom = device_id[6:]
+        if nom in _PREFERER32:
+            return _numeriser_twain32(nom, mode, dpi, source, interface)
+        try:
+            return _numeriser_twain(nom, mode, dpi, source, fenetre, interface)
+        except OuvertureImpossible:
+            if nom not in scanners_twain32():
+                raise
+            # le pilote 64 bits plante a l'ouverture (ex. Avision relie par Virtual Scanner Link) : son pilote
+            # 32 bits, celui qu'utilise le logiciel du fabricant, prend le relais pour le reste de la session
+            _journal(f"TWAIN {nom} : le pilote 64 bits s'arrête à l'ouverture : essai avec le pilote 32 bits")
+            _PREFERER32.add(nom)
+            return _numeriser_twain32(nom, mode, dpi, source, interface)
     if device_id.startswith("escl:"):
         from . import escl
         return escl.numeriser(device_id[5:], mode, dpi, source, _journal)

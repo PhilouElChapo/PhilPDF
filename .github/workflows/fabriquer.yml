@@ -84,6 +84,9 @@ jobs:
       - name: Test des scanners reseau (eSCL) et du nettoyage des scans
         run: python tests/test_escl.py
 
+      - name: Test de l'aide TWAIN 32 bits (scanners au pilote 32 bits seulement)
+        run: python tests/test_twain32.py
+
       - name: Test de la session partagee
         run: python tests/test_session.py
 
@@ -230,6 +233,31 @@ jobs:
           Get-Content verif.txt
           Get-Content verif.txt | Where-Object { $_ -match "^(google drive|onedrive|dropbox|box|coffre|ocr|langues|moteur|orthographe|RESULTAT)" } | ForEach-Object { Write-Output "::notice title=Auto-controle::$_" }
           if ($p.ExitCode -ne 0) { throw "auto-controle en echec" }
+
+      # aide TWAIN 32 bits : certains pilotes ne marchent qu'en 32 bits (Avision relie par Virtual Scanner Link...).
+      # Fabriquee en dernier : le Python 32 bits ne sert qu'a elle.
+      - uses: actions/setup-python@v6
+        id: py32
+        with:
+          python-version: "3.12"
+          architecture: x86
+
+      - name: Aide TWAIN 32 bits
+        shell: pwsh
+        run: |
+          $py = "${{ steps.py32.outputs.python-path }}"
+          & $py -c "import struct,sys; print('Python', sys.version, struct.calcsize('P')*8, 'bits'); assert struct.calcsize('P') == 4"
+          & $py -m pip install --upgrade pip
+          & $py -m pip install pytwain pyinstaller
+          & $py -m PyInstaller --noconfirm --clean --console --name aide_twain32 --distpath dist32 --workpath build32 --exclude-module tkinter twain32\aide_twain32.py
+          if (-not (Test-Path dist32\aide_twain32\aide_twain32.exe)) { throw "aide TWAIN 32 bits absente" }
+          $o = & dist32\aide_twain32\aide_twain32.exe essai
+          Write-Output $o
+          if ($o -notmatch "commande inconnue") { throw "aide TWAIN 32 bits : ne repond pas" }
+          New-Item -ItemType Directory -Force dist\PhilPDF\twain32 | Out-Null
+          Copy-Item -Recurse -Force dist32\aide_twain32\* dist\PhilPDF\twain32\
+          Write-Output "::notice title=TWAIN 32 bits::aide livree dans twain32\aide_twain32.exe"
+          $global:LASTEXITCODE = 0
 
       - name: Version portable
         shell: pwsh
