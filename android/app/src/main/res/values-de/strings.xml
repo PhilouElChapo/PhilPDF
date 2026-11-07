@@ -762,4 +762,15 @@
     <string name="ia_nommer_garder">Diesen Namen behalten</string>
     <string name="ia_nommer_origine">Ursprünglicher Name</string>
     <string name="ia_nommer_case">Namen mit KI vorschlagen (Absender, Betreff, Datum)</string>
+    <string name="outil_biffer">Schwärzen (wirklich löschen)</string>
+    <string name="aide_biffer">Ziehen Sie ein Rechteck über jede Stelle, die verschwinden soll (Text, Bild, Unterschrift...). Vor „Schwärzen“ wird nichts entfernt; danach existiert der Inhalt nicht mehr in der Datei, ein schwarzes Rechteck ersetzt ihn. „Rückgängig“ stellt ihn wieder her, solange die Datei offen ist.</string>
+    <string name="biffer_zones">Markierte Bereiche: %1$d</string>
+    <string name="biffer_appliquer">Schwärzen</string>
+    <string name="biffer_effacer_marques">Markierungen löschen</string>
+    <string name="biffer_titre">Schwärzen</string>
+    <string name="biffer_confirmer">Die %1$d markierten Bereiche werden endgültig aus der Datei entfernt (Text, Bilder und Zeichnungen) und durch ein schwarzes Rechteck ersetzt. Fortfahren?</string>
+    <string name="biffer_fait">%1$d Bereich(e) geschwärzt: ihr Inhalt existiert nicht mehr in der Datei.</string>
+    <string name="biffer_echec">Schwärzen nicht möglich (Details im Protokoll).</string>
+    <string name="biffer_quitter">%1$d markierte Bereiche sind noch nicht geschwärzt.</string>
+    <string name="biffer_abandonner">Markierungen verwerfen</string>
 </resources>

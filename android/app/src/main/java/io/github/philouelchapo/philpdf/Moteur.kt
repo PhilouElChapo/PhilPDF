@@ -1192,6 +1192,20 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         return k
     }
 
+    /** Biffer, comme sous Windows : les zones marquees sont supprimees pour de vrai (texte, images, dessins) et
+     *  remplacees par un rectangle noir. Une seule etape d'annulation pour toutes les zones. */
+    suspend fun biffer(zones: List<Pair<Int, Rect>>): Boolean = if (zones.isEmpty()) false else operation("Biffer") { p ->
+        for ((n, rs) in zones.groupBy({ it.first }, { it.second })) surPage(p, n) { page ->
+            for (r in rs) {
+                val an = page.createAnnotation(PDFAnnotation.TYPE_REDACT)
+                an.setRect(r)
+                an.update()
+            }
+            page.applyRedactions(true, PDFPage.REDACT_IMAGE_PIXELS, PDFPage.REDACT_LINE_ART_REMOVE_IF_TOUCHED, PDFPage.REDACT_TEXT_REMOVE)
+        }
+        true
+    }
+
     /** Effacer le contenu de la page dans la zone (texte, images, traits), comme la retouche « effacer » de Windows. */
     suspend fun effacerZone(n: Int, r: Rect): Boolean = operation("Effacer") { p ->
         surPage(p, n) { page ->

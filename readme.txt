@@ -10,6 +10,14 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.19.0
+- Biffer, comme sous Windows (Modifier > Effacer > Biffer) : tracez un rectangle sur chaque passage a faire
+  disparaitre (texte, image, signature...) ; les zones marquees apparaissent en noir transparent bordees de rouge.
+  « Biffer » demande confirmation, puis supprime pour de vrai leur contenu du fichier et le remplace par un
+  rectangle noir (une seule etape a annuler). « Effacer les marques » repart de zero ; quitter l'outil avec des
+  marques non biffees le demande d'abord.
+- « Effacer une zone de la page » a maintenant son icone (balai) : celle de Biffer lui etait pretee.
+
 1.18.5
 - Modifier le texte : un titre centre dans un bandeau ou une cellule (bandeau rouge d'un releve, par exemple) reste
   centre quand son texte change de longueur ; s'il ne tient plus dans le cadre, un message le dit.

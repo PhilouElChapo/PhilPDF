@@ -100,6 +100,10 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var resumeIa by mutableStateOf(false)                   // « Resumer avec l'IA »
     var reglagesIa by mutableStateOf(false)
     var redresser by mutableStateOf<Int?>(null)               // « Redresser la page » : page choisie
+    /** Biffer : zones marquees (page, rectangle en points), supprimees seulement a « Biffer ». */
+    val biffage = androidx.compose.runtime.mutableStateListOf<Pair<Int, com.artifex.mupdf.fitz.Rect>>()
+    var confirmerBiffage by mutableStateOf(false)
+    var quitterBiffage by mutableStateOf(false)
     var ocr by mutableStateOf<Int?>(null)                   // reconnaissance du texte proposee (page de depart)
     var ocrAuto = false                                     // document numerise : reconnaissance lancee d'office
     var choixPartage by mutableStateOf(false)               // envoyer le fichier ou un lien
@@ -316,6 +320,7 @@ private fun DispositionTablette(etat: EtatLecteur, tailles: List<Pair<Float, Flo
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 Pages(etat, tailles, Modifier.fillMaxSize())
                 IndicateurPage(etat, tailles.size, Modifier.align(Alignment.BottomEnd))
+                if (etat.annot.outil == Outil.BIFFER) BarreBiffer(etat, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
             }
             droite?.let { v ->
                 VerticalDivider(color = Color(0xFFE2E2E2))
@@ -395,7 +400,8 @@ private fun DispositionTelephone(etat: EtatLecteur, tailles: List<Pair<Float, Fl
             }
         }
         // outil en cours (dessin, surlignage...) : petite barre en haut, toujours visible, pour finir
-        if (etat.annot.outil != Outil.MAIN) {
+        if (etat.annot.outil == Outil.BIFFER) BarreBiffer(etat, Modifier.align(Alignment.TopCenter).padding(top = if (barres) hHaut + 4.dp else 8.dp))
+        else if (etat.annot.outil != Outil.MAIN) {
             Row(Modifier.align(Alignment.TopCenter).padding(top = if (barres) 56.dp else 8.dp)
                 .background(Color(0xEE2B2B2B), RoundedCornerShape(20.dp)).padding(horizontal = 10.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically) {
@@ -786,6 +792,12 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                                 Outil.RECTANGLE -> d.forme(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_SQUARE, pts.first(), pts.last(), c, r.epaisseur, 1f)
                                 Outil.ELLIPSE -> d.forme(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_CIRCLE, pts.first(), pts.last(), c, r.epaisseur, 1f)
                                 Outil.FLECHE -> d.forme(n, com.artifex.mupdf.fitz.PDFAnnotation.TYPE_LINE, pts.first(), pts.last(), c, r.epaisseur, 1f)
+                                Outil.BIFFER -> {
+                                    val a = pts.first(); val b = pts.last()
+                                    if (kotlin.math.abs(b.x - a.x) > 2f && kotlin.math.abs(b.y - a.y) > 2f)
+                                        etat.biffage += n to com.artifex.mupdf.fitz.Rect(minOf(a.x, b.x), minOf(a.y, b.y), maxOf(a.x, b.x), maxOf(a.y, b.y))
+                                    true
+                                }
                                 Outil.EFFACER_ZONE -> d.effacerZone(n, com.artifex.mupdf.fitz.Rect(minOf(pts.first().x, pts.last().x),
                                     minOf(pts.first().y, pts.last().y), maxOf(pts.first().x, pts.last().x), maxOf(pts.first().y, pts.last().y)))
                                 Outil.CHAMP_LISTE -> {
@@ -848,6 +860,15 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                 }
             }
         }
+        val aBiffer = if (marques && r.outil == Outil.BIFFER) etat.biffage.filter { it.first == n } else emptyList()
+        if (aBiffer.isNotEmpty()) Canvas(Modifier.fillMaxSize()) {   // zones a biffer : noir transparent, bord rouge
+            val k = size.width / w
+            aBiffer.forEach { (_, z) ->
+                val o = Offset(z.x0 * k, z.y0 * k); val t = Size((z.x1 - z.x0) * k, (z.y1 - z.y0) * k)
+                drawRect(Color(0xAA000000), o, t)
+                drawRect(Color(0xFFD32F2F), o, t, style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+            }
+        }
         val zones = if (marques) etat.trouves.firstOrNull { it.page == n }?.zones else null
         if (!zones.isNullOrEmpty()) {
             Canvas(Modifier.fillMaxSize()) {           // resultats de la recherche surlignes
@@ -870,6 +891,8 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                     Outil.ELLIPSE -> drawOval(c, Offset(minOf(a.x, b.x), minOf(a.y, b.y)), Size(kotlin.math.abs(b.x - a.x), kotlin.math.abs(b.y - a.y)),
                         style = androidx.compose.ui.graphics.drawscope.Stroke(ep))
                     Outil.FLECHE -> drawLine(c, a, b, ep)
+                    Outil.BIFFER -> drawRect(Color(0xAA000000), Offset(minOf(a.x, b.x), minOf(a.y, b.y)),
+                        Size(kotlin.math.abs(b.x - a.x), kotlin.math.abs(b.y - a.y)))
                     Outil.EFFACER_ZONE -> drawRect(Color(0x55D32F2F), Offset(minOf(a.x, b.x), minOf(a.y, b.y)),
                         Size(kotlin.math.abs(b.x - a.x), kotlin.math.abs(b.y - a.y)))
                     Outil.GOMME -> for (i in 1 until trace.size) drawLine(Color(0x88D32F2F), trace[i - 1], trace[i], 18f)
@@ -1194,4 +1217,52 @@ private fun DialogueOcr(etat: EtatLecteur, page: Int, fermer: () -> Unit) {
             }
         },
         dismissButton = { TextButton(onClick = { travail?.cancel(); fermer() }) { Text(stringResource(R.string.annuler)) } })
+}
+
+// ================================================================ biffer (comme sous Windows)
+/** Barre de l'outil Biffer : nombre de zones marquees, « Biffer » (confirmation), « Effacer les marques », « Termine ».
+ *  Rien n'est supprime avant la confirmation ; quitter l'outil avec des marques le demande d'abord. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun BarreBiffer(etat: EtatLecteur, modifier: Modifier) {
+    val ctx = LocalContext.current
+    val portee = rememberCoroutineScope()
+    val n = etat.biffage.size
+    fun quitter() { etat.biffage.clear(); etat.annot.outil = Outil.MAIN }
+    FlowRow(modifier.padding(horizontal = 8.dp).background(Color(0xEE2B2B2B), RoundedCornerShape(20.dp))
+        .padding(horizontal = 10.dp, vertical = 2.dp), horizontalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.Center) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.align(Alignment.CenterVertically)) {
+            Icon(Icones.get("biffer", Color.White), null, tint = Color.Unspecified)
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.biffer_zones, n), color = Color.White, fontSize = 13.sp)
+        }
+        TextButton(onClick = { etat.confirmerBiffage = true }, enabled = n > 0) {
+            Text(stringResource(R.string.biffer_appliquer), color = if (n > 0) Color(0xFFFF8A80) else Color.Gray, fontWeight = FontWeight.SemiBold)
+        }
+        TextButton(onClick = { etat.biffage.clear() }, enabled = n > 0) {
+            Text(stringResource(R.string.biffer_effacer_marques), color = if (n > 0) Color(0xFF9CC3FF) else Color.Gray)
+        }
+        TextButton(onClick = { if (n > 0) etat.quitterBiffage = true else quitter() }) { Text(stringResource(R.string.termine), color = Color.White) }
+    }
+    if (etat.confirmerBiffage) AlertDialog(onDismissRequest = { etat.confirmerBiffage = false },
+        title = { Text(stringResource(R.string.biffer_titre)) },
+        text = { Text(stringResource(R.string.biffer_confirmer, n)) },
+        confirmButton = { Button(onClick = {
+            etat.confirmerBiffage = false
+            val zones = etat.biffage.toList()
+            portee.launch {
+                val ok = try { etat.doc.biffer(zones) } catch (e: Exception) { Journal.ecrire("biffer", e.toString()); false }
+                if (ok) { quitter(); etat.message = ctx.getString(R.string.biffer_fait, zones.size) }
+                else etat.message = ctx.getString(R.string.biffer_echec)
+                Journal.ecrire("biffer", if (ok) "${zones.size} zone(s) biffée(s)" else "biffage impossible")
+            }
+        }, colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) { Text(stringResource(R.string.biffer_appliquer)) } },
+        dismissButton = { TextButton(onClick = { etat.confirmerBiffage = false }) { Text(stringResource(R.string.annuler)) } })
+    if (etat.quitterBiffage) AlertDialog(onDismissRequest = { etat.quitterBiffage = false },
+        title = { Text(stringResource(R.string.biffer_titre)) },
+        text = { Text(stringResource(R.string.biffer_quitter, n)) },
+        confirmButton = { Button(onClick = { etat.quitterBiffage = false; etat.confirmerBiffage = true },
+            colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) { Text(stringResource(R.string.biffer_appliquer)) } },
+        dismissButton = { TextButton(onClick = { etat.quitterBiffage = false; quitter() }) { Text(stringResource(R.string.biffer_abandonner)) } })
 }

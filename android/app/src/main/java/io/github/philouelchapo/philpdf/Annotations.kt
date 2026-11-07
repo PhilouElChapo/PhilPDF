@@ -36,7 +36,8 @@ enum class Outil(val icone: String, val texte: Int) {
     ELLIPSE("aucun", R.string.outil_ellipse),
     FLECHE("suivante", R.string.outil_fleche),
     GOMME("supprimer", R.string.outil_gomme),               // effacer des annotations (toucher ou frotter)
-    EFFACER_ZONE("biffer", R.string.outil_effacer_zone),     // effacer le contenu de la page dans une zone
+    EFFACER_ZONE("nettoyer", R.string.outil_effacer_zone),   // effacer le contenu de la page dans une zone
+    BIFFER("biffer", R.string.outil_biffer),                 // biffer : zones marquees, puis supprimees pour de vrai (noir)
     CHAMP_TEXTE("formulaire", R.string.outil_champ_texte),   // creer un formulaire : zone de texte dessinee
     CHAMP_CASE("valide", R.string.outil_champ_case),         // creer un formulaire : case a cocher
     CHAMP_LISTE("liste_fichiers", R.string.outil_champ_liste), // creer un formulaire : liste deroulante
@@ -49,7 +50,7 @@ enum class Outil(val icone: String, val texte: Int) {
     val forme: Boolean get() = this == RECTANGLE || this == ELLIPSE || this == FLECHE
     val champ: Boolean get() = this == CHAMP_TEXTE || this == CHAMP_CASE || this == CHAMP_LISTE || this == CHAMP_SIGNATURE || this == CHAMP_BOUTON
     /** Outils qui se tracent comme un cadre (rectangle du doigt). */
-    val cadre: Boolean get() = champ || this == EFFACER_ZONE || this == SIGNER_NUM
+    val cadre: Boolean get() = champ || this == EFFACER_ZONE || this == SIGNER_NUM || this == BIFFER
 }
 
 /** Groupes du volet Modifier : un bouton par groupe, ses outils s'affichent dessous (rien n'est noye). */
@@ -58,7 +59,7 @@ enum class GroupeOutils(val icone: String, val texte: Int, val outils: List<Outi
     TEXTE("modifier", R.string.groupe_texte_images, listOf(Outil.TEXTE, Outil.IMAGE)),
     ANNOTER("surligner", R.string.groupe_annoter, listOf(Outil.SURLIGNER, Outil.SOULIGNER, Outil.BARRER, Outil.NOTE,
         Outil.DESSIN, Outil.RECTANGLE, Outil.ELLIPSE, Outil.FLECHE)),
-    EFFACER("supprimer", R.string.groupe_effacer, listOf(Outil.GOMME, Outil.EFFACER_ZONE)),
+    EFFACER("supprimer", R.string.groupe_effacer, listOf(Outil.GOMME, Outil.EFFACER_ZONE, Outil.BIFFER)),
     FORMULAIRE("formulaire", R.string.groupe_formulaire, listOf(Outil.CHAMP_TEXTE, Outil.CHAMP_CASE, Outil.CHAMP_LISTE, Outil.CHAMP_SIGNATURE, Outil.CHAMP_BOUTON));
 
     companion object { fun de(o: Outil) = entries.firstOrNull { o in it.outils } ?: LIRE }
@@ -187,6 +188,7 @@ fun aideOutil(o: Outil): Int = when {
     o == Outil.IMAGE -> R.string.aide_image
     o.champ -> R.string.aide_champ
     o == Outil.EFFACER_ZONE -> R.string.aide_effacer_zone
+    o == Outil.BIFFER -> R.string.aide_biffer
     o == Outil.SIGNER_NUM -> R.string.aide_signer_num
     else -> R.string.aide_dessin
 }

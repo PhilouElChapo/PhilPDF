@@ -763,4 +763,15 @@
     <string name="ia_nommer_garder">Keep this name</string>
     <string name="ia_nommer_origine">Original name</string>
     <string name="ia_nommer_case">Suggest a name with AI (sender, subject, date)</string>
+    <string name="outil_biffer">Redact (erase for real)</string>
+    <string name="aide_biffer">Draw a rectangle over each passage that must disappear (text, image, signature...). Nothing is removed before “Redact”; after that, the content no longer exists in the file and a black rectangle replaces it. “Undo” brings it back until the file is closed.</string>
+    <string name="biffer_zones">Marked areas: %1$d</string>
+    <string name="biffer_appliquer">Redact</string>
+    <string name="biffer_effacer_marques">Clear marks</string>
+    <string name="biffer_titre">Redact</string>
+    <string name="biffer_confirmer">The %1$d marked area(s) will be removed from the file for good (text, images and drawings) and replaced by a black rectangle. Continue?</string>
+    <string name="biffer_fait">%1$d area(s) redacted: their content no longer exists in the file.</string>
+    <string name="biffer_echec">Redaction impossible (details in the log).</string>
+    <string name="biffer_quitter">%1$d marked area(s) are not redacted yet.</string>
+    <string name="biffer_abandonner">Discard the marks</string>
 </resources>

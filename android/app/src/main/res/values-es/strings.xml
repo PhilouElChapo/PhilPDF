@@ -762,4 +762,15 @@
     <string name="ia_nommer_garder">Mantener este nombre</string>
     <string name="ia_nommer_origine">Nombre original</string>
     <string name="ia_nommer_case">Proponer un nombre con IA (remitente, asunto, fecha)</string>
+    <string name="outil_biffer">Tachar (borrar de verdad)</string>
+    <string name="aide_biffer">Trace un rectángulo sobre cada pasaje que debe desaparecer (texto, imagen, firma...). Nada se elimina antes de «Tachar»; después, el contenido ya no existe en el archivo y un rectángulo negro lo sustituye. «Deshacer» lo restablece mientras el archivo esté abierto.</string>
+    <string name="biffer_zones">Zonas marcadas: %1$d</string>
+    <string name="biffer_appliquer">Tachar</string>
+    <string name="biffer_effacer_marques">Borrar las marcas</string>
+    <string name="biffer_titre">Tachar</string>
+    <string name="biffer_confirmer">Las %1$d zona(s) marcada(s) se eliminarán definitivamente del archivo (texto, imágenes y dibujos) y se sustituirán por un rectángulo negro. ¿Continuar?</string>
+    <string name="biffer_fait">%1$d zona(s) tachada(s): su contenido ya no existe en el archivo.</string>
+    <string name="biffer_echec">No se pudo tachar (detalles en el registro).</string>
+    <string name="biffer_quitter">%1$d zona(s) marcada(s) aún no están tachadas.</string>
+    <string name="biffer_abandonner">Descartar las marcas</string>
 </resources>

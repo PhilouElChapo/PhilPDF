@@ -762,4 +762,15 @@
     <string name="ia_nommer_garder">Tenere questo nome</string>
     <string name="ia_nommer_origine">Nome originale</string>
     <string name="ia_nommer_case">Proporre un nome con l\'IA (mittente, oggetto, data)</string>
+    <string name="outil_biffer">Oscurare (cancellare davvero)</string>
+    <string name="aide_biffer">Tracciate un rettangolo su ogni passaggio che deve sparire (testo, immagine, firma...). Nulla viene rimosso prima di «Oscura»; dopo, il contenuto non esiste più nel file e un rettangolo nero lo sostituisce. «Annulla» lo ripristina finché il file resta aperto.</string>
+    <string name="biffer_zones">Zone segnate: %1$d</string>
+    <string name="biffer_appliquer">Oscura</string>
+    <string name="biffer_effacer_marques">Cancella i segni</string>
+    <string name="biffer_titre">Oscurare</string>
+    <string name="biffer_confirmer">Le %1$d zone segnate saranno rimosse definitivamente dal file (testo, immagini e disegni) e sostituite da un rettangolo nero. Continuare?</string>
+    <string name="biffer_fait">%1$d zona/e oscurata/e: il loro contenuto non esiste più nel file.</string>
+    <string name="biffer_echec">Impossibile oscurare (dettagli nel registro).</string>
+    <string name="biffer_quitter">%1$d zone segnate non sono ancora oscurate.</string>
+    <string name="biffer_abandonner">Abbandona i segni</string>
 </resources>

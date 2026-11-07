@@ -763,4 +763,15 @@
     <string name="ia_nommer_garder">Garder ce nom</string>
     <string name="ia_nommer_origine">Nom d\'origine</string>
     <string name="ia_nommer_case">Proposer un nom avec l\'IA (expéditeur, objet, date)</string>
+    <string name="outil_biffer">Biffer (effacer pour de vrai)</string>
+    <string name="aide_biffer">Tracez un rectangle sur chaque passage qui doit disparaître (texte, image, signature...). Rien n\'est supprimé avant « Biffer » ; ensuite le contenu n\'existe plus dans le fichier, un rectangle noir le remplace. « Annuler » le remet tant que le fichier n\'est pas fermé.</string>
+    <string name="biffer_zones">Zones marquées : %1$d</string>
+    <string name="biffer_appliquer">Biffer</string>
+    <string name="biffer_effacer_marques">Effacer les marques</string>
+    <string name="biffer_titre">Biffer</string>
+    <string name="biffer_confirmer">Les %1$d zone(s) marquée(s) seront supprimées définitivement du fichier (texte, images et dessins) et remplacées par un rectangle noir. Continuer ?</string>
+    <string name="biffer_fait">%1$d zone(s) biffée(s) : leur contenu n\'existe plus dans le fichier.</string>
+    <string name="biffer_echec">Biffage impossible (détails dans le journal).</string>
+    <string name="biffer_quitter">%1$d zone(s) marquée(s) ne sont pas encore biffées.</string>
+    <string name="biffer_abandonner">Abandonner les marques</string>
 </resources>
