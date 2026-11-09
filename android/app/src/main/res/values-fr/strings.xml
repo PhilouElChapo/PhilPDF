@@ -886,4 +886,22 @@
     <string name="don_copier">Copier</string>
     <string name="don_partager">Partager</string>
     <string name="don_copie">Copié : collez-le dans votre tableur ou votre message.</string>
+    <string name="grp_lire">Lire et naviguer</string>
+    <string name="grp_ia">Intelligence artificielle</string>
+    <string name="grp_gestion">Gestion du document</string>
+    <string name="grp_fichier">Fichier : enregistrer, partager, imprimer</string>
+    <string name="sgn_menu">Modifier les signets...</string>
+    <string name="sgn_titre">Signets</string>
+    <string name="sgn_aide">Touchez un signet pour le renommer, changer sa page, ajouter un sous-signet, le déplacer ou le supprimer. Annuler marche à chaque changement.</string>
+    <string name="sgn_ajouter">Ajouter un signet</string>
+    <string name="sgn_aller">Aller à sa page</string>
+    <string name="sgn_modifier">Renommer / changer de page</string>
+    <string name="sgn_sous">Ajouter un sous-signet</string>
+    <string name="sgn_monter">Monter</string>
+    <string name="sgn_descendre">Descendre</string>
+    <string name="sgn_supprimer">Supprimer</string>
+    <string name="sgn_supprimer_q">Supprimer le signet « %1$s » ?</string>
+    <string name="sgn_supprimer_q_sous">Supprimer le signet « %1$s » et ses %2$d sous-signet(s) ?</string>
+    <string name="sgn_nom">Nom du signet</string>
+    <string name="sgn_page">Page (1 à %1$d)</string>
 </resources>

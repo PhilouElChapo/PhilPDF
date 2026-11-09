@@ -885,4 +885,22 @@
     <string name="don_copier">Copia</string>
     <string name="don_partager">Condividi</string>
     <string name="don_copie">Copiato: incollatelo nel foglio di calcolo o nel messaggio.</string>
+    <string name="grp_lire">Leggere e navigare</string>
+    <string name="grp_ia">Intelligenza artificiale</string>
+    <string name="grp_gestion">Gestione del documento</string>
+    <string name="grp_fichier">File: salva, condividi, stampa</string>
+    <string name="sgn_menu">Modifica i segnalibri...</string>
+    <string name="sgn_titre">Segnalibri</string>
+    <string name="sgn_aide">Toccate un segnalibro per rinominarlo, cambiarne la pagina, aggiungere un sotto-segnalibro, spostarlo o eliminarlo. Annulla funziona a ogni modifica.</string>
+    <string name="sgn_ajouter">Aggiungi un segnalibro</string>
+    <string name="sgn_aller">Vai alla sua pagina</string>
+    <string name="sgn_modifier">Rinomina / cambia pagina</string>
+    <string name="sgn_sous">Aggiungi un sotto-segnalibro</string>
+    <string name="sgn_monter">Sposta su</string>
+    <string name="sgn_descendre">Sposta giù</string>
+    <string name="sgn_supprimer">Elimina</string>
+    <string name="sgn_supprimer_q">Eliminare il segnalibro «%1$s»?</string>
+    <string name="sgn_supprimer_q_sous">Eliminare il segnalibro «%1$s» e i suoi %2$d sotto-segnalibri?</string>
+    <string name="sgn_nom">Nome del segnalibro</string>
+    <string name="sgn_page">Pagina (da 1 a %1$d)</string>
 </resources>

@@ -885,4 +885,22 @@
     <string name="don_copier">Copiar</string>
     <string name="don_partager">Compartir</string>
     <string name="don_copie">Copiado: péguelo en su hoja de cálculo o mensaje.</string>
+    <string name="grp_lire">Leer y navegar</string>
+    <string name="grp_ia">Inteligencia artificial</string>
+    <string name="grp_gestion">Gestión del documento</string>
+    <string name="grp_fichier">Archivo: guardar, compartir, imprimir</string>
+    <string name="sgn_menu">Editar los marcadores...</string>
+    <string name="sgn_titre">Marcadores</string>
+    <string name="sgn_aide">Toque un marcador para renombrarlo, cambiar su página, añadir un submarcador, moverlo o eliminarlo. Deshacer funciona en cada cambio.</string>
+    <string name="sgn_ajouter">Añadir un marcador</string>
+    <string name="sgn_aller">Ir a su página</string>
+    <string name="sgn_modifier">Renombrar / cambiar de página</string>
+    <string name="sgn_sous">Añadir un submarcador</string>
+    <string name="sgn_monter">Subir</string>
+    <string name="sgn_descendre">Bajar</string>
+    <string name="sgn_supprimer">Eliminar</string>
+    <string name="sgn_supprimer_q">¿Eliminar el marcador «%1$s»?</string>
+    <string name="sgn_supprimer_q_sous">¿Eliminar el marcador «%1$s» y sus %2$d submarcador(es)?</string>
+    <string name="sgn_nom">Nombre del marcador</string>
+    <string name="sgn_page">Página (1 a %1$d)</string>
 </resources>

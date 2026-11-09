@@ -1644,6 +1644,44 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         }
     }
 
+    /** Arbre des signets, pour les modifier (titre, lien d'origine garde tant qu'on ne change pas la page). */
+    suspend fun arbreSignets(): List<NoeudSignet> = verrou.withLock {
+        withContext(Dispatchers.IO) {
+            fun lire(l: Array<Outline>?, prof: Int): MutableList<NoeudSignet> {
+                val out = ArrayList<NoeudSignet>()
+                for (o in l ?: return out) {
+                    val p = try { doc.pageNumberFromLocation(doc.resolveLink(o)) } catch (_: Exception) { -1 }
+                    out += NoeudSignet(o.title ?: "", o.uri ?: "", p, if (prof < 8) lire(o.down, prof + 1) else ArrayList())
+                }
+                return out
+            }
+            try { lire(doc.loadOutline(), 0) } catch (_: Exception) { ArrayList() }
+        }
+    }
+
+    /** Remplace tous les signets par l'arbre donne (une etape d'annulation, nommee par libelle). */
+    suspend fun ecrireSignets(arbre: List<NoeudSignet>, libelle: String): Boolean = operation(libelle) { p ->
+        val it = p.outlineIterator()
+        var garde = 0
+        while (it.item() != null && garde++ < 100_000) it.delete()
+        fun poser(l: List<NoeudSignet>) {
+            for (n in l) {
+                val uri = if (n.uri.isNotEmpty() && n.pageUri == n.page) n.uri else "#page=${n.page + 1}"
+                it.insert(n.titre, uri, true)
+                if (n.enfants.isNotEmpty()) {
+                    it.prev(); it.down()
+                    poser(n.enfants)
+                    it.up(); it.next()
+                }
+            }
+        }
+        poser(arbre)
+        Journal.ecrire("signets", "$libelle (${compter(arbre)} signet(s))")
+        true
+    }
+
+    private fun compter(l: List<NoeudSignet>): Int = l.sumOf { 1 + compter(it.enfants) }
+
     /** Recherche dans tout le document : zones trouvees (en points) par page. */
     suspend fun rechercher(texte: String): List<Trouve> = verrou.withLock {
         withContext(Dispatchers.IO) {
@@ -1737,6 +1775,12 @@ object Miniatures {
 }
 
 data class Signet(val titre: String, val profondeur: Int, val page: Int)
+
+/** Signet modifiable : pageUri = page vers laquelle menait le lien d'origine (s'il change, un lien neuf est ecrit). */
+class NoeudSignet(var titre: String, val uri: String, var page: Int, val enfants: MutableList<NoeudSignet>) {
+    val pageUri = page
+    fun copie(): NoeudSignet = NoeudSignet(titre, uri, pageUri, enfants.map { it.copie() }.toMutableList()).also { it.page = page }
+}
 data class Trouve(val page: Int, val zones: List<FloatArray>)
 data class Commentaire(val page: Int, val genre: Int, val texte: String, val auteur: String)
 data class InfoAnnot(val page: Int, val index: Int, val genre: Int, val couleur: FloatArray, val opacite: Float,

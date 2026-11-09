@@ -10,6 +10,14 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.23.0
+- Signets modifiables, comme sous Windows : Plus > Gestion du document > Modifier les signets, ou le bouton
+  « Signets » d'Organiser les pages, ou « Modifier les signets » en haut de la liste des signets. Ajouter (sur la
+  page voulue, a sa place dans l'ordre des pages), ajouter un sous-signet, renommer, changer de page, monter,
+  descendre, supprimer (avec confirmation, sous-signets compris) ; chaque changement s'annule a part.
+- Menu Plus en rubriques, plus clair : « Lire et naviguer », « Intelligence artificielle », « Gestion du document »,
+  « Fichier : enregistrer, partager, imprimer » ; une ligne par rubrique, ses actions s'ouvrent dessous.
+
 1.22.1
 - Lecteur : zoom a deux doigts fiable des le premier geste (le pincement passe avant le defilement) et centre sur
   le point pince ; les pages zoomees sont vraiment redessinees plus grandes (texte net) ; un doigt fait defiler

@@ -160,6 +160,7 @@ fun OrganiserPages(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, fermer:
                     }
                     Action("combiner", stringResource(R.string.ajouter_pdf)) { ajouterPdf.launch(arrayOf("application/pdf", "image/*")) }
                     Action("numeriser", stringResource(R.string.inserer_scan)) { numeriser = true }
+                    Action("liste_fichiers", stringResource(R.string.signets)) { etat.editerSignets = true }
                     Action("alleger", stringResource(R.string.compresser)) { dialogueCompresser = true }
                     Action("motdepasse", stringResource(R.string.mot_de_passe)) { dialogueMdp = true }
                 }

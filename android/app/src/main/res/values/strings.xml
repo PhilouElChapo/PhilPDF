@@ -886,4 +886,22 @@
     <string name="don_copier">Copy</string>
     <string name="don_partager">Share</string>
     <string name="don_copie">Copied: paste it in your spreadsheet or message.</string>
+    <string name="grp_lire">Read and navigate</string>
+    <string name="grp_ia">Artificial intelligence</string>
+    <string name="grp_gestion">Document management</string>
+    <string name="grp_fichier">File: save, share, print</string>
+    <string name="sgn_menu">Edit bookmarks...</string>
+    <string name="sgn_titre">Bookmarks</string>
+    <string name="sgn_aide">Touch a bookmark to rename it, change its page, add a sub-bookmark, move or delete it. Undo works on each change.</string>
+    <string name="sgn_ajouter">Add a bookmark</string>
+    <string name="sgn_aller">Go to its page</string>
+    <string name="sgn_modifier">Rename / change page</string>
+    <string name="sgn_sous">Add a sub-bookmark</string>
+    <string name="sgn_monter">Move up</string>
+    <string name="sgn_descendre">Move down</string>
+    <string name="sgn_supprimer">Delete</string>
+    <string name="sgn_supprimer_q">Delete the bookmark “%1$s”?</string>
+    <string name="sgn_supprimer_q_sous">Delete the bookmark “%1$s” and its %2$d sub-bookmark(s)?</string>
+    <string name="sgn_nom">Bookmark name</string>
+    <string name="sgn_page">Page (1 to %1$d)</string>
 </resources>

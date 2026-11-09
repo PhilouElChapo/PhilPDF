@@ -115,6 +115,8 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var expliquer by mutableStateOf(false)                  // « Expliquer simplement »
     var remplirIa by mutableStateOf(false)                  // « Remplir avec l'IA »
     var classer by mutableStateOf(false)                    // « Renommer et classer »
+    var editerSignets by mutableStateOf(false)              // « Modifier les signets »
+    var rubrique by mutableStateOf<String?>(null)           // rubrique ouverte du menu Plus
     var extraire by mutableStateOf(false)                   // « Extraire les donnees »
     var enregistrerSous by mutableStateOf<String?>(null)    // enregistrer une copie sous ce nom (selecteur d'Android)
     var quitterBiffage by mutableStateOf(false)
@@ -244,6 +246,7 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
     if (etat.remplirIa) RemplirIa(etat) { etat.remplirIa = false }
     if (etat.classer) ClasserIa(etat) { etat.classer = false }
     if (etat.extraire) ExtraireIa(etat) { etat.extraire = false }
+    if (etat.editerSignets && t != null) EditeurSignets(etat, t.size, etat.page) { etat.editerSignets = false }
     etat.message?.let { m ->
         val txt = if (m == "aucun_texte") stringResource(R.string.aucun_texte) else m
         LaunchedEffect(m) { android.widget.Toast.makeText(ctx, txt, android.widget.Toast.LENGTH_LONG).show(); etat.message = null }
@@ -401,7 +404,7 @@ private fun DispositionTelephone(etat: EtatLecteur, tailles: List<Pair<Float, Fl
     LaunchedEffect(etat.ouvrirSigner) { if (etat.ouvrirSigner) { tiroir = Volet.SIGNER; etat.ouvrirSigner = false } }
     // un ecran ouvert depuis le menu Plus (filigrane, nettoyer, IA...) : le menu se ferme, rien ne reste par-dessus
     val ecranOuvert = etat.filigrane || etat.nettoyer != null || etat.traduire || etat.expliquer || etat.remplirIa ||
-        etat.classer || etat.extraire || etat.redresser != null || etat.resumeIa || etat.lectureFluide || etat.organiser
+        etat.classer || etat.extraire || etat.editerSignets || etat.redresser != null || etat.resumeIa || etat.lectureFluide || etat.organiser
     LaunchedEffect(ecranOuvert) { if (ecranOuvert) tiroir = null }
     val portee = rememberCoroutineScope()
     // en faisant defiler vers le bas, les barres se cachent ; vers le haut, elles reviennent
@@ -472,7 +475,7 @@ private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, 
     val portee = rememberCoroutineScope()
     when (v) {
         Volet.VIGNETTES -> Vignettes(etat, tailles, aller)
-        Volet.SIGNETS -> Signets(etat.doc, aller)
+        Volet.SIGNETS -> Signets(etat.doc, aller, if (etat.doc.modifiable) ({ etat.editerSignets = true }) else null)
         Volet.COMMENTAIRES -> Commentaires(etat.doc, aller)
         Volet.RECHERCHE -> Recherche(etat, aller)
         Volet.ANNOTER -> PanneauAnnoter(etat)
@@ -483,32 +486,43 @@ private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, 
             var comms by remember { mutableStateOf(false) }
             var historique by remember { mutableStateOf(false) }
             when {
-                signets -> Signets(etat.doc, aller)
+                signets -> Signets(etat.doc, aller, if (etat.doc.modifiable) ({ etat.editerSignets = true }) else null)
                 comms -> Commentaires(etat.doc, aller)
                 else -> Column(Modifier.padding(8.dp)) {
-                    LigneAction("oeil", stringResource(R.string.lecture_fluide)) { etat.lectureFluide = true }
-                    LigneAction("ia", stringResource(R.string.ia_resumer)) { etat.resumeIa = true }
-                    LigneAction("aide", stringResource(R.string.expl_menu)) { etat.expliquer = true }
-                    LigneAction("langue", stringResource(R.string.trad_menu)) { etat.traduire = true }
-                    LigneAction("archiver", stringResource(R.string.cls_menu)) { etat.classer = true }
-                    LigneAction("excel", stringResource(R.string.don_menu)) { etat.extraire = true }
-                    if (etat.doc.modifiable) LigneAction("formulaire", stringResource(R.string.rempl_menu)) { etat.remplirIa = true }
-                    if (etat.doc.modifiable) Box { LigneAction("annuler", stringResource(R.string.historique_menu)) { historique = true }
-                        if (historique) MenuHistorique(etat) { historique = false } }
-                    LigneAction("suivante", stringResource(R.string.aller_page)) { allerA = true }
-                    LigneAction("liste_fichiers", stringResource(R.string.signets)) { signets = true }
-                    LigneAction("commentaire", stringResource(R.string.commentaires)) { comms = true }
-                    if (etat.doc.modifiable) LigneAction("organiser", stringResource(R.string.organiser_pages)) { etat.organiser = true }
-                    if (etat.doc.modifiable) LigneAction("pivoter", stringResource(R.string.redresser_menu)) { etat.redresser = etat.page }
-                    if (etat.doc.modifiable) LigneAction("filigrane", stringResource(R.string.fil_menu)) { etat.filigrane = true }
-                    if (etat.doc.modifiable) LigneAction("nettoyer", stringResource(R.string.net_menu)) { etat.nettoyer = etat.page }
-                    if (etat.doc.modifiable) LigneAction("ocr", stringResource(R.string.ocr_titre_menu)) { etat.ocr = etat.page }
-                    LigneAction("certificat", stringResource(R.string.sig_verifier)) { etat.verifierSignatures = true }
-                    LigneAction("enregistrer", stringResource(R.string.enregistrer)) { etat.demandeEnregistrer = true }
-                    LigneAction("courriel", stringResource(R.string.partager)) { etat.choixPartage = true }
-                    LigneAction("imprimer", stringResource(R.string.imprimer)) { portee.launch { imprimer(ctx, etat.doc) } }
-                    LigneAction("largeur", stringResource(R.string.ajuster)) { etat.echelle = 1f; etat.decalage = Offset.Zero }
-                    LigneAction("parametres", stringResource(R.string.ia_reglages)) { etat.reglagesIa = true }
+                    // menu Plus en rubriques : une ligne par rubrique, ses actions s'ouvrent dessous (moins touffu)
+                    val m = etat.doc.modifiable
+                    Rubrique("oeil", stringResource(R.string.grp_lire), etat, "lire") {
+                        LigneAction("oeil", stringResource(R.string.lecture_fluide)) { etat.lectureFluide = true }
+                        LigneAction("suivante", stringResource(R.string.aller_page)) { allerA = true }
+                        LigneAction("liste_fichiers", stringResource(R.string.signets)) { signets = true }
+                        LigneAction("commentaire", stringResource(R.string.commentaires)) { comms = true }
+                        LigneAction("largeur", stringResource(R.string.ajuster)) { etat.echelle = 1f; etat.decalage = Offset.Zero }
+                    }
+                    Rubrique("ia", stringResource(R.string.grp_ia), etat, "ia") {
+                        LigneAction("ia", stringResource(R.string.ia_resumer)) { etat.resumeIa = true }
+                        LigneAction("aide", stringResource(R.string.expl_menu)) { etat.expliquer = true }
+                        LigneAction("langue", stringResource(R.string.trad_menu)) { etat.traduire = true }
+                        LigneAction("archiver", stringResource(R.string.cls_menu)) { etat.classer = true }
+                        LigneAction("excel", stringResource(R.string.don_menu)) { etat.extraire = true }
+                        if (m) LigneAction("formulaire", stringResource(R.string.rempl_menu)) { etat.remplirIa = true }
+                        LigneAction("parametres", stringResource(R.string.ia_reglages)) { etat.reglagesIa = true }
+                    }
+                    if (m) Rubrique("organiser", stringResource(R.string.grp_gestion), etat, "gestion") {
+                        LigneAction("organiser", stringResource(R.string.organiser_pages)) { etat.organiser = true }
+                        LigneAction("liste_fichiers", stringResource(R.string.sgn_menu)) { etat.editerSignets = true }
+                        LigneAction("pivoter", stringResource(R.string.redresser_menu)) { etat.redresser = etat.page }
+                        LigneAction("filigrane", stringResource(R.string.fil_menu)) { etat.filigrane = true }
+                        LigneAction("nettoyer", stringResource(R.string.net_menu)) { etat.nettoyer = etat.page }
+                        LigneAction("ocr", stringResource(R.string.ocr_titre_menu)) { etat.ocr = etat.page }
+                        Box { LigneAction("annuler", stringResource(R.string.historique_menu)) { historique = true }
+                            if (historique) MenuHistorique(etat) { historique = false } }
+                    }
+                    Rubrique("enregistrer", stringResource(R.string.grp_fichier), etat, "fichier") {
+                        LigneAction("enregistrer", stringResource(R.string.enregistrer)) { etat.demandeEnregistrer = true }
+                        LigneAction("courriel", stringResource(R.string.partager)) { etat.choixPartage = true }
+                        LigneAction("imprimer", stringResource(R.string.imprimer)) { portee.launch { imprimer(ctx, etat.doc) } }
+                        LigneAction("certificat", stringResource(R.string.sig_verifier)) { etat.verifierSignatures = true }
+                    }
                     Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.infos_doc, etat.doc.nom, tailles.size), Modifier.padding(8.dp),
                         fontSize = 12.sp, color = Color.Gray)
@@ -517,6 +531,24 @@ private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, 
             if (allerA) AllerALaPage(tailles.size, { allerA = false }, aller)
         }
     }
+}
+
+/** Rubrique du menu Plus : une ligne (icone, titre, fleche) ; ses actions s'ouvrent dessous. Une seule ouverte a la
+ *  fois ; la derniere ouverte le reste tant que le document est ouvert. */
+@Composable
+private fun Rubrique(icone: String, titre: String, etat: EtatLecteur, cle: String, contenu: @Composable () -> Unit) {
+    val ouverte = etat.rubrique == cle
+    Row(Modifier.fillMaxWidth().clickable { etat.rubrique = if (ouverte) null else cle }
+        .background(if (ouverte) Color(0xFFF4F4F4) else Color.Transparent).padding(horizontal = 12.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icones.get(icone, ROUGE), null, tint = Color.Unspecified)
+        Spacer(Modifier.width(14.dp))
+        Text(titre, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+        Icon(Icones.get(if (ouverte) "precedente" else "suivante", Color(0xFF777777)), null,
+            Modifier.graphicsLayer(rotationZ = 90f), tint = Color.Unspecified)
+    }
+    if (ouverte) Column(Modifier.padding(start = 18.dp)) { contenu() }
+    HorizontalDivider(color = Color(0xFFEDEDED))
 }
 
 @Composable
@@ -565,9 +597,15 @@ private fun Vignettes(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, alle
 }
 
 @Composable
-private fun Signets(doc: DocumentPdf, aller: (Int) -> Unit) {
-    val liste by produceState<List<Signet>?>(null, doc) { value = doc.signets() }
+private fun Signets(doc: DocumentPdf, aller: (Int) -> Unit, modifier: (() -> Unit)? = null) {
+    val liste by produceState<List<Signet>?>(null, doc, doc.version) { value = doc.signets() }
     val l = liste
+    Column(Modifier.fillMaxSize()) {
+    if (modifier != null) OutlinedButton(onClick = modifier, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
+        Icon(Icones.get("modifier", ROUGE), null, tint = Color.Unspecified)
+        Spacer(Modifier.width(8.dp))
+        TexteAjuste(stringResource(R.string.sgn_menu), 14.sp)
+    }
     when {
         l == null -> Text(stringResource(R.string.ouverture), Modifier.padding(16.dp))
         l.isEmpty() -> Text(stringResource(R.string.aucun_signet), Modifier.padding(16.dp), color = Color.Gray)
@@ -581,6 +619,7 @@ private fun Signets(doc: DocumentPdf, aller: (Int) -> Unit) {
             }
         }
     }
+}
 }
 
 @Composable

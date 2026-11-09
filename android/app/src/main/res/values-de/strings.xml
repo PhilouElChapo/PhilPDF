@@ -885,4 +885,22 @@
     <string name="don_copier">Kopieren</string>
     <string name="don_partager">Teilen</string>
     <string name="don_copie">Kopiert: in Tabelle oder Nachricht einfügen.</string>
+    <string name="grp_lire">Lesen und navigieren</string>
+    <string name="grp_ia">Künstliche Intelligenz</string>
+    <string name="grp_gestion">Dokumentverwaltung</string>
+    <string name="grp_fichier">Datei: speichern, teilen, drucken</string>
+    <string name="sgn_menu">Lesezeichen bearbeiten...</string>
+    <string name="sgn_titre">Lesezeichen</string>
+    <string name="sgn_aide">Tippen Sie auf ein Lesezeichen, um es umzubenennen, seine Seite zu ändern, ein Unterlesezeichen hinzuzufügen, es zu verschieben oder zu löschen. Rückgängig wirkt bei jeder Änderung.</string>
+    <string name="sgn_ajouter">Lesezeichen hinzufügen</string>
+    <string name="sgn_aller">Zur Seite gehen</string>
+    <string name="sgn_modifier">Umbenennen / Seite ändern</string>
+    <string name="sgn_sous">Unterlesezeichen hinzufügen</string>
+    <string name="sgn_monter">Nach oben</string>
+    <string name="sgn_descendre">Nach unten</string>
+    <string name="sgn_supprimer">Löschen</string>
+    <string name="sgn_supprimer_q">Lesezeichen „%1$s“ löschen?</string>
+    <string name="sgn_supprimer_q_sous">Lesezeichen „%1$s“ und seine %2$d Unterlesezeichen löschen?</string>
+    <string name="sgn_nom">Name des Lesezeichens</string>
+    <string name="sgn_page">Seite (1 bis %1$d)</string>
 </resources>
