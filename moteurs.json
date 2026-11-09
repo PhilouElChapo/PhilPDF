@@ -1,5 +1,5 @@
 {
- "pymupdf": "2.0",
+ "pymupdf": "2.1",
  "tesseract": "5.5.3.20260724",
  "mupdf_java": "1.28.5"
 }
