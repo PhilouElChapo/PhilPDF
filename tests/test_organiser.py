@@ -1,4 +1,5 @@
 """Fractionner, parapher, signets et cote a cote."""
+
 import os, sys, tempfile
 racine = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, racine)
@@ -66,6 +67,7 @@ QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
 import app.bienvenue as BV
 BV.DialogueBienvenue.exec = lambda self: QDialog.Rejected
 from app.fenetre import Fenetre
+Fenetre.verifier_maj = lambda self, silencieux: None      # pas de mise a jour pendant l'essai
 src = os.path.join(tempfile.mkdtemp(), "toc.pdf")
 e = fitz.open()
 for i in range(6):
@@ -87,15 +89,19 @@ a.montrer_signets(True)
 verif(a.arbre_signets.topLevelItemCount() == 2, "arbre des signets")
 a._aller_signet(a.arbre_signets.topLevelItem(1))
 verif(a.page_courante() == 3, "clic sur un signet : va a sa page")
+import app.signets_doc as SD
+SD.DialogueSignet.exec = lambda self: 1          # fenetre du signet : acceptee telle que proposee
 a.ajouter_signet()
-verif(len(a.doc.get_toc()) == 3 and a.modifie, "signet ajoute sur la page affichee")
+verif(len(a.doc.get_toc()) == 3 and a.modifie, "signet ajoute sur la page affichee (fenetre nom et page)")
 a.annuler()
 verif(len(a.doc.get_toc()) == 2, "Ctrl+Z retire le signet")
 # modifier les signets : renommer, sous-signet, mettre sur la page affichee, reordonner, supprimer
 a.montrer_signets(True)
-it = a.arbre_signets.topLevelItem(0)
-it.setText(0, "Introduction")
-verif(a.doc.get_toc()[0][1] == "Introduction", "signet renommé")
+_val = SD.DialogueSignet.valeurs
+SD.DialogueSignet.valeurs = lambda self: ("Introduction", 2)
+a.modifier_signet(a.arbre_signets.topLevelItem(0))
+SD.DialogueSignet.valeurs = _val
+verif(a.doc.get_toc()[0][1:3] == ["Introduction", 2], "signet renommé et mis page 2 (fenetre)")
 a.ajouter_signet(a.arbre_signets.topLevelItem(0))
 t = a.doc.get_toc()
 verif(len(t) == 3 and t[1][0] == 2, "sous-signet ajouté sous le premier")
@@ -110,7 +116,7 @@ verif(a.doc.get_toc()[0][1] == "Deux", "signets réordonnés")
 a.supprimer_signet(a.arbre_signets.topLevelItem(1))
 verif([x[1] for x in a.doc.get_toc()] == ["Deux"], "signet supprimé avec ses sous-signets")
 for _ in range(5):
-    a.annuler()
+    a.annuler()  # modifier, sous-signet, signet ici, reordonner, supprimer
 verif([x[1] for x in a.doc.get_toc()] == ["Un", "Deux"], "Ctrl+Z défait chaque changement de signet")
 a.basculer_vignettes()
 verif(not a.gauche.isVisible(), "volet gauche masquable (pages et signets)")

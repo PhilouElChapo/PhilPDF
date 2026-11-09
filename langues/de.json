@@ -3007,5 +3007,12 @@
  "Que me demande-t-on, avant quand": "Was wird von mir verlangt, bis wann",
  "Courrier administratif, contrat, avis, ordonnance : l'IA l'explique en mots simples (ce qu'on vous demande, avant quand, ce qu'il faut savoir, les mots compliqués) ; dates à mettre dans l'agenda.": "Behördenschreiben, Vertrag, Bescheid, Rezept: Die KI erklärt es in einfachen Worten (was verlangt wird, bis wann, was man wissen muss, die schwierigen Wörter); Termine für den Kalender.",
  "Formulaire rempli, vous vérifiez": "Formular ausgefüllt, Sie prüfen",
- "Dites à l'IA ce qu'elle doit savoir (nom, adresse, dates...) : elle propose une valeur pour chaque champ du formulaire, vous vérifiez et corrigez, puis c'est écrit. Rien n'est inventé.": "Sagen Sie der KI, was sie wissen muss (Name, Adresse, Daten...): Sie schlägt für jedes Feld einen Wert vor, Sie prüfen und korrigieren, dann wird geschrieben. Nichts wird erfunden."
+ "Dites à l'IA ce qu'elle doit savoir (nom, adresse, dates...) : elle propose une valeur pour chaque champ du formulaire, vous vérifiez et corrigez, puis c'est écrit. Rien n'est inventé.": "Sagen Sie der KI, was sie wissen muss (Name, Adresse, Daten...): Sie schlägt für jedes Feld einen Wert vor, Sie prüfen und korrigieren, dann wird geschrieben. Nichts wird erfunden.",
+ "Nom du signet :": "Name des Lesezeichens:",
+ " sur {n}": " von {n}",
+ "Signet sur la page affichée, nommé d'après le texte sélectionné, sinon « Page n » ; double-clic sur un signet : le modifier ; clic droit : sous-signet, supprimer ; glisser pour réordonner": "Lesezeichen auf der angezeigten Seite, benannt nach dem markierten Text, sonst „Seite n“; Doppelklick auf ein Lesezeichen: bearbeiten; Rechtsklick: Unterlesezeichen, löschen; ziehen zum Umordnen",
+ "Modifier le signet": "Lesezeichen bearbeiten",
+ "Signet modifié": "Lesezeichen bearbeitet",
+ "Ajouter un signet": "Lesezeichen hinzufügen",
+ "Renommer / changer de page...": "Umbenennen / Seite ändern..."
 }

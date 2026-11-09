@@ -3016,5 +3016,12 @@
  "Que me demande-t-on, avant quand": "What is being asked of me, by when",
  "Courrier administratif, contrat, avis, ordonnance : l'IA l'explique en mots simples (ce qu'on vous demande, avant quand, ce qu'il faut savoir, les mots compliqués) ; dates à mettre dans l'agenda.": "Administrative letter, contract, notice, prescription: the AI explains it in simple words (what you are asked to do, by when, what to know, the difficult words); dates to put in the calendar.",
  "Formulaire rempli, vous vérifiez": "Form filled in, you check",
- "Dites à l'IA ce qu'elle doit savoir (nom, adresse, dates...) : elle propose une valeur pour chaque champ du formulaire, vous vérifiez et corrigez, puis c'est écrit. Rien n'est inventé.": "Tell the AI what it needs to know (name, address, dates...): it suggests a value for each field of the form, you check and correct, then it is written. Nothing is made up."
+ "Dites à l'IA ce qu'elle doit savoir (nom, adresse, dates...) : elle propose une valeur pour chaque champ du formulaire, vous vérifiez et corrigez, puis c'est écrit. Rien n'est inventé.": "Tell the AI what it needs to know (name, address, dates...): it suggests a value for each field of the form, you check and correct, then it is written. Nothing is made up.",
+ "Nom du signet :": "Bookmark name:",
+ " sur {n}": " of {n}",
+ "Signet sur la page affichée, nommé d'après le texte sélectionné, sinon « Page n » ; double-clic sur un signet : le modifier ; clic droit : sous-signet, supprimer ; glisser pour réordonner": "Bookmark on the displayed page, named after the selected text, otherwise “Page n”; double-click a bookmark: edit it; right-click: sub-bookmark, delete; drag to reorder",
+ "Modifier le signet": "Edit the bookmark",
+ "Signet modifié": "Bookmark edited",
+ "Ajouter un signet": "Add a bookmark",
+ "Renommer / changer de page...": "Rename / change page..."
 }

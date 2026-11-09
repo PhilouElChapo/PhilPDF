@@ -4,9 +4,41 @@ Le volet garde sa largeur et se masque avec le meme bouton que les vignettes ; i
 import pymupdf as fitz
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QToolButton, QStackedWidget, QTreeWidget,
-                               QTreeWidgetItem, QLabel, QMenu, QAbstractItemView, QPushButton, QSizePolicy)
+                               QTreeWidgetItem, QLabel, QMenu, QAbstractItemView, QPushButton, QSizePolicy, QDialog,
+                               QFormLayout, QLineEdit, QSpinBox, QDialogButtonBox)
 
 from .langue import _
+
+
+class DialogueSignet(QDialog):
+    """Nom et page d'un signet, dans une vraie fenetre (le volet est trop etroit pour ecrire dedans)."""
+
+    def __init__(self, parent, titre_fenetre, titre, page, nb_pages):
+        super().__init__(parent)
+        self.setWindowTitle(titre_fenetre)
+        self.setMinimumWidth(460)
+        f = QFormLayout(self)
+        self.nom = QLineEdit(titre)
+        self.nom.selectAll()
+        f.addRow(_("Nom du signet :"), self.nom)
+        self.page = QSpinBox()
+        self.page.setRange(1, max(1, nb_pages))
+        self.page.setValue(max(1, min(page, nb_pages)))
+        self.page.setSuffix(_(" sur {n}", n=nb_pages))
+        f.addRow(_("Page :"), self.page)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        try:
+            from .dialogues import boutons_fr
+            boutons_fr(bb)
+        except Exception:                            # noqa: BLE001
+            pass
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        self.nom.textChanged.connect(lambda t: bb.button(QDialogButtonBox.Ok).setEnabled(bool(t.strip())))
+        f.addRow(bb)
+
+    def valeurs(self):
+        return self.nom.text().strip(), self.page.value()
 
 
 class MixinSignets:
@@ -14,7 +46,7 @@ class MixinSignets:
         """Le volet gauche : onglets Pages / Signets, puis les vignettes ou l'arbre des signets."""
         self.gauche = QWidget()
         self.gauche.setObjectName("volet_gauche")
-        self.gauche.setMinimumWidth(110)
+        self.gauche.setMinimumWidth(150)                 # « Pages » et « Signets · n » lisibles
         self.gauche.setStyleSheet("QWidget#volet_gauche{background:#fafafa;border-right:1px solid #e2e2e2}")
         v = QVBoxLayout(self.gauche)
         v.setContentsMargins(0, 0, 0, 0)
@@ -52,7 +84,8 @@ class MixinSignets:
         self.arbre_signets.setObjectName("arbre_signets")
         self.arbre_signets.setHeaderHidden(True)
         self.arbre_signets.setStyleSheet("QTreeWidget{background:#fafafa;border:none}")
-        self.arbre_signets.setEditTriggers(QAbstractItemView.EditKeyPressed | QAbstractItemView.SelectedClicked)
+        self.arbre_signets.setEditTriggers(QAbstractItemView.NoEditTriggers)   # on modifie dans une fenetre
+        self.arbre_signets.itemDoubleClicked.connect(lambda it, _c=0: self.modifier_signet(it))
         self.arbre_signets.setDragDropMode(QAbstractItemView.InternalMove)
         self.arbre_signets.itemClicked.connect(self._aller_signet)
         self.arbre_signets.itemChanged.connect(self._signet_renomme)
@@ -67,7 +100,8 @@ class MixinSignets:
         v.addWidget(self.l_sans_signet)
         b = QPushButton(_("+ Signet ici"))
         b.setToolTip(_("Signet sur la page affichée, nommé d'après le texte sélectionné, sinon « Page n » ; "
-                       "clic droit sur un signet : renommer, sous-signet, supprimer ; glisser pour réordonner"))
+                       "double-clic sur un signet : le modifier ; clic droit : sous-signet, supprimer ; glisser "
+                       "pour réordonner"))
         b.clicked.connect(lambda: self.ajouter_signet())
         v.addWidget(b)
         return w
@@ -157,6 +191,12 @@ class MixinSignets:
         n = self.page_courante()
         titre = (self.selection or {}).get("texte", "").split("\n")[0].strip()[:120] if getattr(self, "selection", None) else ""
         titre = titre or _("Page {n}", n=n + 1)
+        d = DialogueSignet(self, _("Ajouter un sous-signet") if parent_it is not None else _("Ajouter un signet"),
+                           titre, n + 1, len(self.doc))
+        if not d.exec():
+            return
+        titre, page = d.valeurs()
+        n = page - 1
         toc = self.doc.get_toc(simple=False)
         lvl = 1
         if parent_it is not None:                    # sous-signet : juste apres le parent et ses enfants
@@ -173,7 +213,20 @@ class MixinSignets:
         it = self._item_signet(pos)
         if it is not None:
             self.arbre_signets.setCurrentItem(it)
-            self.arbre_signets.editItem(it, 0)
+
+    def modifier_signet(self, it):
+        """Renommer et / ou changer la page d'un signet, dans une fenetre."""
+        toc = self.doc.get_toc(simple=False)
+        i = self._index_signet(it)
+        d = DialogueSignet(self, _("Modifier le signet"), toc[i][1], toc[i][2] if toc[i][2] > 0 else self.page_courante() + 1,
+                           len(self.doc))
+        if not d.exec():
+            return
+        titre, page = d.valeurs()
+        if titre == toc[i][1] and page == toc[i][2]:
+            return
+        toc[i] = [toc[i][0], titre, page] + ([toc[i][3]] if page == toc[i][2] and len(toc[i]) > 3 else [])
+        self._ecrire_signets(toc, _("Signet modifié"))
 
     def _index_signet(self, item):
         k, cible = 0, None
@@ -213,7 +266,7 @@ class MixinSignets:
         m.addAction(_("Ajouter un signet sur la page affichée"), lambda: self.ajouter_signet())
         if it is not None:
             m.addAction(_("Ajouter un sous-signet"), lambda: self.ajouter_signet(it))
-            m.addAction(_("Renommer"), lambda: self.arbre_signets.editItem(it, 0))
+            m.addAction(_("Renommer / changer de page..."), lambda: self.modifier_signet(it))
             m.addAction(_("Mettre sur la page affichée"), lambda: self._signet_ici(it))
             m.addSeparator()
             m.addAction(_("Supprimer"), lambda: self.supprimer_signet(it))

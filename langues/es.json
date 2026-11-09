@@ -3007,5 +3007,12 @@
  "Que me demande-t-on, avant quand": "Qué se me pide, antes de cuándo",
  "Courrier administratif, contrat, avis, ordonnance : l'IA l'explique en mots simples (ce qu'on vous demande, avant quand, ce qu'il faut savoir, les mots compliqués) ; dates à mettre dans l'agenda.": "Carta administrativa, contrato, aviso, receta: la IA lo explica con palabras sencillas (qué se le pide, antes de cuándo, qué hay que saber, las palabras difíciles); fechas para la agenda.",
  "Formulaire rempli, vous vérifiez": "Formulario rellenado, usted lo revisa",
- "Dites à l'IA ce qu'elle doit savoir (nom, adresse, dates...) : elle propose une valeur pour chaque champ du formulaire, vous vérifiez et corrigez, puis c'est écrit. Rien n'est inventé.": "Diga a la IA lo que debe saber (nombre, dirección, fechas...): propone un valor para cada campo del formulario, usted revisa y corrige, y luego se escribe. No se inventa nada."
+ "Dites à l'IA ce qu'elle doit savoir (nom, adresse, dates...) : elle propose une valeur pour chaque champ du formulaire, vous vérifiez et corrigez, puis c'est écrit. Rien n'est inventé.": "Diga a la IA lo que debe saber (nombre, dirección, fechas...): propone un valor para cada campo del formulario, usted revisa y corrige, y luego se escribe. No se inventa nada.",
+ "Nom du signet :": "Nombre del marcador:",
+ " sur {n}": " de {n}",
+ "Signet sur la page affichée, nommé d'après le texte sélectionné, sinon « Page n » ; double-clic sur un signet : le modifier ; clic droit : sous-signet, supprimer ; glisser pour réordonner": "Marcador en la página mostrada, con el nombre del texto seleccionado o, si no, «Página n»; doble clic en un marcador: modificarlo; clic derecho: submarcador, eliminar; arrastrar para reordenar",
+ "Modifier le signet": "Modificar el marcador",
+ "Signet modifié": "Marcador modificado",
+ "Ajouter un signet": "Añadir un marcador",
+ "Renommer / changer de page...": "Renombrar / cambiar de página..."
 }

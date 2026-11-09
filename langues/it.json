@@ -3007,5 +3007,12 @@
  "Que me demande-t-on, avant quand": "Cosa mi si chiede, entro quando",
  "Courrier administratif, contrat, avis, ordonnance : l'IA l'explique en mots simples (ce qu'on vous demande, avant quand, ce qu'il faut savoir, les mots compliqués) ; dates à mettre dans l'agenda.": "Lettera amministrativa, contratto, avviso, ricetta: l'IA la spiega con parole semplici (cosa vi si chiede, entro quando, cosa sapere, le parole difficili); date da mettere in agenda.",
  "Formulaire rempli, vous vérifiez": "Modulo compilato, voi verificate",
- "Dites à l'IA ce qu'elle doit savoir (nom, adresse, dates...) : elle propose une valeur pour chaque champ du formulaire, vous vérifiez et corrigez, puis c'est écrit. Rien n'est inventé.": "Dite all'IA cosa deve sapere (nome, indirizzo, date...): propone un valore per ogni campo del modulo, voi verificate e correggete, poi viene scritto. Nulla è inventato."
+ "Dites à l'IA ce qu'elle doit savoir (nom, adresse, dates...) : elle propose une valeur pour chaque champ du formulaire, vous vérifiez et corrigez, puis c'est écrit. Rien n'est inventé.": "Dite all'IA cosa deve sapere (nome, indirizzo, date...): propone un valore per ogni campo del modulo, voi verificate e correggete, poi viene scritto. Nulla è inventato.",
+ "Nom du signet :": "Nome del segnalibro:",
+ " sur {n}": " di {n}",
+ "Signet sur la page affichée, nommé d'après le texte sélectionné, sinon « Page n » ; double-clic sur un signet : le modifier ; clic droit : sous-signet, supprimer ; glisser pour réordonner": "Segnalibro sulla pagina visualizzata, con il nome del testo selezionato, altrimenti «Pagina n»; doppio clic su un segnalibro: modificarlo; clic destro: sotto-segnalibro, eliminare; trascinare per riordinare",
+ "Modifier le signet": "Modifica il segnalibro",
+ "Signet modifié": "Segnalibro modificato",
+ "Ajouter un signet": "Aggiungi un segnalibro",
+ "Renommer / changer de page...": "Rinomina / cambia pagina..."
 }
