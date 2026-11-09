@@ -481,10 +481,13 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
-0.9.87
+0.9.88
 - Signets : ajouter et modifier dans une vraie fenetre (nom et page), au lieu d'ecrire dans le volet trop etroit ;
   double-clic sur un signet pour le modifier, clic droit > « Renommer / changer de page... ». Le volet de gauche est
   un peu plus large au minimum : « Pages » et « Signets · n » restent lisibles.
+
+0.9.87
+- Moteur PDF mis a jour (PyMuPDF 2.1).
 
 0.9.86
 - IA : Expliquer simplement (Assistant IA) : courrier administratif, contrat, avis, ordonnance expliques en mots
