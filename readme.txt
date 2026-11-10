@@ -481,6 +481,18 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.89
+- Fenetres d'attente qui ne bloquent plus PhilPDF : le telechargement d'une mise a jour, la conversion d'un fichier
+  Word / Excel en PDF et l'export en Word se font en arriere-plan ; on continue de travailler. « Reduire » range la
+  fenetre dans la barre d'etat (barre de progression + « Afficher ») ; la croix la reduit aussi (rien ne s'arrete en
+  cachette). Une fois la mise a jour telechargee, PhilPDF demande avant de se fermer pour l'installer, propose
+  d'enregistrer les documents modifies, puis installe.
+- Creer un PDF depuis Word : si Office refuse de demarrer (« Echec de l'execution du serveur », Office du Microsoft
+  Store ou deja ouvert), PhilPDF se sert de l'Office deja ouvert, sans le fermer. Et sans Office ni LibreOffice,
+  PhilPDF met lui-meme en page les fichiers Word (.docx), Excel (.xlsx, .csv) et texte : titres, gras, couleurs,
+  listes, tableaux (fonds de cellules, ligne d'en-tete repetee sur chaque page), images, paysage. Il le dit, avec ce
+  qui n'est pas repris (en-tetes, pieds de page...).
+
 0.9.88
 - Signets : ajouter et modifier dans une vraie fenetre (nom et page), au lieu d'ecrire dans le volet trop etroit ;
   double-clic sur un signet pour le modifier, clic droit > « Renommer / changer de page... ». Le volet de gauche est

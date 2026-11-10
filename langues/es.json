@@ -3014,5 +3014,22 @@
  "Modifier le signet": "Modificar el marcador",
  "Signet modifié": "Marcador modificado",
  "Ajouter un signet": "Añadir un marcador",
- "Renommer / changer de page...": "Renombrar / cambiar de página..."
+ "Renommer / changer de page...": "Renombrar / cambiar de página...",
+ "Vous pouvez continuer à travailler pendant ce temps.": "Puede seguir trabajando mientras tanto.",
+ "Réduire": "Reducir",
+ "Ranger cette fenêtre dans la barre d'état, en bas ; « Afficher » la rouvre.": "Guardar esta ventana en la barra de estado, abajo; «Mostrar» la vuelve a abrir.",
+ "Converti par PhilPDF (mise en page simplifiée).": "Convertido por PhilPDF (diseño simplificado).",
+ "PhilPDF {version} est téléchargé.\n\nL'installer maintenant ? PhilPDF se ferme (il vous propose d'enregistrer vos documents modifiés) puis se relance.\n\nSinon, l'installation vous sera reproposée à la prochaine vérification.": "PhilPDF {version} se ha descargado.\n\n¿Instalarlo ahora? PhilPDF se cierra (le propone guardar los documentos modificados) y luego se reinicia.\n\nSi no, la instalación se le volverá a proponer en la próxima comprobación.",
+ "Conversion arrêtée : rien n'a été ouvert.": "Conversión detenida: no se ha abierto nada.",
+ "Conversion impossible : ce format demande Microsoft Office ou LibreOffice sur ce PC.\n\n{e}": "Conversión imposible: este formato requiere Microsoft Office o LibreOffice en este PC.\n\n{e}",
+ "Mise à jour {version} téléchargée, installation remise à plus tard.": "Actualización {version} descargada, instalación aplazada.",
+ "Ni Microsoft Office ni LibreOffice n'ont pu convertir ce fichier : PhilPDF l'a mis en page lui-même.\n\nLe texte, les tableaux, les couleurs et les images sont repris ; la mise en page est simplifiée (vérifiez-la avant d'envoyer le PDF).": "Ni Microsoft Office ni LibreOffice han podido convertir este archivo: PhilPDF lo ha maquetado por sí mismo.\n\nSe conservan el texto, las tablas, los colores y las imágenes; el diseño está simplificado (revíselo antes de enviar el PDF).",
+ "Annulation...": "Cancelando...",
+ "Détail : {e}": "Detalle: {e}",
+ "Export arrêté.": "Exportación detenida.",
+ "Non repris : {x}": "No conservado: {x}",
+ "en-têtes": "encabezados",
+ "pieds de page": "pies de página",
+ "formes et zones de texte": "formas y cuadros de texto",
+ "certaines images": "algunas imágenes"
 }

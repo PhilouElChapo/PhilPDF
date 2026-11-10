@@ -2,7 +2,8 @@
 ouvrir dans PhilPDF par glisser-deposer ou « Creer un PDF ».
 
 Sous Windows, par Office lui-meme (le rendu exact du document, comme « Enregistrer en PDF » d'Office) ; sinon par
-LibreOffice (soffice --headless). Les polices sont toujours integrees : le PDF s'affiche a l'identique partout.
+LibreOffice (soffice --headless) ; sinon, pour Word (.docx), Excel (.xlsx, .csv) et le texte, par PhilPDF lui-meme
+(moteur/office_interne.py : rendu simplifie, dit a l'utilisateur). Les polices sont toujours integrees.
 """
 import glob
 import os
@@ -45,10 +46,26 @@ def _par_office(source, sortie):
     ext = os.path.splitext(source)[1].lower()
     pythoncom.CoInitialize()
     app = None
+    deja_ouvert = False
+
+    def lancer(nom):
+        """Instance a part (DispatchEx) ; si Windows refuse (« Echec de l'execution du serveur », Office en version
+        Microsoft Store / Demarrer en un clic, ou Office deja ouvert avec d'autres droits), l'instance ouverte."""
+        nonlocal deja_ouvert
+        try:
+            return wc.DispatchEx(nom)
+        except Exception:                                # noqa: BLE001
+            try:
+                deja_ouvert = True
+                return wc.GetActiveObject(nom)
+            except Exception:                            # noqa: BLE001
+                deja_ouvert = False
+                return wc.Dispatch(nom)
     try:
         if ext in WORD:
-            app = wc.DispatchEx("Word.Application")
-            app.Visible = False
+            app = lancer("Word.Application")
+            if not deja_ouvert:
+                app.Visible = False
             app.DisplayAlerts = 0
             d = app.Documents.Open(source, ReadOnly=True, AddToRecentFiles=False, ConfirmConversions=False)
             # 17 = PDF ; polices integrees, texte des polices non integrables mis en image (comme Adobe)
@@ -57,15 +74,16 @@ def _par_office(source, sortie):
                                   BitmapMissingFonts=True, UseISO19005_1=False)
             d.Close(False)
         elif ext in EXCEL:
-            app = wc.DispatchEx("Excel.Application")
-            app.Visible = False
+            app = lancer("Excel.Application")
+            if not deja_ouvert:
+                app.Visible = False
             app.DisplayAlerts = False
             c = app.Workbooks.Open(source, ReadOnly=True, AddToMru=False)
             c.ExportAsFixedFormat(0, sortie, Quality=0, IncludeDocProperties=True, IgnorePrintAreas=False,
                                   OpenAfterPublish=False)
             c.Close(False)
         else:
-            app = wc.DispatchEx("PowerPoint.Application")
+            app = lancer("PowerPoint.Application")
             p = app.Presentations.Open(source, ReadOnly=True, WithWindow=False)
             p.SaveAs(sortie, 32)                         # 32 = PDF
             p.Close()
@@ -73,7 +91,7 @@ def _par_office(source, sortie):
         raise ErreurOffice(str(e)) from e
     finally:
         try:
-            if app is not None:
+            if app is not None and not deja_ouvert:   # jamais fermer l'Office ouvert par la personne
                 app.Quit()
         except Exception:
             pass
@@ -99,8 +117,9 @@ def _par_libreoffice(source, sortie):
     shutil.rmtree(dossier, ignore_errors=True)
 
 
-def convertir(source, sortie=None):
-    """Convertit le fichier en PDF ; renvoie (chemin du PDF, moyen utilise : "office" ou "libreoffice")."""
+def convertir(source, sortie=None, details=None):
+    """Convertit le fichier en PDF ; renvoie (chemin du PDF, moyen utilise : "office", "libreoffice" ou "philpdf").
+    details (liste) recoit les essais qui ont echoue et, pour "philpdf", ce qui n'a pas pu etre repris."""
     source = os.path.abspath(source)
     sortie = sortie or os.path.join(tempfile.mkdtemp(prefix="philpdf-office-"),
                                     os.path.splitext(os.path.basename(source))[0] + ".pdf")
@@ -116,6 +135,16 @@ def convertir(source, sortie=None):
         return sortie, "libreoffice"
     except (ErreurOffice, OSError, subprocess.SubprocessError) as e:
         erreurs.append(f"LibreOffice : {e}")
+    from . import office_interne
+    if os.path.splitext(source)[1].lower() in office_interne.INTERNES:
+        try:
+            manques = office_interne.convertir(source, sortie, os.path.join(os.path.dirname(sortie), "images"))
+            if details is not None:
+                details.extend(erreurs)
+                details.append(("manques", manques))
+            return sortie, "philpdf"
+        except Exception as e:                           # noqa: BLE001
+            erreurs.append(f"PhilPDF : {e}")
     raise ErreurOffice(" ; ".join(erreurs))
 
 

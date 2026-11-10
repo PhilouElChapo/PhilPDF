@@ -1150,6 +1150,8 @@ class Fenetre(MixinCoteACote, QMainWindow):
         if getattr(self, "_redemarrage", None):
             from PySide6.QtCore import QProcess
             QProcess.startDetached(*self._redemarrage)
+        if getattr(self, "_maj_a_installer", None):   # mise a jour telechargee : installee une fois tout enregistre
+            self._installer_maj(*self._maj_a_installer)
 
     def taches_en_cours(self):
         """Taches (QThread) encore en cours a la fermeture : Qt arreterait brutalement PhilPDF en les detruisant."""
@@ -1811,26 +1813,43 @@ class Fenetre(MixinCoteACote, QMainWindow):
             self.ocr(o)
 
     def ouvrir_office(self, f):
-        """Fichier Word, Excel ou PowerPoint converti en PDF (par Office, sinon LibreOffice) et ouvert, non enregistre :
-        l'enregistrement propose le dossier du fichier d'origine."""
+        """Fichier Word, Excel ou PowerPoint converti en PDF (par Office, sinon LibreOffice, sinon PhilPDF lui-meme
+        pour Word / Excel / texte) et ouvert, non enregistre : l'enregistrement propose le dossier du fichier d'origine.
+        La conversion ne bloque pas PhilPDF : sa fenetre peut etre reduite dans la barre d'etat."""
         from moteur import office
-        prog = QProgressDialog(_("Conversion de « {f} » en PDF...", f=os.path.basename(f)), None, 0, 0, self)
-        prog.setWindowModality(Qt.WindowModal)
-        prog.show()
-        QApplication.processEvents()
+        from .dialogues_ia import en_tache
+        from .journal import ecrire
+        details = []
         try:
-            pdf, moyen = office.convertir(f)
+            pdf, moyen = en_tache(self, _("Créer un PDF"), _("Conversion de « {f} » en PDF...", f=os.path.basename(f)),
+                                  office.convertir, f, None, details, lecture=True, bloquante=False)
+        except InterruptedError:
+            self.statusBar().showMessage(_("Conversion arrêtée : rien n'a été ouvert."), 8000)
+            return None
         except Exception as ex:
-            prog.close()
+            ecrire("office", f"{f} : conversion impossible ({ex})")
             QMessageBox.warning(self, _("Créer un PDF"),
-                                _("Conversion impossible : il faut Microsoft Office ou LibreOffice sur ce PC.\n\n{e}",
+                                _("Conversion impossible : ce format demande Microsoft Office ou LibreOffice sur ce PC.\n\n{e}",
                                   e=str(ex)[:400]))
             return None
-        prog.close()
         doc = fitz.open("pdf", open(pdf, "rb").read())
         o = self.ajouter_onglet(OngletDocument(self.params, biblio=self.biblio, doc=doc,
                                                nom=os.path.splitext(os.path.basename(f))[0] + ".pdf"))
         o.dossier_propose = os.path.dirname(f)
+        ecrire("office", f"{f} : converti par {moyen}" + (f" (essais : {details})" if details else ""))
+        if moyen == "philpdf":
+            manques = next((m for k, m in (d for d in details if isinstance(d, tuple)) if k == "manques"), [])
+            essais = "\n".join(d for d in details if isinstance(d, str))
+            noms = {"en-têtes": _("en-têtes"), "pieds de page": _("pieds de page"), "formes": _("formes et zones de texte"),
+                    "images": _("certaines images")}
+            QMessageBox.information(self, _("Créer un PDF"), _(
+                "Ni Microsoft Office ni LibreOffice n'ont pu convertir ce fichier : PhilPDF l'a mis en page lui-même.\n\n"
+                "Le texte, les tableaux, les couleurs et les images sont repris ; la mise en page est simplifiée "
+                "(vérifiez-la avant d'envoyer le PDF).") +
+                ("\n\n" + _("Non repris : {x}", x=", ".join(noms.get(m, m) for m in manques)) if manques else "") +
+                ("\n\n" + _("Détail : {e}", e=essais[:400]) if essais else ""))
+            self.statusBar().showMessage(_("Converti par PhilPDF (mise en page simplifiée)."), 12000)
+            return o
         manque = office.polices_non_integrees(pdf)
         self.statusBar().showMessage(
             _("Converti par {m}.", m="Microsoft Office" if moyen == "office" else "LibreOffice") + " " +
@@ -2070,18 +2089,18 @@ class Fenetre(MixinCoteACote, QMainWindow):
             logging.getLogger().setLevel(logging.ERROR)
             src = os.path.join(tempfile.mkdtemp(), "source.pdf")
             o.doc.save(src)
-            prog = QProgressDialog(_('Conversion en Word...'), None, 0, 0, self)
-            prog.setWindowModality(Qt.WindowModal)
-            prog.show()
-            QApplication.processEvents()
-            try:
+            def convertir():                             # sur une copie : on peut continuer a travailler
                 c = Converter(src)
                 c.convert(f)
                 c.close()
+            from .dialogues_ia import en_tache
+            try:
+                en_tache(self, _('Exporter'), _('Conversion en Word...'), convertir, bloquante=False)
                 self.statusBar().showMessage(_('Exporté : {f}', f=f), 8000)
+            except InterruptedError:
+                self.statusBar().showMessage(_("Export arrêté."), 8000)
             except Exception as e:
                 QMessageBox.warning(self, _('Exporter'), _('Conversion impossible :\n{e}', e=e))
-            prog.close()
         else:
             dossier = __import__('app.choix_dossier', fromlist=['x']).choisir_dossier(self, _('Dossier des images'), os.path.dirname(base))
             if dossier:
@@ -3546,44 +3565,72 @@ class Fenetre(MixinCoteACote, QMainWindow):
         if not possible():
             QMessageBox.information(self, _('Mise à jour'), _('Téléchargez la nouvelle version ici :\n{paquet}', paquet=paquet))
             return
-        # telechargement en arriere-plan : la fenetre reste utilisable, avec une barre de progression
-        dlg = QProgressDialog(_("Téléchargement de PhilPDF {version}...", version=version), _("Annuler"), 0, 100, self)
-        dlg.setWindowTitle(_('Mise à jour'))
-        dlg.setMinimumDuration(0)
-        dlg.setValue(0)
+        # telechargement en arriere-plan, fenetre non bloquante : on continue de travailler, « Reduire » la range dans la barre d'etat
+        from .dialogues_ia import Avancement
+        dlg = Avancement(self, _('Mise à jour'), bloquante=False)
+        dlg.b_stop.setText(_("Annuler"))
+        dlg.etape(_("Téléchargement de PhilPDF {version}...", version=version), 0, 100)
+        dlg.barre.setFormat("%p %")
+        dlg.journal.hide()
+        dlg.adjustSize()
+        dlg.show()
         t = TacheTelechargement(paquet)
         self.taches.append(t)
 
         def avance(fait, total):
             if total:
-                dlg.setValue(int(fait * 100 / total))
-                dlg.setLabelText(_("Téléchargement de PhilPDF {version}... {fait} / {total} Mo",
-                                   version=version, fait=fait // 1024, total=total // 1024))
+                dlg.etape(_("Téléchargement de PhilPDF {version}... {fait} / {total} Mo",
+                            version=version, fait=fait // 1024, total=total // 1024), int(fait * 100 / total), 100)
+                dlg.barre.setFormat("%p %")
 
         def fini(fichier, erreur):
-            dlg.close()
+            dlg.terminer()
             ecrire("mise a jour", f"{version} : telechargement " + (("annule" if t.stop else f"en echec ({erreur})") if erreur
                                                                     else f"termine ({fichier})"))
             if erreur:
                 if not t.stop:
                     QMessageBox.warning(self, _('Mise à jour'), _('Echec du téléchargement :\n{e}', e=erreur))
                 return
-            from .mise_a_jour import appliquer
-            try:
-                lance = appliquer(fichier)
-            except Exception as e:
-                ecrire("mise a jour", f"{version} : installation impossible ({e})")
-                QMessageBox.warning(self, _('Mise à jour'), _("Installation impossible :\n{e}", e=e))
+            # la personne a pu continuer a travailler : on demande avant de fermer PhilPDF pour installer
+            r = QMessageBox.question(self, _('Mise à jour'), _(
+                "PhilPDF {version} est téléchargé.\n\nL'installer maintenant ? PhilPDF se ferme (il vous propose "
+                "d'enregistrer vos documents modifiés) puis se relance.\n\nSinon, l'installation vous sera "
+                "reproposée à la prochaine vérification.", version=version),
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+            if r != QMessageBox.Yes:
+                ecrire("mise a jour", f"{version} : installation remise a plus tard")
+                self.statusBar().showMessage(_("Mise à jour {version} téléchargée, installation remise à plus tard.",
+                                               version=version), 10000)
                 return
-            ecrire("mise a jour", f"{version} : " + ("installation lancee, PhilPDF se ferme puis se relance" if lance
-                                                    else "installation non lancee (version non installable ici)"))
-            if lance:
-                self._maj_en_cours = True
-                self.close()
+            from .mise_a_jour import possible
+            if not possible():
+                ecrire("mise a jour", f"{version} : installation non lancee (version non installable ici)")
+                return
+            # fermer d'abord (enregistrer ce qui doit l'etre), installer ensuite : rien de perdu
+            self._maj_a_installer = (fichier, version)
+            ecrire("mise a jour", f"{version} : fermeture de PhilPDF avant installation")
+            if not self.close():
+                self._maj_a_installer = None
+                ecrire("mise a jour", f"{version} : fermeture annulee, installation remise a plus tard")
+                self.statusBar().showMessage(_("Mise à jour {version} téléchargée, installation remise à plus tard.",
+                                               version=version), 10000)
+
         t.avance.connect(avance)
         t.fini.connect(fini)
-        dlg.canceled.connect(lambda: setattr(t, "stop", True))
+        dlg.b_stop.clicked.connect(lambda: (setattr(t, "stop", True), dlg.etat.setText(_("Annulation..."))))
         t.start()
+
+    def _installer_maj(self, fichier, version):
+        from .journal import ecrire
+        from .mise_a_jour import appliquer
+        try:
+            lance = appliquer(fichier)
+        except Exception as e:
+            ecrire("mise a jour", f"{version} : installation impossible ({e})")
+            QMessageBox.warning(None, _('Mise à jour'), _("Installation impossible :\n{e}", e=e))
+            return
+        ecrire("mise a jour", f"{version} : " + ("installation lancee, PhilPDF se relance ensuite" if lance
+                                                else "installation non lancee (version non installable ici)"))
 
     def raccourcis(self):
         QMessageBox.information(self, _('Raccourcis clavier'),

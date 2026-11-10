@@ -3023,5 +3023,22 @@
  "Modifier le signet": "Edit the bookmark",
  "Signet modifié": "Bookmark edited",
  "Ajouter un signet": "Add a bookmark",
- "Renommer / changer de page...": "Rename / change page..."
+ "Renommer / changer de page...": "Rename / change page...",
+ "Vous pouvez continuer à travailler pendant ce temps.": "You can keep working in the meantime.",
+ "Réduire": "Minimise",
+ "Ranger cette fenêtre dans la barre d'état, en bas ; « Afficher » la rouvre.": "Tuck this window into the status bar at the bottom; “Show” reopens it.",
+ "Converti par PhilPDF (mise en page simplifiée).": "Converted by PhilPDF (simplified layout).",
+ "PhilPDF {version} est téléchargé.\n\nL'installer maintenant ? PhilPDF se ferme (il vous propose d'enregistrer vos documents modifiés) puis se relance.\n\nSinon, l'installation vous sera reproposée à la prochaine vérification.": "PhilPDF {version} has been downloaded.\n\nInstall it now? PhilPDF closes (offering to save your modified documents) and then restarts.\n\nOtherwise, you will be offered the installation again at the next check.",
+ "Conversion arrêtée : rien n'a été ouvert.": "Conversion stopped: nothing was opened.",
+ "Conversion impossible : ce format demande Microsoft Office ou LibreOffice sur ce PC.\n\n{e}": "Conversion failed: this format requires Microsoft Office or LibreOffice on this PC.\n\n{e}",
+ "Mise à jour {version} téléchargée, installation remise à plus tard.": "Update {version} downloaded, installation postponed.",
+ "Ni Microsoft Office ni LibreOffice n'ont pu convertir ce fichier : PhilPDF l'a mis en page lui-même.\n\nLe texte, les tableaux, les couleurs et les images sont repris ; la mise en page est simplifiée (vérifiez-la avant d'envoyer le PDF).": "Neither Microsoft Office nor LibreOffice could convert this file: PhilPDF laid it out itself.\n\nText, tables, colours and images are kept; the layout is simplified (check it before sending the PDF).",
+ "Annulation...": "Cancelling...",
+ "Détail : {e}": "Details: {e}",
+ "Export arrêté.": "Export stopped.",
+ "Non repris : {x}": "Not kept: {x}",
+ "en-têtes": "headers",
+ "pieds de page": "footers",
+ "formes et zones de texte": "shapes and text boxes",
+ "certaines images": "some images"
 }

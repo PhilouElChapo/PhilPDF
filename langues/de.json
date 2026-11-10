@@ -3014,5 +3014,22 @@
  "Modifier le signet": "Lesezeichen bearbeiten",
  "Signet modifié": "Lesezeichen bearbeitet",
  "Ajouter un signet": "Lesezeichen hinzufügen",
- "Renommer / changer de page...": "Umbenennen / Seite ändern..."
+ "Renommer / changer de page...": "Umbenennen / Seite ändern...",
+ "Vous pouvez continuer à travailler pendant ce temps.": "Sie können in der Zwischenzeit weiterarbeiten.",
+ "Réduire": "Minimieren",
+ "Ranger cette fenêtre dans la barre d'état, en bas ; « Afficher » la rouvre.": "Dieses Fenster unten in der Statusleiste ablegen; „Anzeigen“ öffnet es wieder.",
+ "Converti par PhilPDF (mise en page simplifiée).": "Von PhilPDF konvertiert (vereinfachtes Layout).",
+ "PhilPDF {version} est téléchargé.\n\nL'installer maintenant ? PhilPDF se ferme (il vous propose d'enregistrer vos documents modifiés) puis se relance.\n\nSinon, l'installation vous sera reproposée à la prochaine vérification.": "PhilPDF {version} wurde heruntergeladen.\n\nJetzt installieren? PhilPDF wird geschlossen (es bietet an, geänderte Dokumente zu speichern) und dann neu gestartet.\n\nAndernfalls wird die Installation bei der nächsten Prüfung erneut angeboten.",
+ "Conversion arrêtée : rien n'a été ouvert.": "Konvertierung abgebrochen: nichts wurde geöffnet.",
+ "Conversion impossible : ce format demande Microsoft Office ou LibreOffice sur ce PC.\n\n{e}": "Konvertierung nicht möglich: Dieses Format benötigt Microsoft Office oder LibreOffice auf diesem PC.\n\n{e}",
+ "Mise à jour {version} téléchargée, installation remise à plus tard.": "Update {version} heruntergeladen, Installation verschoben.",
+ "Ni Microsoft Office ni LibreOffice n'ont pu convertir ce fichier : PhilPDF l'a mis en page lui-même.\n\nLe texte, les tableaux, les couleurs et les images sont repris ; la mise en page est simplifiée (vérifiez-la avant d'envoyer le PDF).": "Weder Microsoft Office noch LibreOffice konnten diese Datei konvertieren: PhilPDF hat sie selbst gesetzt.\n\nText, Tabellen, Farben und Bilder bleiben erhalten; das Layout ist vereinfacht (prüfen Sie es, bevor Sie das PDF versenden).",
+ "Annulation...": "Wird abgebrochen...",
+ "Détail : {e}": "Details: {e}",
+ "Export arrêté.": "Export abgebrochen.",
+ "Non repris : {x}": "Nicht übernommen: {x}",
+ "en-têtes": "Kopfzeilen",
+ "pieds de page": "Fußzeilen",
+ "formes et zones de texte": "Formen und Textfelder",
+ "certaines images": "einige Bilder"
 }

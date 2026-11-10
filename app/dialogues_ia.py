@@ -86,14 +86,21 @@ class _TacheSuivie(QThread):
 
 
 class Avancement(QDialog):
-    """Fenetre d'avancement : etape en cours, barre (page x / y), detail des operations, bouton Arreter."""
+    """Fenetre d'avancement : etape en cours, barre (page x / y), detail des operations, bouton Arreter.
 
-    def __init__(self, parent, titre):
+    bloquante=False (telechargement, conversion, lecture : rien ne change dans le document ouvert) : la fenetre ne
+    bloque pas PhilPDF, et « Reduire » la range dans la barre d'etat (barre + « Afficher ») ; on continue de
+    travailler. bloquante=True seulement quand la tache modifie le document ouvert (sinon on le changerait deux fois)."""
+
+    def __init__(self, parent, titre, bloquante=True):
         from PySide6.QtWidgets import QProgressBar, QPlainTextEdit
         super().__init__(parent)
         self.setWindowTitle(titre)
         self.setMinimumWidth(560)
-        self.setWindowModality(Qt.WindowModal)
+        self.bloquante = bloquante
+        self.en_cours = True
+        self.setWindowModality(Qt.WindowModal if bloquante else Qt.NonModal)
+        self._reduite = None
         v = QVBoxLayout(self)
         self.etat = QLabel(_("Préparation..."))
         self.etat.setWordWrap(True)
@@ -107,10 +114,104 @@ class Avancement(QDialog):
         self.journal.setStyleSheet("font-size:12px;color:#444")
         v.addWidget(self.journal)
         h = QHBoxLayout()
+        if not bloquante:
+            note = QLabel(_("Vous pouvez continuer à travailler pendant ce temps."))
+            note.setStyleSheet("color:#666")
+            h.addWidget(note)
         h.addStretch(1)
+        if not bloquante:
+            self.b_reduire = QPushButton(_("Réduire"))
+            self.b_reduire.setToolTip(_("Ranger cette fenêtre dans la barre d'état, en bas ; « Afficher » la rouvre."))
+            self.b_reduire.clicked.connect(self.reduire)
+            h.addWidget(self.b_reduire)
         self.b_stop = QPushButton(_("Arrêter"))
         h.addWidget(self.b_stop)
         v.addLayout(h)
+
+    def _barre_etat(self):
+        w = self.parent()
+        while w is not None and not hasattr(w, "statusBar"):
+            w = w.parent()
+        return w.statusBar() if w is not None else None
+
+    def reduire(self):
+        """Fenetre rangee dans la barre d'etat de la fenetre principale : titre, barre, « Afficher »."""
+        from PySide6.QtWidgets import QProgressBar, QWidget
+        be = self._barre_etat()
+        if be is None:
+            self.showMinimized()
+            return
+        if self._reduite is None:
+            z = QWidget()
+            hz = QHBoxLayout(z)
+            hz.setContentsMargins(0, 0, 0, 0)
+            z.texte = QLabel()
+            z.texte.setMaximumWidth(360)
+            z.barre = QProgressBar()
+            z.barre.setMaximumWidth(160)
+            z.barre.setMaximumHeight(16)
+            b = QPushButton(_("Afficher"))
+            b.setFlat(True)
+            b.setStyleSheet("color:#0b62c4;text-decoration:underline")
+            b.clicked.connect(self.afficher)
+            for x in (z.texte, z.barre, b):
+                hz.addWidget(x)
+            be.addPermanentWidget(z)
+            self._reduite = z
+        self._copier_vers_reduite()
+        self._reduite.show()
+        self.hide()
+
+    def afficher(self):
+        if self._reduite is not None:
+            self._reduite.hide()
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def _copier_vers_reduite(self):
+        z = self._reduite
+        if z is None:
+            return
+        z.texte.setText(self.windowTitle() + " — " + self.etat.text())
+        z.barre.setRange(self.barre.minimum(), self.barre.maximum())
+        z.barre.setValue(self.barre.value())
+        z.barre.setFormat(self.barre.format())
+
+    def done(self, r):
+        self._retirer_reduite()
+        super().done(r)
+
+    def closeEvent(self, e):
+        if getattr(self, "en_cours", False) and not self.bloquante:   # la croix range la fenetre, rien ne s'arrete en cachette
+            e.ignore()
+            self.reduire()
+            return
+        self._retirer_reduite()
+        super().closeEvent(e)
+
+    def reject(self):                                    # Echap : pareil que la croix
+        if getattr(self, "en_cours", False) and not self.bloquante:
+            self.reduire()
+            return
+        super().reject()
+
+    def _retirer_reduite(self):
+        z, self._reduite = self._reduite, None
+        if z is not None:
+            try:
+                be = self._barre_etat()
+                if be is not None:
+                    be.removeWidget(z)
+                z.deleteLater()
+            except RuntimeError:                         # fenetre principale deja fermee
+                pass
+
+    def terminer(self):
+        """Fin de la tache : fenetre et barre d'etat rangees."""
+        self.en_cours = False
+        self._retirer_reduite()
+        self.close()
 
     def etape(self, texte, valeur, total):
         self.etat.setText(texte)
@@ -120,6 +221,7 @@ class Avancement(QDialog):
             self.barre.setFormat(f"{valeur} / {total}")
         else:
             self.barre.setRange(0, 0)
+        self._copier_vers_reduite()
 
     def noter(self, texte):
         import time
@@ -129,11 +231,12 @@ class Avancement(QDialog):
 _ABANDONNEES = []          # taches arretees qui finissent en arriere-plan (leur resultat est ignore)
 
 
-def executer_suivi(parent, titre, fonction, abandonner=False):
+def executer_suivi(parent, titre, fonction, abandonner=False, bloquante=True):
     """Comme executer(), avec une fenetre d'avancement : fonction(tache) appelle tache.avancer(texte, n, total)
     et tache.noter(detail). Leve l'erreur de fonction, ou InterruptedError si l'utilisateur arrete.
-    abandonner : « Arreter » rend la main tout de suite (reseau qui ne repond pas...) ; la tache finit seule, ignoree."""
-    dlg = Avancement(parent, titre)
+    abandonner : « Arreter » rend la main tout de suite (reseau qui ne repond pas...) ; la tache finit seule, ignoree.
+    bloquante=False : on continue de travailler pendant la tache (voir Avancement)."""
+    dlg = Avancement(parent, titre, bloquante)
     t = _TacheSuivie(fonction)
     res = {}
     boucle = QEventLoop()
@@ -159,20 +262,20 @@ def executer_suivi(parent, titre, fonction, abandonner=False):
             t.finished.connect(lambda t=t: t in _ABANDONNEES and _ABANDONNEES.remove(t))
         else:
             t.wait()
-    dlg.close()
+    dlg.terminer()
     if res.get("e"):
         raise res["e"]
     return res.get("r")
 
 
-def en_tache(parent, titre, texte, fonction, *args, lecture=False):
+def en_tache(parent, titre, texte, fonction, *args, lecture=False, bloquante=True):
     """Longue tache sans etapes : fenetre d'avancement (texte, barre animee, Arreter) si elle dure, erreur levee.
     lecture : la tache ne change rien (lire, lister, tester) ; « Arreter » rend alors la main tout de suite. Une tache
     qui ecrit va au bout de ce qu'elle a commence : rien ne continue en cachette."""
     def travail(t):
         t.avancer(texte)
         return fonction(*args)
-    return executer_suivi(parent, titre, travail, abandonner=lecture)
+    return executer_suivi(parent, titre, travail, abandonner=lecture, bloquante=bloquante)
 
 
 def verifier_cle(parent, params):
