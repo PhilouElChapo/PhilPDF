@@ -934,4 +934,8 @@
     <string name="webdav_utilisateur">Utilisateur</string>
     <string name="err_dav_adresse">L\'adresse doit commencer par https:// (ou http:// sur votre réseau local).</string>
     <string name="err_dav_refus">Le serveur refuse cet utilisateur ou ce mot de passe. Avec la validation en deux étapes, utilisez un mot de passe d\'application.</string>
+    <string name="image_compte">Image du compte</string>
+    <string name="image_compte_aide">Choisissez une image (logo, photo...) pour ce compte : elle remplace la photo ou l\'initiale du service.</string>
+    <string name="image_choisir">Choisir une image...</string>
+    <string name="image_par_defaut">Par défaut</string>
 </resources>

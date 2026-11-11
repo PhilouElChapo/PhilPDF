@@ -48,7 +48,7 @@ import java.util.Locale
 
 /** Couleur de pastille de chaque service (quand il n'y a pas de photo). */
 fun couleurService(cle: String) = when (cle) {
-    "gdrive" -> Color(0xFF1A73E8); "onedrive" -> Color(0xFF0364B8); "dropbox" -> Color(0xFF0061FE); "box" -> Color(0xFF0075C9); "pcloud" -> Color(0xFF17BED0)
+    "gdrive" -> Color(0xFF1A73E8); "onedrive" -> Color(0xFF0364B8); "dropbox" -> Color(0xFF0061FE); "box" -> Color(0xFF0075C9); "pcloud" -> Color(0xFF17BED0); "kdrive" -> Color(0xFF0098FF); "webdav" -> Color(0xFF6A1B9A)
     else -> ROUGE
 }
 
@@ -57,7 +57,8 @@ fun couleurService(cle: String) = when (cle) {
 fun AvatarCompte(n: Nuage?, version: Int, taille: Dp) {
     val ctx = LocalContext.current
     val photo = remember(n?.id, version) {
-        n?.photo(ctx)?.takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.absolutePath)?.asImageBitmap() }
+        (n?.image(ctx)?.takeIf { it.exists() } ?: n?.photo(ctx)?.takeIf { it.exists() })
+            ?.let { BitmapFactory.decodeFile(it.absolutePath)?.asImageBitmap() }
     }
     Box(Modifier.size(taille).clip(CircleShape), contentAlignment = Alignment.Center) {
         when {
@@ -125,6 +126,27 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
     // ouvrir, classer ; ajouter un compte ne retire jamais les autres
     var ajoutAutre by remember { mutableStateOf(false) }
     var davCle by remember { mutableStateOf<String?>(null) }      // compte par WebDAV en cours d'ajout
+    var imagePour by remember { mutableStateOf<Nuage?>(null) }    // compte dont on change l'image
+    val choisirImage = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        val c = imagePour ?: return@rememberLauncherForActivityResult
+        imagePour = null
+        if (uri != null) portee.launch {
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val src = ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } ?: return@withContext false
+                    val cote = minOf(src.width, src.height)       // carre centre, 256 px
+                    val carre = android.graphics.Bitmap.createBitmap(src, (src.width - cote) / 2, (src.height - cote) / 2, cote, cote)
+                    val petit = android.graphics.Bitmap.createScaledBitmap(carre, 256, 256, true)
+                    c.image(ctx).parentFile?.mkdirs()
+                    c.image(ctx).outputStream().use { petit.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                    true
+                } catch (e: Exception) { Journal.ecrire("compte", "image du compte : ${e.message}"); false }
+            }
+            if (!ok) erreur = ctx.getString(R.string.image_illisible)
+            version++
+        }
+    }
+    var menuImage by remember { mutableStateOf<Nuage?>(null) }
     fun apresConnexion(n: Nuage) {
         val commeSynchro = !ajoutAutre
         ajoutAutre = false
@@ -216,7 +238,7 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
                             val pref = Nuage.estPrefere(ctx, c)
                             Row(Modifier.fillMaxWidth().padding(vertical = 3.dp).background(Color(0xFFF6F6F6), RoundedCornerShape(10.dp))
                                 .padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                AvatarCompte(c, version, 32.dp)
+                                Box(Modifier.size(32.dp).clip(CircleShape).clickable { menuImage = c }) { AvatarCompte(c, version, 32.dp) }
                                 Spacer(Modifier.width(8.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(c.libelle(ctx), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -333,6 +355,20 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
                 }) { Text(stringResource(R.string.deconnecter)) }
             },
             dismissButton = { TextButton(onClick = { aRetirer = null }) { Text(stringResource(R.string.annuler)) } })
+    }
+
+    menuImage?.let { c ->
+        AlertDialog(onDismissRequest = { menuImage = null }, title = { Text(stringResource(R.string.image_compte)) },
+            text = { Text(stringResource(R.string.image_compte_aide)) },
+            confirmButton = { TextButton(onClick = { imagePour = c; menuImage = null; choisirImage.launch("image/*") }) {
+                Text(stringResource(R.string.image_choisir)) } },
+            dismissButton = {
+                Row {
+                    if (c.image(ctx).exists()) TextButton(onClick = { c.image(ctx).delete(); menuImage = null; version++ }) {
+                        Text(stringResource(R.string.image_par_defaut)) }
+                    TextButton(onClick = { menuImage = null }) { Text(stringResource(R.string.annuler)) }
+                }
+            })
     }
 
     davCle?.let { cle ->

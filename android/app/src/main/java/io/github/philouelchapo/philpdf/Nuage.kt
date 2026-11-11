@@ -107,6 +107,8 @@ class Nuage private constructor(val id: String) {
     fun nom(ctx: Context): String? = prefs(ctx).getString("nom", null)?.takeIf { it.isNotEmpty() }
     fun mode(ctx: Context): String? = prefs(ctx).getString("mode", null)
     fun photo(ctx: Context): File = File(ctx.filesDir, "comptes/$id.png")
+    /** Image choisie par vous pour ce compte (logo, photo...) : passe avant la photo du service. */
+    fun image(ctx: Context): File = File(ctx.filesDir, "comptes/$id-perso.png")
     fun connecte(ctx: Context) = mode(ctx) != null
     fun libelle(ctx: Context) = email(ctx) ?: nom(ctx) ?: fournisseur(ctx).nom
 
@@ -877,6 +879,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 if (!garderBibliotheque) Bibliotheque.oublier(ctx)
             }
             n.oublierJetons(ctx)
+            n.image(ctx).delete()
             val a = try { JSONArray(registre(ctx).getString("liste", "[]")) } catch (_: Exception) { JSONArray() }
             registre(ctx).edit().putString("liste", JSONArray((0 until a.length()).map { a.getString(it) }.filter { it != n.id }).toString()).apply()
             File(ctx.filesDir, "comptes/fichiers/${n.id}").deleteRecursively()

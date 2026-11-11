@@ -120,7 +120,7 @@ def icone_compte(compte, params=None, taille=48):
     from .icones import icone
     from .dialogues_distant import ICONES
     mode = (params or {}).get("comptes_icone", "photo") if params is not None else "photo"
-    nuage = compte.get("type") in distant.NUAGES
+    nuage = compte.get("type") in distant.NUAGES or compte.get("type") in ("pcloud", "kdrive")   # clouds par WebDAV aussi
     perso = _image_perso(compte)
     cle = (compte.get("id"), compte.get("type"), mode, compte.get("couleur"), len(compte.get("image") or ""), taille,
            os.path.exists(chemin_photo(compte)) if compte.get("id") else False)

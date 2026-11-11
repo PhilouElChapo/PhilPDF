@@ -10,6 +10,11 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.25.1
+- Image de chaque compte, comme sous Windows : Comptes > « Comptes relies », toucher le rond du compte > « Choisir une
+  image... » (logo, photo...) ; elle remplace la photo ou l'initiale du service (pCloud, kDrive, WebDAV compris).
+  « Par defaut » revient a l'icone automatique.
+
 1.25.0
 - WebDAV, comme sous Windows : Comptes > Ajouter un compte > WebDAV (adresse complete du NAS ou du serveur,
   utilisateur, mot de passe chiffre sur le telephone), et deux comptes tout prets : pCloud (adresse e-mail et mot de
@@ -505,6 +510,10 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.94
+- pCloud et kDrive dessines comme les autres Drives (roue de synchro et pastille) ; leur image et leur couleur se
+  changent comme pour tout compte (Modifier... > Icone > Image... / Couleur...).
 
 0.9.93
 - Infomaniak kDrive tout pret (Preferences > Comptes > Ajouter un compte) : le numero du kDrive (le nombre apres
