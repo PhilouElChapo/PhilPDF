@@ -235,8 +235,8 @@ class DialogueCompte(QDialog):
         hi.addWidget(self.apercu_icone)
         for txt, bulle, fn in ((_("Image..."), _("Choisir une image (logo, photo...) pour ce compte ; elle suit le compte sur tous vos postes."), self._icone_image),
                                (_("Couleur..."), _("Couleur de la roue et de la pastille"), self._icone_couleur),
-                               (_("Photo du compte"), _("Redemander la photo du profil au service (pCloud, kDrive, WebDAV : la photo Gravatar de "
-                                                     "l'adresse e-mail ; seule son empreinte est envoyée à gravatar.com)"), self._icone_photo),
+                               (_("Photo du compte"), _("Demander la photo du profil au service, sinon à Gravatar (la recherche universelle "
+                                                     "d'avatar d'après l'adresse e-mail ; seule son empreinte est envoyée à gravatar.com)"), self._icone_photo),
                                (_("Par défaut"), _("Revenir à l'icône automatique"), self._icone_defaut)):
             b = QPushButton(txt)
             b.setToolTip(bulle)
@@ -399,8 +399,9 @@ class DialogueCompte(QDialog):
         finally:
             QApplication.restoreOverrideCursor()
         if not ok:
-            QMessageBox.information(self, _("Photo du compte"), _("Ce compte n'a pas de photo de profil (ou le service ne la donne pas) : "
-                                                                  "la pastille est utilisée. Vous pouvez choisir une image."))
+            QMessageBox.information(self, _("Photo du compte"), _(
+                "Ni le service ni Gravatar (la recherche d'avatar d'après l'adresse e-mail) n'ont de photo pour ce compte : "
+                "la pastille est utilisée. Vous pouvez choisir une image, ou créer votre photo sur gravatar.com."))
         self._maj_icone()
 
     def _icone_defaut(self):

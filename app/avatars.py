@@ -62,6 +62,13 @@ def recuperer_photo(compte, emplacement=None, forcer=False):
     except Exception:
         octets = None
     img = QImage.fromData(octets) if octets else QImage()
+    if img.isNull() and forcer:                          # « Photo du compte » clique : sinon Gravatar de l'adresse
+        try:
+            mail = compte.get("utilisateur") if "@" in (compte.get("utilisateur") or "") else e.qui()
+        except Exception:
+            mail = None
+        g = gravatar(mail)
+        img = QImage.fromData(g) if g else QImage()
     if img.isNull():
         try:
             with open(_marque_absente(compte), "w") as f:

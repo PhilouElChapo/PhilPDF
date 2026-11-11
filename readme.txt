@@ -10,6 +10,9 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.25.3
+- « Photo Gravatar (d'apres l'adresse e-mail) » pour tous les comptes, Google Drive, OneDrive, Dropbox et Box compris.
+
 1.25.2
 - Photo Gravatar : en touchant le rond d'un compte (pCloud, kDrive, WebDAV...), « Photo Gravatar » reprend la photo
   liee a l'adresse e-mail sur gravatar.com (seule l'empreinte de l'adresse est envoyee, et seulement a votre demande).
@@ -514,6 +517,11 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.96
+- Gravatar pour tous les comptes : « Photo du compte » demande la photo au service, sinon a Gravatar (la recherche
+  universelle d'avatar d'apres l'adresse e-mail ; seule son empreinte est envoyee), Google Drive, OneDrive, Dropbox et
+  Box compris.
 
 0.9.95
 - Photo Gravatar pour pCloud, kDrive et WebDAV : Modifier... > Icone > « Photo du compte » reprend la photo liee a
