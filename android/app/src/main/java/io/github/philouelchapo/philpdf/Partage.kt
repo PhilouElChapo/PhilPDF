@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 fun ChoixPartage(etat: EtatLecteur, fermer: () -> Unit) {
     val ctx = LocalContext.current
     val portee = rememberCoroutineScope()
-    val compte = remember { Nuage.synchro(ctx)?.takeIf { it.connecte(ctx) } }
+    val compte = remember { Nuage.prefere(ctx)?.takeIf { it.connecte(ctx) } }
     var occupe by remember { mutableStateOf(false) }
     var erreur by remember { mutableStateOf<String?>(null) }
     AlertDialog(onDismissRequest = { if (!occupe) fermer() },

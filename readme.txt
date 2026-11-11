@@ -15,6 +15,10 @@ ANDROID
   vous autorisez PhilPDF (serveurs pCloud en Europe ou aux Etats-Unis, reconnus seuls). Parcourir et ouvrir vos PDF,
   « Meme fichier » pour les renvoyer, Renommer et classer, partage par lien (dossier PhilPDF/Partages), et pCloud
   peut etre l'emplacement de synchronisation avec vos PC.
+- Plusieurs comptes relies, comme sous Windows : avant, relier un compte retirait les autres. Maintenant Comptes >
+  « Comptes relies » : le compte de synchronisation des reglages (Google Drive par exemple) et d'autres comptes
+  (pCloud, OneDrive...) ajoutes par « Ajouter un compte », sans rien retirer. L'etoile ★ choisit le compte prefere :
+  propose d'office pour partager par lien et classer (sinon celui de la synchronisation).
 
 1.23.1
 - IA : « Signaler ce resultat » sous chaque reponse de l'IA (resume, explication, texte ameliore, formulaire rempli,

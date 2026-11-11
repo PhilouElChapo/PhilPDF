@@ -121,12 +121,15 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
 
     var changer by remember { mutableStateOf(false) }
 
-    // un seul emplacement de synchronisation (comme PhilPDF Windows) : le nouveau compte remplace l'ancien
+    // plusieurs comptes relies (comme sous Windows) : un pour la synchronisation des reglages, d'autres pour envoyer,
+    // ouvrir, classer ; ajouter un compte ne retire jamais les autres
+    var ajoutAutre by remember { mutableStateOf(false) }
     fun apresConnexion(n: Nuage) {
+        val commeSynchro = !ajoutAutre
+        ajoutAutre = false
         portee.launch {
             try { n.profil(ctx) } catch (_: Exception) {}
-            Nuage.liste(ctx).filter { it.id != n.id }.forEach { Nuage.retirer(ctx, it) }
-            Nuage.choisirSynchro(ctx, n)
+            if (commeSynchro) Nuage.choisirSynchro(ctx, n)
             changer = false
             locaux = Bibliotheque.locaux(ctx)
             version++
@@ -201,6 +204,42 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
                         Text(stringResource(R.string.navigateur_aide), fontSize = 12.sp, color = Color.Gray)
                         Spacer(Modifier.height(4.dp))
                         Text(stringResource(R.string.nas_bientot), fontSize = 12.sp, color = Color.Gray)
+                    }
+                    // ---------------------------------------------------- autres comptes (envoyer, ouvrir, classer)
+                    if (synchro != null) {
+                        Spacer(Modifier.height(14.dp))
+                        Text(stringResource(R.string.autres_comptes), fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.autres_comptes_aide), fontSize = 12.sp, color = Color.Gray)
+                        comptes.forEach { c ->
+                            val pref = Nuage.estPrefere(ctx, c)
+                            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp).background(Color(0xFFF6F6F6), RoundedCornerShape(10.dp))
+                                .padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                AvatarCompte(c, version, 32.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(c.libelle(ctx), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(c.fournisseur(ctx).nom + (if (c.id == synchro.id) " · " + stringResource(R.string.compte_synchro) else "") +
+                                        (if (pref) " · ★ " + stringResource(R.string.compte_prefere) else ""), fontSize = 12.sp, color = Color.Gray)
+                                }
+                                TextButton(onClick = { Nuage.choisirPrefere(ctx, if (pref) null else c); version++ }, enabled = occupe == null) {
+                                    Text(if (pref) "★" else "☆", fontSize = 20.sp, color = if (pref) Color(0xFFE0A100) else Color.Gray)
+                                }
+                                if (c.id != synchro.id) TextButton(onClick = { aRetirer = c }, enabled = occupe == null) {
+                                    Text(stringResource(R.string.deconnecter), color = Color.Gray, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                        Text(stringResource(R.string.prefere_aide), fontSize = 12.sp, color = Color.Gray)
+                        TextButton(onClick = { ajoutAutre = !ajoutAutre }, enabled = occupe == null) { Text(stringResource(R.string.ajouter_compte)) }
+                        if (ajoutAutre) {
+                            FOURNISSEURS.drop(1).forEach { f ->
+                                OutlinedButton(onClick = { parNavigateur(f, null) }, enabled = occupe == null && Nuage.disponible(f),
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                                    Text(if (Nuage.disponible(f)) f.nom else f.nom + " — " + stringResource(R.string.non_disponible),
+                                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.ouvrir_partout), fontSize = 12.sp, color = Color.Gray)

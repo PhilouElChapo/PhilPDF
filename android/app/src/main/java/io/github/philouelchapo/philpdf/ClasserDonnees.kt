@@ -99,7 +99,7 @@ fun ClasserIa(etat: EtatLecteur, fermer: () -> Unit) {
     var r by remember { mutableStateOf<JSONObject?>(null) }
     var nom by remember { mutableStateOf("") }
     var choisi by remember { mutableStateOf<Classement.DossierDrive?>(null) }
-    var autreCompte by remember { mutableStateOf<Nuage?>(Nuage.synchro(ctx) ?: Nuage.liste(ctx).firstOrNull()) }
+    var autreCompte by remember { mutableStateOf<Nuage?>(Nuage.prefere(ctx)) }
     var autreChemin by remember { mutableStateOf("") }
     var occupe by remember { mutableStateOf(false) }
     val t = texte; val cs = connus

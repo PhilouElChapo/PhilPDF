@@ -919,4 +919,8 @@
     <string name="sig_envoi">Sending...</string>
     <string name="sig_merci">Thank you, your report has been sent.</string>
     <string name="sig_echec">The report could not be sent (no connection?). Try again later.</string>
+    <string name="autres_comptes_aide">Each linked account can be browsed, receive files, share by link and file documents. Adding an account never removes the others.</string>
+    <string name="compte_synchro">settings sync</string>
+    <string name="compte_prefere">preferred</string>
+    <string name="prefere_aide">★ Preferred: the account offered first to send, share by link and file your PDFs (otherwise the sync account).</string>
 </resources>

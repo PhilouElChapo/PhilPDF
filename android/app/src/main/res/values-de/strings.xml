@@ -918,4 +918,8 @@
     <string name="sig_envoi">Wird gesendet...</string>
     <string name="sig_merci">Danke, Ihre Meldung wurde gesendet.</string>
     <string name="sig_echec">Die Meldung konnte nicht gesendet werden (keine Verbindung?). Später erneut versuchen.</string>
+    <string name="autres_comptes_aide">Jedes verbundene Konto kann durchsucht werden, Dateien empfangen, per Link teilen und Dokumente ablegen. Ein neues Konto entfernt nie die anderen.</string>
+    <string name="compte_synchro">Einstellungs-Sync</string>
+    <string name="compte_prefere">bevorzugt</string>
+    <string name="prefere_aide">★ Bevorzugt: das Konto, das zum Senden, Teilen per Link und Ablegen Ihrer PDFs zuerst vorgeschlagen wird (sonst das Sync-Konto).</string>
 </resources>

@@ -918,4 +918,8 @@
     <string name="sig_envoi">Invio...</string>
     <string name="sig_merci">Grazie, la segnalazione è stata inviata.</string>
     <string name="sig_echec">Impossibile inviare la segnalazione (nessuna connessione?). Riprova più tardi.</string>
+    <string name="autres_comptes_aide">Ogni account collegato si può sfogliare, ricevere file, condividere tramite link e archiviare. Aggiungere un account non rimuove mai gli altri.</string>
+    <string name="compte_synchro">sincronizzazione impostazioni</string>
+    <string name="compte_prefere">preferito</string>
+    <string name="prefere_aide">★ Preferito: l\'account proposto per primo per inviare, condividere tramite link e archiviare i PDF (altrimenti quello di sincronizzazione).</string>
 </resources>

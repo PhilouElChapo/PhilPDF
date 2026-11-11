@@ -919,4 +919,8 @@
     <string name="sig_envoi">Envoi...</string>
     <string name="sig_merci">Merci, votre signalement est envoyé.</string>
     <string name="sig_echec">Le signalement n\'a pas pu partir (pas de connexion ?). Réessayez plus tard.</string>
+    <string name="autres_comptes_aide">Chaque compte relié peut être parcouru, recevoir des fichiers, partager par lien et classer. Ajouter un compte ne retire jamais les autres.</string>
+    <string name="compte_synchro">synchro des réglages</string>
+    <string name="compte_prefere">préféré</string>
+    <string name="prefere_aide">★ Préféré : le compte proposé d\'office pour envoyer, partager par lien et classer vos PDF (sinon celui de la synchro).</string>
 </resources>

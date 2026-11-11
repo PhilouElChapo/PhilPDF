@@ -805,6 +805,14 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
         /** Compte ou se trouve le dossier PhilPDF de vos postes. */
         fun synchro(ctx: Context): Nuage? = liste(ctx).let { l -> l.firstOrNull { it.id == registre(ctx).getString("synchro", null) } }
 
+        /** Compte prefere pour envoyer, partager par lien et classer (sinon celui de la synchronisation). */
+        fun prefere(ctx: Context): Nuage? = liste(ctx).let { l ->
+            l.firstOrNull { it.id == registre(ctx).getString("prefere", null) } ?: synchro(ctx) ?: l.firstOrNull() }
+
+        fun estPrefere(ctx: Context, n: Nuage) = registre(ctx).getString("prefere", null) == n.id
+
+        fun choisirPrefere(ctx: Context, n: Nuage?) = registre(ctx).edit().putString("prefere", n?.id).apply()
+
         fun choisirSynchro(ctx: Context, n: Nuage?) {
             if (synchro(ctx)?.id != n?.id) Bibliotheque.oublier(ctx)
             registre(ctx).edit().putString("synchro", n?.id).apply()

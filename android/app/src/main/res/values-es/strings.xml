@@ -918,4 +918,8 @@
     <string name="sig_envoi">Enviando...</string>
     <string name="sig_merci">Gracias, su informe se ha enviado.</string>
     <string name="sig_echec">No se pudo enviar el informe (¿sin conexión?). Inténtelo más tarde.</string>
+    <string name="autres_comptes_aide">Cada cuenta vinculada se puede explorar, recibir archivos, compartir por enlace y clasificar. Añadir una cuenta nunca quita las demás.</string>
+    <string name="compte_synchro">sincronización de ajustes</string>
+    <string name="compte_prefere">preferida</string>
+    <string name="prefere_aide">★ Preferida: la cuenta propuesta de entrada para enviar, compartir por enlace y clasificar sus PDF (si no, la de sincronización).</string>
 </resources>
