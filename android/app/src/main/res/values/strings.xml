@@ -904,4 +904,19 @@
     <string name="sgn_supprimer_q_sous">Delete the bookmark “%1$s” and its %2$d sub-bookmark(s)?</string>
     <string name="sgn_nom">Bookmark name</string>
     <string name="sgn_page">Page (1 to %1$d)</string>
+    <string name="sig_bouton">Report this result</string>
+    <string name="sig_menu">Report an AI result...</string>
+    <string name="sig_titre">Report an AI result</string>
+    <string name="sig_aide">Sent to the PhilPDF developer, to improve the AI features: the feature, the service, your reason, your comment and the text below (you can shorten it). Your document is not sent.</string>
+    <string name="sig_motif">Reason</string>
+    <string name="sig_choquant">Offensive</string>
+    <string name="sig_dangereux">Dangerous</string>
+    <string name="sig_faux">Wrong</string>
+    <string name="sig_autre">Other</string>
+    <string name="sig_commentaire">Comment (optional)</string>
+    <string name="sig_texte">AI answer sent</string>
+    <string name="sig_envoyer">Send</string>
+    <string name="sig_envoi">Sending...</string>
+    <string name="sig_merci">Thank you, your report has been sent.</string>
+    <string name="sig_echec">The report could not be sent (no connection?). Try again later.</string>
 </resources>

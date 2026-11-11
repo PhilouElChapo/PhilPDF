@@ -3040,5 +3040,21 @@
  "en-têtes": "headers",
  "pieds de page": "footers",
  "formes et zones de texte": "shapes and text boxes",
- "certaines images": "some images"
+ "certaines images": "some images",
+ "Dernière réponse de l'IA": "Last AI answer",
+ "Signaler un résultat de l'IA": "Report an AI result",
+ "Choquant, dangereux ou faux": "Offensive, dangerous or wrong",
+ "Envoie au développeur la dernière réponse de l'IA (que vous voyez et pouvez raccourcir), avec le motif et votre commentaire. Votre document n'est pas envoyé.": "Sends the last AI answer to the developer (you see it and can shorten it), with the reason and your comment. Your document is not sent.",
+ "Signaler ce résultat": "Report this result",
+ "Signaler au développeur une réponse de l'IA choquante, dangereuse ou fausse.": "Report an offensive, dangerous or wrong AI answer to the developer.",
+ "Envoyé au développeur de PhilPDF, pour améliorer les fonctions d'IA : la fonction, le service, le motif, votre commentaire et le texte ci-dessous (vous pouvez le raccourcir). Votre document n'est pas envoyé.": "Sent to the PhilPDF developer, to improve the AI features: the feature, the service, your reason, your comment and the text below (you can shorten it). Your document is not sent.",
+ "Choquant": "Offensive",
+ "Dangereux": "Dangerous",
+ "Faux": "Wrong",
+ "Merci, votre signalement est envoyé.": "Thank you, your report has been sent.",
+ "Motif": "Reason",
+ "Commentaire (facultatif)": "Comment (optional)",
+ "Réponse de l'IA envoyée": "AI answer sent",
+ "Envoi du signalement...": "Sending the report...",
+ "Le signalement n'a pas pu partir (pas de connexion ?). Réessayez plus tard.": "The report could not be sent (no connection?). Try again later."
 }

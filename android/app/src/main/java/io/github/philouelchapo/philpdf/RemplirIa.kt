@@ -90,6 +90,7 @@ fun RemplirIa(etat: EtatLecteur, fermer: () -> Unit) {
                         Spacer(Modifier.height(8.dp))
                         Text(stringResource(R.string.rempl_manque) + "\n• " + manque.take(8).joinToString("\n• "), fontSize = 13.sp, color = Color(0xFF8A5A00))
                     }
+                    BoutonSignalerIa("Remplir avec l'IA") { l.joinToString("\n") { (it.champ.libelle.ifEmpty { it.champ.nom }) + " : " + it.valeur } }
                 }
                 FlowRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {

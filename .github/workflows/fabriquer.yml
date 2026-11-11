@@ -98,6 +98,11 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python tests/test_office_interne.py
 
+      - name: Test de Signaler un resultat de l'IA (reseau simule)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python tests/test_signaler_ia.py
+
       - name: Test de la session partagee
         run: python tests/test_session.py
 

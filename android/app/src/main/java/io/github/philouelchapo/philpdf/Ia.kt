@@ -250,6 +250,7 @@ object Ia {
                 val r = if (m == "claude") claude(clef, c, texte, images, maxJetons) else gemini(clef, c, texte, images, maxJetons, json)
                 Journal.ecrire("IA $m", "réponse en ${(System.currentTimeMillis() - t0) / 1000} s, modèle ${trouves[m]}, ${texte.length} car. envoyés" +
                     if (images.isNotEmpty()) ", ${images.size} image(s)" else "")
+                Signalement.derniere = r.trim()
                 return@withContext r.trim()
             } catch (e: ErreurIa) {
                 Journal.ecrire("IA $m", "✕ après ${(System.currentTimeMillis() - t0) / 1000} s : ${e.message}")

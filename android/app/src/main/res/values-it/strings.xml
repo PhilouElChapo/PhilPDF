@@ -903,4 +903,19 @@
     <string name="sgn_supprimer_q_sous">Eliminare il segnalibro «%1$s» e i suoi %2$d sotto-segnalibri?</string>
     <string name="sgn_nom">Nome del segnalibro</string>
     <string name="sgn_page">Pagina (da 1 a %1$d)</string>
+    <string name="sig_bouton">Segnala questo risultato</string>
+    <string name="sig_menu">Segnala un risultato dell\'IA...</string>
+    <string name="sig_titre">Segnala un risultato dell\'IA</string>
+    <string name="sig_aide">Inviato allo sviluppatore di PhilPDF per migliorare le funzioni di IA: la funzione, il servizio, il motivo, il tuo commento e il testo qui sotto (puoi accorciarlo). Il documento non viene inviato.</string>
+    <string name="sig_motif">Motivo</string>
+    <string name="sig_choquant">Offensivo</string>
+    <string name="sig_dangereux">Pericoloso</string>
+    <string name="sig_faux">Errato</string>
+    <string name="sig_autre">Altro</string>
+    <string name="sig_commentaire">Commento (facoltativo)</string>
+    <string name="sig_texte">Risposta dell\'IA inviata</string>
+    <string name="sig_envoyer">Invia</string>
+    <string name="sig_envoi">Invio...</string>
+    <string name="sig_merci">Grazie, la segnalazione è stata inviata.</string>
+    <string name="sig_echec">Impossibile inviare la segnalazione (nessuna connessione?). Riprova più tardi.</string>
 </resources>

@@ -259,6 +259,8 @@ class DialogueDonnees(QDialog):
         b = QPushButton(_("Enregistrer en Excel..."))
         b.clicked.connect(self.excel)
         h.addWidget(b)
+        from . import signaler_ia
+        h.addWidget(signaler_ia.bouton(self, _("Extraire les données"), lambda: ia.derniere_reponse))
         h.addStretch(1)
         b = QPushButton(_("Fermer"))
         b.clicked.connect(self.accept)

@@ -354,6 +354,7 @@ private fun EcranResume(etat: EtatLecteur, r: ResultatResume, fermer: () -> Unit
                             }
                         }
                     }
+                    BoutonSignalerIa(if (titre == R.string.ia_resume_titre) "Résumer" else "Expliquer simplement") { r.texte }
                 }
                 val dates = r.echeances.joinToString("") { "\n- " + dateFr(it.date) + (if (it.heure.isNotEmpty()) " " + it.heure else "") + " : " + it.libelle }
                 val tout = brut + if (dates.isNotEmpty()) "\n\n" + ctx.getString(R.string.ia_dates) + dates else ""

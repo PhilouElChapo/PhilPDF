@@ -114,6 +114,7 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     var traduire by mutableStateOf(false)                   // « Traduire le document »
     var expliquer by mutableStateOf(false)                  // « Expliquer simplement »
     var remplirIa by mutableStateOf(false)                  // « Remplir avec l'IA »
+    var signalerIa by mutableStateOf(false)                 // « Signaler un resultat de l'IA »
     var classer by mutableStateOf(false)                    // « Renommer et classer »
     var editerSignets by mutableStateOf(false)              // « Modifier les signets »
     var rubrique by mutableStateOf<String?>(null)           // rubrique ouverte du menu Plus
@@ -244,6 +245,7 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
     if (etat.traduire) TraduireUi(etat, ouvrirFichier) { etat.traduire = false }
     if (etat.expliquer) ExpliquerIa(etat) { etat.expliquer = false }
     if (etat.remplirIa) RemplirIa(etat) { etat.remplirIa = false }
+    if (etat.signalerIa) SignalerIa("Menu Plus (dernière réponse)", Signalement.derniere) { etat.signalerIa = false }
     if (etat.classer) ClasserIa(etat) { etat.classer = false }
     if (etat.extraire) ExtraireIa(etat) { etat.extraire = false }
     if (etat.editerSignets && t != null) EditeurSignets(etat, t.size, etat.page) { etat.editerSignets = false }
@@ -404,7 +406,7 @@ private fun DispositionTelephone(etat: EtatLecteur, tailles: List<Pair<Float, Fl
     LaunchedEffect(etat.ouvrirSigner) { if (etat.ouvrirSigner) { tiroir = Volet.SIGNER; etat.ouvrirSigner = false } }
     // un ecran ouvert depuis le menu Plus (filigrane, nettoyer, IA...) : le menu se ferme, rien ne reste par-dessus
     val ecranOuvert = etat.filigrane || etat.nettoyer != null || etat.traduire || etat.expliquer || etat.remplirIa ||
-        etat.classer || etat.extraire || etat.editerSignets || etat.redresser != null || etat.resumeIa || etat.lectureFluide || etat.organiser
+        etat.classer || etat.extraire || etat.editerSignets || etat.signalerIa || etat.redresser != null || etat.resumeIa || etat.lectureFluide || etat.organiser
     LaunchedEffect(ecranOuvert) { if (ecranOuvert) tiroir = null }
     val portee = rememberCoroutineScope()
     // en faisant defiler vers le bas, les barres se cachent ; vers le haut, elles reviennent
@@ -506,6 +508,7 @@ private fun ContenuVolet(v: Volet, etat: EtatLecteur, tailles: List<Pair<Float, 
                         LigneAction("excel", stringResource(R.string.don_menu)) { etat.extraire = true }
                         if (m) LigneAction("formulaire", stringResource(R.string.rempl_menu)) { etat.remplirIa = true }
                         LigneAction("parametres", stringResource(R.string.ia_reglages)) { etat.reglagesIa = true }
+                        LigneAction("attention", stringResource(R.string.sig_menu)) { etat.signalerIa = true }
                     }
                     if (m) Rubrique("organiser", stringResource(R.string.grp_gestion), etat, "gestion") {
                         LigneAction("organiser", stringResource(R.string.organiser_pages)) { etat.organiser = true }

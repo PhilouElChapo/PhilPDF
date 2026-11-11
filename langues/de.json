@@ -3031,5 +3031,21 @@
  "en-têtes": "Kopfzeilen",
  "pieds de page": "Fußzeilen",
  "formes et zones de texte": "Formen und Textfelder",
- "certaines images": "einige Bilder"
+ "certaines images": "einige Bilder",
+ "Dernière réponse de l'IA": "Letzte KI-Antwort",
+ "Signaler un résultat de l'IA": "KI-Ergebnis melden",
+ "Choquant, dangereux ou faux": "Anstößig, gefährlich oder falsch",
+ "Envoie au développeur la dernière réponse de l'IA (que vous voyez et pouvez raccourcir), avec le motif et votre commentaire. Votre document n'est pas envoyé.": "Sendet die letzte KI-Antwort an den Entwickler (Sie sehen sie und können sie kürzen), mit Grund und Kommentar. Ihr Dokument wird nicht gesendet.",
+ "Signaler ce résultat": "Dieses Ergebnis melden",
+ "Signaler au développeur une réponse de l'IA choquante, dangereuse ou fausse.": "Eine anstößige, gefährliche oder falsche KI-Antwort an den Entwickler melden.",
+ "Envoyé au développeur de PhilPDF, pour améliorer les fonctions d'IA : la fonction, le service, le motif, votre commentaire et le texte ci-dessous (vous pouvez le raccourcir). Votre document n'est pas envoyé.": "Wird an den Entwickler von PhilPDF gesendet, um die KI-Funktionen zu verbessern: Funktion, Dienst, Grund, Ihr Kommentar und der Text unten (Sie können ihn kürzen). Ihr Dokument wird nicht gesendet.",
+ "Choquant": "Anstößig",
+ "Dangereux": "Gefährlich",
+ "Faux": "Falsch",
+ "Merci, votre signalement est envoyé.": "Danke, Ihre Meldung wurde gesendet.",
+ "Motif": "Grund",
+ "Commentaire (facultatif)": "Kommentar (optional)",
+ "Réponse de l'IA envoyée": "Gesendete KI-Antwort",
+ "Envoi du signalement...": "Meldung wird gesendet...",
+ "Le signalement n'a pas pu partir (pas de connexion ?). Réessayez plus tard.": "Die Meldung konnte nicht gesendet werden (keine Verbindung?). Später erneut versuchen."
 }

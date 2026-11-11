@@ -155,6 +155,7 @@ fun ClasserIa(etat: EtatLecteur, fermer: () -> Unit) {
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.cls_aide), fontSize = 12.sp, color = Color.Gray)
+                    BoutonSignalerIa("Renommer et classer") { j.toString(2) }
                 }
                 FlowRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {
@@ -242,6 +243,7 @@ fun ExtraireIa(etat: EtatLecteur, fermer: () -> Unit) {
                             }
                         }
                     }
+                    BoutonSignalerIa("Extraire les données") { enTexte() }
                 }
                 FlowRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {

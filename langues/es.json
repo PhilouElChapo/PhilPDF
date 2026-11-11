@@ -3031,5 +3031,21 @@
  "en-têtes": "encabezados",
  "pieds de page": "pies de página",
  "formes et zones de texte": "formas y cuadros de texto",
- "certaines images": "algunas imágenes"
+ "certaines images": "algunas imágenes",
+ "Dernière réponse de l'IA": "Última respuesta de la IA",
+ "Signaler un résultat de l'IA": "Informar de un resultado de la IA",
+ "Choquant, dangereux ou faux": "Ofensivo, peligroso o erróneo",
+ "Envoie au développeur la dernière réponse de l'IA (que vous voyez et pouvez raccourcir), avec le motif et votre commentaire. Votre document n'est pas envoyé.": "Envía al desarrollador la última respuesta de la IA (la ve y puede acortarla), con el motivo y su comentario. Su documento no se envía.",
+ "Signaler ce résultat": "Informar de este resultado",
+ "Signaler au développeur une réponse de l'IA choquante, dangereuse ou fausse.": "Informar al desarrollador de una respuesta de la IA ofensiva, peligrosa o errónea.",
+ "Envoyé au développeur de PhilPDF, pour améliorer les fonctions d'IA : la fonction, le service, le motif, votre commentaire et le texte ci-dessous (vous pouvez le raccourcir). Votre document n'est pas envoyé.": "Se envía al desarrollador de PhilPDF para mejorar las funciones de IA: la función, el servicio, el motivo, su comentario y el texto de abajo (puede acortarlo). Su documento no se envía.",
+ "Choquant": "Ofensivo",
+ "Dangereux": "Peligroso",
+ "Faux": "Erróneo",
+ "Merci, votre signalement est envoyé.": "Gracias, su informe se ha enviado.",
+ "Motif": "Motivo",
+ "Commentaire (facultatif)": "Comentario (opcional)",
+ "Réponse de l'IA envoyée": "Respuesta de la IA enviada",
+ "Envoi du signalement...": "Enviando el informe...",
+ "Le signalement n'a pas pu partir (pas de connexion ?). Réessayez plus tard.": "No se pudo enviar el informe (¿sin conexión?). Inténtelo más tarde."
 }

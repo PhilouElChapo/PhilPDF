@@ -10,6 +10,13 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.23.1
+- IA : « Signaler ce resultat » sous chaque reponse de l'IA (resume, explication, texte ameliore, formulaire rempli,
+  nom et dossier proposes, donnees extraites), et Plus > Intelligence artificielle > « Signaler un resultat de
+  l'IA... » pour la derniere reponse (traduction comprise). Motif (choquant, dangereux, faux, autre), commentaire
+  facultatif ; le texte envoye est montre et peut etre raccourci ; le document n'est jamais envoye. Le signalement
+  part au developpeur sans quitter l'appli (regle de Google Play sur le contenu genere par l'IA).
+
 1.23.0
 - Signets modifiables, comme sous Windows : Plus > Gestion du document > Modifier les signets, ou le bouton
   « Signets » d'Organiser les pages, ou « Modifier les signets » en haut de la liste des signets. Ajouter (sur la
@@ -480,6 +487,11 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.91
+- IA : « Signaler ce resultat » dans le resume, l'explication, le formulaire rempli, Renommer et classer et les
+  donnees extraites, et l'outil Assistant IA > « Signaler un resultat de l'IA » pour la derniere reponse. Meme
+  fonctionnement que sur Android : motif, commentaire, texte montre et modifiable, document jamais envoye.
 
 0.9.90
 - Creer un PDF depuis Word : Word est ferme sans jamais enregistrer son modele Normal (Normal.dotm), et le document

@@ -1684,6 +1684,11 @@ class Fenetre(MixinCoteACote, QMainWindow):
         if oid == "combiner":
             self.combiner()
             return
+        if oid == "ia_signaler":
+            from . import ia
+            from .signaler_ia import signaler
+            signaler(self, _("Dernière réponse de l'IA"), ia.derniere_reponse)
+            return
         if oid == "ia_recherche":
             from .recherche import DialogueRecherche
             self._recherche = DialogueRecherche(self)

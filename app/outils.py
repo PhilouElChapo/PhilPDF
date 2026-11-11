@@ -109,6 +109,9 @@ OUTILS = [
     ("ia_recherche", "ia", "rechercher", _('Rechercher dans tous mes PDF'), _('NAS, Drive, dossiers'),
      _("Une question en français (« le courrier de l'URSSAF du dernier trimestre ») et PhilPDF retrouve les PDF "
        "correspondants, sur ce PC, le NAS ou un Drive. Seule la question est envoyée à l'IA."), True),
+    ("ia_signaler", "ia", "attention", _("Signaler un résultat de l'IA"), _('Choquant, dangereux ou faux'),
+     _("Envoie au développeur la dernière réponse de l'IA (que vous voyez et pouvez raccourcir), avec le motif et "
+       "votre commentaire. Votre document n'est pas envoyé."), True),
     ("alleger", "optimiser", "alleger", _('Alléger le fichier'), _('Même rendu, poids réduit'),
      _('Recompresse les images trop lourdes et nettoie le fichier.'), True),
     ("motdepasse", "optimiser", "motdepasse", _('Mot de passe'), _('Ouverture, impression, copie'),

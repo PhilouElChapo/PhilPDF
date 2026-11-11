@@ -904,4 +904,19 @@
     <string name="sgn_supprimer_q_sous">Supprimer le signet « %1$s » et ses %2$d sous-signet(s) ?</string>
     <string name="sgn_nom">Nom du signet</string>
     <string name="sgn_page">Page (1 à %1$d)</string>
+    <string name="sig_bouton">Signaler ce résultat</string>
+    <string name="sig_menu">Signaler un résultat de l\'IA...</string>
+    <string name="sig_titre">Signaler un résultat de l\'IA</string>
+    <string name="sig_aide">Envoyé au développeur de PhilPDF, pour améliorer les fonctions d\'IA : la fonction, le service, le motif, votre commentaire et le texte ci-dessous (vous pouvez le raccourcir). Votre document n\'est pas envoyé.</string>
+    <string name="sig_motif">Motif</string>
+    <string name="sig_choquant">Choquant</string>
+    <string name="sig_dangereux">Dangereux</string>
+    <string name="sig_faux">Faux</string>
+    <string name="sig_autre">Autre</string>
+    <string name="sig_commentaire">Commentaire (facultatif)</string>
+    <string name="sig_texte">Réponse de l\'IA envoyée</string>
+    <string name="sig_envoyer">Envoyer</string>
+    <string name="sig_envoi">Envoi...</string>
+    <string name="sig_merci">Merci, votre signalement est envoyé.</string>
+    <string name="sig_echec">Le signalement n\'a pas pu partir (pas de connexion ?). Réessayez plus tard.</string>
 </resources>

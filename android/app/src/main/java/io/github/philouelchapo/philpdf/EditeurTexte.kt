@@ -72,6 +72,7 @@ fun EditeurTexte(etat: EtatLecteur, par: Paragraphe, fermer: () -> Unit) {
                         }
                     }
                     avantIa?.let { a -> TextButton(onClick = { texte = a; avantIa = null }) { Text(stringResource(R.string.ia_revenir)) } }
+                    if (avantIa != null) BoutonSignalerIa("Améliorer le texte") { texte }
                 }
                 if (avantIa != null) Text(stringResource(R.string.ia_texte_recoupe), fontSize = 12.sp, color = Color.Gray)
                 Spacer(Modifier.height(8.dp))

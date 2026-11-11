@@ -903,4 +903,19 @@
     <string name="sgn_supprimer_q_sous">¿Eliminar el marcador «%1$s» y sus %2$d submarcador(es)?</string>
     <string name="sgn_nom">Nombre del marcador</string>
     <string name="sgn_page">Página (1 a %1$d)</string>
+    <string name="sig_bouton">Informar de este resultado</string>
+    <string name="sig_menu">Informar de un resultado de la IA...</string>
+    <string name="sig_titre">Informar de un resultado de la IA</string>
+    <string name="sig_aide">Se envía al desarrollador de PhilPDF para mejorar las funciones de IA: la función, el servicio, el motivo, su comentario y el texto de abajo (puede acortarlo). Su documento no se envía.</string>
+    <string name="sig_motif">Motivo</string>
+    <string name="sig_choquant">Ofensivo</string>
+    <string name="sig_dangereux">Peligroso</string>
+    <string name="sig_faux">Erróneo</string>
+    <string name="sig_autre">Otro</string>
+    <string name="sig_commentaire">Comentario (opcional)</string>
+    <string name="sig_texte">Respuesta de la IA enviada</string>
+    <string name="sig_envoyer">Enviar</string>
+    <string name="sig_envoi">Enviando...</string>
+    <string name="sig_merci">Gracias, su informe se ha enviado.</string>
+    <string name="sig_echec">No se pudo enviar el informe (¿sin conexión?). Inténtelo más tarde.</string>
 </resources>

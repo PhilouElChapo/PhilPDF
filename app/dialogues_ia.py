@@ -400,6 +400,8 @@ class DialogueResume(QDialog):
         b = QPushButton(_("Ajouter en note sur la page 1"))
         b.clicked.connect(self._note)
         h.addWidget(b)
+        from . import signaler_ia
+        h.addWidget(signaler_ia.bouton(self, self.windowTitle().split(" — ")[0], self.texte.toPlainText))
         h.addStretch(1)
         bf = QPushButton(_("Fermer"))
         bf.clicked.connect(self.accept)
@@ -645,6 +647,10 @@ class DialogueClasser(QDialog):
         self.supprimer.setChecked(True)
         self.supprimer.setVisible(bool(actuel))
         v.addWidget(self.supprimer)
+        from . import signaler_ia
+        import json as _json
+        v.addWidget(signaler_ia.bouton(self, _("Renommer et classer"),
+                                       lambda: _json.dumps(self.r, ensure_ascii=False, indent=1, default=str)))
         bb = QDialogButtonBox()
         bb.addButton(_("Renommer et classer"), QDialogButtonBox.AcceptRole)
         bb.addButton(_("Annuler"), QDialogButtonBox.RejectRole)
@@ -1392,6 +1398,9 @@ class DialogueRemplirIA(QDialog):
             m.setWordWrap(True)
             m.setStyleSheet("color:#8a5a00")
             v.addWidget(m)
+        from . import signaler_ia
+        v.addWidget(signaler_ia.bouton(self, _("Remplir avec l'IA"), lambda: "\n".join(
+            f"{c['libelle'] or c['nom']} : {self.table.item(r, 3).text()}" for r, (c, _v) in enumerate(self.lignes))))
         bb = boutons_fr(QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel))
         bb.button(QDialogButtonBox.Ok).setText(_("Remplir"))
         bb.button(QDialogButtonBox.Ok).setEnabled(bool(self.lignes))

@@ -230,6 +230,7 @@ def _modele_gemini(clef, params, forcer=False):
 
 
 TRANSITOIRES = (429, 500, 502, 503, 504)
+derniere_reponse = ""                          # texte de la derniere reponse (« Signaler un resultat de l'IA »)
 dernier = {}                                   # qui a vraiment repondu a la derniere demande (moteur, modele)       # surcharge ou panne passagere chez le fournisseur
 
 
@@ -415,6 +416,8 @@ def demander(params, consignes, texte, images=None, json_attendu=False, max_jeto
             r = _claude(clef, params, consignes, texte, images, max_jetons) if m == "claude" else \
                 _gemini(clef, params, consignes, texte, images, max_jetons, json_attendu)
             dernier.update(moteur=m, modele=_modeles_trouves.get(m, "?"), secours=m != ms[0][0], premier=ms[0][0])
+            global derniere_reponse
+            derniere_reponse = r.strip()
             ecrire("IA " + m, f"réponse en {_t.time() - debut:.1f} s, modèle {_modeles_trouves.get(m, '?')}, "
                               f"{len(texte)} car. envoyés{', ' + str(len(images)) + ' image(s)' if images else ''}")
             return lire_json(r) if json_attendu else r.strip()

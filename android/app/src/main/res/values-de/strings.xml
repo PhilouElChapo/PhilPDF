@@ -903,4 +903,19 @@
     <string name="sgn_supprimer_q_sous">Lesezeichen „%1$s“ und seine %2$d Unterlesezeichen löschen?</string>
     <string name="sgn_nom">Name des Lesezeichens</string>
     <string name="sgn_page">Seite (1 bis %1$d)</string>
+    <string name="sig_bouton">Dieses Ergebnis melden</string>
+    <string name="sig_menu">KI-Ergebnis melden...</string>
+    <string name="sig_titre">KI-Ergebnis melden</string>
+    <string name="sig_aide">Wird an den Entwickler von PhilPDF gesendet, um die KI-Funktionen zu verbessern: Funktion, Dienst, Grund, Ihr Kommentar und der Text unten (Sie können ihn kürzen). Ihr Dokument wird nicht gesendet.</string>
+    <string name="sig_motif">Grund</string>
+    <string name="sig_choquant">Anstößig</string>
+    <string name="sig_dangereux">Gefährlich</string>
+    <string name="sig_faux">Falsch</string>
+    <string name="sig_autre">Andere</string>
+    <string name="sig_commentaire">Kommentar (optional)</string>
+    <string name="sig_texte">Gesendete KI-Antwort</string>
+    <string name="sig_envoyer">Senden</string>
+    <string name="sig_envoi">Wird gesendet...</string>
+    <string name="sig_merci">Danke, Ihre Meldung wurde gesendet.</string>
+    <string name="sig_echec">Die Meldung konnte nicht gesendet werden (keine Verbindung?). Später erneut versuchen.</string>
 </resources>
