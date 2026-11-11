@@ -1,18 +1,27 @@
-PhilPDF is a free and open-source PDF reader and editor (AGPL v3), the Android version of PhilPDF for Windows and Linux. Same engine (MuPDF): same rendering, same annotations.
+PhilPDF is a free and open-source PDF reader and editor (AGPL v3), the Android version of PhilPDF for Windows and Linux. Same engine (MuPDF): same rendering, same annotations. No account, no ads, no trackers.
 
-<b>What this version does</b>
+<b>Read</b>
 <ul>
-<li>Home screen with your recent files and thumbnails, shown instantly</li>
-<li>Open a PDF from the device, Google Drive, OneDrive, Dropbox… (Android file picker), or with "Open with" and "Share"</li>
-<li>Continuous scrolling, pinch to zoom, thumbnails on the left on tablets</li>
+<li>Home screen with your recent files and thumbnails</li>
+<li>Continuous scrolling, sharp pinch zoom, reading mode for small screens, bookmarks, comments</li>
 <li>Password-protected PDFs</li>
-<li>Share (e-mail, messaging…) and print through Android's print service</li>
 </ul>
 
-<b>Your data stays yours</b>
-No account, no ads, no trackers. Your documents stay on your device. The only connection checks GitHub for a new version.
+<b>Edit and sign</b>
+<ul>
+<li>Highlight, underline, notes, drawings, shapes, arrows, images, stamps</li>
+<li>Edit text, redact (text really removed), watermark, header and footer</li>
+<li>Fill forms, add form fields, digital signatures and their verification</li>
+<li>Organize pages, straighten and clean up scans, text recognition (OCR)</li>
+</ul>
 
-<b>Coming next</b>
-Annotations, fill and sign, text editing with the original font, stamps and signatures from PhilPDF for Windows, reading mode for small screens.
+<b>Your clouds</b>
+Google Drive, OneDrive, Dropbox, Box, pCloud, Infomaniak kDrive and WebDAV, several accounts at once, with a preferred account for sending and reading. Sync with PhilPDF on your PCs: recent files, stamps and signatures.
+
+<b>Optional AI assistant</b>
+With your own Claude or Gemini key: summarize, explain simply, translate, fill a form, rename and file, extract data. Nothing is sent without your tap, sensitive data is flagged first, and every AI result can be reported.
+
+<b>Your data stays yours</b>
+PhilPDF has no server. Your documents stay on your device; clouds and AI services are reached directly, only when you ask.
 
 Source code and releases: https://github.com/PhilouElChapo/PhilPDF

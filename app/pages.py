@@ -431,7 +431,7 @@ class PageAccueil(QWidget):
         lg.setPixmap(logo(96).pixmap(56, 56))
         h.addWidget(lg)
         t = QLabel('<span style="font-size:26px;font-weight:700">Phil<span style="color:#c9252d">PDF</span></span>'
-                   '<br><span style="color:#555">Editeur PDF · éditez, signez, allégez en toute liberté</span>')
+                   '<br><span style="color:#555">' + _("Editeur PDF · éditez, signez, allégez en toute liberté") + '</span>')
         self._marque = t
         h.addWidget(t)
         h.addStretch()
@@ -950,7 +950,7 @@ class PageAccueil(QWidget):
             return
         self._tete_mode = mode
         self._marque.setText('<span style="font-size:26px;font-weight:700">Phil<span style="color:#c9252d">PDF</span></span>'
-                             + ('<br><span style="color:#555">Editeur PDF · éditez, signez, allégez en toute liberté</span>'
+                             + ('<br><span style="color:#555">' + _("Editeur PDF · éditez, signez, allégez en toute liberté") + '</span>'
                                 if mode == "complet" else ""))
         for x, t in self._boutons_tete:
             x.setText(t if mode != "icones" else "")

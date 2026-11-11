@@ -4,13 +4,42 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>AGPL-3.0-or-later</project_license>
   <name>PhilPDF</name>
-  <summary>Lire, modifier, signer et convertir vos PDF</summary>
+  <summary>Edit, sign, scan and convert your PDFs</summary>
+  <summary xml:lang="fr">Lire, modifier, signer et convertir vos PDF</summary>
   <description>
-    <p>PhilPDF remplace Acrobat : lecture, modification du texte, formulaires, signatures numériques,
-    OCR, allègement, conversion vers Word et Excel, synchronisation entre vos postes.</p>
+    <p>PhilPDF is a free and open-source PDF editor, an alternative to Adobe Acrobat: edit text with the original
+    font, fill and sign forms (including digital signatures), stamps, scanning and OCR, file size reduction, conversion
+    to Word and Excel, redaction, watermarks, page organization and comparison.</p>
+    <p>Open and save directly on Google Drive, OneDrive, Dropbox, Box, pCloud, Infomaniak kDrive, WebDAV, NAS and FTP,
+    and keep recent files, stamps and settings in sync between your computers and your phone. An optional AI assistant
+    uses your own Claude or Gemini key; nothing is sent without your click. No account, no ads, no trackers.</p>
+    <p xml:lang="fr">PhilPDF est un éditeur PDF libre, une alternative à Adobe Acrobat : modifier le texte avec la police
+    d'origine, remplir et signer (y compris signature numérique), tampons, numérisation et OCR, allègement, conversion
+    vers Word et Excel, biffage, filigrane, organisation et comparaison des pages.</p>
+    <p xml:lang="fr">Ouvrez et enregistrez directement sur Google Drive, OneDrive, Dropbox, Box, pCloud, Infomaniak
+    kDrive, WebDAV, NAS et FTP, et retrouvez vos fichiers récents, tampons et réglages sur tous vos postes. Assistant IA
+    facultatif avec votre propre clef Claude ou Gemini ; rien n'est envoyé sans votre clic. Sans compte, sans publicité,
+    sans pisteur.</p>
   </description>
   <launchable type="desktop-id">io.github.PhilouElChapo.PhilPDF.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Editing a PDF</caption>
+      <image>https://raw.githubusercontent.com/PhilouElChapo/PhilPDF/main/docs/captures/document_en.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>All tools</caption>
+      <image>https://raw.githubusercontent.com/PhilouElChapo/PhilPDF/main/docs/captures/outils_en.png</image>
+    </screenshot>
+  </screenshots>
   <url type="homepage">https://github.com/PhilouElChapo/PhilPDF</url>
-  <developer id="io.github.PhilouElChapo"><name>Phil</name></developer>
+  <url type="bugtracker">https://github.com/PhilouElChapo/PhilPDF/issues</url>
+  <url type="vcs-browser">https://github.com/PhilouElChapo/PhilPDF</url>
+  <developer id="io.github.PhilouElChapo"><name>Phil (PhilFactory)</name></developer>
+  <categories><category>Office</category><category>Viewer</category></categories>
+  <keywords><keyword>PDF</keyword><keyword>editor</keyword><keyword>sign</keyword><keyword>OCR</keyword><keyword>Acrobat</keyword></keywords>
   <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="" date="2026-11-12"/>
+  </releases>
 </component>

@@ -518,6 +518,11 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.97
+- Accueil : le sous-titre « Editeur PDF · editez, signez, allegez en toute liberte » est traduit dans chaque langue.
+- Presentation du projet en anglais et en francais (page GitHub, captures d'ecran, fiche Linux et Android) pour le
+  faire connaitre.
+
 0.9.96
 - Gravatar pour tous les comptes : « Photo du compte » demande la photo au service, sinon a Gravatar (la recherche
   universelle d'avatar d'apres l'adresse e-mail ; seule son empreinte est envoyee), Google Drive, OneDrive, Dropbox et

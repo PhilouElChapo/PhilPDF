@@ -1,18 +1,27 @@
-PhilPDF est un lecteur et éditeur PDF libre (AGPL v3), la version Android du logiciel PhilPDF pour Windows et Linux. Même moteur (MuPDF) : même rendu, mêmes annotations.
+PhilPDF est un lecteur et éditeur PDF libre (AGPL v3), la version Android de PhilPDF pour Windows et Linux. Même moteur (MuPDF) : même rendu, mêmes annotations. Sans compte, sans publicité, sans pisteur.
 
-<b>Ce que fait cette version</b>
+<b>Lire</b>
 <ul>
-<li>Accueil avec vos fichiers récents et leurs miniatures, affiché tout de suite</li>
-<li>Ouvrir un PDF depuis l'appareil, Google Drive, OneDrive, Dropbox… (sélecteur de fichiers d'Android), ou par « Ouvrir avec » et « Partager »</li>
-<li>Pages en défilement continu, zoom à deux doigts, vignettes à gauche sur tablette</li>
+<li>Accueil avec vos fichiers récents et leurs miniatures</li>
+<li>Défilement continu, zoom à deux doigts net, mode lecture pour petits écrans, signets, commentaires</li>
 <li>PDF protégés par mot de passe</li>
-<li>Partager (e-mail, messagerie…) et imprimer par le service d'impression d'Android</li>
 </ul>
 
-<b>Respect de vos données</b>
-Aucun compte, aucune publicité, aucun traceur. Vos documents restent sur votre appareil. La seule connexion sert à vérifier s'il existe une nouvelle version sur GitHub.
+<b>Modifier et signer</b>
+<ul>
+<li>Surligner, souligner, notes, dessins, formes, flèches, images, tampons</li>
+<li>Modifier le texte, biffer (le texte est vraiment supprimé), filigrane, en-tête et pied de page</li>
+<li>Remplir les formulaires, ajouter des champs, signatures numériques et leur vérification</li>
+<li>Organiser les pages, redresser et nettoyer les scans, reconnaissance du texte (OCR)</li>
+</ul>
 
-<b>A venir</b>
-Annotations, remplir et signer, modification du texte avec la police d'origine, tampons et signatures repris de PhilPDF pour Windows, lecture adaptée aux petits écrans.
+<b>Vos clouds</b>
+Google Drive, OneDrive, Dropbox, Box, pCloud, Infomaniak kDrive et WebDAV, plusieurs comptes à la fois, avec un compte préféré pour les envois et la lecture. Synchronisation avec PhilPDF sur vos PC : fichiers récents, tampons et signatures.
+
+<b>Assistant IA facultatif</b>
+Avec votre propre clef Claude ou Gemini : résumer, expliquer simplement, traduire, remplir un formulaire, renommer et classer, extraire les données. Rien n'est envoyé sans votre geste, les données sensibles sont signalées avant, et chaque résultat de l'IA peut être signalé.
+
+<b>Vos données restent chez vous</b>
+PhilPDF n'a pas de serveur. Vos documents restent sur votre appareil ; les clouds et l'IA sont joints directement, seulement à votre demande.
 
 Code source et versions : https://github.com/PhilouElChapo/PhilPDF
