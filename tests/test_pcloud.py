@@ -101,7 +101,7 @@ srv = ThreadingHTTPServer(("127.0.0.1", 0), Serveur)
 P = srv.server_port
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 distant.PCLOUD_SCHEMA = "http"
-oauth.FOURNISSEURS["pcloud"]["jeton"] = "http://{hote}/oauth2_token"
+oauth.FOURNISSEURS["pcloud_api"]["jeton"] = "http://{hote}/oauth2_token"
 oauth.HOTE_PCLOUD = r"127\.0\.0\.1:\d+"
 
 
@@ -115,11 +115,11 @@ def navigateur(url):
     threading.Thread(target=lambda: urllib.request.urlopen(retour, timeout=10).read(), daemon=True).start()
 
 
-verifie("pcloud" in distant.NUAGES and distant.TYPES["pcloud"] == "pCloud" and oauth.disponible("pcloud"),
-        "pCloud : proposé parmi les Drives en direct")
-j = oauth.autoriser("pcloud", ouvrir=navigateur, delai=20)
+verifie("pcloud_api" in distant.NUAGES and oauth.disponible("pcloud_api") and "pcloud_api" in distant.types_proposes(),
+        "pCloud (connexion directe) : proposé quand PhilPDF a son identifiant d'application")
+j = oauth.autoriser("pcloud_api", ouvrir=navigateur, delai=20)
 verifie(j["refresh_token"] == f"127.0.0.1:{P}|{JETON}", "pCloud : jeton reçu du serveur du compte, gardé avec lui")
-c = distant.nouveau_compte("pcloud")
+c = distant.nouveau_compte("pcloud_api")
 coffre.enregistrer(c["id"] + ".jeton", j["refresh_token"])
 e = distant.emplacement(c)
 verifie("jean.martin@exemple.fr" in e.tester(), "pCloud : test de connexion (adresse du compte)")
@@ -150,11 +150,66 @@ verifie("access_token=****" in distant.masquer(f"GET http://x/listfolder?path=%2
         "pCloud : jeton masqué dans le journal")
 
 # compte prefere : en tete et propose d'office
-params = {"comptes": [{"id": "a1", "type": "gdrive"}, {"id": "b2", "type": "dropbox"}, {"id": c["id"], "type": "pcloud"}],
+params = {"comptes": [{"id": "a1", "type": "gdrive"}, {"id": "b2", "type": "dropbox"}, {"id": c["id"], "type": "pcloud_api"}],
           "compte_prefere": c["id"]}
 verifie([x["id"] for x in distant.comptes_ordonnes(params)] == [c["id"], "a1", "b2"], "compte préféré en tête de liste")
 params["compte_prefere"] = "supprime"
 verifie(distant.prefere(params) is None and [x["id"] for x in distant.comptes_ordonnes(params)] == ["a1", "b2", c["id"]],
         "compte préféré supprimé : ordre normal")
-srv.shutdown()
+
+# ---- pCloud par WebDAV (adresse e-mail et mot de passe) : compte trouve seul en Europe ou aux Etats-Unis
+import base64
+
+
+class Dav(BaseHTTPRequestHandler):
+    refuse = False
+
+    def log_message(self, *a):
+        pass
+
+    def do_PROPFIND(self):
+        attendu = "Basic " + base64.b64encode(b"jean.martin@exemple.fr:mdp").decode()
+        if self.refuse or self.headers.get("Authorization") != attendu:
+            self.send_response(401)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        b = (b'<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/</d:href><d:propstat><d:prop>'
+             b'<d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat></d:response><d:response>'
+             b'<d:href>/PhilPDF/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop>'
+             b'</d:propstat></d:response></d:multistatus>')
+        self.send_response(207)
+        self.send_header("Content-Type", "application/xml")
+        self.send_header("Content-Length", str(len(b)))
+        self.end_headers()
+        self.wfile.write(b)
+
+
+class DavRefus(Dav):
+    refuse = True
+
+
+eu = ThreadingHTTPServer(("127.0.0.1", 0), DavRefus)
+us = ThreadingHTTPServer(("127.0.0.1", 0), Dav)
+for x in (eu, us):
+    threading.Thread(target=x.serve_forever, daemon=True).start()
+distant.PCLOUD_EUROPE, distant.PCLOUD_USA = f"http://127.0.0.1:{eu.server_port}", f"http://127.0.0.1:{us.server_port}"
+cd = distant.nouveau_compte("pcloud")
+verifie(cd["adresse"] == distant.PCLOUD_EUROPE and "pcloud" in distant.types_proposes() and "pcloud" not in distant.NUAGES,
+        "pCloud par WebDAV : proposé, serveur européen par défaut, avec adresse e-mail et mot de passe")
+cd["utilisateur"] = "jean.martin@exemple.fr"
+ed = distant.emplacement(cd, "mdp")
+verifie(isinstance(ed, distant.PcloudDav) and [x.nom for x in ed.lister("/")] == ["PhilPDF"],
+        "pCloud par WebDAV : liste du dossier")
+verifie(cd["adresse"] == distant.PCLOUD_USA, "pCloud par WebDAV : compte aux Etats-Unis trouvé seul et retenu")
+mauvais = dict(cd, adresse=distant.PCLOUD_EUROPE)
+try:
+    distant.emplacement(mauvais, "faux").lister("/")
+    verifie(False, "pCloud par WebDAV : mauvais mot de passe signalé")
+except distant.ErreurDistant as ex:
+    verifie("offre payante" in str(ex), "pCloud par WebDAV : mauvais mot de passe expliqué (offre payante, deux étapes)")
+os.environ.pop("PHILPDF_PCLOUD_ID")
+verifie("pcloud_api" not in distant.types_proposes(), "pCloud (connexion directe) caché tant que l'identifiant manque")
+for x in (eu, us, srv):
+    x.shutdown()
 print(f"\n{ok} vérifications pCloud réussies")

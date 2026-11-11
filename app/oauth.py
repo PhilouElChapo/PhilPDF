@@ -54,7 +54,7 @@ FOURNISSEURS = {
         "retour": "http://localhost:{port}/",
         "ports": PORTS_FIXES,
     },
-    "pcloud": {
+    "pcloud_api": {
         "nom": "pCloud",
         "auth": "https://my.pcloud.com/oauth2/authorize",
         "jeton": "https://{hote}/oauth2_token",          # serveur du compte (Etats-Unis ou Europe), donne au retour
@@ -220,7 +220,7 @@ def autoriser(fournisseur, ouvrir=webbrowser.open, delai=300, arret=lambda: Fals
         raise ErreurAutorisation(_("Pas de réponse du navigateur (délai dépassé ou annulé)."))
     if recu.get("state") != etat or "code" not in recu:
         raise ErreurAutorisation(_("Autorisation refusée : {raison}", raison=recu.get("error", "?")))
-    if fournisseur == "pcloud":
+    if fournisseur == "pcloud_api":
         return _jeton_pcloud(cid, sec, recu, journal)
     champs = {"client_id": cid, "code": recu["code"], "code_verifier": verif, "grant_type": "authorization_code",
               "redirect_uri": redirection}
@@ -252,7 +252,7 @@ def _jeton_pcloud(cid, sec, recu, journal=None):
         raise ErreurAutorisation(_("PhilPDF n'a pas d'identifiant d'application pour {nom}.", nom="pCloud"))
     if journal:
         journal(f"→ échange du code contre le jeton sur {hote}...")
-    j = _poster(FOURNISSEURS["pcloud"]["jeton"].format(hote=hote), {"client_id": cid, "client_secret": sec,
+    j = _poster(FOURNISSEURS["pcloud_api"]["jeton"].format(hote=hote), {"client_id": cid, "client_secret": sec,
                                                                     "code": recu["code"]}, journal)
     if j.get("result") or not j.get("access_token"):
         raise ErreurAutorisation(j.get("error") or _("Le fournisseur n'a pas donné de jeton durable."))

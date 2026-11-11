@@ -235,6 +235,21 @@ class Nuage private constructor(val id: String) {
             Journal.ecrire("compte", "${f.nom} : relié")
         }
 
+    // ------------------------------------------------------------ pCloud par WebDAV (adresse e-mail et mot de passe)
+    /** Relie pCloud par son WebDAV (offre payante de pCloud), comme sous Windows ; serveur Europe ou Etats-Unis trouve seul. */
+    suspend fun connecterPcloudDav(ctx: Context, email: String, mdp: String) {
+        val base = Dav.trouverPcloud(email.trim(), mdp) ?: throw ErreurCompte(Textes.t(R.string.err_pcloud_refus))
+        prefs(ctx).edit().clear().putString("fournisseur", "pcloud").putString("email", email.trim()).putString("mode", "webdav")
+            .putString("dav", base).putString("jeton", Coffre.chiffrer(mdp)).apply()
+        acces = null; ids.clear()
+        enregistrer(ctx, this)
+        Journal.ecrire("compte", "pCloud : relié par WebDAV ($base)")
+    }
+
+    private fun dav(ctx: Context): Dav.Acces? = if (mode(ctx) != "webdav") null else Dav.Acces(
+        prefs(ctx).getString("dav", Dav.PCLOUD_EUROPE) ?: Dav.PCLOUD_EUROPE, email(ctx) ?: "",
+        prefs(ctx).getString("jeton", null)?.let { Coffre.dechiffrer(it) } ?: throw ErreurCompte(Textes.t(R.string.err_autorisation_perdue, "pCloud")))
+
     private fun pageRetour(f: Fournisseur, ok: Boolean, erreur: String?, vide: Boolean): String {
         // pas de redirection automatique : certains navigateurs la bloquent (« null est inaccessible ») ; un vrai bouton marche partout
         val lien = "intent://connecte#Intent;scheme=philpdf;package=${BuildConfig.APPLICATION_ID};end"
@@ -273,6 +288,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 expire = System.currentTimeMillis() + (o.optLong("expires_in", 3600) - 120) * 1000
                 o.getString("access_token")
             }
+            "webdav" -> ""
             else -> throw ErreurCompte(Textes.t(R.string.err_aucun_compte))
         }
         acces = j
@@ -349,6 +365,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
     }
 
     private suspend fun pcEnvoyer(ctx: Context, dossier: String, nom: String, octets: ByteArray): Triple<Int, ByteArray, String?> {
+        dav(ctx)?.let { a -> val (c, b) = Dav.ecrire(a, dossier.trimEnd('/') + "/" + nom, octets); return Triple(c, b, null) }
         if (dossier.isNotEmpty() && dossier != "/") pc(ctx, "createfolderifnotexists", mapOf("path" to dossier))
         val bord = "PhilPDF" + java.util.UUID.randomUUID().toString().replace("-", "")
         val corps = ("--$bord\r\nContent-Disposition: form-data; name=\"file\"; filename=\"${nom.replace("\"", "")}\"\r\n" +
@@ -359,12 +376,14 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
     }
 
     private suspend fun pcContenu(ctx: Context, chemin: String): ByteArray? {
+        dav(ctx)?.let { return Dav.lire(it, chemin) }
         val l = pc(ctx, "getfilelink", mapOf("path" to chemin)) ?: return null
         val url = "https://" + l.getJSONArray("hosts").getString(0) + l.getString("path")
         return withContext(Dispatchers.IO) { reessayer { URL(url).openStream().use { it.readBytes() } } }
     }
 
-    private suspend fun pcExiste(ctx: Context, chemin: String): Boolean = pc(ctx, "stat", mapOf("path" to chemin)) != null
+    private suspend fun pcExiste(ctx: Context, chemin: String): Boolean =
+        dav(ctx)?.let { Dav.existe(it, chemin) } ?: (pc(ctx, "stat", mapOf("path" to chemin)) != null)
 
     // ------------------------------------------------------------ profil (pastille en haut a droite)
     suspend fun profil(ctx: Context) = withContext(Dispatchers.IO) {
@@ -384,7 +403,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 nom = u.optJSONObject("name")?.optString("display_name"); mail = u.optString("email"); image = publique(u.optString("profile_photo_url"))
             }
             "box" -> json(ctx, "GET", "$BOX/users/me?fields=name,login")?.let { u -> nom = u.optString("name"); mail = u.optString("login") }
-            "pcloud" -> pc(ctx, "userinfo")?.let { u -> mail = u.optString("email") }
+            "pcloud" -> if (mode(ctx) != "webdav") pc(ctx, "userinfo")?.let { u -> mail = u.optString("email") }
         }
         prefs(ctx).edit().apply {
             nom?.takeIf { it.isNotEmpty() }?.let { putString("nom", it) }
@@ -445,7 +464,8 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 }
             }
         }
-        if (fournisseur(ctx).cle == "pcloud") {
+        dav(ctx)?.let { a -> out += Dav.lister(a, dossier).orEmpty() }
+        if (fournisseur(ctx).cle == "pcloud" && mode(ctx) != "webdav") {
             val a = pc(ctx, "listfolder", mapOf("path" to dossier.ifEmpty { "/" }))?.optJSONObject("metadata")?.optJSONArray("contents") ?: JSONArray()
             for (i in 0 until a.length()) a.getJSONObject(i).let { x ->
                 out += Entree(dossier.trimEnd('/') + "/" + x.optString("name"), x.optString("name"), x.optBoolean("isfolder"),
@@ -593,6 +613,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 JSONObject(String(b2)).getJSONObject("shared_link").getString("url")
             }
             "pcloud" -> {
+                if (mode(ctx) == "webdav") throw ErreurCompte(Textes.t(R.string.err_pas_de_lien, f.nom))
                 var n = nom; var i = 2
                 while (pcExiste(ctx, "$racine/Partages/$n")) { n = nom.substringBeforeLast('.') + " ($i)." + nom.substringAfterLast('.', "pdf"); i++ }
                 pcEnvoyer(ctx, "$racine/Partages", n, octets)

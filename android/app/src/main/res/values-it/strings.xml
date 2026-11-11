@@ -922,4 +922,8 @@
     <string name="compte_synchro">sincronizzazione impostazioni</string>
     <string name="compte_prefere">preferito</string>
     <string name="prefere_aide">★ Preferito: l\'account proposto per primo per inviare, condividere tramite link e archiviare i PDF (altrimenti quello di sincronizzazione).</string>
+    <string name="pcloud_dav_aide">Il tuo indirizzo e-mail e la password di pCloud (accesso WebDAV di pCloud, incluso nei piani a pagamento). Il server, in Europa o negli Stati Uniti, viene trovato da solo. La password resta cifrata su questo telefono. Con la verifica in due passaggi, accetta l\'e-mail «New login attempt» di pCloud.</string>
+    <string name="pcloud_email">E-mail pCloud</string>
+    <string name="pcloud_mdp">Password pCloud</string>
+    <string name="err_pcloud_refus">pCloud rifiuta questo indirizzo e-mail o questa password (né in Europa né negli Stati Uniti). WebDAV richiede un piano a pagamento di pCloud; con la verifica in due passaggi, accetta l\'e-mail «New login attempt» e riprova.</string>
 </resources>

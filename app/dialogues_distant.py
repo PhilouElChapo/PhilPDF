@@ -10,7 +10,7 @@ from . import distant, coffre, avatars
 
 ICONES = {"reseau": "ouvrir", "synology": "archiver", "webdav": "lot", "ftp": "exporter", "gdrive": "synchro",
           "onedrive": "synchro", "dropbox": "synchro", "box": "synchro",
-          "pcloud": "synchro"}
+          "pcloud": "synchro", "pcloud_api": "synchro"}
 AIDE = {
     "reseau": _("Un dossier partagé déjà accessible depuis ce PC : \\\\NAS\\partage, une lettre de lecteur (Z:\\) ou /mnt/nas."),
     "synology": _("L'adresse de votre Synology dans le navigateur : http://nas:5000, https://nas:5001 ou une adresse "
@@ -25,8 +25,11 @@ AIDE = {
                   "c'est tout."),
     "dropbox": _("Dropbox en direct : votre navigateur s'ouvre, vous autorisez PhilPDF, c'est tout."),
     "box": _("Box en direct : votre navigateur s'ouvre, vous autorisez PhilPDF, c'est tout."),
-    "pcloud": _("pCloud en direct (serveurs en Europe ou aux Etats-Unis) : votre navigateur s'ouvre, vous autorisez "
-                "PhilPDF, c'est tout."),
+    "pcloud_api": _("pCloud en direct (serveurs en Europe ou aux Etats-Unis) : votre navigateur s'ouvre, vous autorisez "
+                    "PhilPDF, c'est tout."),
+    "pcloud": _("Votre adresse e-mail et votre mot de passe pCloud (WebDAV, offre payante de pCloud). Serveur en Europe "
+                "par défaut ; un compte aux Etats-Unis est trouvé seul. Avec la validation en deux étapes, acceptez "
+                "l'e-mail « New login attempt » de pCloud à la première connexion."),
 }
 
 
@@ -198,7 +201,7 @@ def autoriser_compte(parent, compte):
 # ------------------------------------------------------------------------------------------- compte
 PORTS = {"synology": _("par défaut : 5000 en http, 5001 en https"), "webdav": _("Synology : 5005 en http, 5006 en https"),
          "ftp": _("par défaut : 21")}
-EXEMPLES = {"reseau": r"\\NAS\partage", "synology": "http://monnas.exemple.org:5000", "webdav": "https://monnas.exemple.org:5006",
+EXEMPLES = {"pcloud": "https://ewebdav.pcloud.com", "reseau": r"\\NAS\partage", "synology": "http://monnas.exemple.org:5000", "webdav": "https://monnas.exemple.org:5006",
             "ftp": "ftp.exemple.org"}
 
 
@@ -211,7 +214,7 @@ class DialogueCompte(QDialog):
         self.setMinimumWidth(560)
         f = self.f = QFormLayout(self)
         self.type = QComboBox()
-        for t, lib in distant.TYPES.items():
+        for t, lib in distant.types_proposes().items():
             self.type.addItem(icone(ICONES[t], "#0f6cbd"), lib, t)
         self.type.setCurrentIndex(max(0, self.type.findData(self.c["type"])))
         f.addRow(_("Type"), self.type)
@@ -409,10 +412,12 @@ class DialogueCompte(QDialog):
         self.c["type"] = t
         self.aide.setText(AIDE[t])
         self.adresse.setPlaceholderText(EXEMPLES.get(t, ""))
-        serveur = t in ("synology", "webdav", "ftp")
-        for w, vis in ((self.adresse.parentWidget(), t not in distant.NUAGES), (self.port, serveur),
+        serveur = t in ("synology", "webdav", "ftp", "pcloud")
+        if t == "pcloud" and not self.adresse.text().strip():
+            self.adresse.setText(distant.PCLOUD_EUROPE)
+        for w, vis in ((self.adresse.parentWidget(), t not in distant.NUAGES), (self.port, serveur and t != "pcloud"),
                        (self.utilisateur, serveur), (self.mdp, serveur), (self.chiffrement, t == "ftp"),
-                       (self.dossier, serveur), (self.libre, serveur), (self.note, serveur),
+                       (self.dossier, serveur), (self.libre, serveur and t != "pcloud"), (self.note, serveur),
                        (self.b_autoriser.parentWidget(), t in distant.NUAGES), (self.complet, t == "gdrive")):
             self.f.setRowVisible(w, vis)
         if t in distant.NUAGES:
@@ -461,6 +466,8 @@ class DialogueCompte(QDialog):
                                    e.tester, lecture=True)
                 except InterruptedError:
                     return
+                if c.get("adresse") and c["adresse"] != self.adresse.text().strip():   # pCloud : serveur trouve
+                    self.adresse.setText(c["adresse"])
                 erreur(self, _("Tester la connexion"), msg, e, info=True)
                 return
             except distant.BesoinCode:
@@ -475,7 +482,7 @@ class DialogueCompte(QDialog):
 
     def accept(self):
         self.compte()
-        if self.c["type"] in ("synology", "webdav", "ftp"):
+        if self.c["type"] in ("synology", "webdav", "ftp", "pcloud"):
             coffre.enregistrer(self.c["id"], self.mdp.text())
         super().accept()
 
@@ -510,7 +517,7 @@ class PanneauComptes(QWidget):
         h = QHBoxLayout()
         ajout = QPushButton(_("Ajouter un compte..."))
         m = QMenu(ajout)
-        for t, lib in distant.TYPES.items():
+        for t, lib in distant.types_proposes().items():
             a = m.addAction(icone(ICONES[t], "#444444"), _(lib))
             a.triggered.connect(lambda _x=False, t=t: self.ajouter(t))
         ajout.setMenu(m)

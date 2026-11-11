@@ -2,7 +2,7 @@
 import os
 
 ids = {}
-for cle, env in (("gdrive", "GOOGLE"), ("onedrive", "ONEDRIVE"), ("dropbox", "DROPBOX"), ("box", "BOX"), ("pcloud", "PCLOUD")):
+for cle, env in (("gdrive", "GOOGLE"), ("onedrive", "ONEDRIVE"), ("dropbox", "DROPBOX"), ("box", "BOX"), ("pcloud_api", "PCLOUD")):
     i = "".join(os.environ.get(env + "_CLIENT_ID", "").split())
     s = "".join(os.environ.get(env + "_CLIENT_SECRET", "").split())
     if i:

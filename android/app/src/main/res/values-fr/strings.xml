@@ -923,4 +923,8 @@
     <string name="compte_synchro">synchro des réglages</string>
     <string name="compte_prefere">préféré</string>
     <string name="prefere_aide">★ Préféré : le compte proposé d\'office pour envoyer, partager par lien et classer vos PDF (sinon celui de la synchro).</string>
+    <string name="pcloud_dav_aide">Votre adresse e-mail et votre mot de passe pCloud (accès WebDAV de pCloud, compris dans les offres payantes). Le serveur, en Europe ou aux Etats-Unis, est trouvé seul. Le mot de passe reste chiffré sur ce téléphone. Avec la validation en deux étapes, acceptez l\'e-mail « New login attempt » de pCloud.</string>
+    <string name="pcloud_email">Adresse e-mail pCloud</string>
+    <string name="pcloud_mdp">Mot de passe pCloud</string>
+    <string name="err_pcloud_refus">pCloud refuse cette adresse e-mail ou ce mot de passe (ni en Europe ni aux Etats-Unis). Le WebDAV demande une offre payante de pCloud ; avec la validation en deux étapes, acceptez l\'e-mail « New login attempt », puis réessayez.</string>
 </resources>

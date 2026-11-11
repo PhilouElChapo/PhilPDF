@@ -25,10 +25,18 @@ TYPES = {
     "onedrive": "OneDrive",
     "dropbox": "Dropbox",
     "box": "Box",
-    "pcloud": "pCloud",
+    "pcloud": "pCloud",                                   # par WebDAV : adresse e-mail et mot de passe pCloud
+    "pcloud_api": _("pCloud (connexion directe)"),        # par l'API (application pCloud de PhilFactory, a venir)
 }
+PCLOUD_EUROPE, PCLOUD_USA = "https://ewebdav.pcloud.com", "https://webdav.pcloud.com"
 DELAI = 20
-NUAGES = ("gdrive", "onedrive", "dropbox", "box", "pcloud")       # Drives « en direct », autorises par OAuth
+NUAGES = ("gdrive", "onedrive", "dropbox", "box", "pcloud_api")
+
+
+def types_proposes():
+    """Types offerts dans « Ajouter un compte » : pCloud par l'API seulement quand PhilPDF a son identifiant."""
+    from . import oauth
+    return {t: lib for t, lib in TYPES.items() if t != "pcloud_api" or oauth.disponible("pcloud_api")}       # Drives « en direct », autorises par OAuth
 
 
 class ErreurDistant(Exception):
@@ -90,7 +98,8 @@ def _joindre(dossier, nom):
 
 
 def nouveau_compte(genre):
-    return {"id": uuid.uuid4().hex[:10], "type": genre, "nom": _(TYPES[genre]), "adresse": "", "port": 0,
+    return {"id": uuid.uuid4().hex[:10], "type": genre, "nom": _(TYPES[genre]),
+            "adresse": PCLOUD_EUROPE if genre == "pcloud" else "", "port": 0,
             "utilisateur": "", "dossier": "/", "chiffrement": "tls" if genre == "ftp" else "", "certificat_libre": False}
 
 
@@ -1072,8 +1081,40 @@ class Pcloud(_DriveOAuth):
         return _("Connexion réussie au pCloud de {qui} : {n} élément(s) à la racine.", qui=self.qui(), n=len(self.lister("/")))
 
 
+class PcloudDav(WebDAV):
+    """pCloud par WebDAV (offre payante de pCloud) : adresse e-mail et mot de passe pCloud, serveur en Europe
+    (ewebdav.pcloud.com) ou aux Etats-Unis (webdav.pcloud.com). Si le compte est de l'autre cote, PhilPDF le trouve
+    seul au premier refus et le retient."""
+
+    def _base(self):
+        return (self.c.get("adresse") or PCLOUD_EUROPE).strip().rstrip("/")
+
+    def _req(self, methode, chemin, donnees=None, entetes=None):
+        try:
+            return super()._req(methode, chemin, donnees, entetes)
+        except ErreurDistant:
+            if getattr(self, "dernier_code", None) != 401 or getattr(self, "_autre_essaye", False):
+                raise
+            self._autre_essaye = True                    # compte de l'autre cote de l'Atlantique ?
+            autre = PCLOUD_USA if self._base() == PCLOUD_EUROPE else PCLOUD_EUROPE
+            ancien, self.c["adresse"] = self.c.get("adresse"), autre
+            try:
+                r = super()._req(methode, chemin, donnees, entetes)
+            except ErreurDistant:
+                self.c["adresse"] = ancien
+                raise ErreurDistant(_("pCloud refuse l'adresse e-mail ou le mot de passe. Le WebDAV de pCloud demande "
+                                      "une offre payante ; avec la validation en deux étapes, acceptez l'e-mail « New "
+                                      "login attempt » de pCloud puis réessayez."))
+            self.log(f"   pCloud : compte trouvé sur {autre}")
+            return r
+
+    def tester(self):
+        n = len(self.lister("/"))
+        return _("Connexion réussie à pCloud ({serveur}) : {n} élément(s) à la racine.", serveur=self._base(), n=n)
+
+
 CLASSES = {"reseau": Reseau, "synology": Synology, "webdav": WebDAV, "ftp": FTP, "gdrive": GoogleDrive,
-           "onedrive": OneDrive, "dropbox": Dropbox, "box": Box, "pcloud": Pcloud}
+           "onedrive": OneDrive, "dropbox": Dropbox, "box": Box, "pcloud": PcloudDav, "pcloud_api": Pcloud}
 
 
 def emplacement(compte, mot_de_passe=None, code=None):

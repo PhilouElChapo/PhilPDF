@@ -113,6 +113,8 @@ dependencies {
     // numeriser un document : le scanner de Google s'il est sur le telephone (sinon appareil photo + recadrage maison)
     implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+    // WebDAV (pCloud par adresse e-mail et mot de passe) : PROPFIND et MKCOL, que HttpURLConnection refuse
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
 
 // Nouveautes (readme.txt du depot) livrees dans l'APK : Accueil > Aide > Nouveautes

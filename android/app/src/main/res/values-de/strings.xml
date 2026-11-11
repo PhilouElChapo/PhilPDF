@@ -922,4 +922,8 @@
     <string name="compte_synchro">Einstellungs-Sync</string>
     <string name="compte_prefere">bevorzugt</string>
     <string name="prefere_aide">★ Bevorzugt: das Konto, das zum Senden, Teilen per Link und Ablegen Ihrer PDFs zuerst vorgeschlagen wird (sonst das Sync-Konto).</string>
+    <string name="pcloud_dav_aide">Ihre pCloud-E-Mail-Adresse und Ihr Passwort (WebDAV-Zugang von pCloud, in den kostenpflichtigen Tarifen enthalten). Der Server in Europa oder den USA wird automatisch gefunden. Das Passwort bleibt verschlüsselt auf diesem Telefon. Mit Zwei-Faktor-Bestätigung die E-Mail „New login attempt“ von pCloud bestätigen.</string>
+    <string name="pcloud_email">pCloud-E-Mail-Adresse</string>
+    <string name="pcloud_mdp">pCloud-Passwort</string>
+    <string name="err_pcloud_refus">pCloud lehnt diese E-Mail-Adresse oder dieses Passwort ab (weder in Europa noch in den USA). WebDAV erfordert einen kostenpflichtigen pCloud-Tarif; mit Zwei-Faktor-Bestätigung die E-Mail „New login attempt“ bestätigen und erneut versuchen.</string>
 </resources>

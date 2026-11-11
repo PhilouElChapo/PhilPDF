@@ -12,7 +12,7 @@ from .langue import _
 from .icones import icone
 from . import distant, avatars
 
-AJOUTABLES = ("synology", "webdav", "ftp", "reseau")
+AJOUTABLES = ("pcloud", "synology", "webdav", "ftp", "reseau")
 
 
 def libelle_compte(c):
@@ -54,6 +54,8 @@ def _remplir(cb, params, garde=None):
     for t in distant.NUAGES:
         if t in deja:
             continue
+        if t == "pcloud_api" and not oauth.disponible(t):
+            continue                                      # pCloud : par WebDAV (« pCloud » ci-dessous) en attendant
         if oauth.disponible(t):
             cb.addItem(icone("synchro", "#0f6cbd"), _("{nom} en direct : se connecter et autoriser...", nom=distant.TYPES[t]), "nouveau:" + t)
         else:

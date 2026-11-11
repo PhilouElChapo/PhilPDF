@@ -923,4 +923,8 @@
     <string name="compte_synchro">settings sync</string>
     <string name="compte_prefere">preferred</string>
     <string name="prefere_aide">★ Preferred: the account offered first to send, share by link and file your PDFs (otherwise the sync account).</string>
+    <string name="pcloud_dav_aide">Your pCloud e-mail address and password (pCloud WebDAV access, included in paid pCloud plans). The server, in Europe or the United States, is found automatically. The password stays encrypted on this phone. With two-step verification, accept pCloud\'s \"New login attempt\" e-mail.</string>
+    <string name="pcloud_email">pCloud e-mail address</string>
+    <string name="pcloud_mdp">pCloud password</string>
+    <string name="err_pcloud_refus">pCloud refuses this e-mail address or password (neither in Europe nor in the United States). WebDAV requires a paid pCloud plan; with two-step verification, accept the \"New login attempt\" e-mail, then try again.</string>
 </resources>

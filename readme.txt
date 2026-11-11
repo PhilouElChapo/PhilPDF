@@ -11,10 +11,10 @@ ANDROID
 -------
 
 1.24.0
-- pCloud en direct, comme Google Drive, OneDrive, Dropbox et Box : Comptes > pCloud, votre navigateur s'ouvre,
-  vous autorisez PhilPDF (serveurs pCloud en Europe ou aux Etats-Unis, reconnus seuls). Parcourir et ouvrir vos PDF,
-  « Meme fichier » pour les renvoyer, Renommer et classer, partage par lien (dossier PhilPDF/Partages), et pCloud
-  peut etre l'emplacement de synchronisation avec vos PC.
+- pCloud : Comptes > pCloud, avec votre adresse e-mail et votre mot de passe pCloud (acces WebDAV de pCloud, compris
+  dans ses offres payantes ; serveur en Europe ou aux Etats-Unis trouve seul ; mot de passe chiffre sur le telephone).
+  Parcourir et ouvrir vos PDF, « Meme fichier » pour les renvoyer, Renommer et classer, et pCloud peut etre
+  l'emplacement de synchronisation avec vos PC. Le partage par lien n'est pas possible par ce chemin.
 - Plusieurs comptes relies, comme sous Windows : avant, relier un compte retirait les autres. Maintenant Comptes >
   « Comptes relies » : le compte de synchronisation des reglages (Google Drive par exemple) et d'autres comptes
   (pCloud, OneDrive...) ajoutes par « Ajouter un compte », sans rien retirer. L'etoile ★ choisit le compte prefere :
@@ -499,9 +499,11 @@ WINDOWS ET LINUX
 ----------------
 
 0.9.92
-- pCloud en direct (Preferences > Comptes > Ajouter un compte > pCloud) : votre navigateur s'ouvre, vous autorisez
-  PhilPDF, c'est tout (serveurs pCloud en Europe ou aux Etats-Unis, reconnus seuls). Ouvrir, enregistrer, envoyer,
-  classer sur pCloud, et pCloud peut etre l'emplacement de synchronisation entre vos postes.
+- pCloud (Preferences > Comptes > Ajouter un compte > pCloud) : votre adresse e-mail et votre mot de passe pCloud
+  (acces WebDAV de pCloud, compris dans ses offres payantes) ; serveur en Europe par defaut, un compte aux Etats-Unis
+  est trouve seul ; mot de passe dans le coffre de Windows. Ouvrir, enregistrer, envoyer, classer sur pCloud, et
+  pCloud peut etre l'emplacement de synchronisation entre vos postes. Avec la validation en deux etapes de pCloud,
+  acceptez l'e-mail « New login attempt » a la premiere connexion.
 - Compte prefere : Preferences > Comptes > « ★ Prefere » sur le compte choisi. Il est propose d'office, en tete de
   liste, pour enregistrer, envoyer et classer vos PDF, avant les autres comptes relies (un second clic retire ce
   choix).

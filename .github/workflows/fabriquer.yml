@@ -217,7 +217,7 @@ jobs:
         run: |
           import os, hashlib
           ids = {}
-          for cle, env in (("gdrive", "GOOGLE"), ("onedrive", "ONEDRIVE"), ("dropbox", "DROPBOX"), ("box", "BOX"), ("pcloud", "PCLOUD")):
+          for cle, env in (("gdrive", "GOOGLE"), ("onedrive", "ONEDRIVE"), ("dropbox", "DROPBOX"), ("box", "BOX"), ("pcloud_api", "PCLOUD")):
               brut_i, brut_s = os.environ.get(env + "_CLIENT_ID", ""), os.environ.get(env + "_CLIENT_SECRET", "")
               i = "".join(brut_i.split())          # espaces / retours a la ligne colles par erreur
               if brut_i != i or brut_s != brut_s.strip():
@@ -232,7 +232,7 @@ jobs:
                      "secret " + env + "_CLIENT_ID absent ou vide") +
                     (" ; secret present (" + str(len(sec)) + " caracteres, commence par " + sec[:6] + ", empreinte " +
                      hashlib.sha256(sec.encode()).hexdigest()[:10] + ")" if sec else
-                     (" ; pas de secret" if cle in ("gdrive", "box", "pcloud") else "")))
+                     (" ; pas de secret" if cle in ("gdrive", "box", "pcloud_api") else "")))
           with open("app/identifiants.py", "w") as f:
               f.write("IDENTIFIANTS = " + repr(ids) + "\n")
 

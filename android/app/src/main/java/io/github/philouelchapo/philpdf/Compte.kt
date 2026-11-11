@@ -124,6 +124,7 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
     // plusieurs comptes relies (comme sous Windows) : un pour la synchronisation des reglages, d'autres pour envoyer,
     // ouvrir, classer ; ajouter un compte ne retire jamais les autres
     var ajoutAutre by remember { mutableStateOf(false) }
+    var pcloudDav by remember { mutableStateOf(false) }
     fun apresConnexion(n: Nuage) {
         val commeSynchro = !ajoutAutre
         ajoutAutre = false
@@ -195,9 +196,10 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
                             Text(stringResource(R.string.choisir_compte), maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                         FOURNISSEURS.drop(1).forEach { f ->
-                            OutlinedButton(onClick = { parNavigateur(f, null) }, enabled = occupe == null && Nuage.disponible(f),
+                            OutlinedButton(onClick = { if (f.cle == "pcloud" && !Nuage.disponible(f)) pcloudDav = true else parNavigateur(f, null) },
+                                enabled = occupe == null && (Nuage.disponible(f) || f.cle == "pcloud"),
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                                Text(if (Nuage.disponible(f)) f.nom else f.nom + " — " + stringResource(R.string.non_disponible),
+                                Text(if (Nuage.disponible(f) || f.cle == "pcloud") f.nom else f.nom + " — " + stringResource(R.string.non_disponible),
                                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
                         }
@@ -233,9 +235,10 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
                         TextButton(onClick = { ajoutAutre = !ajoutAutre }, enabled = occupe == null) { Text(stringResource(R.string.ajouter_compte)) }
                         if (ajoutAutre) {
                             FOURNISSEURS.drop(1).forEach { f ->
-                                OutlinedButton(onClick = { parNavigateur(f, null) }, enabled = occupe == null && Nuage.disponible(f),
+                                OutlinedButton(onClick = { if (f.cle == "pcloud" && !Nuage.disponible(f)) pcloudDav = true else parNavigateur(f, null) },
+                                enabled = occupe == null && (Nuage.disponible(f) || f.cle == "pcloud"),
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                                    Text(if (Nuage.disponible(f)) f.nom else f.nom + " — " + stringResource(R.string.non_disponible),
+                                    Text(if (Nuage.disponible(f) || f.cle == "pcloud") f.nom else f.nom + " — " + stringResource(R.string.non_disponible),
                                         maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 }
                             }
@@ -330,6 +333,40 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
                 }) { Text(stringResource(R.string.deconnecter)) }
             },
             dismissButton = { TextButton(onClick = { aRetirer = null }) { Text(stringResource(R.string.annuler)) } })
+    }
+
+    if (pcloudDav) {
+        var email by remember { mutableStateOf("") }
+        var mdp by remember { mutableStateOf("") }
+        var voir by remember { mutableStateOf(false) }
+        AlertDialog(onDismissRequest = { pcloudDav = false }, title = { Text("pCloud") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text(stringResource(R.string.pcloud_dav_aide), fontSize = 13.sp, color = Color.Gray)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(email, { email = it }, Modifier.fillMaxWidth(), singleLine = true,
+                        label = { Text(stringResource(R.string.pcloud_email)) },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Email))
+                    OutlinedTextField(mdp, { mdp = it }, Modifier.fillMaxWidth(), singleLine = true,
+                        label = { Text(stringResource(R.string.pcloud_mdp)) },
+                        visualTransformation = if (voir) androidx.compose.ui.text.input.VisualTransformation.None
+                            else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        trailingIcon = { IconButton(onClick = { voir = !voir }) {
+                            Icon(Icones.get(if (voir) "oeil_barre" else "oeil"), stringResource(R.string.pcloud_mdp)) } })
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pcloudDav = false
+                    portee.launch {
+                        occupe = txtConnexion; erreur = null
+                        val n = Nuage.nouveau()
+                        try { n.connecterPcloudDav(ctx, email, mdp); apresConnexion(n) }
+                        catch (e: Exception) { erreur = e.message; occupe = null }
+                    }
+                }, enabled = email.contains("@") && mdp.isNotEmpty()) { Text(stringResource(R.string.continuer)) }
+            },
+            dismissButton = { TextButton(onClick = { pcloudDav = false }) { Text(stringResource(R.string.annuler)) } })
     }
 
     proposerNavigateur?.let { adresse ->
