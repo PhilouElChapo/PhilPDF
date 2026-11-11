@@ -46,55 +46,87 @@ def _par_office(source, sortie):
     ext = os.path.splitext(source)[1].lower()
     pythoncom.CoInitialize()
     app = None
-    deja_ouvert = False
+    deja_ouvert = False          # Office ouvert par la personne : on ne le ferme pas et on remet ses reglages
+    alertes = None
 
     def lancer(nom):
         """Instance a part (DispatchEx) ; si Windows refuse (« Echec de l'execution du serveur », Office en version
-        Microsoft Store / Demarrer en un clic, ou Office deja ouvert avec d'autres droits), l'instance ouverte."""
+        Microsoft Store / Demarrer en un clic, ou Office deja ouvert), l'instance deja ouverte.
+        Une instance cachee sans document (reste d'une conversion plantee, qui verrouille Normal.dotm) est traitee
+        comme la notre : elle sera fermee proprement a la fin, sans rien enregistrer."""
         nonlocal deja_ouvert
         try:
             return wc.DispatchEx(nom)
         except Exception:                                # noqa: BLE001
             try:
-                deja_ouvert = True
-                return wc.GetActiveObject(nom)
+                a = wc.GetActiveObject(nom)
             except Exception:                            # noqa: BLE001
-                deja_ouvert = False
                 return wc.Dispatch(nom)
+            try:
+                docs = a.Documents.Count if nom.startswith("Word") else a.Workbooks.Count if nom.startswith("Excel") \
+                    else a.Presentations.Count
+                deja_ouvert = bool(a.Visible) or docs > 0
+            except Exception:                            # noqa: BLE001
+                deja_ouvert = True
+            return a
+
+    def fermer_word():
+        """Word ferme SANS enregistrer le modele Normal (sinon Word peut le reecrire ou en recreer un)."""
+        try:
+            app.NormalTemplate.Saved = True
+        except Exception:                                # noqa: BLE001
+            pass
+        app.Quit(SaveChanges=0)                          # 0 = wdDoNotSaveChanges
     try:
         if ext in WORD:
             app = lancer("Word.Application")
+            alertes = app.DisplayAlerts
             if not deja_ouvert:
                 app.Visible = False
             app.DisplayAlerts = 0
-            d = app.Documents.Open(source, ReadOnly=True, AddToRecentFiles=False, ConfirmConversions=False)
-            # 17 = PDF ; polices integrees, texte des polices non integrables mis en image (comme Adobe)
-            d.ExportAsFixedFormat(sortie, 17, OpenAfterExport=False, OptimizeFor=0, Item=0,
-                                  IncludeDocProps=True, CreateBookmarks=1, DocStructureTags=True,
-                                  BitmapMissingFonts=True, UseISO19005_1=False)
-            d.Close(False)
+            d = app.Documents.Open(source, ReadOnly=True, AddToRecentFiles=False, ConfirmConversions=False,
+                                   Visible=False)
+            try:
+                # 17 = PDF ; polices integrees, texte des polices non integrables mis en image (comme Adobe)
+                d.ExportAsFixedFormat(sortie, 17, OpenAfterExport=False, OptimizeFor=0, Item=0,
+                                      IncludeDocProps=True, CreateBookmarks=1, DocStructureTags=True,
+                                      BitmapMissingFonts=True, UseISO19005_1=False)
+            finally:
+                d.Close(SaveChanges=0)
         elif ext in EXCEL:
             app = lancer("Excel.Application")
+            alertes = app.DisplayAlerts
             if not deja_ouvert:
                 app.Visible = False
             app.DisplayAlerts = False
             c = app.Workbooks.Open(source, ReadOnly=True, AddToMru=False)
-            c.ExportAsFixedFormat(0, sortie, Quality=0, IncludeDocProperties=True, IgnorePrintAreas=False,
-                                  OpenAfterPublish=False)
-            c.Close(False)
+            try:
+                c.ExportAsFixedFormat(0, sortie, Quality=0, IncludeDocProperties=True, IgnorePrintAreas=False,
+                                      OpenAfterPublish=False)
+            finally:
+                c.Close(False)
         else:
             app = lancer("PowerPoint.Application")
             p = app.Presentations.Open(source, ReadOnly=True, WithWindow=False)
-            p.SaveAs(sortie, 32)                         # 32 = PDF
-            p.Close()
+            try:
+                p.SaveAs(sortie, 32)                     # 32 = PDF
+            finally:
+                p.Close()
     except Exception as e:                               # noqa: BLE001 (Office absent, fichier protege)
         raise ErreurOffice(str(e)) from e
     finally:
         try:
-            if app is not None and not deja_ouvert:   # jamais fermer l'Office ouvert par la personne
-                app.Quit()
-        except Exception:
+            if app is not None:
+                if deja_ouvert:                          # jamais fermer l'Office de la personne ; ses reglages remis
+                    if alertes is not None:
+                        app.DisplayAlerts = alertes
+                elif ext in WORD:
+                    fermer_word()
+                else:
+                    app.Quit()
+        except Exception:                                # noqa: BLE001
             pass
+        app = None
         pythoncom.CoUninitialize()
     if not os.path.exists(sortie):
         raise ErreurOffice("aucun PDF produit")

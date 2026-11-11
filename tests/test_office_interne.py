@@ -91,6 +91,62 @@ try:
 except office_interne.ErreurInterne:
     verifier(True, "PowerPoint : refuse sans Office (message clair)")
 
+
+# -- Word par automatisation (simulee) : le modele Normal n'est jamais enregistre, l'Office de la personne reste tel quel
+import types
+from moteur import office
+
+
+class _Doc:
+    def ExportAsFixedFormat(self, sortie, *a, **k):
+        open(sortie, "wb").write(b"%PDF-1.4")
+
+    def Close(self, **k):
+        journal.append(("close", k))
+
+
+class _Word:
+    def __init__(self, visible, docs):
+        self.Visible, self.DisplayAlerts = visible, -1
+        self.Documents = types.SimpleNamespace(Count=docs, Open=lambda *a, **k: _Doc())
+        self.NormalTemplate = types.SimpleNamespace(Saved=False)
+
+    def Quit(self, **k):
+        journal.append(("quit", k, self.NormalTemplate.Saved))
+
+
+def essai_word(dispatchex_ok, actif):
+    global journal
+    journal = []
+    wc = types.SimpleNamespace()
+    neuf = _Word(True, 0)
+
+    def dex(nom):
+        if not dispatchex_ok:
+            raise OSError(-2146959355, "Echec de l'execution du serveur")
+        return neuf
+    wc.DispatchEx, wc.Dispatch = dex, lambda nom: neuf
+    wc.GetActiveObject = lambda nom: actif if actif else (_ for _ in ()).throw(OSError("aucun"))
+    sys.modules["pythoncom"] = types.SimpleNamespace(CoInitialize=lambda: None, CoUninitialize=lambda: None)
+    sys.modules["win32com"] = types.SimpleNamespace(client=wc)
+    sys.modules["win32com.client"] = wc
+    office._par_office(src, os.path.join(d, "com.pdf"))
+    return neuf
+
+
+essai_word(True, None)
+verifier(("quit", {"SaveChanges": 0}, True) in journal, "Word : ferme sans enregistrer, modele Normal marque non modifie")
+verifier(any(j[0] == "close" and j[1] == {"SaveChanges": 0} for j in journal), "Word : document ferme sans enregistrer")
+perso = _Word(True, 2)
+essai_word(False, perso)
+verifier(not any(j[0] == "quit" for j in journal) and perso.DisplayAlerts == -1,
+         "Word deja ouvert par la personne : pas ferme, ses alertes remises")
+orphelin = _Word(False, 0)
+essai_word(False, orphelin)
+verifier(("quit", {"SaveChanges": 0}, True) in journal, "Word cache reste d'un plantage : ferme proprement")
+for m in ("pythoncom", "win32com", "win32com.client"):
+    sys.modules.pop(m, None)
+
 # -- fenetre d'avancement non bloquante
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QMainWindow

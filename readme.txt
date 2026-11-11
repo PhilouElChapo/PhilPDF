@@ -481,6 +481,15 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.90
+- Creer un PDF depuis Word : Word est ferme sans jamais enregistrer son modele Normal (Normal.dotm), et le document
+  sans rien enregistrer. Un Word reste cache apres une conversion plantee (il verrouillait le modele Normal, d'ou un
+  modele recree) est reconnu et ferme proprement. Le Word que vous avez ouvert n'est jamais ferme, et ses reglages
+  sont remis comme avant.
+- Ouvrir un fichier depuis Drive / NAS : le telechargement ne bloque plus PhilPDF (« Reduire » dans la barre d'etat).
+- Rappel : la fenetre de telechargement des mises a jour se reduit depuis la 0.9.89 ; elle apparait donc a partir de
+  la mise a jour suivante (le telechargement est fait par la version deja installee).
+
 0.9.89
 - Fenetres d'attente qui ne bloquent plus PhilPDF : le telechargement d'une mise a jour, la conversion d'un fichier
   Word / Excel en PDF et l'export en Word se font en arriere-plan ; on continue de travailler. « Reduire » range la

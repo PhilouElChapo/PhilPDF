@@ -1503,7 +1503,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
         from .dialogues_ia import en_tache
         try:
             en_tache(self, _("Ouvrir"), _("Téléchargement depuis {lieu} : {nom}...", lieu=distant.libelle(c),
-                                          nom=os.path.basename(chemin)), e.telecharger, chemin, local)
+                                          nom=os.path.basename(chemin)), e.telecharger, chemin, local, bloquante=False)
         except InterruptedError:
             return None
         except distant.ErreurDistant as ex:
