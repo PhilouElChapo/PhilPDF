@@ -64,10 +64,17 @@ val FOURNISSEURS = listOf(
     // pCloud : code + secret de l'application (pas de PKCE), jeton sans fin, serveur du compte (Europe ou Etats-Unis)
     Fournisseur("pcloud", "pCloud", "https://my.pcloud.com/oauth2/authorize", "https://%s/oauth2_token", "",
         emptyMap(), "http://localhost:%d/", PORTS_FIXES, BuildConfig.PCLOUD_ID, BuildConfig.PCLOUD_SECRET),
+    // par WebDAV (adresse et mot de passe), comme sous Windows
+    Fournisseur("kdrive", "Infomaniak kDrive", "", "", "", emptyMap(), "", emptyList(), "", ""),
+    Fournisseur("webdav", "WebDAV", "", "", "", emptyMap(), "", emptyList(), "", ""),
 )
 
+/** Comptes relies par WebDAV (adresse e-mail / utilisateur et mot de passe) ; pCloud aussi tant que sa connexion
+ *  directe n'est pas disponible. */
+fun parDav(f: Fournisseur) = f.cle == "kdrive" || f.cle == "webdav" || (f.cle == "pcloud" && f.id.isEmpty())
+
 /** Tous les Drives relies « en direct » (meme liste que sous Windows). */
-val CLES_NUAGES = setOf("gdrive", "onedrive", "dropbox", "box", "pcloud")
+val CLES_NUAGES = setOf("gdrive", "onedrive", "dropbox", "box", "pcloud", "kdrive", "webdav")
 
 /** Element d'un dossier distant : id = identifiant du fournisseur (chemin pour Dropbox). */
 data class Entree(val id: String, val nom: String, val dossier: Boolean, val taille: Long, val date: String)
@@ -239,11 +246,26 @@ class Nuage private constructor(val id: String) {
     /** Relie pCloud par son WebDAV (offre payante de pCloud), comme sous Windows ; serveur Europe ou Etats-Unis trouve seul. */
     suspend fun connecterPcloudDav(ctx: Context, email: String, mdp: String) {
         val base = Dav.trouverPcloud(email.trim(), mdp) ?: throw ErreurCompte(Textes.t(R.string.err_pcloud_refus))
-        prefs(ctx).edit().clear().putString("fournisseur", "pcloud").putString("email", email.trim()).putString("mode", "webdav")
+        relierDav(ctx, "pcloud", base, email, mdp)
+    }
+
+    /** kDrive (numero du kDrive) ou WebDAV (adresse complete) : la connexion est essayee avant d'etre gardee. */
+    suspend fun connecterDav(ctx: Context, cle: String, adresse: String, utilisateur: String, mdp: String) {
+        val a = adresse.trim().trimEnd('/')
+        val base = if (cle == "kdrive" && a.all { it.isDigit() }) "https://$a.connect.kdrive.infomaniak.com" else a
+        if (!base.startsWith("https://") && !base.startsWith("http://")) throw ErreurCompte(Textes.t(R.string.err_dav_adresse))
+        val code = Dav.essayer(Dav.Acces(base, utilisateur.trim(), mdp))
+        if (code == 401 || code == 403) throw ErreurCompte(Textes.t(R.string.err_dav_refus))
+        if (code !in 200..299) throw ErreurCompte(Textes.t(R.string.err_code, "WebDAV", code, base))
+        relierDav(ctx, cle, base, utilisateur, mdp)
+    }
+
+    private fun relierDav(ctx: Context, cle: String, base: String, utilisateur: String, mdp: String) {
+        prefs(ctx).edit().clear().putString("fournisseur", cle).putString("email", utilisateur.trim()).putString("mode", "webdav")
             .putString("dav", base).putString("jeton", Coffre.chiffrer(mdp)).apply()
         acces = null; ids.clear()
         enregistrer(ctx, this)
-        Journal.ecrire("compte", "pCloud : relié par WebDAV ($base)")
+        Journal.ecrire("compte", "$cle : relié par WebDAV ($base)")
     }
 
     private fun dav(ctx: Context): Dav.Acces? = if (mode(ctx) != "webdav") null else Dav.Acces(
@@ -403,7 +425,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 nom = u.optJSONObject("name")?.optString("display_name"); mail = u.optString("email"); image = publique(u.optString("profile_photo_url"))
             }
             "box" -> json(ctx, "GET", "$BOX/users/me?fields=name,login")?.let { u -> nom = u.optString("name"); mail = u.optString("login") }
-            "pcloud" -> if (mode(ctx) != "webdav") pc(ctx, "userinfo")?.let { u -> mail = u.optString("email") }
+            "pcloud", "kdrive", "webdav" -> if (mode(ctx) != "webdav") pc(ctx, "userinfo")?.let { u -> mail = u.optString("email") }
         }
         prefs(ctx).edit().apply {
             nom?.takeIf { it.isNotEmpty() }?.let { putString("nom", it) }
@@ -423,7 +445,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
     /** Google Drive : l'autorisation limitee (drive.file) ne montre que les fichiers de PhilPDF ; le reste passe par Android. */
     fun parcourable(ctx: Context) = fournisseur(ctx).cle != "gdrive"
 
-    fun racineParcours(ctx: Context): String = when (fournisseur(ctx).cle) { "dropbox", "pcloud" -> ""; "box" -> "0"; else -> "root" }
+    fun racineParcours(ctx: Context): String = when (fournisseur(ctx).cle) { "dropbox", "pcloud", "kdrive", "webdav" -> ""; "box" -> "0"; else -> "root" }
 
     /** Dossiers et PDF d'un dossier (les autres fichiers ne sont pas montres). */
     suspend fun lister(ctx: Context, dossier: String): List<Entree> {
@@ -494,7 +516,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
             "gdrive" -> { var x: String? = "root"; for (n in parts) x = x?.let { gEnfant(ctx, it, n)?.getString("id") }; x }
             "onedrive" -> json(ctx, "GET", "$GRAPH/me/drive/root:/" + parts.joinToString("/") { enc(it) } + "?\$select=id")
                 ?.optString("id")?.takeIf { it.isNotEmpty() }
-            "dropbox", "pcloud" -> "/" + parts.joinToString("/")
+            "dropbox", "pcloud", "kdrive", "webdav" -> "/" + parts.joinToString("/")
             "box" -> { var x: String? = "0"; for (n in parts) x = x?.let { bEnfant(ctx, it, n) }; x }
             else -> null
         }
@@ -508,7 +530,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
         "dropbox" -> telecharger(ctx, "POST", "$DBX_CONTENU/files/download", ByteArray(0),
             mapOf("Dropbox-API-Arg" to ascii(JSONObject().put("path", fid).toString()), "Content-Type" to "text/plain; charset=dropbox-cors-hack"))
         "box" -> telecharger(ctx, "GET", "$BOX/files/$fid/content")
-        "pcloud" -> pcContenu(ctx, fid)
+        "pcloud", "kdrive", "webdav" -> pcContenu(ctx, fid)
         else -> null
     }
 
@@ -526,7 +548,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                     "Content-Type: application/pdf\r\n\r\n").toByteArray() + octets + "\r\n--$bord--\r\n".toByteArray()
                 appel(ctx, "POST", "$BOX_ENVOI/files/$fid/content", corps, mapOf("Content-Type" to "multipart/form-data; boundary=$bord"))
             }
-            "pcloud" -> pcEnvoyer(ctx, fid.substringBeforeLast('/', ""), fid.substringAfterLast('/'), octets)
+            "pcloud", "kdrive", "webdav" -> pcEnvoyer(ctx, fid.substringBeforeLast('/', ""), fid.substringAfterLast('/'), octets)
             else -> Triple(0, ByteArray(0), null)
         }
         if (code !in 200..299) {
@@ -612,7 +634,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 if (c2 !in 200..299) erreur("lien", c2, b2)
                 JSONObject(String(b2)).getJSONObject("shared_link").getString("url")
             }
-            "pcloud" -> {
+            "pcloud", "kdrive", "webdav" -> {
                 if (mode(ctx) == "webdav") throw ErreurCompte(Textes.t(R.string.err_pas_de_lien, f.nom))
                 var n = nom; var i = 2
                 while (pcExiste(ctx, "$racine/Partages/$n")) { n = nom.substringBeforeLast('.') + " ($i)." + nom.substringAfterLast('.', "pdf"); i++ }
@@ -664,7 +686,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 appel(ctx, "POST", if (existant != null) "$BOX_ENVOI/files/$existant/content" else "$BOX_ENVOI/files/content", corps,
                     mapOf("Content-Type" to "multipart/form-data; boundary=$bord"))
             }
-            "pcloud" -> pcEnvoyer(ctx, "$racine/$dossier", nom, octets)
+            "pcloud", "kdrive", "webdav" -> pcEnvoyer(ctx, "$racine/$dossier", nom, octets)
             else -> Triple(0, ByteArray(0), null)
         }
         if (code !in 200..299) throw ErreurCompte(Textes.t(R.string.err_depot_refuse, f.nom, nom, code, String(b).take(160)))
@@ -718,7 +740,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                     "Content-Type: application/octet-stream\r\n\r\n").toByteArray() + octets + "\r\n--$bord--\r\n".toByteArray()
                 appel(ctx, "POST", "$BOX_ENVOI/files/content", corps, mapOf("Content-Type" to "multipart/form-data; boundary=$bord"))
             }
-            "pcloud" -> {
+            "pcloud", "kdrive", "webdav" -> {
                 val d = "/" + parts.joinToString("/")
                 nom = libre { pcExiste(ctx, d.trimEnd('/') + "/" + it) }
                 pcEnvoyer(ctx, d, nom, octets)
@@ -751,7 +773,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                     (0 until a.length()).mapNotNull { a.getJSONObject(it).optJSONObject("metadata")?.optJSONObject("metadata") }
                         .firstOrNull { it.optString(".tag") == "folder" && it.optString("name") == "PhilPDF" }?.optString("path_lower")
                 }
-            "pcloud" -> if (pcExiste(ctx, "/PhilPDF")) "/PhilPDF" else null
+            "pcloud", "kdrive", "webdav" -> if (pcExiste(ctx, "/PhilPDF")) "/PhilPDF" else null
             "box" -> bEnfant(ctx, "0", "PhilPDF")
                 ?: json(ctx, "GET", "$BOX/search?query=PhilPDF&type=folder&content_types=name&fields=id,name")?.optJSONArray("entries")?.let { a ->
                     (0 until a.length()).map { a.getJSONObject(it) }.firstOrNull { it.optString("name") == "PhilPDF" }?.optString("id")
@@ -770,7 +792,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
         return when (fournisseur(ctx).cle) {
             "gdrive" -> contenuFichier(ctx, idParChemin(rel) { p, n -> gEnfant(ctx, p, n)?.getString("id") } ?: return null)
             "onedrive" -> telecharger(ctx, "GET", "$GRAPH/me/drive/items/$racine:/" + rel.split("/").joinToString("/") { enc(it) } + ":/content")
-            "dropbox", "pcloud" -> contenuFichier(ctx, "$racine/$rel")
+            "dropbox", "pcloud", "kdrive", "webdav" -> contenuFichier(ctx, "$racine/$rel")
             "box" -> contenuFichier(ctx, idParChemin(rel) { p, n -> bEnfant(ctx, p, n) } ?: return null)
             else -> null
         }

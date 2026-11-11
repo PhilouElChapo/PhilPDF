@@ -210,6 +210,11 @@ except distant.ErreurDistant as ex:
     verifie("offre payante" in str(ex), "pCloud par WebDAV : mauvais mot de passe expliqué (offre payante, deux étapes)")
 os.environ.pop("PHILPDF_PCLOUD_ID")
 verifie("pcloud_api" not in distant.types_proposes(), "pCloud (connexion directe) caché tant que l'identifiant manque")
+ck = distant.nouveau_compte("kdrive")
+ck["adresse"] = "123456"
+verifie(isinstance(distant.emplacement(ck, "x"), distant.KdriveDav) and
+        distant.emplacement(ck, "x")._base() == "https://123456.connect.kdrive.infomaniak.com" and "kdrive" in distant.types_proposes(),
+        "Infomaniak kDrive : le numéro du kDrive donne l'adresse WebDAV")
 for x in (eu, us, srv):
     x.shutdown()
 print(f"\n{ok} vérifications pCloud réussies")

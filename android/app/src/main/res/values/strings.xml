@@ -921,10 +921,17 @@
     <string name="sig_echec">The report could not be sent (no connection?). Try again later.</string>
     <string name="autres_comptes_aide">Each linked account can be browsed, receive files, share by link and file documents. Adding an account never removes the others.</string>
     <string name="compte_synchro">settings sync</string>
-    <string name="compte_prefere">preferred</string>
-    <string name="prefere_aide">★ Preferred: the account offered first to send, share by link and file your PDFs (otherwise the sync account).</string>
+    <string name="compte_prefere">preferred for sending and reading</string>
+    <string name="prefere_aide">★ Preferred for sending and reading in the cloud: this account comes first to open your PDFs, send them, share by link and file them (otherwise the sync account).</string>
     <string name="pcloud_dav_aide">Your pCloud e-mail address and password (pCloud WebDAV access, included in paid pCloud plans). The server, in Europe or the United States, is found automatically. The password stays encrypted on this phone. With two-step verification, accept pCloud\'s \"New login attempt\" e-mail.</string>
     <string name="pcloud_email">pCloud e-mail address</string>
     <string name="pcloud_mdp">pCloud password</string>
     <string name="err_pcloud_refus">pCloud refuses this e-mail address or password (neither in Europe nor in the United States). WebDAV requires a paid pCloud plan; with two-step verification, accept the \"New login attempt\" e-mail, then try again.</string>
+    <string name="kdrive_aide">Your kDrive number, your Infomaniak e-mail address and your password; with two-step verification, an app password created in the Infomaniak Manager. WebDAV requires a paid kSuite plan.</string>
+    <string name="kdrive_numero">kDrive number (after /drive/ in its address)</string>
+    <string name="webdav_aide">Full WebDAV address of your NAS or server (for example the Synology \"WebDAV Server\" package, Nextcloud...), user and password. The password stays encrypted on this phone.</string>
+    <string name="webdav_adresse">WebDAV address</string>
+    <string name="webdav_utilisateur">User</string>
+    <string name="err_dav_adresse">The address must start with https:// (or http:// on your local network).</string>
+    <string name="err_dav_refus">The server refuses this user or password. With two-step verification, use an app password.</string>
 </resources>

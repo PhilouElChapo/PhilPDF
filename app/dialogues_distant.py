@@ -10,7 +10,7 @@ from . import distant, coffre, avatars
 
 ICONES = {"reseau": "ouvrir", "synology": "archiver", "webdav": "lot", "ftp": "exporter", "gdrive": "synchro",
           "onedrive": "synchro", "dropbox": "synchro", "box": "synchro",
-          "pcloud": "synchro", "pcloud_api": "synchro"}
+          "pcloud": "synchro", "pcloud_api": "synchro", "kdrive": "synchro"}
 AIDE = {
     "reseau": _("Un dossier partagé déjà accessible depuis ce PC : \\\\NAS\\partage, une lettre de lecteur (Z:\\) ou /mnt/nas."),
     "synology": _("L'adresse de votre Synology dans le navigateur : http://nas:5000, https://nas:5001 ou une adresse "
@@ -27,6 +27,9 @@ AIDE = {
     "box": _("Box en direct : votre navigateur s'ouvre, vous autorisez PhilPDF, c'est tout."),
     "pcloud_api": _("pCloud en direct (serveurs en Europe ou aux Etats-Unis) : votre navigateur s'ouvre, vous autorisez "
                     "PhilPDF, c'est tout."),
+    "kdrive": _("Le numéro de votre kDrive (le nombre qui suit « /drive/ » dans l'adresse de kDrive dans le navigateur), "
+                "votre adresse e-mail Infomaniak et votre mot de passe ; avec la validation en deux étapes, un mot de "
+                "passe d'application créé dans le Manager d'Infomaniak. Le WebDAV demande une offre kSuite payante."),
     "pcloud": _("Votre adresse e-mail et votre mot de passe pCloud (WebDAV, offre payante de pCloud). Serveur en Europe "
                 "par défaut ; un compte aux Etats-Unis est trouvé seul. Avec la validation en deux étapes, acceptez "
                 "l'e-mail « New login attempt » de pCloud à la première connexion."),
@@ -201,7 +204,7 @@ def autoriser_compte(parent, compte):
 # ------------------------------------------------------------------------------------------- compte
 PORTS = {"synology": _("par défaut : 5000 en http, 5001 en https"), "webdav": _("Synology : 5005 en http, 5006 en https"),
          "ftp": _("par défaut : 21")}
-EXEMPLES = {"pcloud": "https://ewebdav.pcloud.com", "reseau": r"\\NAS\partage", "synology": "http://monnas.exemple.org:5000", "webdav": "https://monnas.exemple.org:5006",
+EXEMPLES = {"pcloud": "https://ewebdav.pcloud.com", "kdrive": "123456", "reseau": r"\\NAS\partage", "synology": "http://monnas.exemple.org:5000", "webdav": "https://monnas.exemple.org:5006",
             "ftp": "ftp.exemple.org"}
 
 
@@ -412,12 +415,12 @@ class DialogueCompte(QDialog):
         self.c["type"] = t
         self.aide.setText(AIDE[t])
         self.adresse.setPlaceholderText(EXEMPLES.get(t, ""))
-        serveur = t in ("synology", "webdav", "ftp", "pcloud")
+        serveur = t in ("synology", "webdav", "ftp", "pcloud", "kdrive")
         if t == "pcloud" and not self.adresse.text().strip():
             self.adresse.setText(distant.PCLOUD_EUROPE)
-        for w, vis in ((self.adresse.parentWidget(), t not in distant.NUAGES), (self.port, serveur and t != "pcloud"),
+        for w, vis in ((self.adresse.parentWidget(), t not in distant.NUAGES), (self.port, serveur and t not in ("pcloud", "kdrive")),
                        (self.utilisateur, serveur), (self.mdp, serveur), (self.chiffrement, t == "ftp"),
-                       (self.dossier, serveur), (self.libre, serveur and t != "pcloud"), (self.note, serveur),
+                       (self.dossier, serveur), (self.libre, serveur and t not in ("pcloud", "kdrive")), (self.note, serveur),
                        (self.b_autoriser.parentWidget(), t in distant.NUAGES), (self.complet, t == "gdrive")):
             self.f.setRowVisible(w, vis)
         if t in distant.NUAGES:
@@ -482,7 +485,7 @@ class DialogueCompte(QDialog):
 
     def accept(self):
         self.compte()
-        if self.c["type"] in ("synology", "webdav", "ftp", "pcloud"):
+        if self.c["type"] in ("synology", "webdav", "ftp", "pcloud", "kdrive"):
             coffre.enregistrer(self.c["id"], self.mdp.text())
         super().accept()
 
@@ -527,9 +530,9 @@ class PanneauComptes(QWidget):
             b = QPushButton(txt)
             b.clicked.connect(f)
             h.addWidget(b)
-        self.b_prefere = QPushButton("★ " + _("Préféré"))
-        self.b_prefere.setToolTip(_("Compte proposé d'office pour enregistrer, envoyer et classer vos PDF (avant les autres "
-                                    "comptes reliés). Un second clic retire ce choix."))
+        self.b_prefere = QPushButton("★ " + _("Préféré pour envois et lecture"))
+        self.b_prefere.setToolTip(_("Le compte proposé d'office pour envoyer, enregistrer, classer et ouvrir vos PDF dans le "
+                                    "cloud (avant les autres comptes reliés). Un second clic retire ce choix."))
         self.b_prefere.clicked.connect(self.preferer)
         h.addWidget(self.b_prefere)
         h.addStretch()
@@ -555,7 +558,7 @@ class PanneauComptes(QWidget):
     def preferer(self):
         c = self._courant()
         if not c:
-            QMessageBox.information(self, _("Préféré"), _("Cliquez d'abord sur un compte de la liste."))
+            QMessageBox.information(self, _("Préféré pour envois et lecture"), _("Cliquez d'abord sur un compte de la liste."))
             return
         self.params["compte_prefere"] = None if self.params.get("compte_prefere") == c["id"] else c["id"]
         self.params.enregistrer()
@@ -573,7 +576,7 @@ class PanneauComptes(QWidget):
             it = QListWidgetItem(avatars.icone_compte(c, self.params),
                                  f"{distant.libelle(c)}   —   " + (f"{_(distant.TYPES[c['type']])}   " if distant.libelle(c) != _(distant.TYPES[c['type']]) else "") + detail)
             if c["id"] == pref:
-                it.setText("★ " + it.text() + "   (" + _("préféré pour enregistrer et envoyer") + ")")
+                it.setText("★ " + it.text() + "   (" + _("préféré pour les envois et la lecture dans le cloud") + ")")
             it.setData(Qt.UserRole, c["id"])
             self.liste.addItem(it)
 

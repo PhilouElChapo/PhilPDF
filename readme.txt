@@ -10,6 +10,14 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.25.0
+- WebDAV, comme sous Windows : Comptes > Ajouter un compte > WebDAV (adresse complete du NAS ou du serveur,
+  utilisateur, mot de passe chiffre sur le telephone), et deux comptes tout prets : pCloud (adresse e-mail et mot de
+  passe) et Infomaniak kDrive (numero du kDrive, adresse e-mail, mot de passe ou mot de passe d'application). La
+  connexion est essayee avant d'etre gardee.
+- Compte prefere plus clair : « prefere pour les envois et la lecture » ; il vient en premier pour ouvrir, envoyer,
+  partager par lien et classer.
+
 1.24.0
 - pCloud : Comptes > pCloud, avec votre adresse e-mail et votre mot de passe pCloud (acces WebDAV de pCloud, compris
   dans ses offres payantes ; serveur en Europe ou aux Etats-Unis trouve seul ; mot de passe chiffre sur le telephone).
@@ -497,6 +505,13 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.93
+- Infomaniak kDrive tout pret (Preferences > Comptes > Ajouter un compte) : le numero du kDrive (le nombre apres
+  « /drive/ » dans son adresse), l'adresse e-mail Infomaniak et le mot de passe (ou un mot de passe d'application avec
+  la validation en deux etapes). pCloud reste tout pret de la meme facon.
+- Bouton « ★ Prefere pour envois et lecture » : le compte propose d'office pour envoyer, enregistrer, classer et
+  ouvrir vos PDF dans le cloud.
 
 0.9.92
 - pCloud (Preferences > Comptes > Ajouter un compte > pCloud) : votre adresse e-mail et votre mot de passe pCloud

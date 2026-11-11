@@ -920,10 +920,17 @@
     <string name="sig_echec">No se pudo enviar el informe (¿sin conexión?). Inténtelo más tarde.</string>
     <string name="autres_comptes_aide">Cada cuenta vinculada se puede explorar, recibir archivos, compartir por enlace y clasificar. Añadir una cuenta nunca quita las demás.</string>
     <string name="compte_synchro">sincronización de ajustes</string>
-    <string name="compte_prefere">preferida</string>
-    <string name="prefere_aide">★ Preferida: la cuenta propuesta de entrada para enviar, compartir por enlace y clasificar sus PDF (si no, la de sincronización).</string>
+    <string name="compte_prefere">preferida para envíos y lectura</string>
+    <string name="prefere_aide">★ Preferida para envíos y lectura en la nube: esta cuenta va primero para abrir sus PDF, enviarlos, compartirlos por enlace y clasificarlos (si no, la de sincronización).</string>
     <string name="pcloud_dav_aide">Su dirección de correo y su contraseña de pCloud (acceso WebDAV de pCloud, incluido en los planes de pago). El servidor, en Europa o en Estados Unidos, se encuentra solo. La contraseña queda cifrada en este teléfono. Con la verificación en dos pasos, acepte el correo «New login attempt» de pCloud.</string>
     <string name="pcloud_email">Correo de pCloud</string>
     <string name="pcloud_mdp">Contraseña de pCloud</string>
     <string name="err_pcloud_refus">pCloud rechaza este correo o esta contraseña (ni en Europa ni en Estados Unidos). WebDAV requiere un plan de pago de pCloud; con la verificación en dos pasos, acepte el correo «New login attempt» y vuelva a intentarlo.</string>
+    <string name="kdrive_aide">El número de su kDrive, su correo de Infomaniak y su contraseña; con la verificación en dos pasos, una contraseña de aplicación creada en el Manager de Infomaniak. WebDAV requiere un plan kSuite de pago.</string>
+    <string name="kdrive_numero">Número del kDrive (tras /drive/ en su dirección)</string>
+    <string name="webdav_aide">Dirección WebDAV completa de su NAS o servidor (por ejemplo el paquete «WebDAV Server» de Synology, Nextcloud...), usuario y contraseña. La contraseña queda cifrada en este teléfono.</string>
+    <string name="webdav_adresse">Dirección WebDAV</string>
+    <string name="webdav_utilisateur">Usuario</string>
+    <string name="err_dav_adresse">La dirección debe empezar por https:// (o http:// en su red local).</string>
+    <string name="err_dav_refus">El servidor rechaza este usuario o esta contraseña. Con la verificación en dos pasos, use una contraseña de aplicación.</string>
 </resources>

@@ -51,6 +51,10 @@ object Dav {
         return null
     }
 
+    /** Code HTTP d'un PROPFIND sur la racine (200..299 : adresse et mot de passe acceptes). */
+    suspend fun essayer(a: Acces): Int = try { requete(a, "PROPFIND", "/", PROPFIND, mapOf("Depth" to "0")).first }
+        catch (e: Exception) { Journal.ecrire("compte", "WebDAV ${a.base} : ${e.message}"); throw ErreurCompte(e.message ?: "WebDAV") }
+
     /** Contenu d'un dossier : (chemin, nom, dossier ?, taille, date) ; null s'il n'existe pas. */
     suspend fun lister(a: Acces, dossier: String): List<Entree>? {
         val d = dossier.ifEmpty { "/" }.let { if (it.endsWith("/")) it else "$it/" }
@@ -74,7 +78,10 @@ object Dav {
                 }
                 XmlPullParser.END_TAG -> {
                     if (p.name == "response") {
-                        val chemin = URLDecoder.decode(java.net.URI(href).rawPath ?: href, "UTF-8").trimEnd('/')
+                        // href absolu : on retire le chemin de l'adresse du serveur (WebDAV d'un NAS, Nextcloud...)
+                        val prefixe = URLDecoder.decode(java.net.URI(a.base).rawPath ?: "", "UTF-8").trimEnd('/')
+                        var chemin = URLDecoder.decode(java.net.URI(href).rawPath ?: href, "UTF-8").trimEnd('/')
+                        if (prefixe.isNotEmpty() && chemin.startsWith(prefixe)) chemin = chemin.removePrefix(prefixe)
                         if (chemin.isNotEmpty() && chemin != d.trimEnd('/'))
                             out += Entree(chemin, chemin.substringAfterLast('/'), dos, taille, date)
                     }

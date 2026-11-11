@@ -920,10 +920,17 @@
     <string name="sig_echec">Die Meldung konnte nicht gesendet werden (keine Verbindung?). Später erneut versuchen.</string>
     <string name="autres_comptes_aide">Jedes verbundene Konto kann durchsucht werden, Dateien empfangen, per Link teilen und Dokumente ablegen. Ein neues Konto entfernt nie die anderen.</string>
     <string name="compte_synchro">Einstellungs-Sync</string>
-    <string name="compte_prefere">bevorzugt</string>
-    <string name="prefere_aide">★ Bevorzugt: das Konto, das zum Senden, Teilen per Link und Ablegen Ihrer PDFs zuerst vorgeschlagen wird (sonst das Sync-Konto).</string>
+    <string name="compte_prefere">bevorzugt zum Senden und Lesen</string>
+    <string name="prefere_aide">★ Bevorzugt zum Senden und Lesen in der Cloud: Dieses Konto steht an erster Stelle, um Ihre PDFs zu öffnen, zu senden, per Link zu teilen und abzulegen (sonst das Sync-Konto).</string>
     <string name="pcloud_dav_aide">Ihre pCloud-E-Mail-Adresse und Ihr Passwort (WebDAV-Zugang von pCloud, in den kostenpflichtigen Tarifen enthalten). Der Server in Europa oder den USA wird automatisch gefunden. Das Passwort bleibt verschlüsselt auf diesem Telefon. Mit Zwei-Faktor-Bestätigung die E-Mail „New login attempt“ von pCloud bestätigen.</string>
     <string name="pcloud_email">pCloud-E-Mail-Adresse</string>
     <string name="pcloud_mdp">pCloud-Passwort</string>
     <string name="err_pcloud_refus">pCloud lehnt diese E-Mail-Adresse oder dieses Passwort ab (weder in Europa noch in den USA). WebDAV erfordert einen kostenpflichtigen pCloud-Tarif; mit Zwei-Faktor-Bestätigung die E-Mail „New login attempt“ bestätigen und erneut versuchen.</string>
+    <string name="kdrive_aide">Die Nummer Ihres kDrive, Ihre Infomaniak-E-Mail-Adresse und Ihr Passwort; mit Zwei-Faktor-Bestätigung ein im Infomaniak Manager erstelltes App-Passwort. WebDAV erfordert einen kostenpflichtigen kSuite-Tarif.</string>
+    <string name="kdrive_numero">kDrive-Nummer (nach /drive/ in der Adresse)</string>
+    <string name="webdav_aide">Vollständige WebDAV-Adresse Ihres NAS oder Servers (z. B. Synology-Paket „WebDAV Server“, Nextcloud...), Benutzer und Passwort. Das Passwort bleibt verschlüsselt auf diesem Telefon.</string>
+    <string name="webdav_adresse">WebDAV-Adresse</string>
+    <string name="webdav_utilisateur">Benutzer</string>
+    <string name="err_dav_adresse">Die Adresse muss mit https:// beginnen (oder http:// im lokalen Netz).</string>
+    <string name="err_dav_refus">Der Server lehnt diesen Benutzer oder dieses Passwort ab. Mit Zwei-Faktor-Bestätigung ein App-Passwort verwenden.</string>
 </resources>

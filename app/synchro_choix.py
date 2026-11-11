@@ -12,7 +12,7 @@ from .langue import _
 from .icones import icone
 from . import distant, avatars
 
-AJOUTABLES = ("pcloud", "synology", "webdav", "ftp", "reseau")
+AJOUTABLES = ("pcloud", "kdrive", "synology", "webdav", "ftp", "reseau")
 
 
 def libelle_compte(c):

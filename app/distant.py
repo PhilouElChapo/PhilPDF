@@ -26,6 +26,7 @@ TYPES = {
     "dropbox": "Dropbox",
     "box": "Box",
     "pcloud": "pCloud",                                   # par WebDAV : adresse e-mail et mot de passe pCloud
+    "kdrive": "Infomaniak kDrive",                        # par WebDAV : numero du kDrive, adresse e-mail, mot de passe
     "pcloud_api": _("pCloud (connexion directe)"),        # par l'API (application pCloud de PhilFactory, a venir)
 }
 PCLOUD_EUROPE, PCLOUD_USA = "https://ewebdav.pcloud.com", "https://webdav.pcloud.com"
@@ -1113,8 +1114,27 @@ class PcloudDav(WebDAV):
         return _("Connexion réussie à pCloud ({serveur}) : {n} élément(s) à la racine.", serveur=self._base(), n=n)
 
 
+class KdriveDav(WebDAV):
+    """Infomaniak kDrive par WebDAV : https://<numero du kDrive>.connect.kdrive.infomaniak.com (le numero suit
+    « /drive/ » dans l'adresse de kDrive). Adresse e-mail Infomaniak ; avec la validation en deux etapes, un mot de
+    passe d'application cree dans le Manager d'Infomaniak."""
+
+    def _base(self):
+        a = (self.c.get("adresse") or "").strip().rstrip("/")
+        if a.isdigit():
+            return f"https://{a}.connect.kdrive.infomaniak.com"
+        return a
+
+    def tester(self):
+        if not self._base():
+            raise ErreurDistant(_("Indiquez le numéro de votre kDrive (le nombre qui suit « /drive/ » dans l'adresse de "
+                                  "kDrive)."))
+        return _("Connexion réussie à kDrive : {n} élément(s) à la racine.", n=len(self.lister("/")))
+
+
 CLASSES = {"reseau": Reseau, "synology": Synology, "webdav": WebDAV, "ftp": FTP, "gdrive": GoogleDrive,
-           "onedrive": OneDrive, "dropbox": Dropbox, "box": Box, "pcloud": PcloudDav, "pcloud_api": Pcloud}
+           "onedrive": OneDrive, "dropbox": Dropbox, "box": Box, "pcloud": PcloudDav, "pcloud_api": Pcloud,
+           "kdrive": KdriveDav}
 
 
 def emplacement(compte, mot_de_passe=None, code=None):

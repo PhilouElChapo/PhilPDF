@@ -140,7 +140,7 @@ fun ClasserIa(etat: EtatLecteur, fermer: () -> Unit) {
                         }
                     }
                     // autre dossier d'un compte relie (cree s'il n'existe pas)
-                    val comptes = Nuage.liste(ctx).filter { it.connecte(ctx) }
+                    val comptes = Nuage.liste(ctx).filter { it.connecte(ctx) }.sortedBy { if (Nuage.estPrefere(ctx, it)) 0 else 1 }
                     if (comptes.isNotEmpty()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             RadioButton(choisi?.let { c -> cs.none { it == c } } == true, { autreCompte?.let { choisi = Classement.DossierDrive(it, autreChemin.trim()) } })

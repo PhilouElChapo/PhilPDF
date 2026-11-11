@@ -50,7 +50,8 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
     var parcourir by remember { mutableStateOf<Nuage?>(null) }
     var aide by remember { mutableStateOf(false) }
     var reglagesIa by remember { mutableStateOf(false) }
-    val comptes = remember(versionCompte) { Nuage.liste(ctx) }
+    // compte prefere (envois et lecture) en tete
+    val comptes = remember(versionCompte) { Nuage.liste(ctx).sortedBy { if (Nuage.estPrefere(ctx, it)) 0 else 1 } }
     // Google Drive (autorisation limitee) : ses PDF passent par le selecteur d'Android, qui le propose deja
     val voir: (Nuage) -> Unit = { n -> if (n.parcourable(ctx)) parcourir = n else choisir() }
     var nouveautes by remember { mutableIntStateOf(0) }
