@@ -75,6 +75,33 @@ def recuperer_photo(compte, emplacement=None, forcer=False):
     return True
 
 
+def gravatar(email):
+    """Photo Gravatar de l'adresse e-mail (gravatar.com), ou None. Seule l'empreinte SHA-256 de l'adresse est envoyee,
+    et seulement quand vous cliquez sur « Photo du compte » (pCloud, kDrive... ne donnent pas leur photo)."""
+    import hashlib, urllib.request
+    e = (email or "").strip().lower()
+    if "@" not in e:
+        return None
+    url = "https://gravatar.com/avatar/" + hashlib.sha256(e.encode()).hexdigest() + "?s=192&d=404"
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "PhilPDF"}), timeout=15) as r:
+            return r.read()
+    except Exception:
+        return None
+
+
+def recuperer_gravatar(compte):
+    """Photo Gravatar de l'utilisateur du compte, gardee comme photo du compte ; True si trouvee."""
+    octets = gravatar(compte.get("utilisateur"))
+    img = QImage.fromData(octets) if octets else QImage()
+    if img.isNull():
+        return False
+    img = img.scaled(96, 96, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+    img.save(chemin_photo(compte), "PNG")
+    _cache.clear()
+    return True
+
+
 def oublier_photo(compte):
     for p in (chemin_photo(compte), _marque_absente(compte)):
         try:

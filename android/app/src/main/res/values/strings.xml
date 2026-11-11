@@ -938,4 +938,6 @@
     <string name="image_compte_aide">Choose an image (logo, photo...) for this account: it replaces the service\'s photo or initial.</string>
     <string name="image_choisir">Choose an image...</string>
     <string name="image_par_defaut">Default</string>
+    <string name="gravatar">Gravatar photo</string>
+    <string name="gravatar_absent">No Gravatar photo for %1$s. Create one on gravatar.com with this address, or choose an image.</string>
 </resources>

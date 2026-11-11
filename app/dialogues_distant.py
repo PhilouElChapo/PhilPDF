@@ -235,7 +235,8 @@ class DialogueCompte(QDialog):
         hi.addWidget(self.apercu_icone)
         for txt, bulle, fn in ((_("Image..."), _("Choisir une image (logo, photo...) pour ce compte ; elle suit le compte sur tous vos postes."), self._icone_image),
                                (_("Couleur..."), _("Couleur de la roue et de la pastille"), self._icone_couleur),
-                               (_("Photo du compte"), _("Redemander la photo du profil au service"), self._icone_photo),
+                               (_("Photo du compte"), _("Redemander la photo du profil au service (pCloud, kDrive, WebDAV : la photo Gravatar de "
+                                                     "l'adresse e-mail ; seule son empreinte est envoyée à gravatar.com)"), self._icone_photo),
                                (_("Par défaut"), _("Revenir à l'icône automatique"), self._icone_defaut)):
             b = QPushButton(txt)
             b.setToolTip(bulle)
@@ -264,6 +265,8 @@ class DialogueCompte(QDialog):
         f.addRow(_("Port"), self.port)
         self.utilisateur = QLineEdit(self.c.get("utilisateur", ""))
         f.addRow(_("Utilisateur"), self.utilisateur)
+        self.utilisateur.textChanged.connect(lambda _t: self.b_photo.setVisible(
+            self.type.currentData() in distant.NUAGES or "@" in self.utilisateur.text()))
         self.mdp = QLineEdit(coffre.lire(self.c["id"]) or "")
         self.mdp.setEchoMode(QLineEdit.Password)
         self.oeil = self.mdp.addAction(icone("oeil", "#555555"), QLineEdit.TrailingPosition)
@@ -352,7 +355,7 @@ class DialogueCompte(QDialog):
 
     def _maj_icone(self):
         self.apercu_icone.setPixmap(avatars.icone_compte(self.c, self.params, 40).pixmap(40, 40))
-        self.b_photo.setVisible(self.c.get("type") in distant.NUAGES)
+        self.b_photo.setVisible(self.c.get("type") in distant.NUAGES or "@" in (self.utilisateur.text() if hasattr(self, "utilisateur") else ""))
 
     def _icone_image(self):
         from PySide6.QtWidgets import QFileDialog
@@ -374,6 +377,19 @@ class DialogueCompte(QDialog):
             self._maj_icone()
 
     def _icone_photo(self):
+        c = self.compte()
+        if c.get("type") not in distant.NUAGES:              # pCloud, kDrive, WebDAV... : photo Gravatar de l'adresse
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                ok = avatars.recuperer_gravatar(c)
+            finally:
+                QApplication.restoreOverrideCursor()
+            if not ok:
+                QMessageBox.information(self, _("Photo du compte"), _(
+                    "Aucune photo Gravatar pour {email}. Créez-la sur gravatar.com avec cette adresse, ou choisissez une "
+                    "image.", email=c.get("utilisateur") or "?"))
+            self._maj_icone()
+            return
         if not coffre.lire(self.c["id"] + ".jeton"):
             QMessageBox.information(self, _("Photo du compte"), _("Autorisez d'abord l'accès au compte."))
             return

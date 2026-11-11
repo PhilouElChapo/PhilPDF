@@ -359,7 +359,15 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
 
     menuImage?.let { c ->
         AlertDialog(onDismissRequest = { menuImage = null }, title = { Text(stringResource(R.string.image_compte)) },
-            text = { Text(stringResource(R.string.image_compte_aide)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.image_compte_aide))
+                    if ((c.email(ctx) ?: "").contains("@")) OutlinedButton(onClick = {
+                        menuImage = null
+                        portee.launch { if (!c.gravatar(ctx)) erreur = ctx.getString(R.string.gravatar_absent, c.email(ctx) ?: ""); version++ }
+                    }, Modifier.padding(top = 8.dp)) { Text(stringResource(R.string.gravatar)) }
+                }
+            },
             confirmButton = { TextButton(onClick = { imagePour = c; menuImage = null; choisirImage.launch("image/*") }) {
                 Text(stringResource(R.string.image_choisir)) } },
             dismissButton = {

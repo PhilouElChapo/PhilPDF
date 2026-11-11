@@ -107,6 +107,23 @@ class Nuage private constructor(val id: String) {
     fun nom(ctx: Context): String? = prefs(ctx).getString("nom", null)?.takeIf { it.isNotEmpty() }
     fun mode(ctx: Context): String? = prefs(ctx).getString("mode", null)
     fun photo(ctx: Context): File = File(ctx.filesDir, "comptes/$id.png")
+    /** Photo Gravatar de l'adresse e-mail du compte (pCloud, kDrive, WebDAV ne donnent pas leur photo) : seule
+     *  l'empreinte SHA-256 de l'adresse est envoyee a gravatar.com, et seulement a votre demande. */
+    suspend fun gravatar(ctx: Context): Boolean = withContext(Dispatchers.IO) {
+        val e = (email(ctx) ?: "").trim().lowercase()
+        if ("@" !in e) return@withContext false
+        val h = java.security.MessageDigest.getInstance("SHA-256").digest(e.toByteArray()).joinToString("") { "%02x".format(it) }
+        try {
+            val c = URL("https://gravatar.com/avatar/$h?s=192&d=404").openConnection() as java.net.HttpURLConnection
+            c.connectTimeout = 15_000; c.readTimeout = 15_000
+            if (c.responseCode != 200) return@withContext false
+            val b = c.inputStream.use { it.readBytes() }
+            photo(ctx).parentFile?.mkdirs(); photo(ctx).writeBytes(b)
+            Journal.ecrire("compte", "photo Gravatar trouvée")
+            true
+        } catch (x: Exception) { Journal.ecrire("compte", "Gravatar : ${x.message}"); false }
+    }
+
     /** Image choisie par vous pour ce compte (logo, photo...) : passe avant la photo du service. */
     fun image(ctx: Context): File = File(ctx.filesDir, "comptes/$id-perso.png")
     fun connecte(ctx: Context) = mode(ctx) != null

@@ -10,6 +10,10 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.25.2
+- Photo Gravatar : en touchant le rond d'un compte (pCloud, kDrive, WebDAV...), « Photo Gravatar » reprend la photo
+  liee a l'adresse e-mail sur gravatar.com (seule l'empreinte de l'adresse est envoyee, et seulement a votre demande).
+
 1.25.1
 - Image de chaque compte, comme sous Windows : Comptes > « Comptes relies », toucher le rond du compte > « Choisir une
   image... » (logo, photo...) ; elle remplace la photo ou l'initiale du service (pCloud, kDrive, WebDAV compris).
@@ -510,6 +514,10 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.95
+- Photo Gravatar pour pCloud, kDrive et WebDAV : Modifier... > Icone > « Photo du compte » reprend la photo liee a
+  l'adresse e-mail sur gravatar.com (seule l'empreinte de l'adresse est envoyee, et seulement a votre demande).
 
 0.9.94
 - pCloud et kDrive dessines comme les autres Drives (roue de synchro et pastille) ; leur image et leur couleur se

@@ -3076,5 +3076,7 @@
  "Le numéro de votre kDrive (le nombre qui suit « /drive/ » dans l'adresse de kDrive dans le navigateur), votre adresse e-mail Infomaniak et votre mot de passe ; avec la validation en deux étapes, un mot de passe d'application créé dans le Manager d'Infomaniak. Le WebDAV demande une offre kSuite payante.": "Your kDrive number (the number after \"/drive/\" in the kDrive address in your browser), your Infomaniak e-mail address and your password; with two-step verification, an app password created in the Infomaniak Manager. WebDAV requires a paid kSuite plan.",
  "Préféré pour envois et lecture": "Preferred for sending and reading",
  "Le compte proposé d'office pour envoyer, enregistrer, classer et ouvrir vos PDF dans le cloud (avant les autres comptes reliés). Un second clic retire ce choix.": "The account offered first to send, save, file and open your PDFs in the cloud (before the other linked accounts). Click again to remove this choice.",
- "préféré pour les envois et la lecture dans le cloud": "preferred for sending and reading in the cloud"
+ "préféré pour les envois et la lecture dans le cloud": "preferred for sending and reading in the cloud",
+ "Redemander la photo du profil au service (pCloud, kDrive, WebDAV : la photo Gravatar de l'adresse e-mail ; seule son empreinte est envoyée à gravatar.com)": "Ask the service for the profile photo again (pCloud, kDrive, WebDAV: the Gravatar photo of the e-mail address; only its fingerprint is sent to gravatar.com)",
+ "Aucune photo Gravatar pour {email}. Créez-la sur gravatar.com avec cette adresse, ou choisissez une image.": "No Gravatar photo for {email}. Create one on gravatar.com with this address, or choose an image."
 }
