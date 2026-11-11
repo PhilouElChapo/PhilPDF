@@ -1598,8 +1598,10 @@ class Fenetre(MixinCoteACote, QMainWindow):
             QMessageBox.information(self, "PhilPDF", _("Ce fichier est introuvable sur ce poste."))
             return False
         dernier = self.params.get("envoi_dernier") or {}
+        # compte prefere d'abord (Preferences > Comptes > « Prefere »), sinon le dernier utilise
+        pref = distant.prefere(self.params)
         d = DialogueParcourir(self, self.params, "enregistrer", nom=os.path.basename(fichiers[0]),
-                              compte_id=dernier.get("compte"))
+                              compte_id=pref["id"] if pref else dernier.get("compte"))
         d.setWindowTitle(_("Envoyer une copie vers un emplacement"))
         d.b_ok.setText(_("Envoyer ici"))
         if len(fichiers) > 1:

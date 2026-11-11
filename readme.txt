@@ -10,6 +10,12 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.24.0
+- pCloud en direct, comme Google Drive, OneDrive, Dropbox et Box : Comptes > pCloud, votre navigateur s'ouvre,
+  vous autorisez PhilPDF (serveurs pCloud en Europe ou aux Etats-Unis, reconnus seuls). Parcourir et ouvrir vos PDF,
+  « Meme fichier » pour les renvoyer, Renommer et classer, partage par lien (dossier PhilPDF/Partages), et pCloud
+  peut etre l'emplacement de synchronisation avec vos PC.
+
 1.23.1
 - IA : « Signaler ce resultat » sous chaque reponse de l'IA (resume, explication, texte ameliore, formulaire rempli,
   nom et dossier proposes, donnees extraites), et Plus > Intelligence artificielle > « Signaler un resultat de
@@ -487,6 +493,14 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.92
+- pCloud en direct (Preferences > Comptes > Ajouter un compte > pCloud) : votre navigateur s'ouvre, vous autorisez
+  PhilPDF, c'est tout (serveurs pCloud en Europe ou aux Etats-Unis, reconnus seuls). Ouvrir, enregistrer, envoyer,
+  classer sur pCloud, et pCloud peut etre l'emplacement de synchronisation entre vos postes.
+- Compte prefere : Preferences > Comptes > « ★ Prefere » sur le compte choisi. Il est propose d'office, en tete de
+  liste, pour enregistrer, envoyer et classer vos PDF, avant les autres comptes relies (un second clic retire ce
+  choix).
 
 0.9.91
 - IA : « Signaler ce resultat » dans le resume, l'explication, le formulaire rempli, Renommer et classer et les

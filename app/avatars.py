@@ -20,7 +20,7 @@ def modes():
     return {"photo": _("Photo du compte (sinon pastille du service)"), "pastille": _("Pastille du service (initiale et couleur)"),
             "simple": _("Roue seule, comme avant")}
 # initiale et couleur par defaut de chaque service (simple reperage, pas les logos des marques)
-PASTILLES = {"gdrive": ("G", "#2e7d32"), "onedrive": ("O", "#0f6cbd"), "dropbox": ("D", "#3949ab"), "box": ("B", "#00838f"),
+PASTILLES = {"gdrive": ("G", "#2e7d32"), "onedrive": ("O", "#0f6cbd"), "dropbox": ("D", "#3949ab"), "box": ("B", "#00838f"), "pcloud": ("P", "#17bed0"),
              "synology": ("S", "#5d4037"), "webdav": ("W", "#6a1b9a"), "ftp": ("F", "#ad1457"), "reseau": ("R", "#455a64")}
 SEMAINE = 7 * 24 * 3600      # delai avant de redemander une photo absente
 

@@ -1048,7 +1048,6 @@
  "Poste : <b>{machine}</b>. ": "Computer: <b>{machine}</b>. ",
  "Pour accord": "Per accettazione",
  "POUR ACCORD": "PER ACCETTAZIONE",
- "Pour retrouver sur chaque poste vos préférences, tampons, signatures, apprentissages et les fichiers ouverts ailleurs, choisissez un emplacement commun : un Drive (Google Drive, OneDrive, Dropbox, Box), votre NAS, un serveur FTP ou un dossier partagé. Choisissez le même sur tous vos postes. PhilPDF n'y met que son dossier « PhilPDF », jamais vos PDF.": "Per ritrovare su ogni computer preferenze, timbri, firme, apprendimenti e i file aperti altrove, scegli una posizione comune: un Drive (Google Drive, OneDrive, Dropbox, Box), il tuo NAS, un server FTP o una cartella condivisa. Scegli la stessa su tutti i computer. PhilPDF ci mette solo la sua cartella «PhilPDF», mai i tuoi PDF.",
  "Pour un ancien PC : il disparaît de la liste, de la session et des réglages partagés": "Per un vecchio PC: scompare dall'elenco, dalla sessione e dalle impostazioni condivise",
  "Pour utiliser l'assistant IA, renseignez votre clef Claude ou Gemini dans Edition › Préférences › IA.\n\nRien n'est envoyé sans votre clic, et PhilPDF vous prévient si le document contient des données sensibles.": "Per usare l'assistente IA, inserisci la tua chiave Claude o Gemini in Modifica › Preferenze › IA.\n\nNulla viene inviato senza il tuo clic, e PhilPDF ti avvisa se il documento contiene dati sensibili.",
  "Pour {x}, Google doit vous redemander l'autorisation.\nGoogle affichera « application non validée » : cliquez sur « Paramètres avancés », puis « Accéder à PhilPDF ».\n\nAutoriser maintenant ?": "Per {x}, Google deve chiederti di nuovo l'autorizzazione.\nGoogle mostrerà «app non verificata»: clicca su «Avanzate», poi su «Vai a PhilPDF».\n\nAutorizzare ora?",
@@ -3047,5 +3046,15 @@
  "Commentaire (facultatif)": "Commento (facoltativo)",
  "Réponse de l'IA envoyée": "Risposta dell'IA inviata",
  "Envoi du signalement...": "Invio della segnalazione...",
- "Le signalement n'a pas pu partir (pas de connexion ?). Réessayez plus tard.": "Impossibile inviare la segnalazione (nessuna connessione?). Riprova più tardi."
+ "Le signalement n'a pas pu partir (pas de connexion ?). Réessayez plus tard.": "Impossibile inviare la segnalazione (nessuna connessione?). Riprova più tardi.",
+ "pCloud en direct (serveurs en Europe ou aux Etats-Unis) : votre navigateur s'ouvre, vous autorisez PhilPDF, c'est tout.": "pCloud diretto (server in Europa o negli Stati Uniti): si apre il browser, autorizzi PhilPDF ed è tutto.",
+ "Compte proposé d'office pour enregistrer, envoyer et classer vos PDF (avant les autres comptes reliés). Un second clic retire ce choix.": "Account proposto per primo per salvare, inviare e archiviare i PDF (prima degli altri account collegati). Un secondo clic annulla la scelta.",
+ "Préféré": "Preferito",
+ "Cliquez d'abord sur un compte de la liste.": "Fai prima clic su un account dell'elenco.",
+ "préféré pour enregistrer et envoyer": "preferito per salvare e inviare",
+ "préféré": "preferito",
+ "Connexion réussie au pCloud de {qui} : {n} élément(s) à la racine.": "Connessione riuscita al pCloud di {qui}: {n} elemento/i nella radice.",
+ "pCloud a répondu : {raison}": "pCloud ha risposto: {raison}",
+ "Serveur pCloud inattendu : {hote}": "Server pCloud inatteso: {hote}",
+ "Pour retrouver sur chaque poste vos préférences, tampons, signatures, apprentissages et les fichiers ouverts ailleurs, choisissez un emplacement commun : un Drive (Google Drive, OneDrive, Dropbox, Box, pCloud), votre NAS, un serveur FTP ou un dossier partagé. Choisissez le même sur tous vos postes. PhilPDF n'y met que son dossier « PhilPDF », jamais vos PDF.": "Per ritrovare su ogni computer preferenze, timbri, firme, apprendimenti e i file aperti altrove, scegli una posizione comune: un Drive (Google Drive, OneDrive, Dropbox, Box, pCloud), il tuo NAS, un server FTP o una cartella condivisa. Scegli la stessa su tutti i computer. PhilPDF ci mette solo la sua cartella «PhilPDF», mai i tuoi PDF."
 }

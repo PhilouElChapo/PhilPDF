@@ -44,7 +44,7 @@ object Classement {
         val reste = forme.removePrefix("distant:")
         val genre = reste.substringBefore("|")
         val chemin = reste.substringAfter(":", "")
-        if (genre !in setOf("gdrive", "onedrive", "dropbox", "box")) return null
+        if (genre !in CLES_NUAGES) return null
         val c = Nuage.liste(ctx).filter { it.fournisseur(ctx).cle == genre }.let { l -> l.firstOrNull { it == Nuage.synchro(ctx) } ?: l.firstOrNull() } ?: return null
         return DossierDrive(c, chemin)
     }

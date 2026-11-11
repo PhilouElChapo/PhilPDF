@@ -10,7 +10,7 @@ Les identifiants d'application (client_id, secret) ne sont pas dans le code sour
  - pour une fabrication personnelle : variables PHILPDF_GOOGLE_ID / PHILPDF_GOOGLE_SECRET, ou fichier
    identifiants.json dans le dossier de donnees ({"gdrive": {"id": "...", "secret": "..."}}).
 """
-import base64, hashlib, html, http.server, json, os, secrets, socket, threading, time, urllib.parse, urllib.request, webbrowser
+import base64, hashlib, html, http.server, json, os, re, secrets, socket, threading, time, urllib.parse, urllib.request, webbrowser
 from .langue import _
 
 PORTS_FIXES = [53682, 53683, 53684]      # a declarer chez Dropbox (qui exige le port exact)
@@ -53,6 +53,17 @@ FOURNISSEURS = {
         "env": ("PHILPDF_BOX_ID", "PHILPDF_BOX_SECRET"),
         "retour": "http://localhost:{port}/",
         "ports": PORTS_FIXES,
+    },
+    "pcloud": {
+        "nom": "pCloud",
+        "auth": "https://my.pcloud.com/oauth2/authorize",
+        "jeton": "https://{hote}/oauth2_token",          # serveur du compte (Etats-Unis ou Europe), donne au retour
+        "portee": "",
+        "extra": {},
+        "env": ("PHILPDF_PCLOUD_ID", "PHILPDF_PCLOUD_SECRET"),
+        "retour": "http://localhost:{port}/",          # adresses declarees dans l'application pCloud
+        "ports": PORTS_FIXES,
+        "sans_pkce": True,                             # pCloud : code + secret de l'application, jeton sans fin
     },
 }
 
@@ -185,8 +196,9 @@ def autoriser(fournisseur, ouvrir=webbrowser.open, delai=300, arret=lambda: Fals
         raise ErreurAutorisation(_("Les ports {ports} sont occupés : fermez l'application qui les utilise.",
                                    ports=", ".join(map(str, f.get("ports", [])))))
     redirection = f.get("retour", "http://127.0.0.1:{port}").format(port=serveur.server_port)
-    params = {"client_id": cid, "redirect_uri": redirection, "response_type": "code",
-              "code_challenge": defi, "code_challenge_method": "S256", "state": etat, **f["extra"]}
+    params = {"client_id": cid, "redirect_uri": redirection, "response_type": "code", "state": etat, **f["extra"]}
+    if not f.get("sans_pkce"):
+        params.update(code_challenge=defi, code_challenge_method="S256")
     portee = PORTEE_COMPLETE.get(fournisseur) if complet and fournisseur in PORTEE_COMPLETE else f["portee"]
     if portee:
         params["scope"] = portee
@@ -208,6 +220,8 @@ def autoriser(fournisseur, ouvrir=webbrowser.open, delai=300, arret=lambda: Fals
         raise ErreurAutorisation(_("Pas de réponse du navigateur (délai dépassé ou annulé)."))
     if recu.get("state") != etat or "code" not in recu:
         raise ErreurAutorisation(_("Autorisation refusée : {raison}", raison=recu.get("error", "?")))
+    if fournisseur == "pcloud":
+        return _jeton_pcloud(cid, sec, recu, journal)
     champs = {"client_id": cid, "code": recu["code"], "code_verifier": verif, "grant_type": "authorization_code",
               "redirect_uri": redirection}
     if sec:
@@ -223,6 +237,29 @@ def autoriser(fournisseur, ouvrir=webbrowser.open, delai=300, arret=lambda: Fals
         journal("✓ jeton durable reçu")
     jetons["expire"] = time.time() + int(jetons.get("expires_in", 3000)) - 60
     return jetons
+
+
+HOTE_PCLOUD = r"[a-z0-9.-]+\.pcloud\.com"      # serveurs de pCloud seulement (adresse donnee au retour du navigateur)
+
+
+def _jeton_pcloud(cid, sec, recu, journal=None):
+    """pCloud : le code s'echange sur le serveur du compte (api.pcloud.com ou eapi.pcloud.com) ; le jeton ne perime
+    pas. Garde dans le coffre sous la forme « hote|jeton » (refresh_token, comme pour les autres Drives)."""
+    hote = recu.get("hostname") or ("eapi.pcloud.com" if recu.get("locationid") == "2" else "api.pcloud.com")
+    if not re.fullmatch(HOTE_PCLOUD, hote):
+        raise ErreurAutorisation(_("Serveur pCloud inattendu : {hote}", hote=hote))
+    if not sec:
+        raise ErreurAutorisation(_("PhilPDF n'a pas d'identifiant d'application pour {nom}.", nom="pCloud"))
+    if journal:
+        journal(f"→ échange du code contre le jeton sur {hote}...")
+    j = _poster(FOURNISSEURS["pcloud"]["jeton"].format(hote=hote), {"client_id": cid, "client_secret": sec,
+                                                                    "code": recu["code"]}, journal)
+    if j.get("result") or not j.get("access_token"):
+        raise ErreurAutorisation(j.get("error") or _("Le fournisseur n'a pas donné de jeton durable."))
+    if journal:
+        journal("✓ jeton pCloud reçu")
+    return {"refresh_token": f"{hote}|{j['access_token']}", "access_token": j["access_token"],
+            "expire": time.time() + 10 * 365 * 86400}
 
 
 def rafraichir(fournisseur, refresh_token, journal=None):

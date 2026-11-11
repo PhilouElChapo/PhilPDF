@@ -48,7 +48,7 @@ import java.util.Locale
 
 /** Couleur de pastille de chaque service (quand il n'y a pas de photo). */
 fun couleurService(cle: String) = when (cle) {
-    "gdrive" -> Color(0xFF1A73E8); "onedrive" -> Color(0xFF0364B8); "dropbox" -> Color(0xFF0061FE); "box" -> Color(0xFF0075C9)
+    "gdrive" -> Color(0xFF1A73E8); "onedrive" -> Color(0xFF0364B8); "dropbox" -> Color(0xFF0061FE); "box" -> Color(0xFF0075C9); "pcloud" -> Color(0xFF17BED0)
     else -> ROUGE
 }
 

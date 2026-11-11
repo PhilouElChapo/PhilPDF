@@ -9,7 +9,8 @@ from .icones import icone
 from . import distant, coffre, avatars
 
 ICONES = {"reseau": "ouvrir", "synology": "archiver", "webdav": "lot", "ftp": "exporter", "gdrive": "synchro",
-          "onedrive": "synchro", "dropbox": "synchro", "box": "synchro"}
+          "onedrive": "synchro", "dropbox": "synchro", "box": "synchro",
+          "pcloud": "synchro"}
 AIDE = {
     "reseau": _("Un dossier partagé déjà accessible depuis ce PC : \\\\NAS\\partage, une lettre de lecteur (Z:\\) ou /mnt/nas."),
     "synology": _("L'adresse de votre Synology dans le navigateur : http://nas:5000, https://nas:5001 ou une adresse "
@@ -24,6 +25,8 @@ AIDE = {
                   "c'est tout."),
     "dropbox": _("Dropbox en direct : votre navigateur s'ouvre, vous autorisez PhilPDF, c'est tout."),
     "box": _("Box en direct : votre navigateur s'ouvre, vous autorisez PhilPDF, c'est tout."),
+    "pcloud": _("pCloud en direct (serveurs en Europe ou aux Etats-Unis) : votre navigateur s'ouvre, vous autorisez "
+                "PhilPDF, c'est tout."),
 }
 
 
@@ -517,6 +520,11 @@ class PanneauComptes(QWidget):
             b = QPushButton(txt)
             b.clicked.connect(f)
             h.addWidget(b)
+        self.b_prefere = QPushButton("★ " + _("Préféré"))
+        self.b_prefere.setToolTip(_("Compte proposé d'office pour enregistrer, envoyer et classer vos PDF (avant les autres "
+                                    "comptes reliés). Un second clic retire ce choix."))
+        self.b_prefere.clicked.connect(self.preferer)
+        h.addWidget(self.b_prefere)
         h.addStretch()
         v.addLayout(h)
         self.remplir()
@@ -537,14 +545,28 @@ class PanneauComptes(QWidget):
                 QApplication.restoreOverrideCursor()
         self.remplir()
 
+    def preferer(self):
+        c = self._courant()
+        if not c:
+            QMessageBox.information(self, _("Préféré"), _("Cliquez d'abord sur un compte de la liste."))
+            return
+        self.params["compte_prefere"] = None if self.params.get("compte_prefere") == c["id"] else c["id"]
+        self.params.enregistrer()
+        r = self.liste.currentRow()
+        self.remplir()
+        self.liste.setCurrentRow(r)
+
     def remplir(self):
         self.liste.clear()
+        pref = self.params.get("compte_prefere")
         for c in self.comptes():
             detail = c.get("adresse") or ""
             if c.get("utilisateur"):
                 detail = f"{c['utilisateur']} @ {detail}"
             it = QListWidgetItem(avatars.icone_compte(c, self.params),
                                  f"{distant.libelle(c)}   —   " + (f"{_(distant.TYPES[c['type']])}   " if distant.libelle(c) != _(distant.TYPES[c['type']]) else "") + detail)
+            if c["id"] == pref:
+                it.setText("★ " + it.text() + "   (" + _("préféré pour enregistrer et envoyer") + ")")
             it.setData(Qt.UserRole, c["id"])
             self.liste.addItem(it)
 
@@ -638,8 +660,10 @@ class DialogueParcourir(QDialog):
         h = QHBoxLayout()
         h.addWidget(QLabel(_("Emplacement :")))
         self.comptes = QComboBox()
-        for c in params.get("comptes", []):
-            self.comptes.addItem(avatars.icone_compte(c, params), distant.libelle(c), c["id"])
+        pref = distant.prefere(params)
+        for c in distant.comptes_ordonnes(params):       # le compte prefere en tete, choisi d'office
+            self.comptes.addItem(avatars.icone_compte(c, params),
+                                 distant.libelle(c) + ("  ★ " + _("préféré") if pref and c["id"] == pref["id"] else ""), c["id"])
         h.addWidget(self.comptes, 1)
         v.addLayout(h)
         # chemin + bouton bien visible pour remonter (aussi : ligne « .. » en tete de liste, touche Retour arriere)

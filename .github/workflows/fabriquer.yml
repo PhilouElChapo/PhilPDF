@@ -103,6 +103,9 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python tests/test_signaler_ia.py
 
+      - name: Test de pCloud et du compte prefere (serveur simule)
+        run: python tests/test_pcloud.py
+
       - name: Test de la session partagee
         run: python tests/test_session.py
 
@@ -209,10 +212,12 @@ jobs:
           DROPBOX_CLIENT_ID: ${{ secrets.DROPBOX_CLIENT_ID || vars.DROPBOX_CLIENT_ID }}
           BOX_CLIENT_ID: ${{ secrets.BOX_CLIENT_ID || vars.BOX_CLIENT_ID }}
           BOX_CLIENT_SECRET: ${{ secrets.BOX_CLIENT_SECRET || vars.BOX_CLIENT_SECRET }}
+          PCLOUD_CLIENT_ID: ${{ secrets.PCLOUD_CLIENT_ID || vars.PCLOUD_CLIENT_ID }}
+          PCLOUD_CLIENT_SECRET: ${{ secrets.PCLOUD_CLIENT_SECRET || vars.PCLOUD_CLIENT_SECRET }}
         run: |
           import os, hashlib
           ids = {}
-          for cle, env in (("gdrive", "GOOGLE"), ("onedrive", "ONEDRIVE"), ("dropbox", "DROPBOX"), ("box", "BOX")):
+          for cle, env in (("gdrive", "GOOGLE"), ("onedrive", "ONEDRIVE"), ("dropbox", "DROPBOX"), ("box", "BOX"), ("pcloud", "PCLOUD")):
               brut_i, brut_s = os.environ.get(env + "_CLIENT_ID", ""), os.environ.get(env + "_CLIENT_SECRET", "")
               i = "".join(brut_i.split())          # espaces / retours a la ligne colles par erreur
               if brut_i != i or brut_s != brut_s.strip():
@@ -227,7 +232,7 @@ jobs:
                      "secret " + env + "_CLIENT_ID absent ou vide") +
                     (" ; secret present (" + str(len(sec)) + " caracteres, commence par " + sec[:6] + ", empreinte " +
                      hashlib.sha256(sec.encode()).hexdigest()[:10] + ")" if sec else
-                     (" ; pas de secret" if cle in ("gdrive", "box") else "")))
+                     (" ; pas de secret" if cle in ("gdrive", "box", "pcloud") else "")))
           with open("app/identifiants.py", "w") as f:
               f.write("IDENTIFIANTS = " + repr(ids) + "\n")
 
@@ -370,6 +375,8 @@ jobs:
           DROPBOX_CLIENT_ID: ${{ secrets.DROPBOX_CLIENT_ID || vars.DROPBOX_CLIENT_ID }}
           BOX_CLIENT_ID: ${{ secrets.BOX_CLIENT_ID || vars.BOX_CLIENT_ID }}
           BOX_CLIENT_SECRET: ${{ secrets.BOX_CLIENT_SECRET || vars.BOX_CLIENT_SECRET }}
+          PCLOUD_CLIENT_ID: ${{ secrets.PCLOUD_CLIENT_ID || vars.PCLOUD_CLIENT_ID }}
+          PCLOUD_CLIENT_SECRET: ${{ secrets.PCLOUD_CLIENT_SECRET || vars.PCLOUD_CLIENT_SECRET }}
         run: |
           python outils_dev/identifiants_ci.py
           echo "VERSION=$(grep -oP 'VERSION = "\K[^"]+' app/config.py)" >> "$GITHUB_ENV"
@@ -421,6 +428,8 @@ jobs:
           DROPBOX_CLIENT_ID: ${{ secrets.DROPBOX_CLIENT_ID || vars.DROPBOX_CLIENT_ID }}
           BOX_CLIENT_ID: ${{ secrets.BOX_CLIENT_ID || vars.BOX_CLIENT_ID }}
           BOX_CLIENT_SECRET: ${{ secrets.BOX_CLIENT_SECRET || vars.BOX_CLIENT_SECRET }}
+          PCLOUD_CLIENT_ID: ${{ secrets.PCLOUD_CLIENT_ID || vars.PCLOUD_CLIENT_ID }}
+          PCLOUD_CLIENT_SECRET: ${{ secrets.PCLOUD_CLIENT_SECRET || vars.PCLOUD_CLIENT_SECRET }}
         run: |
           command -v python3 || dnf install -y python3
           python3 outils_dev/identifiants_ci.py
@@ -530,6 +539,8 @@ jobs:
           DROPBOX_CLIENT_SECRET: ${{ secrets.DROPBOX_CLIENT_SECRET || vars.DROPBOX_CLIENT_SECRET }}
           BOX_CLIENT_ID: ${{ secrets.BOX_CLIENT_ID || vars.BOX_CLIENT_ID }}
           BOX_CLIENT_SECRET: ${{ secrets.BOX_CLIENT_SECRET || vars.BOX_CLIENT_SECRET }}
+          PCLOUD_CLIENT_ID: ${{ secrets.PCLOUD_CLIENT_ID || vars.PCLOUD_CLIENT_ID }}
+          PCLOUD_CLIENT_SECRET: ${{ secrets.PCLOUD_CLIENT_SECRET || vars.PCLOUD_CLIENT_SECRET }}
         run: |
           set +e
           gradle --no-daemon assembleRelease > fabrication.log 2>&1; r=$?

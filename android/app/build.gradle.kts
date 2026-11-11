@@ -28,7 +28,7 @@ android {
         buildConfigField("String", "GOOGLE_ID", "\"${(System.getenv("GOOGLE_CLIENT_ID") ?: "").trim()}\"")
         buildConfigField("String", "GOOGLE_SECRET", "\"${(System.getenv("GOOGLE_CLIENT_SECRET") ?: "").trim()}\"")
         // OneDrive, Dropbox, Box : memes applications que PhilPDF Windows (espaces colles par erreur retires)
-        for (n in listOf("ONEDRIVE", "DROPBOX", "BOX")) {
+        for (n in listOf("ONEDRIVE", "DROPBOX", "BOX", "PCLOUD")) {
             buildConfigField("String", "${n}_ID", "\"${(System.getenv("${n}_CLIENT_ID") ?: "").filterNot { it.isWhitespace() }}\"")
             buildConfigField("String", "${n}_SECRET", "\"${(System.getenv("${n}_CLIENT_SECRET") ?: "").filterNot { it.isWhitespace() }}\"")
         }

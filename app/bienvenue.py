@@ -42,7 +42,7 @@ class DialogueBienvenue(QDialog):
         f.addRow(_("Synchronisation"), self.emplacement)
         v.addLayout(f)
         n = QLabel(_("Pour retrouver sur chaque poste vos préférences, tampons, signatures, apprentissages et les fichiers "
-                     "ouverts ailleurs, choisissez un emplacement commun : un Drive (Google Drive, OneDrive, Dropbox, Box), "
+                     "ouverts ailleurs, choisissez un emplacement commun : un Drive (Google Drive, OneDrive, Dropbox, Box, pCloud), "
                      "votre NAS, un serveur FTP ou un dossier partagé. Choisissez le même sur tous vos postes. "
                      "PhilPDF n'y met que son dossier « PhilPDF », jamais vos PDF."))
         n.setWordWrap(True)

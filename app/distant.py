@@ -11,7 +11,7 @@ Chaque emplacement offre : lister(dossier), telecharger(chemin, fichier_local), 
 tester(). Les chemins distants s'ecrivent toujours avec des / et commencent par /.
 Les mots de passe ne sont jamais dans les parametres : ils vont dans le coffre du systeme (coffre.py).
 """
-import base64, contextlib, ftplib, io, json, os, posixpath, re, ssl, threading, time, urllib.error, urllib.parse, urllib.request, uuid
+import base64, contextlib, ftplib, io, json, os, posixpath, re, shutil, ssl, threading, time, urllib.error, urllib.parse, urllib.request, uuid
 import xml.etree.ElementTree as ET
 from .langue import _
 from . import coffre
@@ -25,9 +25,10 @@ TYPES = {
     "onedrive": "OneDrive",
     "dropbox": "Dropbox",
     "box": "Box",
+    "pcloud": "pCloud",
 }
 DELAI = 20
-NUAGES = ("gdrive", "onedrive", "dropbox", "box")       # Drives « en direct », autorises par OAuth
+NUAGES = ("gdrive", "onedrive", "dropbox", "box", "pcloud")       # Drives « en direct », autorises par OAuth
 
 
 class ErreurDistant(Exception):
@@ -96,6 +97,18 @@ def nouveau_compte(genre):
 def cle_compte(c):
     """Meme compte sur deux postes = meme type, meme adresse, meme utilisateur (pour la session)."""
     return f"{c.get('type')}|{(c.get('adresse') or '').lower().rstrip('/')}|{(c.get('utilisateur') or '').lower()}"
+
+
+def prefere(params):
+    """Compte prefere (Preferences > Comptes > « Preferer ») s'il existe encore, sinon None."""
+    cid = params.get("compte_prefere")
+    return next((c for c in params.get("comptes", []) if c["id"] == cid), None) if cid else None
+
+
+def comptes_ordonnes(params):
+    """Comptes dans l'ordre choisi, le compte prefere en tete : propose d'office pour enregistrer et envoyer."""
+    p = prefere(params)
+    return ([p] if p else []) + [c for c in params.get("comptes", []) if not p or c["id"] != p["id"]]
 
 
 def libelle(c):
@@ -963,8 +976,104 @@ class Box(_DriveOAuth):
         return _("Connexion réussie au Box de {qui} : {n} élément(s) à la racine.", qui=self.qui(), n=len(self.lister("/")))
 
 
+# ---------------------------------------------------------------------------------- pCloud
+PCLOUD_SCHEMA = "https"          # (les essais automatiques le remplacent par http, serveur simule)
+
+
+class Pcloud(_DriveOAuth):
+    """pCloud : API par chemins (/dossier/fichier). Le jeton pCloud ne perime pas ; il est garde dans le coffre avec
+    le serveur du compte (« api.pcloud.com » aux Etats-Unis, « eapi.pcloud.com » en Europe), sous la forme hote|jeton."""
+
+    def _acces(self):
+        if self.jeton:
+            return self.jeton
+        v = coffre.lire(self.c["id"] + ".jeton")
+        if not v:
+            raise ErreurDistant(_("{nom} n'est pas encore autorisé : cliquez sur « Autoriser l'accès » dans le compte.",
+                                  nom="pCloud"))
+        self.hote, _sep, self.jeton = v.rpartition("|")
+        self.hote = self.hote or "api.pcloud.com"
+        return self.jeton
+
+    def _hote(self):
+        self._acces()
+        return self.hote
+
+    def _api(self, methode, donnees=None, entetes=None, **params):
+        jeton = self._acces()
+        url = f"{PCLOUD_SCHEMA}://{self.hote}/{methode}?" + urllib.parse.urlencode({**params, "access_token": jeton})
+        r = urllib.request.Request(url, data=donnees, method="POST" if donnees is not None else "GET")
+        for k, v in (entetes or {}).items():
+            r.add_header(k, v)
+        self.dernier_code = None
+        with self._ouvrir(r) as f:
+            d = json.loads(f.read() or b"{}")
+        res = d.get("result", 0)
+        if res:
+            self.dernier_code = res
+            self.log(f"   pCloud : erreur {res} {d.get('error', '')}")
+            if res in (1000, 2000, 2094, 2095):              # jeton refuse ou retire
+                raise ErreurDistant(_("L'autorisation {nom} a expiré ou a été retirée ({raison}) : autorisez à nouveau.",
+                                      nom="pCloud", raison=d.get("error", res)))
+            raise ErreurDistant(_("pCloud a répondu : {raison}", raison=d.get("error", res)))
+        return d
+
+    def _contenu(self, dossier):
+        try:
+            return self._api("listfolder", path=self._cle(dossier)).get("metadata", {}).get("contents", [])
+        except ErreurDistant:
+            if self.dernier_code in (2005, 2002):            # dossier inexistant
+                return None
+            raise
+
+    def lister(self, dossier):
+        e = self._contenu(dossier)
+        if e is None:
+            raise ErreurDistant(_("Dossier inaccessible : {dossier}", dossier=dossier))
+        return sorted((Element(x["name"], _joindre(dossier, x["name"]), bool(x.get("isfolder")), int(x.get("size") or 0),
+                               x.get("modified", "")) for x in e), key=lambda e: (not e.dossier, e.nom.lower()))
+
+    def modifies(self, dossier):
+        return {x["name"]: (int(x.get("size") or 0), f"{x.get('modified', '')}|{x.get('hash', '')}", bool(x.get("isfolder")))
+                for x in (self._contenu(dossier) or [])}
+
+    def creer_dossiers(self, chemin):
+        d = posixpath.dirname(self._cle(chemin))
+        if d and d != "/":
+            self._api("createfolderifnotexists", path=d)
+
+    def telecharger(self, chemin, local):
+        try:
+            l = self._api("getfilelink", path=self._cle(chemin))
+        except ErreurDistant:
+            if self.dernier_code in (2009, 2002, 2005):
+                raise ErreurDistant(_("Fichier ou dossier introuvable sur le Drive : {chemin}", chemin=chemin))
+            raise
+        url = f"{PCLOUD_SCHEMA}://" + l["hosts"][0] + l["path"]
+        with self._ouvrir(urllib.request.Request(url)) as f, open(local, "wb") as g:
+            shutil.copyfileobj(f, g)
+
+    def envoyer(self, local, chemin):
+        dossier, nom = posixpath.split(self._cle(chemin))
+        if dossier and dossier != "/":
+            self._api("createfolderifnotexists", path=dossier)
+        with open(local, "rb") as f:
+            contenu = f.read()
+        bord = "PhilPDF" + uuid.uuid4().hex
+        corps = (f'--{bord}\r\nContent-Disposition: form-data; name="file"; filename="{nom}"\r\n'
+                 f'Content-Type: application/octet-stream\r\n\r\n'.encode("utf-8") + contenu + f"\r\n--{bord}--\r\n".encode())
+        self._api("uploadfile", corps, {"Content-Type": f"multipart/form-data; boundary={bord}"},
+                  path=dossier or "/", filename=nom, nopartial=1)
+
+    def qui(self):
+        return self._api("userinfo").get("email") or "?"
+
+    def tester(self):
+        return _("Connexion réussie au pCloud de {qui} : {n} élément(s) à la racine.", qui=self.qui(), n=len(self.lister("/")))
+
+
 CLASSES = {"reseau": Reseau, "synology": Synology, "webdav": WebDAV, "ftp": FTP, "gdrive": GoogleDrive,
-           "onedrive": OneDrive, "dropbox": Dropbox, "box": Box}
+           "onedrive": OneDrive, "dropbox": Dropbox, "box": Box, "pcloud": Pcloud}
 
 
 def emplacement(compte, mot_de_passe=None, code=None):

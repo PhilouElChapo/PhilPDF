@@ -61,7 +61,13 @@ val FOURNISSEURS = listOf(
         mapOf("token_access_type" to "offline"), "http://localhost:%d/", PORTS_FIXES, BuildConfig.DROPBOX_ID, BuildConfig.DROPBOX_SECRET),
     Fournisseur("box", "Box", "https://account.box.com/api/oauth2/authorize", "https://api.box.com/oauth2/token", "",
         emptyMap(), "http://localhost:%d/", PORTS_FIXES, BuildConfig.BOX_ID, BuildConfig.BOX_SECRET),
+    // pCloud : code + secret de l'application (pas de PKCE), jeton sans fin, serveur du compte (Europe ou Etats-Unis)
+    Fournisseur("pcloud", "pCloud", "https://my.pcloud.com/oauth2/authorize", "https://%s/oauth2_token", "",
+        emptyMap(), "http://localhost:%d/", PORTS_FIXES, BuildConfig.PCLOUD_ID, BuildConfig.PCLOUD_SECRET),
 )
+
+/** Tous les Drives relies « en direct » (meme liste que sous Windows). */
+val CLES_NUAGES = setOf("gdrive", "onedrive", "dropbox", "box", "pcloud")
 
 /** Element d'un dossier distant : id = identifiant du fournisseur (chemin pour Dropbox). */
 data class Entree(val id: String, val nom: String, val dossier: Boolean, val taille: Long, val date: String)
@@ -152,12 +158,14 @@ class Nuage private constructor(val id: String) {
                 try { ServerSocket().apply { reuseAddress = true; bind(InetSocketAddress(p), 8) } } catch (_: Exception) { null }
             } ?: throw ErreurCompte(Textes.t(R.string.err_ports, f.ports.joinToString()))
             var code: String? = null
+            var hotePcloud = "api.pcloud.com"
             var retour = ""
             try { srv.use { s0 ->
                 s0.soTimeout = 5 * 60_000
                 retour = f.retour.format(s0.localPort)
                 val params = (linkedMapOf("client_id" to f.id, "redirect_uri" to retour, "response_type" to "code",
-                    "code_challenge" to defi, "code_challenge_method" to "S256", "state" to etatAleatoire) + f.extra).toMutableMap()
+                    "state" to etatAleatoire) + f.extra).toMutableMap()
+                if (f.cle != "pcloud") { params["code_challenge"] = defi; params["code_challenge_method"] = "S256" }
                 if (f.portee.isNotEmpty()) params["scope"] = f.portee
                 if (!indice.isNullOrEmpty() && f.cle == "gdrive") params["login_hint"] = indice
                 val url = f.auth + "?" + formulaire(params)
@@ -184,7 +192,7 @@ class Nuage private constructor(val id: String) {
                         Journal.ecrire("compte", "${f.nom} : réponse du navigateur — " + when {
                             ok -> "accord reçu"; q["error"] != null -> "refus (${q["error"]})"; else -> "autre demande (${chemin.take(40)})" })
                         if (q["error"] != null) throw ErreurCompte(Textes.t(R.string.err_a_refuse, f.nom, q["error_description"] ?: q["error"]))
-                        if (ok) code = q["code"]
+                        if (ok) { code = q["code"]; hotePcloud = q["hostname"] ?: if (q["locationid"] == "2") "eapi.pcloud.com" else "api.pcloud.com" }
                     }
                 }
             } } catch (e: Exception) { AttenteConnexion.arreter(ctx); Journal.ecrire("compte", "${f.nom} : échec ($e)"); throw e }
@@ -197,6 +205,20 @@ class Nuage private constructor(val id: String) {
             AttenteConnexion.arreter(ctx)
             Journal.ecrire("compte", "${f.nom} : PhilPDF revenu au premier plan, échange du code...")
             attente(ctx.getString(R.string.connexion_en_cours))
+            if (f.cle == "pcloud") {
+                // jeton sans fin, demande au serveur du compte ; garde chiffre avec ce serveur (« hote|jeton »)
+                if (!Regex("[a-z0-9.-]+\\.pcloud\\.com").matches(hotePcloud)) throw ErreurCompte(Textes.t(R.string.err_pas_durable, f.nom))
+                val r = try { JSONObject(String(post(f.jeton.format(hotePcloud), mapOf("client_id" to f.id, "client_secret" to f.secret,
+                    "code" to code!!)))) } catch (e: Exception) { Journal.ecrire("compte", "pCloud : échange du code refusé (${e.message})"); throw e }
+                val jt = r.optString("access_token")
+                if (r.optInt("result", 0) != 0 || jt.isEmpty()) throw ErreurCompte(Textes.t(R.string.err_pas_durable, f.nom))
+                acces = jt; expire = Long.MAX_VALUE; ids.clear()
+                prefs(ctx).edit().clear().putString("fournisseur", f.cle).putString("email", indice ?: "")
+                    .putString("mode", "navigateur").putString("jeton", Coffre.chiffrer("$hotePcloud|$jt")).apply()
+                enregistrer(ctx, this@Nuage)
+                Journal.ecrire("compte", "pCloud : relié ($hotePcloud)")
+                return@withContext
+            }
             val champs = mutableMapOf("code" to code!!, "client_id" to f.id, "redirect_uri" to retour,
                 "grant_type" to "authorization_code", "code_verifier" to verif)
             if (f.secret.isNotEmpty()) champs["client_secret"] = f.secret
@@ -238,6 +260,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 val f = fournisseur(ctx)
                 val r = prefs(ctx).getString("jeton", null)?.let { Coffre.dechiffrer(it) }
                     ?: throw ErreurCompte(Textes.t(R.string.err_autorisation_perdue, f.nom))
+                if (f.cle == "pcloud") { expire = Long.MAX_VALUE; acces = r.substringAfter('|'); return@withContext r.substringAfter('|') }
                 val champs = mutableMapOf("client_id" to f.id, "refresh_token" to r, "grant_type" to "refresh_token")
                 if (f.secret.isNotEmpty()) champs["client_secret"] = f.secret
                 val o = try { JSONObject(String(post(f.jeton, champs))) } catch (e: Exception) {
@@ -305,6 +328,44 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
         return JSONObject(String(b))
     }
 
+    // ------------------------------------------------------------ pCloud (API par chemins, reponse {"result": 0, ...})
+    private fun hote(ctx: Context): String =
+        prefs(ctx).getString("jeton", null)?.let { Coffre.dechiffrer(it) }?.substringBefore('|', "api.pcloud.com") ?: "api.pcloud.com"
+
+    /** Appel pCloud ; null si le fichier ou dossier n'existe pas. */
+    private suspend fun pc(ctx: Context, methode: String, params: Map<String, String> = emptyMap(), corps: ByteArray? = null,
+                           entetes: Map<String, String> = emptyMap()): JSONObject? {
+        val j = jeton(ctx)
+        val url = "https://${hote(ctx)}/$methode?" + formulaire(params + ("access_token" to j))
+        val (code, b, _) = appel(ctx, if (corps != null) "POST" else "GET", url, corps, entetes)
+        if (code !in 200..299) throw ErreurCompte(Textes.t(R.string.err_code, "pCloud", code, String(b).take(200)))
+        val o = JSONObject(String(b))
+        return when (val r = o.optInt("result", 0)) {
+            0 -> o
+            2002, 2005, 2009 -> null
+            else -> { Journal.ecrire("compte", "pCloud : $methode refusé ($r ${o.optString("error")})")
+                throw ErreurCompte(Textes.t(R.string.err_code, "pCloud", r, o.optString("error").take(200))) }
+        }
+    }
+
+    private suspend fun pcEnvoyer(ctx: Context, dossier: String, nom: String, octets: ByteArray): Triple<Int, ByteArray, String?> {
+        if (dossier.isNotEmpty() && dossier != "/") pc(ctx, "createfolderifnotexists", mapOf("path" to dossier))
+        val bord = "PhilPDF" + java.util.UUID.randomUUID().toString().replace("-", "")
+        val corps = ("--$bord\r\nContent-Disposition: form-data; name=\"file\"; filename=\"${nom.replace("\"", "")}\"\r\n" +
+            "Content-Type: application/octet-stream\r\n\r\n").toByteArray() + octets + "\r\n--$bord--\r\n".toByteArray()
+        pc(ctx, "uploadfile", mapOf("path" to dossier.ifEmpty { "/" }, "filename" to nom, "nopartial" to "1"), corps,
+            mapOf("Content-Type" to "multipart/form-data; boundary=$bord"))
+        return Triple(200, ByteArray(0), null)
+    }
+
+    private suspend fun pcContenu(ctx: Context, chemin: String): ByteArray? {
+        val l = pc(ctx, "getfilelink", mapOf("path" to chemin)) ?: return null
+        val url = "https://" + l.getJSONArray("hosts").getString(0) + l.getString("path")
+        return withContext(Dispatchers.IO) { reessayer { URL(url).openStream().use { it.readBytes() } } }
+    }
+
+    private suspend fun pcExiste(ctx: Context, chemin: String): Boolean = pc(ctx, "stat", mapOf("path" to chemin)) != null
+
     // ------------------------------------------------------------ profil (pastille en haut a droite)
     suspend fun profil(ctx: Context) = withContext(Dispatchers.IO) {
         var nom: String? = null; var mail: String? = null; var image: ByteArray? = null
@@ -323,6 +384,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 nom = u.optJSONObject("name")?.optString("display_name"); mail = u.optString("email"); image = publique(u.optString("profile_photo_url"))
             }
             "box" -> json(ctx, "GET", "$BOX/users/me?fields=name,login")?.let { u -> nom = u.optString("name"); mail = u.optString("login") }
+            "pcloud" -> pc(ctx, "userinfo")?.let { u -> mail = u.optString("email") }
         }
         prefs(ctx).edit().apply {
             nom?.takeIf { it.isNotEmpty() }?.let { putString("nom", it) }
@@ -342,7 +404,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
     /** Google Drive : l'autorisation limitee (drive.file) ne montre que les fichiers de PhilPDF ; le reste passe par Android. */
     fun parcourable(ctx: Context) = fournisseur(ctx).cle != "gdrive"
 
-    fun racineParcours(ctx: Context): String = when (fournisseur(ctx).cle) { "dropbox" -> ""; "box" -> "0"; else -> "root" }
+    fun racineParcours(ctx: Context): String = when (fournisseur(ctx).cle) { "dropbox", "pcloud" -> ""; "box" -> "0"; else -> "root" }
 
     /** Dossiers et PDF d'un dossier (les autres fichiers ne sont pas montres). */
     suspend fun lister(ctx: Context, dossier: String): List<Entree> {
@@ -383,6 +445,13 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 }
             }
         }
+        if (fournisseur(ctx).cle == "pcloud") {
+            val a = pc(ctx, "listfolder", mapOf("path" to dossier.ifEmpty { "/" }))?.optJSONObject("metadata")?.optJSONArray("contents") ?: JSONArray()
+            for (i in 0 until a.length()) a.getJSONObject(i).let { x ->
+                out += Entree(dossier.trimEnd('/') + "/" + x.optString("name"), x.optString("name"), x.optBoolean("isfolder"),
+                    x.optLong("size"), x.optString("modified"))
+            }
+        }
         return out.filter { it.dossier || it.nom.lowercase().endsWith(".pdf") }
             .sortedWith(compareBy<Entree>({ !it.dossier }, { it.nom.lowercase() }))
     }
@@ -405,7 +474,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
             "gdrive" -> { var x: String? = "root"; for (n in parts) x = x?.let { gEnfant(ctx, it, n)?.getString("id") }; x }
             "onedrive" -> json(ctx, "GET", "$GRAPH/me/drive/root:/" + parts.joinToString("/") { enc(it) } + "?\$select=id")
                 ?.optString("id")?.takeIf { it.isNotEmpty() }
-            "dropbox" -> "/" + parts.joinToString("/")
+            "dropbox", "pcloud" -> "/" + parts.joinToString("/")
             "box" -> { var x: String? = "0"; for (n in parts) x = x?.let { bEnfant(ctx, it, n) }; x }
             else -> null
         }
@@ -419,6 +488,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
         "dropbox" -> telecharger(ctx, "POST", "$DBX_CONTENU/files/download", ByteArray(0),
             mapOf("Dropbox-API-Arg" to ascii(JSONObject().put("path", fid).toString()), "Content-Type" to "text/plain; charset=dropbox-cors-hack"))
         "box" -> telecharger(ctx, "GET", "$BOX/files/$fid/content")
+        "pcloud" -> pcContenu(ctx, fid)
         else -> null
     }
 
@@ -436,6 +506,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                     "Content-Type: application/pdf\r\n\r\n").toByteArray() + octets + "\r\n--$bord--\r\n".toByteArray()
                 appel(ctx, "POST", "$BOX_ENVOI/files/$fid/content", corps, mapOf("Content-Type" to "multipart/form-data; boundary=$bord"))
             }
+            "pcloud" -> pcEnvoyer(ctx, fid.substringBeforeLast('/', ""), fid.substringAfterLast('/'), octets)
             else -> Triple(0, ByteArray(0), null)
         }
         if (code !in 200..299) {
@@ -521,6 +592,13 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 if (c2 !in 200..299) erreur("lien", c2, b2)
                 JSONObject(String(b2)).getJSONObject("shared_link").getString("url")
             }
+            "pcloud" -> {
+                var n = nom; var i = 2
+                while (pcExiste(ctx, "$racine/Partages/$n")) { n = nom.substringBeforeLast('.') + " ($i)." + nom.substringAfterLast('.', "pdf"); i++ }
+                pcEnvoyer(ctx, "$racine/Partages", n, octets)
+                pc(ctx, "getfilepublink", mapOf("path" to "$racine/Partages/$n"))?.optString("link")?.takeIf { it.isNotEmpty() }
+                    ?: throw ErreurCompte(Textes.t(R.string.err_pas_de_lien, f.nom))
+            }
             else -> throw ErreurCompte(Textes.t(R.string.err_pas_de_lien, f.nom))
         }
         Journal.ecrire("partage", "${f.nom} : $nom déposé dans PhilPDF/Partages, lien créé")
@@ -565,6 +643,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                 appel(ctx, "POST", if (existant != null) "$BOX_ENVOI/files/$existant/content" else "$BOX_ENVOI/files/content", corps,
                     mapOf("Content-Type" to "multipart/form-data; boundary=$bord"))
             }
+            "pcloud" -> pcEnvoyer(ctx, "$racine/$dossier", nom, octets)
             else -> Triple(0, ByteArray(0), null)
         }
         if (code !in 200..299) throw ErreurCompte(Textes.t(R.string.err_depot_refuse, f.nom, nom, code, String(b).take(160)))
@@ -618,6 +697,11 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                     "Content-Type: application/octet-stream\r\n\r\n").toByteArray() + octets + "\r\n--$bord--\r\n".toByteArray()
                 appel(ctx, "POST", "$BOX_ENVOI/files/content", corps, mapOf("Content-Type" to "multipart/form-data; boundary=$bord"))
             }
+            "pcloud" -> {
+                val d = "/" + parts.joinToString("/")
+                nom = libre { pcExiste(ctx, d.trimEnd('/') + "/" + it) }
+                pcEnvoyer(ctx, d, nom, octets)
+            }
             else -> Triple(0, ByteArray(0), null)
         }
         if (code !in 200..299) throw ErreurCompte(Textes.t(R.string.err_depot_refuse, f.nom, nom, code, String(b).take(160)))
@@ -646,6 +730,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                     (0 until a.length()).mapNotNull { a.getJSONObject(it).optJSONObject("metadata")?.optJSONObject("metadata") }
                         .firstOrNull { it.optString(".tag") == "folder" && it.optString("name") == "PhilPDF" }?.optString("path_lower")
                 }
+            "pcloud" -> if (pcExiste(ctx, "/PhilPDF")) "/PhilPDF" else null
             "box" -> bEnfant(ctx, "0", "PhilPDF")
                 ?: json(ctx, "GET", "$BOX/search?query=PhilPDF&type=folder&content_types=name&fields=id,name")?.optJSONArray("entries")?.let { a ->
                     (0 until a.length()).map { a.getJSONObject(it) }.firstOrNull { it.optString("name") == "PhilPDF" }?.optString("id")
@@ -664,7 +749,7 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
         return when (fournisseur(ctx).cle) {
             "gdrive" -> contenuFichier(ctx, idParChemin(rel) { p, n -> gEnfant(ctx, p, n)?.getString("id") } ?: return null)
             "onedrive" -> telecharger(ctx, "GET", "$GRAPH/me/drive/items/$racine:/" + rel.split("/").joinToString("/") { enc(it) } + ":/content")
-            "dropbox" -> contenuFichier(ctx, "$racine/$rel")
+            "dropbox", "pcloud" -> contenuFichier(ctx, "$racine/$rel")
             "box" -> contenuFichier(ctx, idParChemin(rel) { p, n -> bEnfant(ctx, p, n) } ?: return null)
             else -> null
         }
@@ -1030,7 +1115,7 @@ object AutresPostes {
                     val d = e.optJSONObject("distant") ?: continue
                     val genre = d.optString("cle").substringBefore("|")
                     val chemin = d.optString("chemin")
-                    if (genre !in setOf("gdrive", "onedrive", "dropbox", "box") || chemin.isEmpty()) continue
+                    if (genre !in CLES_NUAGES || chemin.isEmpty()) continue
                     val lieu = d.optString("lieu")
                     val memes = comptes.filter { it.fournisseur(ctx).cle == genre }
                     val c = memes.firstOrNull { n -> n.email(ctx)?.let { lieu.contains(it, true) } == true } ?: memes.singleOrNull() ?: continue

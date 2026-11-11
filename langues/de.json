@@ -1048,7 +1048,6 @@
  "Poste : <b>{machine}</b>. ": "Rechner: <b>{machine}</b>. ",
  "Pour accord": "Einverstanden",
  "POUR ACCORD": "EINVERSTANDEN",
- "Pour retrouver sur chaque poste vos préférences, tampons, signatures, apprentissages et les fichiers ouverts ailleurs, choisissez un emplacement commun : un Drive (Google Drive, OneDrive, Dropbox, Box), votre NAS, un serveur FTP ou un dossier partagé. Choisissez le même sur tous vos postes. PhilPDF n'y met que son dossier « PhilPDF », jamais vos PDF.": "Um auf jedem Rechner Ihre Einstellungen, Stempel, Unterschriften, Lerndaten und die anderswo geöffneten Dateien wiederzufinden, wählen Sie einen gemeinsamen Ort: ein Drive (Google Drive, OneDrive, Dropbox, Box), Ihr NAS, einen FTP-Server oder einen freigegebenen Ordner. Wählen Sie auf allen Rechnern denselben. PhilPDF legt dort nur seinen Ordner „PhilPDF“ ab, nie Ihre PDFs.",
  "Pour un ancien PC : il disparaît de la liste, de la session et des réglages partagés": "Für einen alten PC: er verschwindet aus der Liste, der Sitzung und den gemeinsamen Einstellungen",
  "Pour utiliser l'assistant IA, renseignez votre clef Claude ou Gemini dans Edition › Préférences › IA.\n\nRien n'est envoyé sans votre clic, et PhilPDF vous prévient si le document contient des données sensibles.": "Um den KI-Assistenten zu nutzen, geben Sie Ihren Claude- oder Gemini-Schlüssel unter Bearbeiten › Einstellungen › KI ein.\n\nNichts wird ohne Ihren Klick gesendet, und PhilPDF warnt Sie, wenn das Dokument sensible Daten enthält.",
  "Pour {x}, Google doit vous redemander l'autorisation.\nGoogle affichera « application non validée » : cliquez sur « Paramètres avancés », puis « Accéder à PhilPDF ».\n\nAutoriser maintenant ?": "Um {x}, muss Google Sie erneut um Zustimmung bitten.\nGoogle zeigt „nicht verifizierte App“: klicken Sie auf „Erweitert“ und dann „Zu PhilPDF“.\n\nJetzt zustimmen?",
@@ -3047,5 +3046,15 @@
  "Commentaire (facultatif)": "Kommentar (optional)",
  "Réponse de l'IA envoyée": "Gesendete KI-Antwort",
  "Envoi du signalement...": "Meldung wird gesendet...",
- "Le signalement n'a pas pu partir (pas de connexion ?). Réessayez plus tard.": "Die Meldung konnte nicht gesendet werden (keine Verbindung?). Später erneut versuchen."
+ "Le signalement n'a pas pu partir (pas de connexion ?). Réessayez plus tard.": "Die Meldung konnte nicht gesendet werden (keine Verbindung?). Später erneut versuchen.",
+ "pCloud en direct (serveurs en Europe ou aux Etats-Unis) : votre navigateur s'ouvre, vous autorisez PhilPDF, c'est tout.": "pCloud direkt (Server in Europa oder in den USA): Ihr Browser öffnet sich, Sie erlauben PhilPDF den Zugriff, fertig.",
+ "Compte proposé d'office pour enregistrer, envoyer et classer vos PDF (avant les autres comptes reliés). Un second clic retire ce choix.": "Konto, das zum Speichern, Senden und Ablegen Ihrer PDFs zuerst vorgeschlagen wird (vor den anderen verbundenen Konten). Ein zweiter Klick hebt die Wahl auf.",
+ "Préféré": "Bevorzugt",
+ "Cliquez d'abord sur un compte de la liste.": "Klicken Sie zuerst auf ein Konto in der Liste.",
+ "préféré pour enregistrer et envoyer": "bevorzugt zum Speichern und Senden",
+ "préféré": "bevorzugt",
+ "Connexion réussie au pCloud de {qui} : {n} élément(s) à la racine.": "Verbindung mit dem pCloud von {qui} hergestellt: {n} Element(e) im Stammordner.",
+ "pCloud a répondu : {raison}": "pCloud antwortete: {raison}",
+ "Serveur pCloud inattendu : {hote}": "Unerwarteter pCloud-Server: {hote}",
+ "Pour retrouver sur chaque poste vos préférences, tampons, signatures, apprentissages et les fichiers ouverts ailleurs, choisissez un emplacement commun : un Drive (Google Drive, OneDrive, Dropbox, Box, pCloud), votre NAS, un serveur FTP ou un dossier partagé. Choisissez le même sur tous vos postes. PhilPDF n'y met que son dossier « PhilPDF », jamais vos PDF.": "Um auf jedem Rechner Ihre Einstellungen, Stempel, Unterschriften, Lerndaten und die anderswo geöffneten Dateien wiederzufinden, wählen Sie einen gemeinsamen Ort: ein Drive (Google Drive, OneDrive, Dropbox, Box, pCloud), Ihr NAS, einen FTP-Server oder einen freigegebenen Ordner. Wählen Sie auf allen Rechnern denselben. PhilPDF legt dort nur seinen Ordner „PhilPDF“ ab, nie Ihre PDFs."
 }

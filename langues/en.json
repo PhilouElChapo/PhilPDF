@@ -1048,7 +1048,6 @@
  "Poste : <b>{machine}</b>. ": "Computer: <b>{machine}</b>. ",
  "Pour accord": "For approval",
  "POUR ACCORD": "FOR APPROVAL",
- "Pour retrouver sur chaque poste vos préférences, tampons, signatures, apprentissages et les fichiers ouverts ailleurs, choisissez un emplacement commun : un Drive (Google Drive, OneDrive, Dropbox, Box), votre NAS, un serveur FTP ou un dossier partagé. Choisissez le même sur tous vos postes. PhilPDF n'y met que son dossier « PhilPDF », jamais vos PDF.": "To find your preferences, stamps, signatures, learning and the files open elsewhere on every computer, choose a common location: a Drive (Google Drive, OneDrive, Dropbox, Box), your NAS, an FTP server or a shared folder. Choose the same one on all your computers. PhilPDF only puts its “PhilPDF” folder there, never your PDFs.",
  "Pour un ancien PC : il disparaît de la liste, de la session et des réglages partagés": "For an old PC: it disappears from the list, the session and the shared settings",
  "Pour utiliser l'assistant IA, renseignez votre clef Claude ou Gemini dans Edition › Préférences › IA.\n\nRien n'est envoyé sans votre clic, et PhilPDF vous prévient si le document contient des données sensibles.": "To use the AI assistant, enter your Claude or Gemini key in Edit › Preferences › AI.\n\nNothing is sent without your click, and PhilPDF warns you if the document contains sensitive data.",
  "Pour {x}, Google doit vous redemander l'autorisation.\nGoogle affichera « application non validée » : cliquez sur « Paramètres avancés », puis « Accéder à PhilPDF ».\n\nAutoriser maintenant ?": "To {x}, Google must ask you for authorisation again.\nGoogle will show “unverified app”: click “Advanced”, then “Go to PhilPDF”.\n\nAuthorise now?",
@@ -3056,5 +3055,15 @@
  "Commentaire (facultatif)": "Comment (optional)",
  "Réponse de l'IA envoyée": "AI answer sent",
  "Envoi du signalement...": "Sending the report...",
- "Le signalement n'a pas pu partir (pas de connexion ?). Réessayez plus tard.": "The report could not be sent (no connection?). Try again later."
+ "Le signalement n'a pas pu partir (pas de connexion ?). Réessayez plus tard.": "The report could not be sent (no connection?). Try again later.",
+ "pCloud en direct (serveurs en Europe ou aux Etats-Unis) : votre navigateur s'ouvre, vous autorisez PhilPDF, c'est tout.": "pCloud directly (servers in Europe or the United States): your browser opens, you authorise PhilPDF, that's all.",
+ "Compte proposé d'office pour enregistrer, envoyer et classer vos PDF (avant les autres comptes reliés). Un second clic retire ce choix.": "Account offered first to save, send and file your PDFs (before the other linked accounts). Click again to remove this choice.",
+ "Préféré": "Preferred",
+ "Cliquez d'abord sur un compte de la liste.": "First click an account in the list.",
+ "préféré pour enregistrer et envoyer": "preferred for saving and sending",
+ "préféré": "preferred",
+ "Connexion réussie au pCloud de {qui} : {n} élément(s) à la racine.": "Connected to {qui}'s pCloud: {n} item(s) at the root.",
+ "pCloud a répondu : {raison}": "pCloud replied: {raison}",
+ "Serveur pCloud inattendu : {hote}": "Unexpected pCloud server: {hote}",
+ "Pour retrouver sur chaque poste vos préférences, tampons, signatures, apprentissages et les fichiers ouverts ailleurs, choisissez un emplacement commun : un Drive (Google Drive, OneDrive, Dropbox, Box, pCloud), votre NAS, un serveur FTP ou un dossier partagé. Choisissez le même sur tous vos postes. PhilPDF n'y met que son dossier « PhilPDF », jamais vos PDF.": "To find your preferences, stamps, signatures, learning and the files open elsewhere on every computer, choose a common location: a Drive (Google Drive, OneDrive, Dropbox, Box, pCloud), your NAS, an FTP server or a shared folder. Choose the same one on all your computers. PhilPDF only puts its “PhilPDF” folder there, never your PDFs."
 }
