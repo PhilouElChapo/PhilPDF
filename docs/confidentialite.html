@@ -15,7 +15,7 @@ ul{padding-left:20px}a{color:var(--rouge)}footer{color:var(--gris);font-size:14p
 <p class="langue"><a href="#en">English</a></p>
 <p class="marque"><b>PhilFactory</b> · PhilPDF</p>
 <h1>Règles de confidentialité</h1>
-<p class="sous">PhilPDF pour Windows, Linux et Android · mise à jour : 4 novembre 2026</p>
+<p class="sous">PhilPDF pour Windows, Linux et Android · mise à jour : 11 novembre 2026</p>
 <div class="carte"><h2 style="margin-top:0">En bref</h2>
 <p>PhilPDF fonctionne sur votre appareil. PhilFactory ne reçoit, ne collecte et ne conserve aucune de vos données :
 il n'y a ni serveur PhilPDF, ni compte PhilPDF, ni statistique d'utilisation, ni publicité, ni pisteur.</p></div>
@@ -39,9 +39,21 @@ Ils ne sont transmis qu'au service concerné.</li>
 exigences d'usage limité (Limited Use). Elles ne sont ni vendues, ni partagées, ni utilisées pour de la publicité ou pour entraîner des modèles d'IA.</p>
 <h2>NAS, FTP, WebDAV</h2>
 <p>Les adresses de vos serveurs sont enregistrées sur votre appareil ; les mots de passe vont dans le coffre du système, jamais en clair.</p>
-<h2>Assistant IA (facultatif, Windows et Linux)</h2>
-<p>Si vous l'utilisez, le texte concerné est envoyé à Claude (Anthropic) ou Gemini (Google) avec votre propre clef API, uniquement
-quand vous cliquez, et selon les règles de ces services. Rien n'est envoyé sinon.</p>
+<h2>Intelligence artificielle (facultative, Windows, Linux et Android)</h2>
+<p>Les fonctions d'IA (résumer, expliquer, traduire, améliorer un texte, remplir un formulaire, renommer et classer, extraire des
+données, proposer un nom après une numérisation, nettoyer une page avec Magnificence IA) ne servent que si vous les lancez.
+Elles passent par Claude (Anthropic) ou Gemini (Google), avec <b>votre propre clef API</b> : PhilPDF envoie directement, de votre appareil
+au service choisi, ce dont la fonction a besoin : le texte du document ou de la sélection, l'image de la page pour Magnificence IA, et pour
+« Remplir avec l'IA » la liste des champs et les informations que vous tapez. Rien ne passe par PhilFactory, et rien n'est envoyé sans
+votre geste. Avant chaque envoi, PhilPDF vous signale les données sensibles repérées (IBAN, carte bancaire, numéro de sécurité sociale,
+numéro fiscal, mot de passe…) et vous pouvez renoncer.</p>
+<p>Ces envois suivent les règles du service choisi (<a href="https://www.anthropic.com/legal/privacy">Anthropic</a>,
+<a href="https://ai.google.dev/gemini-api/terms">Gemini API</a>) ; par exemple, l'offre gratuite de Gemini peut utiliser les contenus
+envoyés pour améliorer les produits de Google. Vos clefs API restent sur votre appareil (coffre du système, chiffrées par le Keystore
+d'Android sur le téléphone). Les informations que vous tapez pour « Remplir avec l'IA » ne sont gardées sur l'appareil que si vous
+cochez la case prévue.</p>
+<p>Les réponses de l'IA peuvent être inexactes : PhilPDF vous les montre toujours avant de les appliquer. Pour signaler un résultat
+choquant ou inapproprié, écrivez à <a href="mailto:PhilFactory.Dev@gmail.com">PhilFactory.Dev@gmail.com</a>.</p>
 <h2>Reconnaissance du texte (OCR)</h2>
 <p>La lecture du texte des scans se fait sur votre appareil (Tesseract), rien n'est envoyé. Sur Android, si vous choisissez une autre
 langue que le français, son fichier de langue est téléchargé une seule fois depuis le projet Tesseract sur GitHub, sans aucune information
@@ -74,8 +86,16 @@ the service concerned. PhilPDF's use and transfer of information received from G
 Limited Use requirements; this data is never sold, shared, used for advertising or to train AI models.</p>
 <p>Server passwords (NAS, FTP, WebDAV) are kept in the system vault, never in plain text. Text recognition (OCR) runs on
 your device; on Android, a language other than French is downloaded once from the Tesseract project on GitHub, without any information
-about you or your documents. The optional AI assistant (Windows, Linux) sends text
-to Claude or Gemini with your own API key only when you click. A local log of connections and updates, with secrets masked, stays on your
+about you or your documents. Optional AI features (Windows, Linux and Android: summarise,
+explain, translate, improve text, fill in a form, rename and file, extract data, suggest a name after a scan, clean a page with
+Magnificence AI) run only when you start them. They send what the feature needs (document or selected text, the page image for
+Magnificence AI, and for "Fill in with AI" the field list and the information you type) directly from your device to Claude (Anthropic)
+or Gemini (Google) with <b>your own API key</b>; nothing goes through PhilFactory. Sensitive data found (IBAN, card, social security or
+tax number, password…) is flagged before sending and you can cancel. These transfers follow the chosen service's terms
+(<a href="https://www.anthropic.com/legal/privacy">Anthropic</a>, <a href="https://ai.google.dev/gemini-api/terms">Gemini API</a>);
+for example, Gemini's free tier may use submitted content to improve Google's products. API keys stay on your device (system vault,
+Android Keystore). AI answers may be wrong and are always shown before being applied; to report an offensive or inappropriate result,
+write to <a href="mailto:PhilFactory.Dev@gmail.com">PhilFactory.Dev@gmail.com</a>. A local log of connections and updates, with secrets masked, stays on your
 device unless you share it. Update checks read GitHub's public release page; no personal data is sent. Uninstalling PhilPDF deletes
 everything it stored on the device; the "PhilPDF" folder in your Drive is yours to delete. PhilPDF is not directed at children and collects
 no data from anyone. Contact: <a href="mailto:PhilFactory.Dev@gmail.com">PhilFactory.Dev@gmail.com</a> or the <a href="https://github.com/PhilouElChapo/PhilPDF/issues">project contact page</a> on GitHub.</p>
