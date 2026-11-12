@@ -581,7 +581,8 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
     /** Depose le PDF dans PhilPDF/Partages du compte et renvoie un lien public (lecture seule), a mettre dans un e-mail. */
     suspend fun partagerParLien(ctx: Context, nom: String, octets: ByteArray): String {
         val f = fournisseur(ctx)
-        if (ids[""] == null && !trouverRacine(ctx)) throw ErreurCompte(Textes.t(R.string.err_dossier_philpdf_windows, f.nom))
+        // compte sans dossier PhilPDF (il ne sert pas a la synchronisation) : on le cree a la racine
+        if (ids[""] == null && !trouverRacine(ctx) && !creerRacine(ctx)) throw ErreurCompte(Textes.t(R.string.err_dossier_creer, f.nom, "PhilPDF"))
         val racine = ids[""]!!
         fun erreur(etape: String, code: Int, b: ByteArray): Nothing {
             Journal.ecrire("partage", "${f.nom} : $etape refusé ($code) ${String(b).take(200)}")
@@ -800,6 +801,25 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
             else -> null
         }
         if (r.isNullOrEmpty()) { Journal.ecrire("synchro", "${fournisseur(ctx).nom} : aucun dossier PhilPDF"); return false }
+        ids[""] = r
+        return true
+    }
+
+    /** Cree le dossier PhilPDF a la racine du compte (partage par lien depuis un compte qui ne synchronise pas). */
+    suspend fun creerRacine(ctx: Context): Boolean {
+        val r: String? = when (fournisseur(ctx).cle) {
+            "gdrive" -> json(ctx, "POST", "$GOOGLE/files?fields=id", JSONObject().put("name", "PhilPDF")
+                .put("mimeType", "application/vnd.google-apps.folder").put("parents", JSONArray().put("root")))?.optString("id")
+            "onedrive" -> json(ctx, "POST", "$GRAPH/me/drive/root/children", JSONObject().put("name", "PhilPDF")
+                .put("folder", JSONObject()).put("@microsoft.graph.conflictBehavior", "replace"))?.optString("id")
+            "dropbox" -> json(ctx, "POST", "$DBX/files/create_folder_v2", JSONObject().put("path", "/PhilPDF").put("autorename", false))
+                ?.optJSONObject("metadata")?.optString("path_lower")
+            "box" -> json(ctx, "POST", "$BOX/folders", JSONObject().put("name", "PhilPDF").put("parent", JSONObject().put("id", "0")))?.optString("id")
+            "pcloud", "kdrive", "webdav" -> "/PhilPDF"      // les dossiers manquants sont crees a l'envoi
+            else -> null
+        }
+        if (r.isNullOrEmpty()) return false
+        Journal.ecrire("partage", "${fournisseur(ctx).nom} : dossier PhilPDF créé")
         ids[""] = r
         return true
     }

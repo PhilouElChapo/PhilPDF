@@ -948,4 +948,10 @@
     <string name="empl_enregistre">Enregistré sur %1$s : %2$s</string>
     <string name="lien_changer">Changer le compte des liens</string>
     <string name="lien_aucun_compte">Aucun de vos comptes reliés ne sait faire de lien de partage (pCloud, kDrive et WebDAV par mot de passe ne le peuvent pas) : reliez Google Drive, Dropbox, Box ou OneDrive.</string>
+    <string name="ouvrir_cloud">Ouvrir depuis un compte cloud</string>
+    <string name="changer_compte">Autre compte</string>
+    <string name="enregistrer_cloud">Enregistrer dans le cloud (%1$s)</string>
+    <string name="lien_drive">Envoyer un lien Google Drive</string>
+    <string name="lien_autre">Envoyer un lien par un autre compte</string>
+    <string name="lien_autre_aide">OneDrive, Dropbox, Box… : le PDF est déposé dans PhilPDF/Partages de ce compte (dossier créé s\'il manque) et le lien part dans le message de la même façon. Le lien est aussi copié.</string>
 </resources>

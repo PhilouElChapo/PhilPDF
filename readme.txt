@@ -10,6 +10,15 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.27.0
+- Ouvrir et Enregistrer sous reviennent au selecteur d'Android direct, comme avant (il garde votre tri et votre
+  dernier dossier).
+- Petit bouton nuage a cote de votre avatar sur l'Accueil : ouvre directement votre compte prefere (pCloud, kDrive,
+  WebDAV...) ; « Autre compte » en haut de la liste passe a un autre compte relie.
+- Enregistrer : nouveau bouton « Enregistrer dans le cloud », qui ouvre le compte prefere (choix du dossier et du nom).
+- Partager : « Envoyer un lien Google Drive » en direct, et « Envoyer un lien par un autre compte » (OneDrive, Dropbox,
+  Box). Le lien part dans le message de la meme facon ; le dossier PhilPDF/Partages est cree s'il manque.
+
 1.26.0
 - Ouvrir et Enregistrer sous proposent maintenant : « Ce telephone ou une autre appli » (le selecteur d'Android) ou
   chacun de vos comptes relies dans PhilPDF (pCloud, kDrive, WebDAV, OneDrive, Dropbox, Box), parcourus dans PhilPDF :

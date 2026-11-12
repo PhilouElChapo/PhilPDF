@@ -437,39 +437,6 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
     }
 }
 
-/** Ouvrir / Enregistrer sous : « Ce telephone ou une autre appli » (selecteur d'Android) ou l'un des comptes relies
- *  dans PhilPDF (pCloud, kDrive, WebDAV... que le selecteur d'Android ne connait pas), compte prefere en tete. */
-@Composable
-fun ChoixEmplacement(titre: String, telephone: () -> Unit, compte: (Nuage) -> Unit, fermer: () -> Unit) {
-    val ctx = LocalContext.current
-    val comptes = remember { comptesParcourables(ctx) }
-    AlertDialog(onDismissRequest = fermer, title = { Text(titre) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                Row(Modifier.fillMaxWidth().clickable { fermer(); telephone() }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icones.get("ouvrir", Color(0xFFE0A100)), null, Modifier.size(32.dp), tint = Color.Unspecified)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(stringResource(R.string.empl_telephone), fontWeight = FontWeight.SemiBold)
-                        Text(stringResource(R.string.empl_telephone_aide), fontSize = 12.sp, color = Color.Gray)
-                    }
-                }
-                comptes.forEach { c ->
-                    HorizontalDivider(color = Color(0xFFEEEEEE))
-                    Row(Modifier.fillMaxWidth().clickable { fermer(); compte(c) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        AvatarCompte(c, 0, 32.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(c.fournisseur(ctx).nom + if (Nuage.estPrefere(ctx, c)) "  ★" else "", fontWeight = FontWeight.SemiBold)
-                            Text(c.libelle(ctx), fontSize = 12.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {}, dismissButton = { TextButton(onClick = fermer) { Text(stringResource(R.string.annuler)) } })
-}
-
 /** Comptes relies que PhilPDF sait parcourir lui-meme (Google Drive passe par le selecteur d'Android), prefere en tete. */
 fun comptesParcourables(ctx: android.content.Context): List<Nuage> =
     Nuage.liste(ctx).filter { it.connecte(ctx) && it.parcourable(ctx) }.sortedBy { if (Nuage.estPrefere(ctx, it)) 0 else 1 }
@@ -478,18 +445,22 @@ fun comptesParcourables(ctx: android.content.Context): List<Nuage> =
  *  a y enregistrer (un fichier du meme nom n'est jamais remplace : « (2) » est ajoute). */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun EcranFichiers(n: Nuage, fermer: () -> Unit, ouvrir: (Uri) -> Unit,
-                  enregistrer: ((dossier: String, nom: String) -> Unit)? = null, nomDefaut: String = "") {
+fun EcranFichiers(depart: Nuage, fermer: () -> Unit, ouvrir: (Uri) -> Unit,
+                  enregistrer: ((compte: Nuage, dossier: String, nom: String) -> Unit)? = null, nomDefaut: String = "") {
     var nomFichier by remember { mutableStateOf(nomDefaut) }
     val ctx = LocalContext.current
     val portee = rememberCoroutineScope()
+    // compte affiche (le prefere au depart) ; un appui sur son nom en haut passe a un autre compte relie
+    var n by remember { mutableStateOf(depart) }
+    val autresComptes = remember { comptesParcourables(ctx) }
+    var menuComptes by remember { mutableStateOf(false) }
     var chemin by remember { mutableStateOf(listOf(n.racineParcours(ctx) to n.fournisseur(ctx).nom)) }
     var entrees by remember { mutableStateOf<List<Entree>?>(null) }
     var erreur by remember { mutableStateOf<String?>(null) }
     var occupe by remember { mutableStateOf<String?>(null) }
     val txtTelechargement = stringResource(R.string.telechargement)
 
-    LaunchedEffect(chemin) {
+    LaunchedEffect(n, chemin) {
         entrees = null; erreur = null
         try { entrees = n.lister(ctx, chemin.last().first) } catch (e: Exception) { erreur = e.message ?: e.javaClass.simpleName }
     }
@@ -501,11 +472,30 @@ fun EcranFichiers(n: Nuage, fermer: () -> Unit, ouvrir: (Uri) -> Unit,
             Column(Modifier.fillMaxSize().padding(vertical = 10.dp)) {
                 Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { remonter() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.retour)) }
-                    AvatarCompte(n, 0, 28.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(chemin.last().second, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(n.libelle(ctx), fontSize = 12.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(Modifier.weight(1f).clickable(enabled = autresComptes.size > 1 && occupe == null) { menuComptes = true },
+                        verticalAlignment = Alignment.CenterVertically) {
+                        AvatarCompte(n, 0, 28.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(chemin.last().second, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(n.libelle(ctx), fontSize = 12.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        if (autresComptes.size > 1) Box {
+                            Text(stringResource(R.string.changer_compte) + " ▾", fontSize = 12.sp, color = ROUGE, modifier = Modifier.padding(horizontal = 8.dp))
+                            DropdownMenu(menuComptes, { menuComptes = false }) {
+                                autresComptes.forEach { c ->
+                                    DropdownMenuItem(leadingIcon = { AvatarCompte(c, 0, 24.dp) },
+                                        text = { Column {
+                                            Text(c.fournisseur(ctx).nom + if (Nuage.estPrefere(ctx, c)) "  ★" else "", fontWeight = FontWeight.SemiBold)
+                                            Text(c.libelle(ctx), fontSize = 12.sp, color = Color.Gray)
+                                        } },
+                                        onClick = {
+                                            menuComptes = false
+                                            if (c.id != n.id) { n = c; chemin = listOf(c.racineParcours(ctx) to c.fournisseur(ctx).nom) }
+                                        })
+                                }
+                            }
+                        }
                     }
                 }
                 HorizontalDivider()
@@ -557,7 +547,7 @@ fun EcranFichiers(n: Nuage, fermer: () -> Unit, ouvrir: (Uri) -> Unit,
                             Button(onClick = {
                                 val nom = nomFichier.trim().let { if (it.lowercase().endsWith(".pdf")) it else "$it.pdf" }
                                 val dossier = "/" + chemin.drop(1).joinToString("/") { it.second }
-                                fermer(); enregistrer(dossier, nom)
+                                fermer(); enregistrer(n, dossier, nom)
                             }, enabled = nomFichier.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) {
                                 Text(stringResource(R.string.empl_enregistrer_ici)) }
                         }

@@ -947,4 +947,10 @@
     <string name="empl_enregistre">Gespeichert auf %1$s: %2$s</string>
     <string name="lien_changer">Konto für Links ändern</string>
     <string name="lien_aucun_compte">Keines Ihrer verbundenen Konten kann einen Freigabelink erstellen (pCloud, kDrive und WebDAV per Passwort können es nicht): Verbinden Sie Google Drive, Dropbox, Box oder OneDrive.</string>
+    <string name="ouvrir_cloud">Aus einem Cloud-Konto öffnen</string>
+    <string name="changer_compte">Anderes Konto</string>
+    <string name="enregistrer_cloud">In der Cloud speichern (%1$s)</string>
+    <string name="lien_drive">Google-Drive-Link senden</string>
+    <string name="lien_autre">Link über ein anderes Konto senden</string>
+    <string name="lien_autre_aide">OneDrive, Dropbox, Box…: Das PDF wird in PhilPDF/Partages dieses Kontos abgelegt (Ordner wird bei Bedarf erstellt) und der Link kommt genauso in die Nachricht. Der Link wird auch kopiert.</string>
 </resources>

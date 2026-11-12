@@ -48,7 +48,8 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
     var versionCompte by remember { mutableIntStateOf(0) }
     var ecranCompte by remember { mutableStateOf(false) }
     var parcourir by remember { mutableStateOf<Nuage?>(null) }
-    var choixOuvrir by remember { mutableStateOf(false) }       // Ouvrir : ce telephone ou un compte relie
+    // comptes que PhilPDF parcourt lui-meme (pCloud, kDrive, WebDAV, OneDrive...) : petit bouton nuage a cote de l'avatar
+    val parcourables = remember(versionCompte) { comptesParcourables(ctx) }
     var aide by remember { mutableStateOf(false) }
     var reglagesIa by remember { mutableStateOf(false) }
     // compte prefere (envois et lecture) en tete
@@ -80,7 +81,15 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
             telechargement = null
         }
     }
-    val pastille: @Composable () -> Unit = { PastilleCompte(versionCompte) { ecranCompte = true } }
+    val pastille: @Composable () -> Unit = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // « Ouvrir depuis le cloud » : le compte prefere s'ouvre, on peut changer de compte en haut de la liste
+            if (parcourables.isNotEmpty()) IconButton(onClick = { parcourir = parcourables.first() }, Modifier.size(40.dp)) {
+                Icon(Icones.get("nuage", Color(0xFF777777)), stringResource(R.string.ouvrir_cloud), Modifier.size(24.dp), tint = Color.Unspecified)
+            }
+            PastilleCompte(versionCompte) { ecranCompte = true }
+        }
+    }
 
     Column(Modifier.fillMaxSize().background(Color(0xFFF3F3F3)).padding(16.dp)) {
         // en-tete : logo, nom, bouton principal (passe sous le titre si l'ecran est etroit : rien de coupe)
@@ -101,7 +110,7 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
                 Row(if (etroit) Modifier.fillMaxWidth() else Modifier.widthIn(max = 420.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     BoutonAccueil("ouvrir", stringResource(R.string.accueil_ouvrir), true, Modifier.weight(1f)) {
-                        if (comptesParcourables(ctx).isEmpty()) choisir() else choixOuvrir = true }
+                        choisir() }
                     BoutonAccueil("numeriser", stringResource(R.string.accueil_numeriser), false, Modifier.weight(1f), numeriser)
                     BoutonAccueil("combiner", stringResource(R.string.accueil_combiner), false, Modifier.weight(1f), combiner)
                 }
@@ -185,8 +194,6 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
     if (ecranCompte) EcranComptes(fermer = { ecranCompte = false; versionCompte++ },
         parcourir = { n -> ecranCompte = false; versionCompte++; voir(n) })
     parcourir?.let { n -> EcranFichiers(n, fermer = { parcourir = null }, ouvrir = ouvrir) }
-    if (choixOuvrir) ChoixEmplacement(stringResource(R.string.accueil_ouvrir), telephone = choisir, compte = { parcourir = it },
-        fermer = { choixOuvrir = false })
     if (aide) EcranAide { aide = false }
     telechargement?.let { f ->
         AlertDialog(onDismissRequest = {}, confirmButton = {}, title = { Text(stringResource(R.string.accueil_ouvrir)) },

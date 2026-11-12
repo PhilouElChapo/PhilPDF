@@ -948,4 +948,10 @@
     <string name="empl_enregistre">Saved on %1$s: %2$s</string>
     <string name="lien_changer">Change the account for links</string>
     <string name="lien_aucun_compte">None of your linked accounts can make a share link (pCloud, kDrive and WebDAV by password cannot): link Google Drive, Dropbox, Box or OneDrive.</string>
+    <string name="ouvrir_cloud">Open from a cloud account</string>
+    <string name="changer_compte">Other account</string>
+    <string name="enregistrer_cloud">Save to the cloud (%1$s)</string>
+    <string name="lien_drive">Send a Google Drive link</string>
+    <string name="lien_autre">Send a link from another account</string>
+    <string name="lien_autre_aide">OneDrive, Dropbox, Box…: the PDF is placed in PhilPDF/Partages on that account (folder created if missing) and the link goes into the message in the same way. The link is also copied.</string>
 </resources>

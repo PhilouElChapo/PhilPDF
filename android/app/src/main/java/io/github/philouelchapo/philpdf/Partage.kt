@@ -19,69 +19,75 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
-/** « Partager » : envoyer le fichier lui-meme, ou un lien (le PDF est depose dans PhilPDF/Partages du compte de
- *  synchronisation ; le lien part dans le texte de l'e-mail, pratique pour un gros fichier). */
+/** « Partager » : envoyer le fichier lui-meme, ou un lien. Le PDF est depose dans PhilPDF/Partages du compte (dossier
+ *  cree s'il manque) et le lien public part dans le texte du message, quel que soit le compte : Google Drive en
+ *  direct, ou un autre compte relie qui sait faire un lien (OneDrive, Dropbox, Box). */
 @Composable
 fun ChoixPartage(etat: EtatLecteur, fermer: () -> Unit) {
     val ctx = LocalContext.current
     val portee = rememberCoroutineScope()
-    // le lien passe par un compte qui sait en faire (Google Drive par defaut) ; « Changer » en choisit un autre
-    var compte by remember { mutableStateOf(Nuage.compteLien(ctx)) }
     val possibles = remember { Nuage.liste(ctx).filter { Nuage.peutLien(ctx, it) } }
-    var changer by remember { mutableStateOf(false) }
-    var occupe by remember { mutableStateOf(false) }
+    // Google Drive : celui de la synchronisation s'il y en a un, sinon le premier relie
+    val drive = remember { possibles.filter { it.fournisseur(ctx).cle == "gdrive" }
+        .let { l -> l.firstOrNull { it.id == Nuage.synchro(ctx)?.id } ?: l.firstOrNull() } }
+    val autres = remember { possibles.filter { it.id != drive?.id } }
+    var deplier by remember { mutableStateOf(false) }
+    var occupe by remember { mutableStateOf<Nuage?>(null) }
     var erreur by remember { mutableStateOf<String?>(null) }
-    AlertDialog(onDismissRequest = { if (!occupe) fermer() },
+    fun lien(n: Nuage) {
+        occupe = n; erreur = null
+        portee.launch {
+            try {
+                val f = etat.doc.copieAJour(ctx)
+                val lien = n.partagerParLien(ctx, etat.doc.nom, f.readBytes())
+                envoyerLien(ctx, etat.doc.nom, lien)
+                fermer()
+            } catch (e: Exception) {
+                Journal.ecrire("partage", "${n.fournisseur(ctx).nom} : lien impossible ($e)")
+                erreur = e.message ?: e.toString()
+            } finally { occupe = null }
+        }
+    }
+    val libre = occupe == null
+    AlertDialog(onDismissRequest = { if (libre) fermer() },
         title = { Text(stringResource(R.string.partager)) },
         text = {
             // defile si l'ecran est bas (telephone a l'horizontale) : rien d'ecrase
             Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
-                Ligne("courriel", stringResource(R.string.partage_fichier), stringResource(R.string.partage_fichier_aide), !occupe) {
+                Ligne("courriel", stringResource(R.string.partage_fichier), stringResource(R.string.partage_fichier_aide), libre) {
                     fermer(); portee.launch { partager(ctx, etat.doc) }
                 }
                 Spacer(Modifier.height(6.dp))
-                Ligne("synchro", stringResource(R.string.partage_lien),
-                    compte?.let { stringResource(R.string.partage_lien_aide, it.fournisseur(ctx).nom + " · " + it.libelle(ctx)) }
-                        ?: if (Nuage.liste(ctx).isNotEmpty()) stringResource(R.string.lien_aucun_compte) else
-                    stringResource(R.string.partage_sans_compte), !occupe && compte != null) {
-                    val n = compte ?: return@Ligne
-                    occupe = true; erreur = null
-                    portee.launch {
-                        try {
-                            val f = etat.doc.copieAJour(ctx)
-                            val lien = n.partagerParLien(ctx, etat.doc.nom, f.readBytes())
-                            envoyerLien(ctx, etat.doc.nom, lien)
-                            fermer()
-                        } catch (e: Exception) {
-                            Journal.ecrire("partage", "lien impossible ($e)")
-                            erreur = e.message ?: e.toString()
-                        } finally { occupe = false }
-                    }
-                }
-                if (compte != null && possibles.size > 1) {
-                    TextButton(onClick = { changer = !changer }, enabled = !occupe, modifier = Modifier.padding(start = 36.dp)) {
-                        Text(stringResource(R.string.lien_changer), fontSize = 13.sp) }
-                    if (changer) possibles.forEach { c ->
-                        Row(Modifier.fillMaxWidth().clickable { compte = c; Nuage.choisirLien(ctx, c); changer = false }
-                            .padding(start = 44.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(c.id == compte?.id, { compte = c; Nuage.choisirLien(ctx, c); changer = false })
+                if (drive != null) Ligne("lien", stringResource(R.string.lien_drive),
+                    stringResource(R.string.partage_lien_aide, "Google Drive · " + drive.libelle(ctx)), libre) { lien(drive) }
+                if (autres.isNotEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    Ligne("lien", stringResource(R.string.lien_autre) + if (deplier) "  ▴" else "  ▾",
+                        stringResource(R.string.lien_autre_aide), libre) { deplier = !deplier }
+                    if (deplier) autres.forEach { c ->
+                        Row(Modifier.fillMaxWidth().clickable(enabled = libre) { lien(c) }
+                            .padding(start = 36.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            AvatarCompte(c, 0, 28.dp)
+                            Spacer(Modifier.width(10.dp))
                             Column {
-                                Text(c.fournisseur(ctx).nom, fontSize = 14.sp)
+                                Text(c.fournisseur(ctx).nom, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                                 Text(c.libelle(ctx), fontSize = 12.sp, color = Color.Gray)
                             }
                         }
                     }
                 }
-                if (occupe) Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (possibles.isEmpty()) Ligne("lien", stringResource(R.string.partage_lien),
+                    if (Nuage.liste(ctx).isNotEmpty()) stringResource(R.string.lien_aucun_compte) else stringResource(R.string.partage_sans_compte), false) {}
+                occupe?.let { n -> Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(10.dp))
-                    Text(stringResource(R.string.partage_envoi), fontSize = 13.sp)
-                }
+                    Text(stringResource(R.string.partage_envoi) + " (" + n.fournisseur(ctx).nom + ")", fontSize = 13.sp)
+                } }
                 erreur?.let { Text(it, color = ROUGE, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp)) }
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = fermer, enabled = !occupe) { Text(stringResource(R.string.annuler)) } })
+        dismissButton = { TextButton(onClick = fermer, enabled = libre) { Text(stringResource(R.string.annuler)) } })
 }
 
 @Composable

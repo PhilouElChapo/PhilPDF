@@ -947,4 +947,10 @@
     <string name="empl_enregistre">Guardado en %1$s: %2$s</string>
     <string name="lien_changer">Cambiar la cuenta de los enlaces</string>
     <string name="lien_aucun_compte">Ninguna de sus cuentas vinculadas puede crear un enlace (pCloud, kDrive y WebDAV por contraseña no pueden): vincule Google Drive, Dropbox, Box u OneDrive.</string>
+    <string name="ouvrir_cloud">Abrir desde una cuenta en la nube</string>
+    <string name="changer_compte">Otra cuenta</string>
+    <string name="enregistrer_cloud">Guardar en la nube (%1$s)</string>
+    <string name="lien_drive">Enviar un enlace de Google Drive</string>
+    <string name="lien_autre">Enviar un enlace desde otra cuenta</string>
+    <string name="lien_autre_aide">OneDrive, Dropbox, Box…: el PDF se guarda en PhilPDF/Partages de esa cuenta (la carpeta se crea si falta) y el enlace va en el mensaje de la misma forma. El enlace también se copia.</string>
 </resources>

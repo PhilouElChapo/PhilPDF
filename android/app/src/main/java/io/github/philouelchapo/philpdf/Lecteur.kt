@@ -176,17 +176,13 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/pdf")) { u ->
         if (u != null) ecrireVers(u, fermerApres)
     }
-    // Enregistrer sous : ce telephone (selecteur d'Android) ou un compte relie (pCloud, kDrive, WebDAV...)
-    var choixSous by remember { mutableStateOf<String?>(null) }
+    // Autre nom : le selecteur d'Android, comme avant (il garde votre tri et votre dossier) ; « Enregistrer dans le
+    // cloud » ouvre le compte prefere (pCloud, kDrive, WebDAV...), on peut y changer de compte
     var sousCompte by remember { mutableStateOf<Pair<String, Nuage>?>(null) }
-    fun autreNomOu(n: String) { if (comptesParcourables(ctx).isEmpty()) autreNom.launch(n) else choixSous = n }
-    LaunchedEffect(etat.enregistrerSous) { etat.enregistrerSous?.let { n -> etat.enregistrerSous = null; autreNomOu(n) } }
-    choixSous?.let { n ->
-        ChoixEmplacement(stringResource(R.string.empl_enregistrer_sous), telephone = { autreNom.launch(n) },
-            compte = { c -> sousCompte = n to c }, fermer = { choixSous = null })
-    }
-    sousCompte?.let { (n, c) ->
-        EcranFichiers(c, fermer = { sousCompte = null }, ouvrir = {}, nomDefaut = n, enregistrer = { dossier, nom ->
+    val parcourables = remember { comptesParcourables(ctx) }
+    LaunchedEffect(etat.enregistrerSous) { etat.enregistrerSous?.let { n -> etat.enregistrerSous = null; autreNom.launch(n) } }
+    sousCompte?.let { (n, c0) ->
+        EcranFichiers(c0, fermer = { sousCompte = null }, ouvrir = {}, nomDefaut = n, enregistrer = { c, dossier, nom ->
             portee.launch {
                 try {
                     val octets = doc.copieAJour(ctx).readBytes()
@@ -293,10 +289,19 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
                     if (!doc.neuf) TextButton(onClick = { etat.demandeEnregistrer = false; quitter = false; ecrireVers(doc.uri, q) }) {
                         Text(stringResource(R.string.meme_fichier))
                     }
+                    val nomPropose = if (doc.neuf) doc.nom else doc.nom.removeSuffix(".pdf").removeSuffix(".PDF") + Textes.t(R.string.suffixe_modifie) + ".pdf"
                     TextButton(onClick = {
                         etat.demandeEnregistrer = false; quitter = false; fermerApres = q
-                        autreNomOu(if (doc.neuf) doc.nom else doc.nom.removeSuffix(".pdf").removeSuffix(".PDF") + Textes.t(R.string.suffixe_modifie) + ".pdf")
+                        autreNom.launch(nomPropose)
                     }) { Text(stringResource(R.string.autre_nom)) }
+                    if (parcourables.isNotEmpty()) TextButton(onClick = {
+                        etat.demandeEnregistrer = false; quitter = false; fermerApres = q
+                        sousCompte = nomPropose to parcourables.first()
+                    }) {
+                        Icon(Icones.get("nuage", ROUGE), null, Modifier.size(18.dp), tint = Color.Unspecified)
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.enregistrer_cloud, parcourables.first().fournisseur(ctx).nom))
+                    }
                     if (q) TextButton(onClick = { quitter = false; fermer() }) {
                         Text(stringResource(R.string.ne_pas_enregistrer), color = Color(0xFFC62828))
                     }
