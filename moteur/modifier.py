@@ -61,19 +61,50 @@ def _num(s):
     return float(s)
 
 
+def _unicode(h):
+    """Valeur d'une table ToUnicode : UTF-16 (4, 8... chiffres), ou point de code ecrit tel quel en nombre impair de
+    chiffres (<1F600>, comme le font certains generateurs, MuPDF compris)."""
+    if len(h) % 4:
+        try:
+            return chr(int(h, 16))
+        except (ValueError, OverflowError):
+            return "\ufffd"
+    return bytes.fromhex(h).decode("utf-16-be", "ignore")
+
+
 def _parse_cmap(data):
     """ToUnicode -> {code: texte}"""
     txt = data.decode("latin1")
     out = {}
     for blk in re.findall(r"beginbfchar(.*?)endbfchar", txt, re.S):
         for a, b in re.findall(r"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>", blk):
-            out[int(a, 16)] = bytes.fromhex(b).decode("utf-16-be", "ignore")
+            out[int(a, 16)] = _unicode(b)
     for blk in re.findall(r"beginbfrange(.*?)endbfrange", txt, re.S):
-        for a, b, c in re.findall(r"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>", blk):
+        # deux formes : <debut> <fin> <unicode du premier>, ou <debut> <fin> [ <u1> <u2> ... ] (une valeur par code,
+        # polices fusionnees par les editeurs de releves : CAVP...). Lire la seconde comme la premiere melangeait tout.
+        for a, b, c, liste in re.findall(r"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*(?:<([0-9A-Fa-f]+)>|\[([^\]]*)\])", blk):
+            if liste:
+                for i, u in enumerate(re.findall(r"<([0-9A-Fa-f]*)>", liste)):
+                    if int(a, 16) + i > int(b, 16):
+                        break
+                    out[int(a, 16) + i] = _unicode(u)
+                continue
             u = int(c, 16)
             for i, code in enumerate(range(int(a, 16), int(b, 16) + 1)):
                 out[code] = chr(u + i)
     return out
+
+
+def _chasses_fixes(vus, pp):
+    """Ligne proportionnelle : largeurs « a chasse fixe » de la police a eviter (celle que partagent le plus de
+    glyphes differents, 0.6 pour un Courier fusionne), si la ligne elle-meme ne l'emploie pas."""
+    from collections import Counter
+    compte = Counter(round(v, 3) for v in pp.width.values())
+    if not compte:
+        return set()
+    l, n = compte.most_common(1)[0]
+    employees = {x[2] for x in vus}
+    return {l} if n >= 8 and l not in employees else set()
 
 
 def _resolve(doc, xref, key):
@@ -149,9 +180,14 @@ class PolicePDF:
                 from .noms_glyphes import differences
                 for code, ch in differences(m.group(1)).items():
                     cmap.setdefault(code, ch)
-        for code, ch in cmap.items():
-            if len(ch) == 1 and ch not in self.code_of and ch != "�":
-                self.code_of[ch] = code
+        # un caractere peut avoir plusieurs glyphes dans une meme police (polices fusionnees des releves : chiffres
+        # a chasse fixe ET proportionnels, maigres ET gras) : tous sont notes, le bon est choisi selon la ligne
+        self.codes_of = {}
+        for code, ch in sorted(cmap.items()):
+            if len(ch) == 1 and ch != "\ufffd":
+                self.codes_of.setdefault(ch, []).append(code)
+                if ch not in self.code_of:
+                    self.code_of[ch] = code
         self.fontname = doc.xref_get_key(fd, "FontName")[1].lstrip("/") if fd else self.base
         wt = doc.xref_get_key(fd, "FontWeight")[1] if fd else ""
         self.weight = int(float(wt)) if wt and wt != "null" else (700 if "Bold" in self.base else 400)
@@ -174,6 +210,23 @@ class PolicePDF:
                 for c in range(c1, c2 + 1):
                     self.width[c] = v
                 i += 3
+
+    def code_mesure(self, ch, largeur):
+        """Code du glyphe dont l'avance (pour 1 pt) colle le mieux a la largeur mesuree d'une lettre."""
+        codes = self.codes_of.get(ch) or ([self.code_of[ch]] if ch in self.code_of else [])
+        if not codes:
+            return None
+        return min(codes, key=lambda c: abs(self.width.get(c, getattr(self, "dw", 0.5)) - largeur))
+
+    def variante(self, ch, code):
+        """La meme police, mais ce caractere ecrit avec ce glyphe-la."""
+        if code is None or self.code_of.get(ch) == code:
+            return self
+        import copy
+        v = copy.copy(self)
+        v.code_of = dict(self.code_of)
+        v.code_of[ch] = code
+        return v
 
     def famille(self):
         """Cle de famille : nom sans prefixe de sous-ensemble ni numero de decoupe."""
@@ -720,12 +773,14 @@ class Editeur:
         repli_par_police = {}
         incorporee = PoliceIncorporee(os.path.basename(police), police) if police else None
 
+        _connus, choisir = self._choix_glyphes(page, [x for l in para["lignes"] for x in l["chars"]])
+
         def cible_de(ch, sp):
             if incorporee:
                 return incorporee if incorporee.a(ch) else None
             p_sp = self._police_du_span(page, sp)
             if p_sp and p_sp.a(ch):
-                return p_sp
+                return p_sp.variante(ch, choisir(p_sp, ch, sp)) if isinstance(p_sp, PolicePDF) else p_sp
             for q in pol.values():
                 if p_sp and q.famille() == p_sp.famille() and q.a(ch):
                     return q
@@ -750,8 +805,10 @@ class Editeur:
             cible = cible_de(ch if ch != " " else "a", sp) if ch != " " else None
             if ch != " " and cible is None:
                 continue
-            av = (cible.avance(ch) if cible else (self._police_du_span(page, sp).avance(" ")
-                                                    if self._police_du_span(page, sp) and self._police_du_span(page, sp).a(" ") else 0.28)) * sz
+            p_esp = self._police_du_span(page, sp) if cible is None else None
+            if isinstance(p_esp, PolicePDF) and p_esp.a(" "):
+                p_esp = p_esp.variante(" ", choisir(p_esp, " ", sp))     # espace de chasse fixe si le texte l'est
+            av = (cible.avance(ch) if cible else (p_esp.avance(" ") if p_esp and p_esp.a(" ") else 0.28)) * sz
             coul = couleur or fitz.sRGB_to_pdf(sp["color"])
             lettres.append((ch, cible, sz, coul, av))
         # coupure en lignes a la largeur du paragraphe
@@ -1165,6 +1222,46 @@ class Editeur:
                 n += 1
         return n
 
+    def _choix_glyphes(self, page, chars):
+        """Une police fusionnee (releves CAVP, banques...) a parfois deux glyphes pour un meme caractere : « 1 » a
+        chasse fixe ET proportionnel, maigre ET gras. Renvoie le code exact de chaque lettre d'origine (mesure sur sa
+        largeur) et une fonction qui choisit, pour une lettre ecrite dans un span, le glyphe du style de ce span
+        (la meme lettre si elle y est, sinon chasse fixe si le span l'est, sinon les glyphes voisins)."""
+        def mesure(c, sp):
+            pp = self._police_du_span(page, sp)
+            if not isinstance(pp, PolicePDF) or len(pp.codes_of.get(c["c"], ())) < 2 or not sp["size"]:
+                return None
+            return pp.code_mesure(c["c"], fitz.Rect(c["bbox"]).width / sp["size"])
+        connus = [mesure(c, sp) for c, sp in chars]
+        par_span, par_police = {}, {}
+        for (c, sp), code in zip(chars, connus):
+            pp = self._police_du_span(page, sp)
+            if isinstance(pp, PolicePDF) and c["c"] in pp.code_of:        # espaces compris : chasse fixe aussi
+                code = code if code is not None else pp.code_of[c["c"]]
+                v = (c["c"], code, round(pp.width.get(code, 0), 3))
+                par_span.setdefault(id(sp), []).append(v)
+                par_police.setdefault(pp.xref, []).append(v)
+
+        def choisir(pp, ch, sp):
+            codes = pp.codes_of.get(ch, ()) if isinstance(pp, PolicePDF) else ()
+            if len(codes) < 2:
+                return None
+            vus = par_span.get(id(sp)) or par_police.get(pp.xref, [])
+            for c0, code, _l in vus:                       # la meme lettre existe deja dans ce texte
+                if c0 == ch and code in codes:
+                    return code
+            if not vus:
+                return None
+            largeurs = {l for _c0, _code, l in vus}
+            fixe = largeurs.pop() if len(largeurs) == 1 and len(vus) >= 3 else None
+            evitees = set() if fixe is not None else _chasses_fixes(vus, pp)
+
+            def cle(code):
+                l = round(pp.width.get(code, 0), 3)
+                return ((l != fixe) if fixe is not None else (l in evitees), min(abs(code - v[1]) for v in vus))
+            return min(codes, key=cle)
+        return connus, choisir
+
     def _remplacer_dans_ligne(self, page, chars, deb, fin, nouveau, taille=None, couleur=None):
         pol = self._polices(page)
         # 1) style : celui du 1er caractere remplace, applique a tout le fragment
@@ -1185,22 +1282,32 @@ class Editeur:
         #    elle reste ainsi une seule ligne pour les modifications suivantes
         prefixe, suite = chars[:deb], chars[fin:]
         a_ecrire = [(ch, s_ref) for ch in nouveau] + [(c["c"], s) for c, s in suite]
+
+        connus, code_nouveau = self._choix_glyphes(page, chars)
+        code_nouveau_ = code_nouveau
+        code_nouveau = lambda pp, ch: code_nouveau_(pp, ch, s_ref)
         # 3) choix de la police caractere par caractere
         soeurs = [p for p in pol.values() if p_ref and p.famille() == p_ref.famille()]
         repli = None
         plan, x = [], chars[deb][0]["origin"][0] if deb < len(chars) else chars[-1][0]["origin"][0]
         y = chars[deb][0]["origin"][1] if deb < len(chars) else chars[-1][0]["origin"][1]
-        for c, s in prefixe:
+        for (c, s), code0 in zip(prefixe, connus):
             p_s = self._police_du_span(page, s)
             cible = p_s if p_s and p_s.a(c["c"]) else next((q for q in pol.values() if p_s and q.famille() == p_s.famille() and q.a(c["c"])), None)
+            if isinstance(cible, PolicePDF) and cible is p_s:
+                cible = cible.variante(c["c"], code0)
             if cible is not None or c["c"] == " ":
                 plan.append((c["c"], cible, s["size"], fitz.sRGB_to_pdf(s["color"]), c["origin"][0], "prefixe", c["origin"][1]))
         n_prefixe = len(plan)
-        for ch, s in a_ecrire:
+        codes_suite = connus[fin:]
+        for k, (ch, s) in enumerate(a_ecrire):
             p_span = self._police_du_span(page, s) if s is not s_ref else p_ref
             cible = None
             if p_span and p_span.a(ch):
                 cible, how = p_span, "glyphe d'origine"
+                if isinstance(p_span, PolicePDF):
+                    k2 = k - len(nouveau)
+                    cible = p_span.variante(ch, codes_suite[k2] if k2 >= 0 else code_nouveau(p_span, ch))
             else:
                 fam = [p for p in pol.values() if p_span and p.famille() == p_span.famille()]
                 for p in fam:

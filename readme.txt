@@ -10,6 +10,10 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.27.3
+- Modifier le texte d'un releve dont la police reunit chiffres a chasse fixe et proportionnels : le style de la
+  ligne d'origine est garde, comme sous Windows.
+
 1.27.2
 - Infomaniak kDrive : meme message clair que sous Windows quand l'offre ne comprend pas WebDAV (refus 403) ou quand
   le mot de passe est refuse (401 : mot de passe d'application avec la validation en deux etapes).
@@ -541,6 +545,13 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.100
+- Modifier le texte d'un releve (CAVP, banques...) dont la police reunit plusieurs polices en une : les lettres
+  ecrites sortaient fausses (« DELAYE » devenait « Sq N74IX7 »). La table de correspondance des lettres, sous une
+  forme peu courante, est maintenant bien lue.
+- Dans ces polices, un meme chiffre existe a chasse fixe ET proportionnel, maigre ET gras : PhilPDF reprend celui
+  du texte d'origine (un montant a chasse fixe le reste, espaces compris).
 
 0.9.99
 - Infomaniak kDrive : un refus 403 dit maintenant clairement que l'offre kDrive ne comprend pas WebDAV (kSuite Free,

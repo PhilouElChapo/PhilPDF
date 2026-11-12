@@ -36,7 +36,32 @@ class TablePolice(val nomRessource: String, val objet: PDFObject, val octets: In
                   val largeurs: Map<Int, Float>, val largeurDefaut: Float, val nomBase: String) {
     /** Polices Type3 decoupees (une police par paquet de lettres, meme dessin) : les autres morceaux du jeu. */
     var autres: List<TablePolice> = emptyList()
-    private fun codeSeul(c: Char): Int? = codes[c] ?: EQUIVALENTS[c]?.let { codes[it] }
+    /** Tous les glyphes d'un caractere : une police fusionnee (releves CAVP, banques) a parfois deux « 1 », a chasse
+     *  fixe ET proportionnel. Le bon est choisi selon la ligne ecrite (chasseFixe), comme sous Windows. */
+    var tous: Map<Char, List<Int>> = emptyMap()
+    var chasseFixe: Boolean? = null
+    private val largeurFixe: Float? by lazy {
+        val n = largeurs.values.groupingBy { it }.eachCount().maxByOrNull { it.value }
+        if (n != null && n.value >= 8) n.key else null
+    }
+    private fun choisi(c: Char): Int? {
+        val l = tous[c]
+        if (l == null || l.size < 2 || chasseFixe == null || largeurFixe == null) return codes[c]
+        val voulus = l.filter { (largeurs[it] == largeurFixe) == chasseFixe }
+        return voulus.firstOrNull() ?: codes[c]
+    }
+    /** Choisit chasse fixe ou proportionnelle d'apres la ligne d'origine : la variante dont la largeur calculee
+     *  colle le mieux a la largeur mesuree. Sans glyphe double dans la ligne, rien ne change. */
+    fun reglerSur(texte: String, largeurMesuree: Float, taille: Float) {
+        chasseFixe = null
+        if (largeurFixe == null || texte.none { (tous[it]?.size ?: 0) > 1 }) return
+        val essais = listOf(true, false).mapNotNull { v ->
+            chasseFixe = v
+            largeur(texte.trimEnd(), taille)?.let { v to kotlin.math.abs(it - largeurMesuree) }
+        }
+        chasseFixe = essais.minByOrNull { it.second }?.first
+    }
+    private fun codeSeul(c: Char): Int? = choisi(c) ?: EQUIVALENTS[c]?.let { codes[it] }
     /** Le morceau du jeu qui sait ecrire cette lettre. */
     fun source(c: Char): TablePolice? = if (codeSeul(c) != null) this else autres.firstOrNull { it.codeSeul(c) != null }
     fun code(c: Char): Int? = source(c)?.codeSeul(c)
@@ -238,13 +263,17 @@ object TexteModif {
             if (fc.isNumber && ws.isArray) for (k in 0 until ws.size()) largeurs[fc.asInteger() + k] = ws.get(k).asFloat()
         }
         val codes = HashMap<Char, Int>()
+        val tous = HashMap<Char, MutableList<Int>>()
         val tu = f.get("ToUnicode")
         if (tu.isStream) {
             val cm = String(tu.readStream(), Charsets.ISO_8859_1)
             Regex("beginbfchar(.*?)endbfchar", RegexOption.DOT_MATCHES_ALL).findAll(cm).forEach { b ->
                 Regex("<([0-9A-Fa-f]+)>\\s*<([0-9A-Fa-f]*)>").findAll(b.groupValues[1]).forEach { m ->
                     val u = String(hex(m.groupValues[2]), Charsets.UTF_16BE)
-                    if (u.length == 1) codes.putIfAbsent(u[0], m.groupValues[1].toInt(16))
+                    if (u.length == 1) {
+                        codes.putIfAbsent(u[0], m.groupValues[1].toInt(16))
+                        tous.getOrPut(u[0]) { mutableListOf() }.add(m.groupValues[1].toInt(16))
+                    }
                 }
             }
             Regex("beginbfrange(.*?)endbfrange", RegexOption.DOT_MATCHES_ALL).findAll(cm).forEach { b ->
@@ -257,7 +286,9 @@ object TexteModif {
                     } else {
                         Regex("<([0-9A-Fa-f]*)>").findAll(d).forEachIndexed { k, x ->
                             val u = String(hex(x.groupValues[1]), Charsets.UTF_16BE)
-                            if (u.length == 1) codes.putIfAbsent(u[0], lo + k)
+                            if (u.length == 1 && lo + k <= hi) {
+                                codes.putIfAbsent(u[0], lo + k); tous.getOrPut(u[0]) { mutableListOf() }.add(lo + k)
+                            }
                         }
                     }
                 }
@@ -288,7 +319,7 @@ object TexteModif {
         }
         if (codes.isEmpty()) return null
         val base = (try { f.get("BaseFont").asName() } catch (_: Exception) { null }) ?: ""
-        return TablePolice(nom, f0, octets, codes, largeurs, dw, base)
+        return TablePolice(nom, f0, octets, codes, largeurs, dw, base).also { it.tous = tous }
     }
 
     // ------------------------------------------------------------ ecriture
@@ -359,6 +390,8 @@ object TexteModif {
         val l0 = par.lignes.first()
         val centrer = try { cadreCentre(page, par, nouvelles, droite) } catch (_: Exception) { null }
         val t = par.table
+        // police fusionnee (chiffres a chasse fixe et proportionnels) : le style de la ligne d'origine
+        t?.reglerSur(l0.texte, l0.x1 - l0.x0, l0.taille)
         val styleChange = gras != l0.gras || italique != l0.italique
         val texteTotal = nouvelles.joinToString("")
         val originale = t != null && !styleChange && t.peutEcrire(texteTotal)
@@ -493,6 +526,7 @@ object TexteModif {
     private fun ecrireMixte(pdf: PDFDocument, page: PDFPage, par: Paragraphe, nouvelles: List<String>, taille: Float, argb: Int,
                             droite: Boolean, fonts: PDFObject, centrer: Rect? = null): ResultatTexte {
         val l0 = par.lignes.first()
+        par.tables.values.forEach { it.reglerSur(l0.texte, l0.x1 - l0.x0, l0.taille) }
         val noms = HashMap<PDFObject, String>()
         // la police d'origine, rattachee aux ressources sous un nom sur (le caviardage peut les avoir reecrites)
         fun nomDe(t: TablePolice): String = noms.getOrPut(t.objet) {
