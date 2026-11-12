@@ -274,6 +274,9 @@ class Nuage private constructor(val id: String) {
         val base = if (cle == "kdrive" && a.all { it.isDigit() }) "https://$a.connect.kdrive.infomaniak.com" else a
         if (!base.startsWith("https://") && !base.startsWith("http://")) throw ErreurCompte(Textes.t(R.string.err_dav_adresse))
         val code = Dav.essayer(Dav.Acces(base, utilisateur.trim(), mdp))
+        // kDrive : 403 = offre sans WebDAV (kSuite Free, Standard, my kSuite) ; 401 = adresse ou mot de passe
+        if (cle == "kdrive" && code == 403) throw ErreurCompte(Textes.t(R.string.err_kdrive_offre))
+        if (cle == "kdrive" && code == 401) throw ErreurCompte(Textes.t(R.string.err_kdrive_mdp))
         if (code == 401 || code == 403) throw ErreurCompte(Textes.t(R.string.err_dav_refus))
         if (code !in 200..299) throw ErreurCompte(Textes.t(R.string.err_code, "WebDAV", code, base))
         relierDav(ctx, cle, base, utilisateur, mdp)

@@ -954,4 +954,6 @@
     <string name="lien_drive">Envoyer un lien Google Drive</string>
     <string name="lien_autre">Envoyer un lien par un autre compte</string>
     <string name="lien_autre_aide">OneDrive, Dropbox, Box… : le PDF est déposé dans PhilPDF/Partages de ce compte (dossier créé s\'il manque) et le lien part dans le message de la même façon. Le lien est aussi copié.</string>
+    <string name="err_kdrive_offre">kDrive refuse l\'accès WebDAV (403) : votre offre kDrive ne le permet pas (kSuite Free, kSuite Standard, my kSuite). L\'adresse et le mot de passe ont bien été reçus : il faut une offre kDrive qui comprend WebDAV.</string>
+    <string name="err_kdrive_mdp">kDrive refuse l\'adresse e-mail ou le mot de passe (401). Avec la validation en deux étapes, créez un mot de passe d\'application dans le Manager d\'Infomaniak et utilisez-le ici.</string>
 </resources>

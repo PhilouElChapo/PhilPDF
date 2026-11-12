@@ -10,6 +10,10 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.27.2
+- Infomaniak kDrive : meme message clair que sous Windows quand l'offre ne comprend pas WebDAV (refus 403) ou quand
+  le mot de passe est refuse (401 : mot de passe d'application avec la validation en deux etapes).
+
 1.27.1
 - « Nettoyer un scan » et la numerisation en noir et blanc : un scan deja en noir et blanc TRAME (fond pointille,
   papier securise d'ordonnance) est maintenant nettoye, comme sous Windows : le fond part au blanc, le texte reste.
@@ -537,6 +541,10 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.99
+- Infomaniak kDrive : un refus 403 dit maintenant clairement que l'offre kDrive ne comprend pas WebDAV (kSuite Free,
+  kSuite Standard, my kSuite) ; un refus 401 rappelle le mot de passe d'application (validation en deux etapes).
 
 0.9.98
 - Scan deja en noir et blanc TRAME (le pilote du scanner fait les gris avec des points ; papier securise

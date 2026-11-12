@@ -1125,6 +1125,21 @@ class KdriveDav(WebDAV):
             return f"https://{a}.connect.kdrive.infomaniak.com"
         return a
 
+    def _req(self, methode, chemin, donnees=None, entetes=None):
+        try:
+            return super()._req(methode, chemin, donnees, entetes)
+        except ErreurDistant:
+            code = getattr(self, "dernier_code", None)
+            if code == 403:         # Infomaniak : accès refusé au compte, pas au mot de passe
+                raise ErreurDistant(_("kDrive refuse l'accès WebDAV (403) : votre offre kDrive ne le permet pas "
+                                      "(kSuite Free, kSuite Standard, my kSuite). L'adresse et le mot de passe ont bien été "
+                                      "reçus : il faut une offre kDrive qui comprend WebDAV."))
+            if code == 401:
+                raise ErreurDistant(_("kDrive refuse l'adresse e-mail ou le mot de passe (401). Avec la validation en deux "
+                                      "étapes, créez un mot de passe d'application dans le Manager d'Infomaniak et "
+                                      "utilisez-le ici."))
+            raise
+
     def tester(self):
         if not self._base():
             raise ErreurDistant(_("Indiquez le numéro de votre kDrive (le nombre qui suit « /drive/ » dans l'adresse de "

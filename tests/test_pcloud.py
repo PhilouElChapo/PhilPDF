@@ -215,6 +215,24 @@ ck["adresse"] = "123456"
 verifie(isinstance(distant.emplacement(ck, "x"), distant.KdriveDav) and
         distant.emplacement(ck, "x")._base() == "https://123456.connect.kdrive.infomaniak.com" and "kdrive" in distant.types_proposes(),
         "Infomaniak kDrive : le numéro du kDrive donne l'adresse WebDAV")
+
+
+class Dav403(Dav):
+    def do_PROPFIND(self):
+        self.send_response(403)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+
+k403 = ThreadingHTTPServer(("127.0.0.1", 0), Dav403)
+threading.Thread(target=k403.serve_forever, daemon=True).start()
+ck2 = dict(ck, adresse=f"http://127.0.0.1:{k403.server_port}", utilisateur="jean.martin@exemple.fr")
+try:
+    distant.emplacement(ck2, "mdp").tester()
+    verifie(False, "Infomaniak kDrive : refus 403 signalé")
+except distant.ErreurDistant as ex:
+    verifie("offre kDrive ne le permet pas" in str(ex), "Infomaniak kDrive : refus 403 expliqué (offre sans WebDAV)")
+k403.shutdown()
 for x in (eu, us, srv):
     x.shutdown()
 print(f"\n{ok} vérifications pCloud réussies")
