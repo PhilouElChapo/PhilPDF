@@ -955,4 +955,10 @@
     <string name="lien_autre_aide">OneDrive, Dropbox, Box…: il PDF viene messo in PhilPDF/Partages di quell\'account (cartella creata se manca) e il link va nel messaggio allo stesso modo. Il link viene anche copiato.</string>
     <string name="err_kdrive_offre">kDrive rifiuta l\'accesso WebDAV (403): il tuo piano kDrive non lo consente (kSuite Free, kSuite Standard, my kSuite). Indirizzo e password sono stati ricevuti: serve un piano kDrive che includa WebDAV.</string>
     <string name="err_kdrive_mdp">kDrive rifiuta l\'indirizzo e-mail o la password (401). Con la verifica in due passaggi, crea una password per applicazioni nel Manager di Infomaniak e usala qui.</string>
+    <string name="nouveau_dossier">Nuova cartella</string>
+    <string name="nouveau_dossier_nom">Nome della nuova cartella in %1$s</string>
+    <string name="creer">Crea</string>
+    <string name="dossier_existe">Questa cartella esiste già.</string>
+    <string name="dossier_nom_interdit">Non consentito in un nome di cartella: / \\ : * ? \" &lt; &gt; |</string>
+    <string name="creation_dossier">Creazione della cartella…</string>
 </resources>

@@ -102,6 +102,9 @@ object Dav {
     suspend fun existe(a: Acces, chemin: String): Boolean =
         requete(a, "PROPFIND", chemin, PROPFIND, mapOf("Depth" to "0")).first in 200..299
 
+    /** Cree un dossier (bouton « Nouveau dossier ») ; code HTTP de la reponse. */
+    suspend fun creerDossier(a: Acces, chemin: String): Int = requete(a, "MKCOL", "/" + chemin.trim('/') + "/").first
+
     /** Ecrit (ou remplace) le fichier ; les dossiers manquants sont crees. */
     suspend fun ecrire(a: Acces, chemin: String, octets: ByteArray): Pair<Int, ByteArray> {
         val parties = chemin.split("/").filter { it.isNotEmpty() }.dropLast(1)

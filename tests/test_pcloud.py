@@ -185,6 +185,15 @@ class Dav(BaseHTTPRequestHandler):
         self.wfile.write(b)
 
 
+    crees = []
+
+    def do_MKCOL(self):
+        Dav.crees.append(self.path)
+        self.send_response(201)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+
 class DavRefus(Dav):
     refuse = True
 
@@ -223,6 +232,11 @@ class Dav403(Dav):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
+
+# bouton « Nouveau dossier » de Ouvrir / Enregistrer : MKCOL sur le dossier voulu
+ed = distant.PcloudDav(dict(cd, adresse=distant.PCLOUD_USA), "mdp")
+ed.nouveau_dossier("/PhilPDF/Factures 2026")
+verifie(Dav.crees and Dav.crees[-1] == "/PhilPDF/Factures%202026/", "WebDAV : nouveau dossier créé (MKCOL)")
 
 k403 = ThreadingHTTPServer(("127.0.0.1", 0), Dav403)
 threading.Thread(target=k403.serve_forever, daemon=True).start()

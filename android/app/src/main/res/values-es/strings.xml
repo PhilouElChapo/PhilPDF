@@ -955,4 +955,10 @@
     <string name="lien_autre_aide">OneDrive, Dropbox, Box…: el PDF se guarda en PhilPDF/Partages de esa cuenta (la carpeta se crea si falta) y el enlace va en el mensaje de la misma forma. El enlace también se copia.</string>
     <string name="err_kdrive_offre">kDrive rechaza el acceso WebDAV (403): su plan de kDrive no lo permite (kSuite Free, kSuite Standard, my kSuite). La dirección y la contraseña se recibieron: necesita un plan de kDrive que incluya WebDAV.</string>
     <string name="err_kdrive_mdp">kDrive rechaza la dirección de correo o la contraseña (401). Con la verificación en dos pasos, cree una contraseña de aplicación en el Manager de Infomaniak y úsela aquí.</string>
+    <string name="nouveau_dossier">Nueva carpeta</string>
+    <string name="nouveau_dossier_nom">Nombre de la nueva carpeta en %1$s</string>
+    <string name="creer">Crear</string>
+    <string name="dossier_existe">Esta carpeta ya existe.</string>
+    <string name="dossier_nom_interdit">No permitido en un nombre de carpeta: / \\ : * ? \" &lt; &gt; |</string>
+    <string name="creation_dossier">Creando la carpeta…</string>
 </resources>

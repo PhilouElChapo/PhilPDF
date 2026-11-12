@@ -520,6 +520,33 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
             .sortedWith(compareBy<Entree>({ !it.dossier }, { it.nom.lowercase() }))
     }
 
+    /** Cree le dossier « nom » dans le dossier parent (identifiant ou chemin, comme lister) ; renvoie de quoi y
+     *  entrer. Bouton « Nouveau dossier » de Ouvrir / Enregistrer, comme sous Windows. */
+    suspend fun creerDossier(ctx: Context, parent: String, nom: String): String {
+        val f = fournisseur(ctx)
+        val dans = parent.trimEnd('/') + "/" + nom
+        val r: String? = when (f.cle) {
+            "gdrive" -> json(ctx, "POST", "$GOOGLE/files?fields=id", JSONObject().put("name", nom)
+                .put("mimeType", "application/vnd.google-apps.folder").put("parents", JSONArray().put(parent)))?.optString("id")
+            "onedrive" -> json(ctx, "POST", "$GRAPH/me/drive/items/$parent/children", JSONObject().put("name", nom)
+                .put("folder", JSONObject()).put("@microsoft.graph.conflictBehavior", "fail"))?.optString("id")
+            "dropbox" -> json(ctx, "POST", "$DBX/files/create_folder_v2", JSONObject().put("path", dans).put("autorename", false))
+                ?.optJSONObject("metadata")?.optString("path_display")
+            "box" -> json(ctx, "POST", "$BOX/folders", JSONObject().put("name", nom).put("parent", JSONObject().put("id", parent)))?.optString("id")
+            else -> {
+                val a = dav(ctx)
+                if (a != null) {
+                    val code = Dav.creerDossier(a, dans)
+                    if (code !in 200..299) throw ErreurCompte(Textes.t(R.string.err_code, f.nom, code, ""))
+                    dans
+                } else if (f.cle == "pcloud") { pc(ctx, "createfolder", mapOf("path" to dans)); dans } else null
+            }
+        }
+        if (r.isNullOrEmpty()) throw ErreurCompte(Textes.t(R.string.err_dossier_creer, f.nom, nom))
+        Journal.ecrire("compte", "${f.nom} : dossier « $nom » créé")
+        return r
+    }
+
     /** Copie le fichier sur le telephone et retient d'ou il vient (pour « Meme fichier »). */
     suspend fun ouvrirFichier(ctx: Context, e: Entree): Uri {
         val b = contenuFichier(ctx, e.id) ?: throw ErreurCompte(Textes.t(R.string.err_fichier_introuvable, fournisseur(ctx).nom))

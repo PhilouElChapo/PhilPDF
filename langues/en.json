@@ -3083,5 +3083,12 @@
  "Demander la photo du profil au service, sinon à Gravatar (la recherche universelle d'avatar d'après l'adresse e-mail ; seule son empreinte est envoyée à gravatar.com)": "Ask the service for the profile photo, otherwise Gravatar (the universal avatar lookup by e-mail address; only its fingerprint is sent to gravatar.com)",
  "Editeur PDF · éditez, signez, allégez en toute liberté": "PDF editor · edit, sign, compress, freely",
  "kDrive refuse l'accès WebDAV (403) : votre offre kDrive ne le permet pas (kSuite Free, kSuite Standard, my kSuite). L'adresse et le mot de passe ont bien été reçus : il faut une offre kDrive qui comprend WebDAV.": "kDrive refuses WebDAV access (403): your kDrive plan does not allow it (kSuite Free, kSuite Standard, my kSuite). The address and password were received: you need a kDrive plan that includes WebDAV.",
- "kDrive refuse l'adresse e-mail ou le mot de passe (401). Avec la validation en deux étapes, créez un mot de passe d'application dans le Manager d'Infomaniak et utilisez-le ici.": "kDrive refuses the e-mail address or password (401). With two-step verification, create an application password in the Infomaniak Manager and use it here."
+ "kDrive refuse l'adresse e-mail ou le mot de passe (401). Avec la validation en deux étapes, créez un mot de passe d'application dans le Manager d'Infomaniak et utilisez-le ici.": "kDrive refuses the e-mail address or password (401). With two-step verification, create an application password in the Infomaniak Manager and use it here.",
+ "Nouveau dossier": "New folder",
+ "Créer un dossier ici (Ctrl+Maj+N)": "Create a folder here (Ctrl+Shift+N)",
+ "Nom du nouveau dossier dans {d} :": "Name of the new folder in {d}:",
+ "Un nom de dossier ne peut pas contenir / \\ : * ? \" < > |": "A folder name cannot contain / \\ : * ? \" < > |",
+ "Ce dossier existe déjà.": "This folder already exists.",
+ "Création du dossier {d}...": "Creating folder {d}...",
+ "Cet emplacement ne permet pas de créer un dossier depuis PhilPDF.": "This location does not allow creating a folder from PhilPDF."
 }

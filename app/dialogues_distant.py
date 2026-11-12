@@ -703,6 +703,12 @@ class DialogueParcourir(QDialog):
         self.lbl_chemin.setStyleSheet("color:#333; font-weight:600")
         self.lbl_chemin.setWordWrap(True)
         hc.addWidget(self.lbl_chemin, 1)
+        self.b_dossier = QPushButton(icone("nouveau_dossier", "#c8a000"), _("Nouveau dossier"))
+        self.b_dossier.setToolTip(_("Créer un dossier ici (Ctrl+Maj+N)"))
+        self.b_dossier.setShortcut("Ctrl+Shift+N")
+        self.b_dossier.setAutoDefault(False)
+        self.b_dossier.clicked.connect(self.nouveau_dossier)
+        hc.addWidget(self.b_dossier)
         v.addLayout(hc)
         self.bandeau = QLabel()
         self.bandeau.setWordWrap(True)
@@ -828,6 +834,33 @@ class DialogueParcourir(QDialog):
             self.monter()
             return
         super().keyPressEvent(ev)
+
+    def nouveau_dossier(self):
+        """Cree un dossier dans le dossier affiche, puis y entre (pour y enregistrer ou ranger)."""
+        if not self.e:
+            return
+        nom, ok = QInputDialog.getText(self, _("Nouveau dossier"), _("Nom du nouveau dossier dans {d} :", d=self.dossier or "/"))
+        nom = (nom or "").strip()
+        if not ok or not nom:
+            return
+        if any(c in nom for c in '/\\:*?"<>|') or nom in (".", ".."):
+            QMessageBox.warning(self, _("Nouveau dossier"), _("Un nom de dossier ne peut pas contenir / \\ : * ? \" < > |"))
+            return
+        if any(isinstance(x, distant.Element) and x.dossier and x.nom.lower() == nom.lower()
+               for x in (self.liste.topLevelItem(i).data(0, Qt.UserRole) for i in range(self.liste.topLevelItemCount()))):
+            QMessageBox.information(self, _("Nouveau dossier"), _("Ce dossier existe déjà."))
+            return
+        chemin = posixpath.join(self.dossier or "/", nom)
+        try:
+            from .dialogues_ia import en_tache
+            try:
+                en_tache(self, _("Nouveau dossier"), _("Création du dossier {d}...", d=chemin), self.e.nouveau_dossier, chemin)
+            except InterruptedError:
+                return
+        except distant.ErreurDistant as ex:
+            erreur(self, _("Nouveau dossier"), ex, self.e)
+            return
+        self.aller(chemin)
 
     def monter(self):
         if self.e and self.dossier not in ("", "/"):

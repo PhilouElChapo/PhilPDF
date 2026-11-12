@@ -956,4 +956,10 @@
     <string name="lien_autre_aide">OneDrive, Dropbox, Box…: the PDF is placed in PhilPDF/Partages on that account (folder created if missing) and the link goes into the message in the same way. The link is also copied.</string>
     <string name="err_kdrive_offre">kDrive refuses WebDAV access (403): your kDrive plan does not allow it (kSuite Free, kSuite Standard, my kSuite). The address and password were received: you need a kDrive plan that includes WebDAV.</string>
     <string name="err_kdrive_mdp">kDrive refuses the e-mail address or password (401). With two-step verification, create an application password in the Infomaniak Manager and use it here.</string>
+    <string name="nouveau_dossier">New folder</string>
+    <string name="nouveau_dossier_nom">Name of the new folder in %1$s</string>
+    <string name="creer">Create</string>
+    <string name="dossier_existe">This folder already exists.</string>
+    <string name="dossier_nom_interdit">Not allowed in a folder name: / \\ : * ? \" &lt; &gt; |</string>
+    <string name="creation_dossier">Creating the folder…</string>
 </resources>

@@ -3074,5 +3074,12 @@
  "Demander la photo du profil au service, sinon à Gravatar (la recherche universelle d'avatar d'après l'adresse e-mail ; seule son empreinte est envoyée à gravatar.com)": "Das Profilfoto beim Dienst abrufen, sonst bei Gravatar (die universelle Avatar-Suche anhand der E-Mail-Adresse; nur ihr Fingerabdruck wird an gravatar.com gesendet)",
  "Editeur PDF · éditez, signez, allégez en toute liberté": "PDF-Editor · bearbeiten, signieren, verkleinern, ganz frei",
  "kDrive refuse l'accès WebDAV (403) : votre offre kDrive ne le permet pas (kSuite Free, kSuite Standard, my kSuite). L'adresse et le mot de passe ont bien été reçus : il faut une offre kDrive qui comprend WebDAV.": "kDrive verweigert den WebDAV-Zugang (403): Ihr kDrive-Tarif erlaubt ihn nicht (kSuite Free, kSuite Standard, my kSuite). Adresse und Passwort wurden empfangen: Sie benötigen einen kDrive-Tarif mit WebDAV.",
- "kDrive refuse l'adresse e-mail ou le mot de passe (401). Avec la validation en deux étapes, créez un mot de passe d'application dans le Manager d'Infomaniak et utilisez-le ici.": "kDrive lehnt die E-Mail-Adresse oder das Passwort ab (401). Mit Zwei-Faktor-Bestätigung erstellen Sie im Infomaniak-Manager ein Anwendungspasswort und verwenden es hier."
+ "kDrive refuse l'adresse e-mail ou le mot de passe (401). Avec la validation en deux étapes, créez un mot de passe d'application dans le Manager d'Infomaniak et utilisez-le ici.": "kDrive lehnt die E-Mail-Adresse oder das Passwort ab (401). Mit Zwei-Faktor-Bestätigung erstellen Sie im Infomaniak-Manager ein Anwendungspasswort und verwenden es hier.",
+ "Nouveau dossier": "Neuer Ordner",
+ "Créer un dossier ici (Ctrl+Maj+N)": "Hier einen Ordner erstellen (Strg+Umschalt+N)",
+ "Nom du nouveau dossier dans {d} :": "Name des neuen Ordners in {d}:",
+ "Un nom de dossier ne peut pas contenir / \\ : * ? \" < > |": "Ein Ordnername darf nicht / \\ : * ? \" < > | enthalten",
+ "Ce dossier existe déjà.": "Dieser Ordner existiert bereits.",
+ "Création du dossier {d}...": "Ordner {d} wird erstellt...",
+ "Cet emplacement ne permet pas de créer un dossier depuis PhilPDF.": "An diesem Speicherort kann PhilPDF keinen Ordner erstellen."
 }

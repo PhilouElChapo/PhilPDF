@@ -206,6 +206,10 @@ class Emplacement:
         """Cree les dossiers parents de chemin s'ils manquent (avant un envoi)."""
         pass
 
+    def nouveau_dossier(self, chemin):
+        """Cree le dossier chemin (bouton « Nouveau dossier » de Ouvrir / Enregistrer)."""
+        raise ErreurDistant(_("Cet emplacement ne permet pas de créer un dossier depuis PhilPDF."))
+
 
 # ---------------------------------------------------------------------------------- dossier reseau
 class Reseau(Emplacement):
@@ -241,6 +245,14 @@ class Reseau(Emplacement):
         import shutil
         os.makedirs(os.path.dirname(self._local(chemin)), exist_ok=True)
         shutil.copy2(local, self._local(chemin))
+
+    def nouveau_dossier(self, chemin):
+        try:
+            os.makedirs(self._local(chemin), exist_ok=False)
+        except FileExistsError:
+            raise ErreurDistant(_("Ce dossier existe déjà."))
+        except OSError as e:
+            raise ErreurDistant(str(e))
 
 
 # ---------------------------------------------------------------------------------- HTTP commun
@@ -357,6 +369,9 @@ class WebDAV(_Http):
                 pass                                   # deja la (405) : normal
             self.__dict__.setdefault("_dossiers_vus", set()).add(d)
 
+    def nouveau_dossier(self, chemin):
+        self._req("MKCOL", "/" + chemin.strip("/") + "/").close()
+
 
 # ---------------------------------------------------------------------------------- FTP / FTPS
 class FTP(Emplacement):
@@ -462,6 +477,16 @@ class FTP(Emplacement):
     def envoyer(self, local, chemin):
         with self._capture():
             return self._envoyer(local, chemin)
+
+    def nouveau_dossier(self, chemin):
+        with self._capture():
+            f = self._connexion()
+            try:
+                f.mkd(chemin)
+            except ftplib.error_perm as e:
+                raise ErreurDistant(str(e))
+            finally:
+                f.close()
 
 
 # ---------------------------------------------------------------------------------- Synology File Station
@@ -583,6 +608,12 @@ class Synology(_Http):
         corps.write(f"\r\n--{bord}--\r\n".encode())
         self._api({"_sid": self.sid}, donnees=corps.getvalue(),
                   entetes={"Content-Type": f"multipart/form-data; boundary={bord}"})
+
+    def nouveau_dossier(self, chemin):
+        self.connecter()
+        parent, nom = posixpath.split(chemin.rstrip("/"))
+        self._api({"api": "SYNO.FileStation.CreateFolder", "version": "2", "method": "create",
+                   "folder_path": json.dumps([parent or "/"]), "name": json.dumps([nom]), "force_parent": "false"})
 
 
 # ---------------------------------------------------------------------------------- Google Drive / OneDrive
@@ -717,6 +748,11 @@ class GoogleDrive(_DriveOAuth):
         self._ids[chemin] = d["id"]
         return d["id"]
 
+    def nouveau_dossier(self, chemin):
+        if self._id(chemin) is not None:
+            raise ErreurDistant(_("Ce dossier existe déjà."))
+        self._id(chemin, creer=True)
+
     def lister(self, dossier):
         i = self._id(dossier)
         if i is None:
@@ -830,6 +866,12 @@ class OneDrive(_DriveOAuth):
             r.add_header("Content-Range", f"bytes {debut}-{debut + len(bout) - 1}/{len(contenu)}")
             self._ouvrir(r).close()
 
+    def nouveau_dossier(self, chemin):
+        parent, nom = posixpath.split(self._cle(chemin))
+        self._appel("POST", self._url(parent or "/", "children"),
+                    json.dumps({"name": nom, "folder": {}, "@microsoft.graph.conflictBehavior": "fail"}).encode(),
+                    {"Content-Type": "application/json"})
+
     def qui(self):
         u = self._appel("GET", f"{GRAPH}/me?$select=userPrincipalName,mail,displayName")
         return u.get("mail") or u.get("userPrincipalName") or u.get("displayName") or "?"
@@ -887,6 +929,9 @@ class Dropbox(_DriveOAuth):
             self._appel("POST", f"{DROPBOX_CONTENU}/files/upload", f.read(),
                         {"Dropbox-API-Arg": arg, "Content-Type": "application/octet-stream"})
 
+    def nouveau_dossier(self, chemin):
+        self._json(f"{DROPBOX_API}/files/create_folder_v2", {"path": self._cle(chemin), "autorename": False})
+
     def qui(self):
         u = self._appel("POST", f"{DROPBOX_API}/users/get_current_account", None)
         return u.get("email") or (u.get("name") or {}).get("display_name") or "?"
@@ -934,6 +979,11 @@ class Box(_DriveOAuth):
                         {"Content-Type": "application/json"})
         self._ids[c] = d["id"]
         return d["id"]
+
+    def nouveau_dossier(self, chemin):
+        if self._id(chemin, type_="folder") is not None:
+            raise ErreurDistant(_("Ce dossier existe déjà."))
+        self._id(chemin, creer=True, type_="folder")
 
     def lister(self, dossier):
         i = self._id(dossier)
@@ -1051,6 +1101,9 @@ class Pcloud(_DriveOAuth):
         d = posixpath.dirname(self._cle(chemin))
         if d and d != "/":
             self._api("createfolderifnotexists", path=d)
+
+    def nouveau_dossier(self, chemin):
+        self._api("createfolder", path=self._cle(chemin))
 
     def telecharger(self, chemin, local):
         try:

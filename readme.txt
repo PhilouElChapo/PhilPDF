@@ -10,6 +10,10 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.27.4
+- Ouvrir depuis le cloud et Enregistrer dans le cloud : bouton « Nouveau dossier », comme sous Windows (pCloud,
+  kDrive, WebDAV, Google Drive, OneDrive, Dropbox, Box).
+
 1.27.3
 - Modifier le texte d'un releve dont la police reunit chiffres a chasse fixe et proportionnels : le style de la
   ligne d'origine est garde, comme sous Windows.
@@ -545,6 +549,10 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.101
+- Ouvrir / Enregistrer vers un emplacement (cloud, NAS, FTP, WebDAV, dossier reseau) : bouton « Nouveau dossier »
+  (Ctrl+Maj+N). Le dossier est cree dans le dossier affiche et PhilPDF y entre aussitot.
 
 0.9.100
 - Modifier le texte d'un releve (CAVP, banques...) dont la police reunit plusieurs polices en une : les lettres

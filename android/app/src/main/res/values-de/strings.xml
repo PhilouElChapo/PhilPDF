@@ -955,4 +955,10 @@
     <string name="lien_autre_aide">OneDrive, Dropbox, Box…: Das PDF wird in PhilPDF/Partages dieses Kontos abgelegt (Ordner wird bei Bedarf erstellt) und der Link kommt genauso in die Nachricht. Der Link wird auch kopiert.</string>
     <string name="err_kdrive_offre">kDrive verweigert den WebDAV-Zugang (403): Ihr kDrive-Tarif erlaubt ihn nicht (kSuite Free, kSuite Standard, my kSuite). Adresse und Passwort wurden empfangen: Sie benötigen einen kDrive-Tarif mit WebDAV.</string>
     <string name="err_kdrive_mdp">kDrive lehnt die E-Mail-Adresse oder das Passwort ab (401). Mit Zwei-Faktor-Bestätigung erstellen Sie im Infomaniak-Manager ein Anwendungspasswort und verwenden es hier.</string>
+    <string name="nouveau_dossier">Neuer Ordner</string>
+    <string name="nouveau_dossier_nom">Name des neuen Ordners in %1$s</string>
+    <string name="creer">Erstellen</string>
+    <string name="dossier_existe">Dieser Ordner existiert bereits.</string>
+    <string name="dossier_nom_interdit">In einem Ordnernamen nicht erlaubt: / \\ : * ? \" &lt; &gt; |</string>
+    <string name="creation_dossier">Ordner wird erstellt…</string>
 </resources>

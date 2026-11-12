@@ -459,6 +459,10 @@ fun EcranFichiers(depart: Nuage, fermer: () -> Unit, ouvrir: (Uri) -> Unit,
     var erreur by remember { mutableStateOf<String?>(null) }
     var occupe by remember { mutableStateOf<String?>(null) }
     val txtTelechargement = stringResource(R.string.telechargement)
+    val txtCreation = stringResource(R.string.creation_dossier)
+    var demandeDossier by remember { mutableStateOf(false) }
+    var nomDossier by remember { mutableStateOf("") }
+    var erreurDossier by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(n, chemin) {
         entrees = null; erreur = null
@@ -497,6 +501,38 @@ fun EcranFichiers(depart: Nuage, fermer: () -> Unit, ouvrir: (Uri) -> Unit,
                             }
                         }
                     }
+                }
+                // « Nouveau dossier » : cree dans le dossier affiche, puis on y entre (pour y enregistrer ou ranger)
+                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    erreurDossier?.let { Text(it, Modifier.weight(1f).padding(start = 8.dp), color = ROUGE, fontSize = 12.sp, maxLines = 2) }
+                    TextButton(onClick = { nomDossier = ""; erreurDossier = null; demandeDossier = true }, enabled = occupe == null && erreur == null) {
+                        Icon(Icones.get("nouveau_dossier", Color(0xFFE0A100)), null, Modifier.size(20.dp), tint = Color.Unspecified)
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.nouveau_dossier))
+                    }
+                }
+                if (demandeDossier) {
+                    val existe = entrees.orEmpty().any { it.dossier && it.nom.equals(nomDossier.trim(), true) }
+                    val interdit = nomDossier.any { it in "/\\:*?\"<>|" } || nomDossier.trim() in listOf(".", "..")
+                    AlertDialog(onDismissRequest = { demandeDossier = false },
+                        title = { Text(stringResource(R.string.nouveau_dossier)) },
+                        text = { Column {
+                            OutlinedTextField(nomDossier, { nomDossier = it }, singleLine = true, isError = existe || interdit,
+                                label = { Text(stringResource(R.string.nouveau_dossier_nom, chemin.last().second)) })
+                            if (existe) Text(stringResource(R.string.dossier_existe), color = ROUGE, fontSize = 12.sp)
+                            if (interdit) Text(stringResource(R.string.dossier_nom_interdit), color = ROUGE, fontSize = 12.sp)
+                        } },
+                        confirmButton = { TextButton(enabled = nomDossier.isNotBlank() && !existe && !interdit, onClick = {
+                            val nom = nomDossier.trim(); demandeDossier = false
+                            portee.launch {
+                                occupe = txtCreation
+                                try { val id = n.creerDossier(ctx, chemin.last().first, nom); chemin = chemin + (id to nom) }
+                                catch (ex: Exception) { erreurDossier = ex.message ?: ex.javaClass.simpleName }
+                                occupe = null
+                            }
+                        }) { Text(stringResource(R.string.creer)) } },
+                        dismissButton = { TextButton(onClick = { demandeDossier = false }) { Text(stringResource(R.string.annuler)) } })
                 }
                 HorizontalDivider()
                 Box(Modifier.weight(1f).fillMaxWidth()) {
