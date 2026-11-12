@@ -84,7 +84,7 @@ jobs:
       - name: Test des scanners reseau (eSCL) et du nettoyage des scans
         run: python tests/test_escl.py
 
-      - name: Test des polices fusionnees (releves : chiffres en double, plages en tableau)
+      - name: Test des polices fusionnees (releves, chiffres en double, plages en tableau)
         run: python tests/test_police_fusionnee.py
 
       - name: Test des scans deja trames (fond pointille d'ordonnance)
