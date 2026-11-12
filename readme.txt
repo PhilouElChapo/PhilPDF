@@ -10,6 +10,10 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.27.1
+- « Nettoyer un scan » et la numerisation en noir et blanc : un scan deja en noir et blanc TRAME (fond pointille,
+  papier securise d'ordonnance) est maintenant nettoye, comme sous Windows : le fond part au blanc, le texte reste.
+
 1.27.0
 - Ouvrir et Enregistrer sous reviennent au selecteur d'Android direct, comme avant (il garde votre tri et votre
   dernier dossier).
@@ -533,6 +537,12 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.98
+- Scan deja en noir et blanc TRAME (le pilote du scanner fait les gris avec des points ; papier securise
+  d'ordonnance, photocopie d'un fond gris) : le fond pointille restait tel quel. La numerisation, « Nettoyer un scan »
+  et la reconnaissance du texte le reconnaissent maintenant : les points sont lisses, le fond part au blanc, le texte
+  reste net.
 
 0.9.97
 - Accueil : le sous-titre « Editeur PDF · editez, signez, allegez en toute liberte » est traduit dans chaque langue.

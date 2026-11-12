@@ -253,10 +253,19 @@ object Numerisation {
 
     /** Applique le modele : fond eclairci (ombres et lumiere inegale retirees), noir et blanc net, ou rien (photo). */
     fun ameliorer(source: Bitmap, m: Modele, bords: Boolean = true, taches: Boolean = true): Bitmap {
+        // tramage regarde sur l'image d'origine (la reduction le melange deja en gris)
+        val trame = m == Modele.NOIR_BLANC && tramee(source)
         val bm = reduire(source, m.grandCote).copy(Bitmap.Config.ARGB_8888, true)
         if (m == Modele.PHOTO) return bm
         val w = bm.width; val h = bm.height
         val px = IntArray(w * h).also { bm.getPixels(it, 0, w, 0, 0, w, h) }
+        // deja en noir et blanc TRAME (pilote du scanner, papier securise d'ordonnance) : points lisses d'abord
+        if (trame) {
+            detramer(px, w, h)
+            nettoyerNb(px, w, h, max(w, h) / 11.69f / 300f, bords, taches)
+            bm.setPixels(px, 0, w, 0, 0, w, h)
+            return bm
+        }
         // fond estime : image tres reduite (le texte disparait), lissee, puis agrandie
         val f = 24
         val fw = (w / f).coerceAtLeast(2); val fh = (h / f).coerceAtLeast(2)
@@ -296,6 +305,66 @@ object Numerisation {
         if (nb) nettoyerNb(px, w, h, max(w, h) / 11.69f / 300f, bords, taches)
         bm.setPixels(px, 0, w, 0, 0, w, h)
         return bm
+    }
+
+    /** Vrai si l'image est faite de points noirs et blancs alternes (gris trames), comme sous Windows
+     *  (moteur/nettoyage.py, tramee) : un seuil ne retire pas un fond pointille, il faut le lisser d'abord. */
+    private fun tramee(bm: Bitmap): Boolean {
+        if (bm.width < 400 || bm.height < 400) return false
+        val w = bm.width / 2; val h = bm.height / 2           // le centre de la page
+        val px = IntArray(w * h).also { bm.getPixels(it, 0, w, bm.width / 4, bm.height / 4, w, h) }
+        var moyens = 0; var n = 0; var alt = 0; var paires = 0
+        for (y in 0 until h) for (x in 0 until w) {
+            val v = gris(px[y * w + x]); n++
+            if (v in 21..234) moyens++
+            val noir = v < 128
+            if (x + 1 < w) { paires++; if (noir != (gris(px[y * w + x + 1]) < 128)) alt++ }
+            if (y + 1 < h) { paires++; if (noir != (gris(px[(y + 1) * w + x]) < 128)) alt++ }
+        }
+        return moyens.toFloat() / n <= 0.02f && alt.toFloat() / paires.coerceAtLeast(1) > 0.15f
+    }
+
+    /** Noir et blanc net d'une image tramee : points lisses en gris (flou), puis seuil a 45 % entre l'encre (le plus
+     *  sombre) et le fond du voisinage, motif du papier compris, qui part au blanc. */
+    private fun detramer(px: IntArray, w: Int, h: Int) {
+        var g = FloatArray(w * h) { gris(px[it]).toFloat() }
+        val r = (2f * max(w, h) / 3508f).roundToInt().coerceAtLeast(1)
+        repeat(2) {                                     // deux flous en boite ~ flou gaussien
+            val t = FloatArray(w * h)
+            for (y in 0 until h) { var s = 0f; val o = y * w
+                for (x in -r..r) s += g[o + x.coerceIn(0, w - 1)]
+                for (x in 0 until w) { t[o + x] = s / (2 * r + 1); s += g[o + (x + r + 1).coerceAtMost(w - 1)] - g[o + (x - r).coerceAtLeast(0)] } }
+            val u = FloatArray(w * h)
+            for (x in 0 until w) { var s = 0f
+                for (y in -r..r) s += t[y.coerceIn(0, h - 1) * w + x]
+                for (y in 0 until h) { u[y * w + x] = s / (2 * r + 1); s += t[(y + r + 1).coerceAtMost(h - 1) * w + x] - t[(y - r).coerceAtLeast(0) * w + x] } }
+            g = u
+        }
+        fun centile(v: FloatArray, p: Float): Float {
+            val hist = IntArray(256); v.forEach { hist[it.toInt().coerceIn(0, 255)]++ }
+            var c = 0; val but = (v.size * p).toInt()
+            for (i in 0..255) { c += hist[i]; if (c > but) return i.toFloat() }
+            return 255f
+        }
+        val noir = minOf(centile(g, 0.01f), 80f); val mediane = centile(g, 0.5f)      // encre (peu de texte : le 1 % serait le motif)
+        // fond du voisinage : mediane par case, puis agrandie en douceur
+        val cw = (w / 40).coerceAtLeast(8); val nx = (w + cw - 1) / cw; val ny = (h + cw - 1) / cw
+        val cases = IntArray(nx * ny)
+        for (cy in 0 until ny) for (cx in 0 until nx) {
+            val hist = IntArray(256); var n = 0
+            for (y in cy * cw until minOf(h, (cy + 1) * cw)) for (x in cx * cw until minOf(w, (cx + 1) * cw)) { hist[g[y * w + x].toInt().coerceIn(0, 255)]++; n++ }
+            var c = 0; var med = 255
+            for (i in 0..255) { c += hist[i]; if (c > n / 2) { med = i; break } }
+            val f = maxOf(med.toFloat(), mediane * 0.85f).roundToInt().coerceIn(0, 255)
+            cases[cy * nx + cx] = (0xFF shl 24) or (f shl 16) or (f shl 8) or f
+        }
+        val fond = Bitmap.createScaledBitmap(Bitmap.createBitmap(cases, nx, ny, Bitmap.Config.ARGB_8888), w, h, true)
+        val fd = IntArray(w * h).also { fond.getPixels(it, 0, w, 0, 0, w, h) }
+        for (i in px.indices) {
+            val seuil = noir + ((fd[i] and 255) - noir) * 0.45f
+            val v = if (g[i] < seuil) 0 else 255
+            px[i] = (0xFF shl 24) or (v shl 16) or (v shl 8) or v
+        }
     }
 
     /**

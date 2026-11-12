@@ -51,8 +51,39 @@ def tourner(img, a, fond=255):
     return cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_CUBIC, borderValue=bv)
 
 
+def tramee(gris):
+    """Vrai si l'image est deja en noir et blanc TRAME (points alternes) : pilote de scanner en « noir et blanc »
+    avec diffusion d'erreur, papier securise (ordonnance), photocopie d'un fond gris. Les gris y sont faits de
+    points noirs et blancs melanges : un seuil ne les retire pas, il faut d'abord les lisser."""
+    h, w = gris.shape[:2]
+    c = gris[h // 4:3 * h // 4, w // 4:3 * w // 4]
+    if c.size < 10000 or float(((c > 20) & (c < 235)).mean()) > 0.02:
+        return False                        # vrais gris : image en niveaux de gris, pas tramee
+    b = (c < 128).astype(np.int8)
+    alternance = (np.abs(np.diff(b, axis=1)).mean() + np.abs(np.diff(b, axis=0)).mean()) / 2
+    return float(alternance) > 0.15         # texte net en noir et blanc : bien moins de 0.1
+
+
+def detramer(gris, contraste=18):
+    """Noir et blanc net d'une image tramee : les points sont lisses en gris, puis le seuil passe entre l'encre
+    (le plus sombre) et le fond (le plus courant, motif du papier compris), qui part au blanc."""
+    flou = cv2.GaussianBlur(gris, (0, 0), 1.6 * max(gris.shape) / 3508)
+    noir = min(float(np.percentile(flou, 1)), 80.0)        # encre (peu de texte : le 1 % serait le motif)
+    # fond du voisinage (le motif du papier est plus fonce par endroits) : mediane sur une image reduite
+    k = 0.1
+    petit = cv2.resize(flou, None, fx=k, fy=k, interpolation=cv2.INTER_AREA)
+    fond = cv2.resize(cv2.medianBlur(petit, 15), (flou.shape[1], flou.shape[0]), interpolation=cv2.INTER_LINEAR)
+    fond = np.maximum(fond.astype(np.float32), float(np.percentile(flou, 50)) * 0.85)
+    # contraste 18 (reglage par defaut) : seuil a 45 % entre l'encre et le fond ; plus haut = plus clair
+    seuil = noir + (fond - noir) * (0.45 - (contraste - 18) / 200)
+    return np.where(flou < seuil, 0, 255).astype(np.uint8)
+
+
 def noir_blanc(gris, contraste=18):
-    """Fond eclairci (ombres, jaunissement) puis noir et blanc net (255 blanc, 0 noir)."""
+    """Fond eclairci (ombres, jaunissement) puis noir et blanc net (255 blanc, 0 noir). Une image deja tramee
+    (points noirs et blancs) est d'abord lissee : sinon son fond gris pointille resterait tel quel."""
+    if tramee(gris):
+        return detramer(gris, contraste)
     fond = cv2.medianBlur(cv2.dilate(gris, np.ones((7, 7), np.uint8)), 31)
     norm = cv2.divide(gris, fond, scale=255)
     return cv2.adaptiveThreshold(norm, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 41, int(contraste))
