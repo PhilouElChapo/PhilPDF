@@ -176,7 +176,32 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/pdf")) { u ->
         if (u != null) ecrireVers(u, fermerApres)
     }
-    LaunchedEffect(etat.enregistrerSous) { etat.enregistrerSous?.let { n -> etat.enregistrerSous = null; autreNom.launch(n) } }
+    // Enregistrer sous : ce telephone (selecteur d'Android) ou un compte relie (pCloud, kDrive, WebDAV...)
+    var choixSous by remember { mutableStateOf<String?>(null) }
+    var sousCompte by remember { mutableStateOf<Pair<String, Nuage>?>(null) }
+    fun autreNomOu(n: String) { if (comptesParcourables(ctx).isEmpty()) autreNom.launch(n) else choixSous = n }
+    LaunchedEffect(etat.enregistrerSous) { etat.enregistrerSous?.let { n -> etat.enregistrerSous = null; autreNomOu(n) } }
+    choixSous?.let { n ->
+        ChoixEmplacement(stringResource(R.string.empl_enregistrer_sous), telephone = { autreNom.launch(n) },
+            compte = { c -> sousCompte = n to c }, fermer = { choixSous = null })
+    }
+    sousCompte?.let { (n, c) ->
+        EcranFichiers(c, fermer = { sousCompte = null }, ouvrir = {}, nomDefaut = n, enregistrer = { dossier, nom ->
+            portee.launch {
+                try {
+                    val octets = doc.copieAJour(ctx).readBytes()
+                    val chemin = c.envoyerChemin(ctx, dossier, nom, octets)
+                    Journal.ecrire("enregistrement", "${doc.nom} : copie sur ${c.fournisseur(ctx).nom} ($chemin)")
+                    android.widget.Toast.makeText(ctx, ctx.getString(R.string.empl_enregistre, c.fournisseur(ctx).nom, chemin),
+                        android.widget.Toast.LENGTH_LONG).show()
+                    if (fermerApres) fermer()
+                } catch (e: Exception) {
+                    Journal.ecrire("enregistrement", "${doc.nom} : envoi impossible ($e)")
+                    android.widget.Toast.makeText(ctx, e.message ?: e.toString(), android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        })
+    }
     // retour : si le document est modifie, on demande (rien ne se perd en silence)
     BackHandler { if (doc.modifie) quitter = true else fermer() }
     val fermerDemande = { if (doc.modifie) quitter = true else fermer() }
@@ -270,7 +295,7 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
                     }
                     TextButton(onClick = {
                         etat.demandeEnregistrer = false; quitter = false; fermerApres = q
-                        autreNom.launch(if (doc.neuf) doc.nom else doc.nom.removeSuffix(".pdf").removeSuffix(".PDF") + Textes.t(R.string.suffixe_modifie) + ".pdf")
+                        autreNomOu(if (doc.neuf) doc.nom else doc.nom.removeSuffix(".pdf").removeSuffix(".PDF") + Textes.t(R.string.suffixe_modifie) + ".pdf")
                     }) { Text(stringResource(R.string.autre_nom)) }
                     if (q) TextButton(onClick = { quitter = false; fermer() }) {
                         Text(stringResource(R.string.ne_pas_enregistrer), color = Color(0xFFC62828))

@@ -48,6 +48,7 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
     var versionCompte by remember { mutableIntStateOf(0) }
     var ecranCompte by remember { mutableStateOf(false) }
     var parcourir by remember { mutableStateOf<Nuage?>(null) }
+    var choixOuvrir by remember { mutableStateOf(false) }       // Ouvrir : ce telephone ou un compte relie
     var aide by remember { mutableStateOf(false) }
     var reglagesIa by remember { mutableStateOf(false) }
     // compte prefere (envois et lecture) en tete
@@ -99,7 +100,8 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
                 // ouvrir, numeriser, combiner : trois boutons sur une seule ligne (icone et nom court dessous)
                 Row(if (etroit) Modifier.fillMaxWidth() else Modifier.widthIn(max = 420.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BoutonAccueil("ouvrir", stringResource(R.string.accueil_ouvrir), true, Modifier.weight(1f), choisir)
+                    BoutonAccueil("ouvrir", stringResource(R.string.accueil_ouvrir), true, Modifier.weight(1f)) {
+                        if (comptesParcourables(ctx).isEmpty()) choisir() else choixOuvrir = true }
                     BoutonAccueil("numeriser", stringResource(R.string.accueil_numeriser), false, Modifier.weight(1f), numeriser)
                     BoutonAccueil("combiner", stringResource(R.string.accueil_combiner), false, Modifier.weight(1f), combiner)
                 }
@@ -183,6 +185,8 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
     if (ecranCompte) EcranComptes(fermer = { ecranCompte = false; versionCompte++ },
         parcourir = { n -> ecranCompte = false; versionCompte++; voir(n) })
     parcourir?.let { n -> EcranFichiers(n, fermer = { parcourir = null }, ouvrir = ouvrir) }
+    if (choixOuvrir) ChoixEmplacement(stringResource(R.string.accueil_ouvrir), telephone = choisir, compte = { parcourir = it },
+        fermer = { choixOuvrir = false })
     if (aide) EcranAide { aide = false }
     telechargement?.let { f ->
         AlertDialog(onDismissRequest = {}, confirmButton = {}, title = { Text(stringResource(R.string.accueil_ouvrir)) },

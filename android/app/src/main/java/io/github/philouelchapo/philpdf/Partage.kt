@@ -25,7 +25,10 @@ import kotlinx.coroutines.launch
 fun ChoixPartage(etat: EtatLecteur, fermer: () -> Unit) {
     val ctx = LocalContext.current
     val portee = rememberCoroutineScope()
-    val compte = remember { Nuage.prefere(ctx)?.takeIf { it.connecte(ctx) } }
+    // le lien passe par un compte qui sait en faire (Google Drive par defaut) ; « Changer » en choisit un autre
+    var compte by remember { mutableStateOf(Nuage.compteLien(ctx)) }
+    val possibles = remember { Nuage.liste(ctx).filter { Nuage.peutLien(ctx, it) } }
+    var changer by remember { mutableStateOf(false) }
     var occupe by remember { mutableStateOf(false) }
     var erreur by remember { mutableStateOf<String?>(null) }
     AlertDialog(onDismissRequest = { if (!occupe) fermer() },
@@ -38,8 +41,9 @@ fun ChoixPartage(etat: EtatLecteur, fermer: () -> Unit) {
                 }
                 Spacer(Modifier.height(6.dp))
                 Ligne("synchro", stringResource(R.string.partage_lien),
-                    if (compte != null) stringResource(R.string.partage_lien_aide, compte.libelle(ctx))
-                    else stringResource(R.string.partage_sans_compte), !occupe && compte != null) {
+                    compte?.let { stringResource(R.string.partage_lien_aide, it.fournisseur(ctx).nom + " · " + it.libelle(ctx)) }
+                        ?: if (Nuage.liste(ctx).isNotEmpty()) stringResource(R.string.lien_aucun_compte) else
+                    stringResource(R.string.partage_sans_compte), !occupe && compte != null) {
                     val n = compte ?: return@Ligne
                     occupe = true; erreur = null
                     portee.launch {
@@ -52,6 +56,20 @@ fun ChoixPartage(etat: EtatLecteur, fermer: () -> Unit) {
                             Journal.ecrire("partage", "lien impossible ($e)")
                             erreur = e.message ?: e.toString()
                         } finally { occupe = false }
+                    }
+                }
+                if (compte != null && possibles.size > 1) {
+                    TextButton(onClick = { changer = !changer }, enabled = !occupe, modifier = Modifier.padding(start = 36.dp)) {
+                        Text(stringResource(R.string.lien_changer), fontSize = 13.sp) }
+                    if (changer) possibles.forEach { c ->
+                        Row(Modifier.fillMaxWidth().clickable { compte = c; Nuage.choisirLien(ctx, c); changer = false }
+                            .padding(start = 44.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(c.id == compte?.id, { compte = c; Nuage.choisirLien(ctx, c); changer = false })
+                            Column {
+                                Text(c.fournisseur(ctx).nom, fontSize = 14.sp)
+                                Text(c.libelle(ctx), fontSize = 12.sp, color = Color.Gray)
+                            }
+                        }
                     }
                 }
                 if (occupe) Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {

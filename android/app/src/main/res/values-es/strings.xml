@@ -939,4 +939,12 @@
     <string name="image_par_defaut">Por defecto</string>
     <string name="gravatar">Foto Gravatar (según el correo)</string>
     <string name="gravatar_absent">No hay foto Gravatar para %1$s. Créela en gravatar.com con esta dirección, o elija una imagen.</string>
+    <string name="empl_telephone">Este teléfono u otra app</string>
+    <string name="empl_telephone_aide">El selector de Android: memoria del teléfono, apps Google Drive, Dropbox, Box, OneDrive...</string>
+    <string name="empl_nom">Nombre del archivo</string>
+    <string name="empl_enregistrer_ici">Guardar aquí</string>
+    <string name="empl_enregistrer_sous">Guardar como</string>
+    <string name="empl_enregistre">Guardado en %1$s: %2$s</string>
+    <string name="lien_changer">Cambiar la cuenta de los enlaces</string>
+    <string name="lien_aucun_compte">Ninguna de sus cuentas vinculadas puede crear un enlace (pCloud, kDrive y WebDAV por contraseña no pueden): vincule Google Drive, Dropbox, Box u OneDrive.</string>
 </resources>

@@ -10,6 +10,13 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.26.0
+- Ouvrir et Enregistrer sous proposent maintenant : « Ce telephone ou une autre appli » (le selecteur d'Android) ou
+  chacun de vos comptes relies dans PhilPDF (pCloud, kDrive, WebDAV, OneDrive, Dropbox, Box), parcourus dans PhilPDF :
+  on choisit le dossier et le nom ; un fichier du meme nom n'est jamais remplace. Le compte prefere vient en tete.
+- Partager par lien : le lien passe par un compte qui sait en faire (pCloud, kDrive et WebDAV par mot de passe ne le
+  peuvent pas) : Google Drive par defaut, « Changer le compte des liens » en choisit un autre, retenu ensuite.
+
 1.25.3
 - « Photo Gravatar (d'apres l'adresse e-mail) » pour tous les comptes, Google Drive, OneDrive, Dropbox et Box compris.
 

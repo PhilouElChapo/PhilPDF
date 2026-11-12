@@ -437,9 +437,50 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
     }
 }
 
-/** Parcourir les dossiers d'un compte (OneDrive, Dropbox, Box) et ouvrir un PDF. */
+/** Ouvrir / Enregistrer sous : « Ce telephone ou une autre appli » (selecteur d'Android) ou l'un des comptes relies
+ *  dans PhilPDF (pCloud, kDrive, WebDAV... que le selecteur d'Android ne connait pas), compte prefere en tete. */
 @Composable
-fun EcranFichiers(n: Nuage, fermer: () -> Unit, ouvrir: (Uri) -> Unit) {
+fun ChoixEmplacement(titre: String, telephone: () -> Unit, compte: (Nuage) -> Unit, fermer: () -> Unit) {
+    val ctx = LocalContext.current
+    val comptes = remember { comptesParcourables(ctx) }
+    AlertDialog(onDismissRequest = fermer, title = { Text(titre) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Row(Modifier.fillMaxWidth().clickable { fermer(); telephone() }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icones.get("ouvrir", Color(0xFFE0A100)), null, Modifier.size(32.dp), tint = Color.Unspecified)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.empl_telephone), fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.empl_telephone_aide), fontSize = 12.sp, color = Color.Gray)
+                    }
+                }
+                comptes.forEach { c ->
+                    HorizontalDivider(color = Color(0xFFEEEEEE))
+                    Row(Modifier.fillMaxWidth().clickable { fermer(); compte(c) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        AvatarCompte(c, 0, 32.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(c.fournisseur(ctx).nom + if (Nuage.estPrefere(ctx, c)) "  ★" else "", fontWeight = FontWeight.SemiBold)
+                            Text(c.libelle(ctx), fontSize = 12.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {}, dismissButton = { TextButton(onClick = fermer) { Text(stringResource(R.string.annuler)) } })
+}
+
+/** Comptes relies que PhilPDF sait parcourir lui-meme (Google Drive passe par le selecteur d'Android), prefere en tete. */
+fun comptesParcourables(ctx: android.content.Context): List<Nuage> =
+    Nuage.liste(ctx).filter { it.connecte(ctx) && it.parcourable(ctx) }.sortedBy { if (Nuage.estPrefere(ctx, it)) 0 else 1 }
+
+/** Parcourir les dossiers d'un compte et ouvrir un PDF ; ou, avec enregistrer, choisir le dossier et le nom du PDF
+ *  a y enregistrer (un fichier du meme nom n'est jamais remplace : « (2) » est ajoute). */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun EcranFichiers(n: Nuage, fermer: () -> Unit, ouvrir: (Uri) -> Unit,
+                  enregistrer: ((dossier: String, nom: String) -> Unit)? = null, nomDefaut: String = "") {
+    var nomFichier by remember { mutableStateOf(nomDefaut) }
     val ctx = LocalContext.current
     val portee = rememberCoroutineScope()
     var chemin by remember { mutableStateOf(listOf(n.racineParcours(ctx) to n.fournisseur(ctx).nom)) }
@@ -476,7 +517,7 @@ fun EcranFichiers(n: Nuage, fermer: () -> Unit, ouvrir: (Uri) -> Unit) {
                         l.isEmpty() -> Text(stringResource(R.string.dossier_vide), Modifier.padding(16.dp), color = Color.Gray)
                         else -> LazyColumn {
                             items(l, key = { it.id }) { e ->
-                                Row(Modifier.fillMaxWidth().clickable(enabled = occupe == null) {
+                                Row(Modifier.fillMaxWidth().clickable(enabled = occupe == null && (e.dossier || enregistrer == null)) {
                                     if (e.dossier) chemin = chemin + (e.id to e.nom)
                                     else portee.launch {
                                         occupe = txtTelechargement
@@ -506,6 +547,22 @@ fun EcranFichiers(n: Nuage, fermer: () -> Unit, ouvrir: (Uri) -> Unit) {
                         }
                     }
                 }
+                if (enregistrer != null) {
+                    HorizontalDivider()
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        OutlinedTextField(nomFichier, { nomFichier = it }, Modifier.fillMaxWidth(), singleLine = true,
+                            label = { Text(stringResource(R.string.empl_nom)) })
+                        FlowRow(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {
+                            TextButton(onClick = fermer) { Text(stringResource(R.string.annuler)) }
+                            Button(onClick = {
+                                val nom = nomFichier.trim().let { if (it.lowercase().endsWith(".pdf")) it else "$it.pdf" }
+                                val dossier = "/" + chemin.drop(1).joinToString("/") { it.second }
+                                fermer(); enregistrer(dossier, nom)
+                            }, enabled = nomFichier.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) {
+                                Text(stringResource(R.string.empl_enregistrer_ici)) }
+                        }
+                    }
+                } else
                 Text(stringResource(R.string.fichiers_aide), Modifier.padding(horizontal = 16.dp, vertical = 6.dp), fontSize = 11.sp, color = Color.Gray)
             }
         }

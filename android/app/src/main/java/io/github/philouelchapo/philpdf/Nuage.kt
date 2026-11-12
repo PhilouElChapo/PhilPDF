@@ -873,6 +873,18 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
 
         fun estPrefere(ctx: Context, n: Nuage) = registre(ctx).getString("prefere", null) == n.id
 
+        /** Comptes qui savent faire un lien de partage (pas pCloud, kDrive ni WebDAV par mot de passe). */
+        fun peutLien(ctx: Context, n: Nuage) = n.connecte(ctx) && n.mode(ctx) != "webdav" &&
+            n.fournisseur(ctx).cle in setOf("gdrive", "onedrive", "dropbox", "box", "pcloud")
+
+        /** Compte des liens de partage : celui que vous avez choisi, sinon Google Drive, sinon le prefere s'il sait
+         *  faire un lien, sinon le premier qui le sait. */
+        fun compteLien(ctx: Context): Nuage? = liste(ctx).filter { peutLien(ctx, it) }.let { l ->
+            l.firstOrNull { it.id == registre(ctx).getString("lien", null) } ?: l.firstOrNull { it.fournisseur(ctx).cle == "gdrive" }
+                ?: l.firstOrNull { estPrefere(ctx, it) } ?: l.firstOrNull() }
+
+        fun choisirLien(ctx: Context, n: Nuage) = registre(ctx).edit().putString("lien", n.id).apply()
+
         fun choisirPrefere(ctx: Context, n: Nuage?) = registre(ctx).edit().putString("prefere", n?.id).apply()
 
         fun choisirSynchro(ctx: Context, n: Nuage?) {

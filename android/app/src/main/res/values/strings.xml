@@ -940,4 +940,12 @@
     <string name="image_par_defaut">Default</string>
     <string name="gravatar">Gravatar photo (from the e-mail address)</string>
     <string name="gravatar_absent">No Gravatar photo for %1$s. Create one on gravatar.com with this address, or choose an image.</string>
+    <string name="empl_telephone">This phone or another app</string>
+    <string name="empl_telephone_aide">Android\'s file picker: phone storage, Google Drive, Dropbox, Box, OneDrive apps...</string>
+    <string name="empl_nom">File name</string>
+    <string name="empl_enregistrer_ici">Save here</string>
+    <string name="empl_enregistrer_sous">Save as</string>
+    <string name="empl_enregistre">Saved on %1$s: %2$s</string>
+    <string name="lien_changer">Change the account for links</string>
+    <string name="lien_aucun_compte">None of your linked accounts can make a share link (pCloud, kDrive and WebDAV by password cannot): link Google Drive, Dropbox, Box or OneDrive.</string>
 </resources>
