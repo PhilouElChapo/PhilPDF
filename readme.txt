@@ -10,6 +10,10 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.27.5
+- Aide : « Noter PhilPDF » (page de notation Google Play, version Play) et « Partager PhilPDF » (message tout pret
+  avec le lien, envoye par l'appli de votre choix).
+
 1.27.4
 - Ouvrir depuis le cloud et Enregistrer dans le cloud : bouton « Nouveau dossier », comme sous Windows (pCloud,
   kDrive, WebDAV, Google Drive, OneDrive, Dropbox, Box).
@@ -549,6 +553,10 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.102
+- Menu Aide : « Partager PhilPDF... » (message tout pret avec le lien, modifiable, a copier ou envoyer par e-mail) et
+  « Mettre une etoile a PhilPDF (GitHub) ».
 
 0.9.101
 - Ouvrir / Enregistrer vers un emplacement (cloud, NAS, FTP, WebDAV, dossier reseau) : bouton « Nouveau dossier »

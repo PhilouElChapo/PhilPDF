@@ -3081,5 +3081,11 @@
  "Un nom de dossier ne peut pas contenir / \\ : * ? \" < > |": "Ein Ordnername darf nicht / \\ : * ? \" < > | enthalten",
  "Ce dossier existe déjà.": "Dieser Ordner existiert bereits.",
  "Création du dossier {d}...": "Ordner {d} wird erstellt...",
- "Cet emplacement ne permet pas de créer un dossier depuis PhilPDF.": "An diesem Speicherort kann PhilPDF keinen Ordner erstellen."
+ "Cet emplacement ne permet pas de créer un dossier depuis PhilPDF.": "An diesem Speicherort kann PhilPDF keinen Ordner erstellen.",
+ "Partager PhilPDF...": "PhilPDF teilen...",
+ "Mettre une étoile à PhilPDF (GitHub)": "PhilPDF einen Stern geben (GitHub)",
+ "Partager PhilPDF": "PhilPDF teilen",
+ "Message à envoyer (vous pouvez le modifier) :": "Zu sendende Nachricht (Sie können sie ändern):",
+ "Je te conseille PhilPDF, un éditeur PDF libre et gratuit, sans publicité ni compte : lire, modifier le texte, remplir et signer, numériser, alléger. Pour Windows, Linux et Android : {lien}": "Ich empfehle dir PhilPDF, einen freien und kostenlosen PDF-Editor ohne Werbung und ohne Konto: lesen, Text bearbeiten, ausfüllen und unterschreiben, scannen, verkleinern. Für Windows, Linux und Android: {lien}",
+ "Message copié.": "Nachricht kopiert."
 }

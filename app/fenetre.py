@@ -561,6 +561,9 @@ class Fenetre(MixinCoteACote, QMainWindow):
         act(m, _('Rechercher les mises à jour...'), lambda: self.verifier_maj(silencieux=False), None, "mise_a_jour")
         act(m, _('Journal (échanges, mises à jour)...'), self.journal_echanges, None, "lot")
         act(m, _('Nouveautés (readme.txt)...'), self.nouveautes, None, "info")
+        m.addSeparator()
+        act(m, _('Partager PhilPDF...'), self.partager_philpdf, None, "courriel")
+        act(m, _('Mettre une étoile à PhilPDF (GitHub)'), self.noter_philpdf, None, "etoile")
         act(m, _('A propos de PhilPDF'), self.a_propos, None, "aide")
 
     def verifier_orthographe(self):
@@ -3646,6 +3649,46 @@ class Fenetre(MixinCoteACote, QMainWindow):
                                   "Ctrl+ +/-  Zoom\nCtrl+1  Taille réelle\nCtrl+2  Ajuster à la largeur\n"
                                   "Shift+Ctrl++  Pivoter\nCtrl+W  Fermer le fichier\nF4  Vignettes\nShift+F4  Volet de droite\n"
                                   "F11  Plein écran"))
+
+    def noter_philpdf(self):
+        """Pas de boutique sous Windows et Linux : la page du projet, ou l'on met une etoile (bouton Star)."""
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl("https://github.com/PhilouElChapo/PhilPDF"))
+
+    def partager_philpdf(self):
+        """Message tout pret avec le lien de PhilPDF, modifiable, puis copie ou envoi par e-mail."""
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QApplication
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        import urllib.parse
+        d = QDialog(self)
+        d.setWindowTitle(_('Partager PhilPDF'))
+        d.resize(520, 260)
+        v = QVBoxLayout(d)
+        v.addWidget(QLabel(_("Message à envoyer (vous pouvez le modifier) :")))
+        t = QPlainTextEdit(_("Je te conseille PhilPDF, un éditeur PDF libre et gratuit, sans publicité ni compte : lire, "
+                             "modifier le texte, remplir et signer, numériser, alléger. Pour Windows, Linux et Android : {lien}",
+                             lien="https://github.com/PhilouElChapo/PhilPDF"))
+        v.addWidget(t, 1)
+        h = QHBoxLayout()
+        b_copier = QPushButton(icone("copier"), _("Copier"))
+        b_mail = QPushButton(icone("courriel"), _("Envoyer par e-mail"))
+        b_fermer = QPushButton(_("Fermer"))
+        lbl = QLabel()
+        h.addWidget(lbl, 1)
+        for b in (b_copier, b_mail, b_fermer):
+            h.addWidget(b)
+        v.addLayout(h)
+
+        def copier():
+            QApplication.clipboard().setText(t.toPlainText())
+            lbl.setText(_("Message copié."))
+        b_copier.clicked.connect(copier)
+        b_mail.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(
+            "mailto:?subject=PhilPDF&body=" + urllib.parse.quote(t.toPlainText()))))
+        b_fermer.clicked.connect(d.accept)
+        d.exec()
 
     def a_propos(self):
         from moteur.scan import versions_moteurs

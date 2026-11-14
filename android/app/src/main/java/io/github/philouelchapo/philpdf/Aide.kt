@@ -58,6 +58,13 @@ fun EcranAide(fermer: () -> Unit) {
                     }
                 }
 
+                // Noter (version Google Play seulement) et Partager PhilPDF : suggestion des testeurs
+                FlowRow(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.Start) {
+                    if (BuildConfig.PLAY_STORE) TextButton(onClick = { noterPhilpdf(ctx) }) {
+                        Text("★ " + stringResource(R.string.noter_philpdf))
+                    }
+                    TextButton(onClick = { partagerPhilpdf(ctx) }) { Text(stringResource(R.string.partager_philpdf)) }
+                }
                 FlowRow(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
                     if (onglet == 1) {
                         TextButton(onClick = {
@@ -78,4 +85,25 @@ fun EcranAide(fermer: () -> Unit) {
             }
         }
     }
+}
+
+
+private const val LIEN_PLAY = "https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf"
+private const val LIEN_GITHUB = "https://github.com/PhilouElChapo/PhilPDF"
+
+/** Page de PhilPDF dans l'appli Play Store (navigateur si elle n'est pas la) : l'utilisateur y met sa note. */
+fun noterPhilpdf(ctx: android.content.Context) {
+    val play = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=" + ctx.packageName))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+    try { ctx.startActivity(play) }
+    catch (_: android.content.ActivityNotFoundException) { ctx.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(LIEN_PLAY))) }
+}
+
+/** Message tout pret avec le lien (Google Play pour la version Play, sinon la page du projet) ; l'utilisateur
+ *  choisit l'appli et peut modifier le texte avant l'envoi. */
+fun partagerPhilpdf(ctx: android.content.Context) {
+    val lien = if (BuildConfig.PLAY_STORE) LIEN_PLAY else LIEN_GITHUB
+    val texte = Textes.t(R.string.partager_philpdf_message, lien)
+    ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
+        .putExtra(Intent.EXTRA_SUBJECT, "PhilPDF").putExtra(Intent.EXTRA_TEXT, texte), null))
 }

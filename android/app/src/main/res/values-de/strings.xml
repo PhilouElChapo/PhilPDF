@@ -961,4 +961,7 @@
     <string name="dossier_existe">Dieser Ordner existiert bereits.</string>
     <string name="dossier_nom_interdit">In einem Ordnernamen nicht erlaubt: / \\ : * ? \" &lt; &gt; |</string>
     <string name="creation_dossier">Ordner wird erstellt…</string>
+    <string name="noter_philpdf">PhilPDF bewerten</string>
+    <string name="partager_philpdf">PhilPDF teilen</string>
+    <string name="partager_philpdf_message">Ich empfehle dir PhilPDF, einen freien und kostenlosen PDF-Editor ohne Werbung und ohne Konto: lesen, Text bearbeiten, ausfüllen und unterschreiben, scannen, verkleinern. %1$s</string>
 </resources>

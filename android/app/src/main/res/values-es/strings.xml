@@ -961,4 +961,7 @@
     <string name="dossier_existe">Esta carpeta ya existe.</string>
     <string name="dossier_nom_interdit">No permitido en un nombre de carpeta: / \\ : * ? \" &lt; &gt; |</string>
     <string name="creation_dossier">Creando la carpeta…</string>
+    <string name="noter_philpdf">Valorar PhilPDF</string>
+    <string name="partager_philpdf">Compartir PhilPDF</string>
+    <string name="partager_philpdf_message">Te recomiendo PhilPDF, un editor de PDF libre y gratuito, sin publicidad ni cuenta: leer, editar el texto, rellenar y firmar, escanear, comprimir. %1$s</string>
 </resources>

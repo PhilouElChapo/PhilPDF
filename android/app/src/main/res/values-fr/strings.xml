@@ -962,4 +962,7 @@
     <string name="dossier_existe">Ce dossier existe déjà.</string>
     <string name="dossier_nom_interdit">Interdit dans un nom de dossier : / \\ : * ? \" &lt; &gt; |</string>
     <string name="creation_dossier">Création du dossier…</string>
+    <string name="noter_philpdf">Noter PhilPDF</string>
+    <string name="partager_philpdf">Partager PhilPDF</string>
+    <string name="partager_philpdf_message">Je te conseille PhilPDF, un éditeur PDF libre et gratuit, sans publicité ni compte : lire, modifier le texte, remplir et signer, numériser, alléger. %1$s</string>
 </resources>

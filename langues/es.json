@@ -3081,5 +3081,11 @@
  "Un nom de dossier ne peut pas contenir / \\ : * ? \" < > |": "Un nombre de carpeta no puede contener / \\ : * ? \" < > |",
  "Ce dossier existe déjà.": "Esta carpeta ya existe.",
  "Création du dossier {d}...": "Creando la carpeta {d}...",
- "Cet emplacement ne permet pas de créer un dossier depuis PhilPDF.": "Esta ubicación no permite crear una carpeta desde PhilPDF."
+ "Cet emplacement ne permet pas de créer un dossier depuis PhilPDF.": "Esta ubicación no permite crear una carpeta desde PhilPDF.",
+ "Partager PhilPDF...": "Compartir PhilPDF...",
+ "Mettre une étoile à PhilPDF (GitHub)": "Dar una estrella a PhilPDF (GitHub)",
+ "Partager PhilPDF": "Compartir PhilPDF",
+ "Message à envoyer (vous pouvez le modifier) :": "Mensaje para enviar (puede modificarlo):",
+ "Je te conseille PhilPDF, un éditeur PDF libre et gratuit, sans publicité ni compte : lire, modifier le texte, remplir et signer, numériser, alléger. Pour Windows, Linux et Android : {lien}": "Te recomiendo PhilPDF, un editor de PDF libre y gratuito, sin publicidad ni cuenta: leer, editar el texto, rellenar y firmar, escanear, comprimir. Para Windows, Linux y Android: {lien}",
+ "Message copié.": "Mensaje copiado."
 }

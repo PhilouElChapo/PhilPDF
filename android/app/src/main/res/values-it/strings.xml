@@ -961,4 +961,7 @@
     <string name="dossier_existe">Questa cartella esiste già.</string>
     <string name="dossier_nom_interdit">Non consentito in un nome di cartella: / \\ : * ? \" &lt; &gt; |</string>
     <string name="creation_dossier">Creazione della cartella…</string>
+    <string name="noter_philpdf">Valuta PhilPDF</string>
+    <string name="partager_philpdf">Condividi PhilPDF</string>
+    <string name="partager_philpdf_message">Ti consiglio PhilPDF, un editor PDF libero e gratuito, senza pubblicità né account: leggere, modificare il testo, compilare e firmare, scansionare, comprimere. %1$s</string>
 </resources>
