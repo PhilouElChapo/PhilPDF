@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- mises a jour sur GitHub, et Google Drive (dossier PhilPDF de vos postes) -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -52,6 +53,12 @@
                 <data android:mimeType="application/pdf" />
             </intent-filter>
         </activity>
+
+        <!-- scanner de documents de Google (ML Kit) : sa fenetre est bloquee en portrait. Google Play demande de
+             retirer ce blocage pour les tablettes et pliables (Android 16 l'ignore de toute facon sur grand ecran). -->
+        <activity
+            android:name="com.google.mlkit.vision.documentscanner.internal.GmsDocumentScanningDelegateActivity"
+            tools:remove="android:screenOrientation" />
 
         <service
             android:name=".AttenteConnexion"

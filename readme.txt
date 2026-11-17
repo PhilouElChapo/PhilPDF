@@ -10,6 +10,10 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.27.6
+- Tablettes et telephones pliables : la numerisation n'est plus bloquee en mode portrait (demande de Google Play
+  pour les grands ecrans).
+
 1.27.5
 - Aide : « Noter PhilPDF » (page de notation Google Play, version Play) et « Partager PhilPDF » (message tout pret
   avec le lien, envoye par l'appli de votre choix).
