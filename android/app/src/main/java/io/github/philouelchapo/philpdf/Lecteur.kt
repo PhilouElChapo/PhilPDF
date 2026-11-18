@@ -156,15 +156,12 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
     etat.texteImagePartagee = stringResource(R.string.image_partagee)
     val erreurEcriture = stringResource(R.string.enregistrement_impossible)
     val enregistre = stringResource(R.string.enregistre)
-    var dansDocuments: android.net.Uri? = null
     fun ecrireVers(u: android.net.Uri, puisFermer: Boolean) {
         portee.launch {
             try {
                 doc.enregistrer(ctx, u)
-                if (u != doc.uri) { doc.cible = u; doc.cibleCompte = null }    // « Enregistrer » y réécrira la prochaine fois
                 Journal.ecrire("enregistrement", "${doc.nom} : enregistré (${if (u == doc.uri) "même fichier" else "autre nom"})")
-                android.widget.Toast.makeText(ctx, if (u == dansDocuments) ctx.getString(R.string.enregistre_documents, doc.nom)
-                    else enregistre, android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(ctx, enregistre, android.widget.Toast.LENGTH_SHORT).show()
                 if (puisFermer) fermer()
             } catch (e: ErreurCompte) {       // copie gardee sur le telephone, mais pas renvoyee au compte
                 Journal.ecrire("enregistrement", "${doc.nom} : renvoi au compte impossible (${e.message})")
@@ -184,12 +181,12 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
     var sousCompte by remember { mutableStateOf<Pair<String, Nuage>?>(null) }
     val parcourables = remember { comptesParcourables(ctx) }
     LaunchedEffect(etat.enregistrerSous) { etat.enregistrerSous?.let { n -> etat.enregistrerSous = null; autreNom.launch(n) } }
-    fun envoyerAuCompte(c: Nuage, dossier: String, nom: String) {
+    sousCompte?.let { (n, c0) ->
+        EcranFichiers(c0, fermer = { sousCompte = null }, ouvrir = {}, nomDefaut = n, enregistrer = { c, dossier, nom ->
             portee.launch {
                 try {
                     val octets = doc.copieAJour(ctx).readBytes()
                     val chemin = c.envoyerChemin(ctx, dossier, nom, octets)
-                    doc.cibleCompte = Triple(c, dossier, nom); doc.cible = null; doc.modifie = false
                     Journal.ecrire("enregistrement", "${doc.nom} : copie sur ${c.fournisseur(ctx).nom} ($chemin)")
                     android.widget.Toast.makeText(ctx, ctx.getString(R.string.empl_enregistre, c.fournisseur(ctx).nom, chemin),
                         android.widget.Toast.LENGTH_LONG).show()
@@ -199,10 +196,6 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
                     android.widget.Toast.makeText(ctx, e.message ?: e.toString(), android.widget.Toast.LENGTH_LONG).show()
                 }
             }
-    }
-    sousCompte?.let { (n, c0) ->
-        EcranFichiers(c0, fermer = { sousCompte = null }, ouvrir = {}, nomDefaut = n, enregistrer = { c, dossier, nom ->
-            envoyerAuCompte(c, dossier, nom)
         })
     }
     // retour : si le document est modifie, on demande (rien ne se perd en silence)
@@ -285,42 +278,26 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
         etat.noteA = null
         portee.launch { doc.note(n, pt, texte, etat.annot.couleur(Outil.NOTE).versPdf()) }
     } }
-    // « Enregistrer » : toujours la question, meme fichier ou autre nom
+    // « Enregistrer » : toujours la question. Document deja enregistre : meme fichier, autre nom ou cloud. Nouveau
+    // document (numerisation, assemblage, traduction) : il n'a pas encore de fichier, on demande seulement ou le mettre.
+    // Tous les boutons, Annuler compris, dans une seule colonne alignee a droite (sinon Annuler chevauche le dernier).
     if (etat.demandeEnregistrer || quitter) {
         val q = quitter
-        AlertDialog(onDismissRequest = { etat.demandeEnregistrer = false; quitter = false },
+        val fini: () -> Unit = { etat.demandeEnregistrer = false; quitter = false }
+        AlertDialog(onDismissRequest = fini,
             title = { Text(stringResource(if (q) R.string.enregistrer_modifs else R.string.enregistrer)) },
-            text = { Text(stringResource(if (doc.neuf && doc.cible == null && doc.cibleCompte == null) R.string.ou_enregistrer_neuf
-                else R.string.ou_enregistrer, doc.nom)) },
+            text = { Text(stringResource(if (doc.neuf) R.string.enregistrer_nouveau else R.string.ou_enregistrer, doc.nom)) },
             confirmButton = {
                 Column(horizontalAlignment = Alignment.End) {
-                    // « Enregistrer » d'un geste, toujours en premier : le fichier d'origine, sinon là où il a été enregistré
-                    // la dernière fois, sinon (document neuf : scan, combinaison, traduction) dans Documents › PhilPDF
-                    val ici = if (!doc.neuf) doc.uri else doc.cible
-                    val compte = doc.cibleCompte
-                    when {
-                        ici != null -> TextButton(onClick = { etat.demandeEnregistrer = false; quitter = false; ecrireVers(ici, q) }) {
-                            Text(stringResource(if (doc.neuf) R.string.enregistrer_meme_endroit else R.string.meme_fichier))
-                        }
-                        compte != null -> TextButton(onClick = {
-                            etat.demandeEnregistrer = false; quitter = false; fermerApres = q
-                            envoyerAuCompte(compte.first, compte.second, compte.third)
-                        }) { Text(stringResource(R.string.enregistrer_meme_endroit)) }
-                        android.os.Build.VERSION.SDK_INT >= 29 -> TextButton(onClick = {
-                            etat.demandeEnregistrer = false; quitter = false
-                            val u = creerDansDocuments(ctx, doc.nom)
-                            if (u == null) { fermerApres = q; autreNom.launch(doc.nom) } else { dansDocuments = u; ecrireVers(u, q) }
-                        }) { Text(stringResource(R.string.enregistrer_documents)) }
+                    if (!doc.neuf) TextButton(onClick = { fini(); ecrireVers(doc.uri, q) }) {
+                        Text(stringResource(R.string.meme_fichier), fontWeight = FontWeight.Bold)
                     }
                     val nomPropose = if (doc.neuf) doc.nom else doc.nom.removeSuffix(".pdf").removeSuffix(".PDF") + Textes.t(R.string.suffixe_modifie) + ".pdf"
-                    TextButton(onClick = {
-                        etat.demandeEnregistrer = false; quitter = false; fermerApres = q
-                        autreNom.launch(nomPropose)
-                    }) { Text(stringResource(R.string.autre_nom)) }
-                    if (parcourables.isNotEmpty()) TextButton(onClick = {
-                        etat.demandeEnregistrer = false; quitter = false; fermerApres = q
-                        sousCompte = nomPropose to parcourables.first()
-                    }) {
+                    TextButton(onClick = { fini(); fermerApres = q; autreNom.launch(nomPropose) }) {
+                        Text(stringResource(if (doc.neuf) R.string.enregistrer_telephone else R.string.autre_nom),
+                            fontWeight = if (doc.neuf) FontWeight.Bold else null)
+                    }
+                    if (parcourables.isNotEmpty()) TextButton(onClick = { fini(); fermerApres = q; sousCompte = nomPropose to parcourables.first() }) {
                         Icon(Icones.get("nuage", ROUGE), null, Modifier.size(18.dp), tint = Color.Unspecified)
                         Spacer(Modifier.width(6.dp))
                         Text(stringResource(R.string.enregistrer_cloud, parcourables.first().fournisseur(ctx).nom))
@@ -328,8 +305,7 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
                     if (q) TextButton(onClick = { quitter = false; fermer() }) {
                         Text(stringResource(R.string.ne_pas_enregistrer), color = Color(0xFFC62828))
                     }
-                    // Annuler dans la même colonne : alignée à droite sous les autres, jamais par-dessus
-                    TextButton(onClick = { etat.demandeEnregistrer = false; quitter = false }) { Text(stringResource(R.string.annuler)) }
+                    TextButton(onClick = fini) { Text(stringResource(R.string.annuler)) }
                 }
             })
     }
@@ -1442,17 +1418,4 @@ fun BarreBiffer(etat: EtatLecteur, modifier: Modifier) {
         confirmButton = { Button(onClick = { etat.quitterBiffage = false; etat.confirmerBiffage = true },
             colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) { Text(stringResource(R.string.biffer_appliquer)) } },
         dismissButton = { TextButton(onClick = { etat.quitterBiffage = false; quitter() }) { Text(stringResource(R.string.biffer_abandonner)) } })
-}
-
-/** Nouveau fichier dans Documents › PhilPDF (Android 10 et plus, sans autorisation) ; un nom déjà pris devient « nom (1) ». */
-internal fun creerDansDocuments(ctx: android.content.Context, nom: String): android.net.Uri? = try {
-    val v = android.content.ContentValues().apply {
-        put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, if (nom.endsWith(".pdf", true)) nom else "$nom.pdf")
-        put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
-        put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOCUMENTS + "/PhilPDF")
-    }
-    ctx.contentResolver.insert(android.provider.MediaStore.Files.getContentUri("external"), v)
-} catch (e: Exception) {
-    Journal.ecrire("enregistrement", "Documents › PhilPDF impossible ($e)")
-    null
 }
