@@ -10,6 +10,10 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.27.7
+- Partager > Envoyer le fichier : avec Gmail (surtout en touchant directement un contact), le message s'ouvrait
+  parfois sans le PDF. Le droit de lecture du fichier est maintenant transmis a l'appli choisie dans tous les cas.
+
 1.27.6
 - Tablettes et telephones pliables : la numerisation n'est plus bloquee en mode portrait (demande de Google Play
   pour les grands ecrans).

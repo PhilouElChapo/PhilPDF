@@ -72,10 +72,7 @@ fun EcranAide(fermer: () -> Unit) {
                             if (f.exists()) {
                                 val copie = java.io.File(ctx.cacheDir, "ouverts/partage/journal_philpdf.txt").apply { parentFile?.mkdirs() }
                                 f.copyTo(copie, overwrite = true)
-                                val u = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fichiers", copie)
-                                ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
-                                    .putExtra(Intent.EXTRA_STREAM, u).putExtra(Intent.EXTRA_SUBJECT, "Journal PhilPDF Android ${BuildConfig.VERSION_NAME}")
-                                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), null))
+                                envoyerFichier(ctx, copie, "text/plain", "Journal PhilPDF Android ${BuildConfig.VERSION_NAME}", null)
                             }
                         }) { Text(stringResource(R.string.partager)) }
                         TextButton(onClick = { Journal.effacer(ctx); journal = "" }) { Text(stringResource(R.string.effacer)) }

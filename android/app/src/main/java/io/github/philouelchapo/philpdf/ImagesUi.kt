@@ -175,10 +175,7 @@ fun CadreImage(etat: EtatLecteur, n: Int, w: Float) {
                         val ok = etat.doc.exporterImage(i, f)
                         if (ok == null) etat.message = ctx.getString(R.string.image_illisible)
                         else {
-                            val u = FileProvider.getUriForFile(ctx, ctx.packageName + ".fichiers", ok)
-                            ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("image/png")
-                                .putExtra(Intent.EXTRA_STREAM, u).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
-                                ctx.getString(R.string.image_enregistrer)))
+                            envoyerFichier(ctx, ok, "image/png", ok.name, ctx.getString(R.string.image_enregistrer))
                         }
                     },
                     ctx.getString(R.string.image_supprimer) to lancer {

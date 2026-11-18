@@ -1217,10 +1217,25 @@ object PagesLues {
 /** Partager : l'application e-mail d'Android, un Drive, une messagerie... (choix d'Android). */
 suspend fun partager(ctx: Context, doc: DocumentPdf) {
     val f = doc.copieAJour(ctx)                     // avec les annotations, meme pas encore enregistrees
-    val u = FileProvider.getUriForFile(ctx, ctx.packageName + ".fichiers", f)
-    val i = Intent(Intent.ACTION_SEND).setType("application/pdf").putExtra(Intent.EXTRA_STREAM, u)
-        .putExtra(Intent.EXTRA_SUBJECT, doc.nom).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    ctx.startActivity(Intent.createChooser(i, ctx.getString(R.string.partager)))
+    envoyerFichier(ctx, f, "application/pdf", doc.nom, ctx.getString(R.string.partager))
+}
+
+/** Envoie un fichier a l'appli choisie (Gmail, WhatsApp...). Le droit de lecture passe par le ClipData, sur
+ *  l'intention ET sur le selecteur : sans lui, Gmail (surtout par ses raccourcis vers un contact) ouvre le message
+ *  sans la piece jointe. Copie dans « ouverts/partage » avec le nom du document, que Gmail affiche. */
+fun envoyerFichier(ctx: Context, f: java.io.File, mime: String, sujet: String, titre: String?) {
+    val dossier = java.io.File(ctx.cacheDir, "ouverts/partage").apply { mkdirs() }
+    val copie = if (f.parentFile?.canonicalPath == dossier.canonicalPath) f
+        else java.io.File(dossier, f.name).also { f.copyTo(it, overwrite = true) }
+    val u = FileProvider.getUriForFile(ctx, ctx.packageName + ".fichiers", copie)
+    val clip = android.content.ClipData.newUri(ctx.contentResolver, copie.name, u)
+    val i = Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, u)
+        .putExtra(Intent.EXTRA_SUBJECT, sujet).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    i.clipData = clip
+    val choix = Intent.createChooser(i, titre).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    choix.clipData = clip
+    Journal.ecrire("partage", "envoi de ${copie.name} (${copie.length()} octets, $mime)")
+    ctx.startActivity(choix)
 }
 
 /** Imprimer : service d'impression d'Android (imprimantes du reseau, « Enregistrer au format PDF »...). */
