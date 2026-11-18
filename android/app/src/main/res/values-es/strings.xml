@@ -964,6 +964,8 @@
     <string name="noter_philpdf">Valorar PhilPDF</string>
     <string name="partager_philpdf">Compartir PhilPDF</string>
     <string name="partager_philpdf_message">Te recomiendo PhilPDF, un editor de PDF libre y gratuito, sin publicidad ni cuenta: leer, editar el texto, rellenar y firmar, escanear, comprimir. %1$s</string>
-    <string name="enregistrer_nouveau">«%1$s» es un documento nuevo: ¿dónde guardarlo?</string>
-    <string name="enregistrer_telephone">En el teléfono…</string>
+    <string name="ou_enregistrer_neuf">«%1$s»: ¿dónde guardarlo?</string>
+    <string name="enregistrer_documents">Guardar en Documentos › PhilPDF</string>
+    <string name="enregistrer_meme_endroit">Guardar (mismo lugar)</string>
+    <string name="enregistre_documents">«%1$s» guardado en Documentos › PhilPDF.</string>
 </resources>

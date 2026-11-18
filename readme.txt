@@ -11,8 +11,10 @@ ANDROID
 -------
 
 1.27.8
-- Enregistrer un nouveau document (numerisation, assemblage, traduction) : la question dit clairement qu'il n'a pas
-  encore de fichier et propose « Sur le telephone... » ou le cloud. « Annuler » ne chevauche plus le dernier bouton.
+- Enregistrer : un document neuf (numerisation, combinaison, traduction) a maintenant aussi son bouton simple,
+  « Enregistrer dans Documents › PhilPDF », en premier. Une fois enregistre (la ou autre nom, ou dans le cloud),
+  « Enregistrer (meme endroit) » y reecrit d'un geste, sans redemander le nom.
+- La fenetre Enregistrer : « Annuler » est a sa place, sous les autres boutons (il chevauchait « Enregistrer dans le cloud »).
 
 1.27.7
 - Partager > Envoyer le fichier : avec Gmail (surtout en touchant directement un contact), le message s'ouvrait

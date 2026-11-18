@@ -964,6 +964,8 @@
     <string name="noter_philpdf">PhilPDF bewerten</string>
     <string name="partager_philpdf">PhilPDF teilen</string>
     <string name="partager_philpdf_message">Ich empfehle dir PhilPDF, einen freien und kostenlosen PDF-Editor ohne Werbung und ohne Konto: lesen, Text bearbeiten, ausfüllen und unterschreiben, scannen, verkleinern. %1$s</string>
-    <string name="enregistrer_nouveau">„%1$s“ ist ein neues Dokument: Wo soll es gespeichert werden?</string>
-    <string name="enregistrer_telephone">Auf dem Telefon…</string>
+    <string name="ou_enregistrer_neuf">„%1$s“: wo speichern?</string>
+    <string name="enregistrer_documents">In Dokumente › PhilPDF speichern</string>
+    <string name="enregistrer_meme_endroit">Speichern (gleicher Ort)</string>
+    <string name="enregistre_documents">„%1$s“ in Dokumente › PhilPDF gespeichert.</string>
 </resources>
