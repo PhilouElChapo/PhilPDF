@@ -63,6 +63,10 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
     var modifie by mutableStateOf(false)
     /** Document cree sur le telephone (numerisation) : pas encore de fichier a lui, « Autre nom » pour l'enregistrer. */
     var neuf = false
+    /** Où ce document a été enregistré la dernière fois (fichier neuf ou « Autre nom ») : « Enregistrer » y réécrit. */
+    var cible: Uri? = null
+    /** Idem quand il a été envoyé dans un compte (pCloud, kDrive, WebDAV…) : compte, dossier, nom. */
+    var cibleCompte: Triple<Nuage, String, String>? = null
     /** Reconnaitre le texte des l'ouverture (document numerise). */
     var ocrAuto = false
     var peutAnnuler by mutableStateOf(false)

@@ -965,4 +965,8 @@
     <string name="noter_philpdf">Rate PhilPDF</string>
     <string name="partager_philpdf">Share PhilPDF</string>
     <string name="partager_philpdf_message">I recommend PhilPDF, a free and open-source PDF editor, with no ads and no account: read, edit text, fill and sign, scan, compress. %1$s</string>
+    <string name="ou_enregistrer_neuf">“%1$s”: where should it be saved?</string>
+    <string name="enregistrer_documents">Save in Documents › PhilPDF</string>
+    <string name="enregistrer_meme_endroit">Save (same place)</string>
+    <string name="enregistre_documents">“%1$s” saved in Documents › PhilPDF.</string>
 </resources>

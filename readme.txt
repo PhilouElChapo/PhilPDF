@@ -10,6 +10,12 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.27.8
+- Enregistrer : un document neuf (numerisation, combinaison, traduction) a maintenant aussi son bouton simple,
+  « Enregistrer dans Documents › PhilPDF », en premier. Une fois enregistre (la ou autre nom, ou dans le cloud),
+  « Enregistrer (meme endroit) » y reecrit d'un geste, sans redemander le nom.
+- La fenetre Enregistrer : « Annuler » est a sa place, sous les autres boutons (il chevauchait « Enregistrer dans le cloud »).
+
 1.27.7
 - Partager > Envoyer le fichier : avec Gmail (surtout en touchant directement un contact), le message s'ouvrait
   parfois sans le PDF. Le droit de lecture du fichier est maintenant transmis a l'appli choisie dans tous les cas.
