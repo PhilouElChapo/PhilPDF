@@ -1,27 +1,45 @@
-PhilPDF is a free and open-source PDF reader and editor (AGPL v3), the Android version of PhilPDF for Windows and Linux. Same engine (MuPDF): same rendering, same annotations. No account, no ads, no trackers.
+PhilPDF is a free and open-source PDF editor: edit, sign, fill and scan your documents right on your phone. No subscription, no ads, no account to create and no trackers.
 
-<b>Read</b>
+<b>✏️ Edit your PDFs</b>
 <ul>
-<li>Home screen with your recent files and thumbnails</li>
-<li>Continuous scrolling, sharp pinch zoom, reading mode for small screens, bookmarks, comments</li>
-<li>Password-protected PDFs</li>
+<li>Edit text while keeping the original font</li>
+<li>Highlight, underline, strike out, notes, drawings, arrows, shapes, images and stamps</li>
+<li>True redaction: hidden text is really removed, not just covered</li>
+<li>Watermark, header and footer</li>
 </ul>
 
-<b>Edit and sign</b>
+<b>🖊️ Fill and sign</b>
 <ul>
-<li>Highlight, underline, notes, drawings, shapes, arrows, images, stamps</li>
-<li>Edit text, redact (text really removed), watermark, header and footer</li>
-<li>Fill forms, add form fields, digital signatures and their verification</li>
-<li>Organize pages, straighten and clean up scans, text recognition (OCR)</li>
+<li>Fill PDF forms, add fields, checkboxes and lists</li>
+<li>Sign by hand or with a digital signature (certificate), and verify the signatures you receive</li>
+<li>Reusable stamps: "Paid", "Received on", your company stamp…</li>
 </ul>
 
-<b>Your clouds</b>
-Google Drive, OneDrive, Dropbox, Box, pCloud, Infomaniak kDrive and WebDAV, several accounts at once, with a preferred account for sending and reading. Sync with PhilPDF on your PCs: recent files, stamps and signatures.
+<b>📷 Scan and recognize text</b>
+<ul>
+<li>Scan documents with the camera, several pages at once</li>
+<li>Straighten and clean up scans: white background, sharp text, even on security paper</li>
+<li>Text recognition (OCR): your scans become searchable and copyable</li>
+</ul>
 
-<b>Optional AI assistant</b>
-With your own Claude or Gemini key: summarize, explain simply, translate, fill a form, rename and file, extract data. Nothing is sent without your tap, sensitive data is flagged first, and every AI result can be reported.
+<b>📄 Organize, compress, combine</b>
+<ul>
+<li>Reorder, rotate, extract and delete pages</li>
+<li>Combine several PDFs into one</li>
+<li>Compress a PDF that is too big to e-mail</li>
+<li>Search the document, bookmarks, reading mode for small screens</li>
+<li>Print, share the file or a link</li>
+</ul>
 
-<b>Your data stays yours</b>
-PhilPDF has no server. Your documents stay on your device; clouds and AI services are reached directly, only when you ask.
+<b>☁️ Your clouds, directly</b>
+Open and save on Google Drive, OneDrive, Dropbox, Box, pCloud, Infomaniak kDrive and WebDAV, with several accounts and a preferred one. Create folders without leaving the app. Sync with PhilPDF on Windows and Linux: recent files, stamps and signatures follow you.
 
+<b>🤖 Optional AI assistant</b>
+With your own Claude or Gemini key: summarize, explain simply, translate a document, fill a form, rename and file, extract invoice data. Nothing is sent without your tap, sensitive data is flagged before sending, and every answer can be reported.
+
+<b>🔒 Your documents stay yours</b>
+PhilPDF has no server. Your files stay on your device; clouds and AI are reached only when you ask.
+
+<b>💚 Free software</b>
+Open source (AGPL v3), also available on Windows and Linux. Interface in English, French, German, Spanish and Italian.
 Source code and releases: https://github.com/PhilouElChapo/PhilPDF

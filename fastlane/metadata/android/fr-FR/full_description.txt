@@ -1,27 +1,45 @@
-PhilPDF est un lecteur et éditeur PDF libre (AGPL v3), la version Android de PhilPDF pour Windows et Linux. Même moteur (MuPDF) : même rendu, mêmes annotations. Sans compte, sans publicité, sans pisteur.
+PhilPDF est un éditeur PDF libre et gratuit : modifiez, signez, remplissez et numérisez vos documents directement sur votre téléphone. Sans abonnement, sans publicité, sans compte à créer et sans pisteur.
 
-<b>Lire</b>
+<b>✏️ Modifier vos PDF</b>
 <ul>
-<li>Accueil avec vos fichiers récents et leurs miniatures</li>
-<li>Défilement continu, zoom à deux doigts net, mode lecture pour petits écrans, signets, commentaires</li>
-<li>PDF protégés par mot de passe</li>
+<li>Modifier le texte en gardant la police d'origine</li>
+<li>Surligner, souligner, barrer, notes, dessins, flèches, formes, images et tampons</li>
+<li>Biffer pour de vrai : le texte caché est réellement supprimé, pas seulement recouvert</li>
+<li>Filigrane, en-tête et pied de page</li>
 </ul>
 
-<b>Modifier et signer</b>
+<b>🖊️ Remplir et signer</b>
 <ul>
-<li>Surligner, souligner, notes, dessins, formes, flèches, images, tampons</li>
-<li>Modifier le texte, biffer (le texte est vraiment supprimé), filigrane, en-tête et pied de page</li>
-<li>Remplir les formulaires, ajouter des champs, signatures numériques et leur vérification</li>
-<li>Organiser les pages, redresser et nettoyer les scans, reconnaissance du texte (OCR)</li>
+<li>Remplir les formulaires PDF, ajouter des champs, cases à cocher et listes</li>
+<li>Signer à la main ou avec une signature numérique (certificat), et vérifier les signatures reçues</li>
+<li>Tampons réutilisables : « Payé », « Reçu le », votre cachet…</li>
 </ul>
 
-<b>Vos clouds</b>
-Google Drive, OneDrive, Dropbox, Box, pCloud, Infomaniak kDrive et WebDAV, plusieurs comptes à la fois, avec un compte préféré pour les envois et la lecture. Synchronisation avec PhilPDF sur vos PC : fichiers récents, tampons et signatures.
+<b>📷 Scanner et reconnaître le texte</b>
+<ul>
+<li>Numériser un document avec l'appareil photo, plusieurs pages d'un coup</li>
+<li>Redresser et nettoyer les scans : fond blanc, texte net, même sur papier sécurisé</li>
+<li>Reconnaissance du texte (OCR) : vos scans deviennent cherchables et copiables</li>
+</ul>
 
-<b>Assistant IA facultatif</b>
-Avec votre propre clef Claude ou Gemini : résumer, expliquer simplement, traduire, remplir un formulaire, renommer et classer, extraire les données. Rien n'est envoyé sans votre geste, les données sensibles sont signalées avant, et chaque résultat de l'IA peut être signalé.
+<b>📄 Organiser, alléger, combiner</b>
+<ul>
+<li>Réorganiser, tourner, extraire et supprimer des pages</li>
+<li>Combiner plusieurs PDF en un seul</li>
+<li>Alléger un PDF trop lourd pour l'envoyer par e-mail</li>
+<li>Rechercher dans le document, signets, mode lecture pour petits écrans</li>
+<li>Imprimer, partager le fichier ou un lien</li>
+</ul>
 
-<b>Vos données restent chez vous</b>
-PhilPDF n'a pas de serveur. Vos documents restent sur votre appareil ; les clouds et l'IA sont joints directement, seulement à votre demande.
+<b>☁️ Vos clouds, directement</b>
+Ouvrez et enregistrez sur Google Drive, OneDrive, Dropbox, Box, pCloud, Infomaniak kDrive et WebDAV, avec plusieurs comptes et un compte préféré. Créez vos dossiers sans quitter l'appli. Synchronisation avec PhilPDF sur Windows et Linux : fichiers récents, tampons et signatures vous suivent.
 
+<b>🤖 Assistant IA facultatif</b>
+Avec votre propre clef Claude ou Gemini : résumer, expliquer simplement, traduire un document, remplir un formulaire, renommer et classer, extraire les données d'une facture. Rien n'est envoyé sans votre geste, les données sensibles sont signalées avant l'envoi, et chaque réponse peut être signalée.
+
+<b>🔒 Vos documents restent chez vous</b>
+PhilPDF n'a aucun serveur. Vos fichiers restent sur votre appareil ; les clouds et l'IA ne sont joints que lorsque vous le demandez.
+
+<b>💚 Logiciel libre</b>
+Code source ouvert (licence AGPL v3), disponible aussi sur Windows et Linux. Interface en français, anglais, allemand, espagnol et italien.
 Code source et versions : https://github.com/PhilouElChapo/PhilPDF
