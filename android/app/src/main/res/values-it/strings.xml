@@ -968,4 +968,9 @@
     <string name="enregistrer_documents">Salva in Documenti › PhilPDF</string>
     <string name="enregistrer_meme_endroit">Salva (stesso posto)</string>
     <string name="enregistre_documents">«%1$s» salvato in Documenti › PhilPDF.</string>
+    <string name="ajout_texte_titre">Aggiungi testo qui</string>
+    <string name="ajout_texte_aide">Digita il testo da aggiungere in questo punto</string>
+    <string name="ajout_texte_ajouter">Aggiungi</string>
+    <string name="ajout_texte_image">Modifica l\'immagine in questo punto</string>
+    <string name="ajout_texte_impossible">Impossibile aggiungere il testo.</string>
 </resources>

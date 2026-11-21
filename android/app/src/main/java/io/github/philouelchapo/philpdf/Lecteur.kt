@@ -88,6 +88,8 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     val annot = ReglagesAnnot()
     var selection by mutableStateOf<InfoAnnot?>(null)       // annotation en cours de modification (appui long)
     var noteA by mutableStateOf<Pair<Int, com.artifex.mupdf.fitz.Point>?>(null)
+    /** Modifier le texte, toucher hors du texte : ajouter du texte ici, ou l'image / la reconnaissance (comme Windows). */
+    var ajoutTexte by mutableStateOf<ChoixVide?>(null)
     var demandeEnregistrer by mutableStateOf(false)
     var aPoser by mutableStateOf<APoser?>(null)            // signature, paraphe ou tampon choisi
     var champ by mutableStateOf<InfoChamp?>(null)           // champ de formulaire en cours de saisie
@@ -281,6 +283,12 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
         val txt = if (m == "aucun_texte") stringResource(R.string.aucun_texte) else m
         LaunchedEffect(m) { android.widget.Toast.makeText(ctx, txt, android.widget.Toast.LENGTH_LONG).show(); etat.message = null }
     }
+    etat.ajoutTexte?.let { ch -> AjoutTexte(ch, fermer = { etat.ajoutTexte = null },
+        ocr = { etat.ajoutTexte = null; etat.ocr = ch.page },
+        image = ch.image?.let { f -> { etat.ajoutTexte = null; f() } }) { texte, taille, couleur ->
+        etat.ajoutTexte = null
+        portee.launch { if (!doc.ajouterTexte(ch.page, ch.point, texte, taille, couleur)) etat.message = ctx.getString(R.string.ajout_texte_impossible) }
+    } }
     etat.noteA?.let { (n, pt) -> DemandeNote({ etat.noteA = null }) { texte ->
         etat.noteA = null
         portee.launch { doc.note(n, pt, texte, etat.annot.couleur(Outil.NOTE).versPdf()) }
@@ -333,6 +341,44 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
                 }
             })
     }
+}
+
+/** Toucher hors du texte, outil « Modifier le texte ». */
+class ChoixVide(val page: Int, val point: com.artifex.mupdf.fitz.Point, val image: (() -> Unit)?, val ocr: Boolean)
+
+/** Ajouter du texte simple a l'endroit touche (vrai texte de la page, modifiable ensuite comme le reste), avec la
+ *  taille et la couleur ; si une image ou un scan est la, on peut aussi la travailler ou reconnaitre son texte. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AjoutTexte(ch: ChoixVide, fermer: () -> Unit, ocr: () -> Unit, image: (() -> Unit)?, valider: (String, Float, Int) -> Unit) {
+    var t by remember { mutableStateOf("") }
+    var taille by remember { mutableFloatStateOf(11f) }
+    var couleur by remember { mutableIntStateOf(0x000000) }
+    AlertDialog(onDismissRequest = fermer, title = { Text(stringResource(R.string.ajout_texte_titre)) },
+        text = {
+            Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                OutlinedTextField(t, { t = it }, Modifier.fillMaxWidth(), minLines = 2,
+                    placeholder = { Text(stringResource(R.string.ajout_texte_aide)) })
+                Spacer(Modifier.height(8.dp))
+                FlowRow(verticalArrangement = Arrangement.Center, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (v in listOf(9f, 11f, 14f, 18f, 24f)) FilterChip(taille == v, { taille = v }, label = { Text("${v.toInt()}") })
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    for (c in listOf(0x000000, 0x1A4FB4, 0xC62828)) Box(Modifier.padding(vertical = 6.dp).size(30.dp)
+                        .background(Color(0xFF000000.toInt() or c), androidx.compose.foundation.shape.CircleShape)
+                        .border(if (couleur == c) 3.dp else 0.dp, Color(0xFFFFB300), androidx.compose.foundation.shape.CircleShape)
+                        .clickable { couleur = c })
+                }
+                if (image != null || ch.ocr) {
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                    if (image != null) TextButton(onClick = image) { Text(stringResource(R.string.ajout_texte_image)) }
+                    if (ch.ocr) TextButton(onClick = ocr) { Text(stringResource(R.string.ocr_titre_menu)) }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { if (t.isNotBlank()) valider(t.trimEnd(), taille, couleur) else fermer() }, enabled = t.isNotBlank()) {
+            Text(stringResource(R.string.ajout_texte_ajouter)) } },
+        dismissButton = { TextButton(onClick = fermer) { Text(stringResource(R.string.annuler)) } })
 }
 
 @Composable
@@ -836,7 +882,13 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                         portee.launch {
                             val c = d.champA(n, k(o))
                             when {
-                                c == null || c.lectureSeule -> auToucher?.invoke()
+                                // signature, paraphe ou tampon touche : on le deplace tout de suite (cadre bleu, « Ici »)
+                                c == null -> {
+                                    val an = d.annotationA(n, k(o))
+                                    if (an != null && an.objet && d.modifiable) { etat.decalageDepl = Offset.Zero; etat.deplacement = an }
+                                    else auToucher?.invoke()
+                                }
+                                c.lectureSeule -> auToucher?.invoke()
                                 // bouton d'action : ce qu'il fait aussi dans Acrobat
                                 c.genre == com.artifex.mupdf.fitz.PDFWidget.TYPE_BUTTON -> {
                                     val a = try { org.json.JSONObject(c.regles).optJSONObject("action") } catch (_: Exception) { null }
@@ -885,13 +937,15 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                     portee.launch {
                         val p = d.paragrapheA(n, k(o))
                         if (p != null) { etat.paragraphe = p; return@launch }
-                        // pas de texte ici : une image (photo, scan) devient l'objet choisi, avec ses outils (OCR compris)
-                        val im = if (etat.doc.modifiable) d.imageA(n, k(o)) else null
-                        if (im != null) {
-                            etat.repereImage = d.images(n).second
-                            etat.image = im
-                            r.outil = Outil.IMAGE
-                        } else if (etat.doc.modifiable && d.ocrPossible(n, k(o))) etat.ocr = n else etat.message = "aucun_texte"
+                        // pas de texte ici : on propose d'en ajouter (texte simple, comme sous Windows), et selon
+                        // l'endroit de travailler l'image touchee (photo, scan) ou de reconnaitre le texte de la page
+                        if (!etat.doc.modifiable) { etat.message = "aucun_texte"; return@launch }
+                        val pt = k(o)
+                        val im = d.imageA(n, pt)
+                        val repere = if (im != null) d.images(n).second else null
+                        etat.ajoutTexte = ChoixVide(n, pt,
+                            image = im?.let { i -> { etat.repereImage = repere!!; etat.image = i; r.outil = Outil.IMAGE } },
+                            ocr = d.ocrPossible(n, pt))
                     }
                 })
                 Outil.IMAGE -> with(GestesImage) {
@@ -1182,6 +1236,9 @@ private fun Deplacement(etat: EtatLecteur, info: InfoAnnot, w: Float) {
             }, colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) { Text(stringResource(R.string.ici)) }
             OutlinedButton(onClick = { etat.deplacement = null; etat.decalageDepl = Offset.Zero },
                 colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White)) { Text(stringResource(R.string.annuler)) }
+            // taille, supprimer, en mettre une autre a la place : la feuille de l'appui long
+            OutlinedButton(onClick = { etat.deplacement = null; etat.decalageDepl = Offset.Zero; etat.selection = info },
+                colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White)) { Text("⋯", fontSize = 18.sp) }
         }
         Text(stringResource(R.string.aide_deplacer), Modifier.align(Alignment.TopCenter).padding(8.dp)
             .background(Color(0xCC333333), RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 4.dp),

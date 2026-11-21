@@ -10,6 +10,14 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.27.9
+- Signature, paraphe ou tampon deja pose : il suffit de le toucher pour le deplacer (cadre bleu, faites glisser,
+  puis « Ici »). Le bouton « ⋯ » donne le reste : plus petit, plus grand, en mettre un autre a la place, supprimer.
+- Modifier le texte : toucher un endroit sans texte propose « Ajouter du texte ici », comme sous Windows. Le texte
+  tape (taille et couleur au choix, une ou plusieurs lignes) devient du vrai texte de la page : on le retrouve par
+  la recherche et on peut le modifier ensuite. Si une image ou un scan est a cet endroit, la meme fenetre permet
+  aussi de travailler l'image ou de reconnaitre le texte de la page (OCR).
+
 1.27.8
 - Enregistrer : un document neuf (numerisation, combinaison, traduction) a maintenant aussi son bouton simple,
   « Enregistrer dans Documents › PhilPDF », en premier. Une fois enregistre (la ou autre nom, ou dans le cloud),

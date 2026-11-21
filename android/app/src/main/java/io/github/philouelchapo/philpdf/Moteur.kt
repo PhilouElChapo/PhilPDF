@@ -1316,6 +1316,27 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
         true
     }
 
+    /** Texte simple ajoute a l'endroit touche (coin haut gauche), dans le contenu de la page : c'est du vrai texte,
+     *  retrouve par la recherche et modifiable ensuite, comme « Ajouter du texte ici » de PhilPDF Windows.
+     *  Police Helvetica (lettres accentuees et euro compris) ; une ligne par retour a la ligne. */
+    suspend fun ajouterTexte(n: Int, coin: Point, texte: String, taille: Float, couleur: Int): Boolean = operation("Ajouter du texte") { p ->
+        val fonte = Font("Helvetica")
+        val obj = p.addSimpleFont(fonte, Font.SIMPLE_ENCODING_LATIN)
+        surPage(p, n) { page ->
+            val res = Pagination.ressources(p, page)
+            val fonts = Pagination.dico(p, res, "Font")
+            val nf = Pagination.nom(fonts, "PhilT"); fonts.put(nf, obj)
+            val sb = StringBuilder("q ${Pagination.rgb(couleur)}\n")
+            texte.split("\n").forEachIndexed { i, l ->
+                if (l.isNotBlank()) sb.append(Pagination.texte(page, nf, taille, coin.x, coin.y + taille * 0.8f + i * taille * 1.22f, 0f, l))
+            }
+            sb.append("Q\n")
+            Pagination.ajouterFlux(p, page, sb.toString())
+            Journal.ecrire("texte", "texte ajouté page ${n + 1} (${texte.lines().size} ligne(s), ${taille.toInt()} pt)")
+            true
+        }
+    }
+
     // ---------------------------------------------------------------- filigrane, en-tete / pied de page
     suspend fun poserFiligrane(pages: List<Int>, r: ReglagesFiligrane): Boolean = operation("Filigrane") { p ->
         val fonte = Font("Helvetica-Bold")
