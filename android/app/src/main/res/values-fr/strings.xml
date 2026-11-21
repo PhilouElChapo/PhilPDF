@@ -974,4 +974,7 @@
     <string name="ajout_texte_ajouter">Ajouter</string>
     <string name="ajout_texte_image">Modifier l\'image à cet endroit</string>
     <string name="ajout_texte_impossible">Le texte n\'a pas pu être ajouté.</string>
+    <string name="deplacer_champ">Déplacer ou redimensionner</string>
+    <string name="aide_deplacer_champ">Faites glisser ; la pastille (en bas à droite) change la taille, puis « Ici »</string>
+    <string name="champ_deplacement_impossible">Ce champ ne peut pas être déplacé (une signature déjà apposée deviendrait invalide).</string>
 </resources>

@@ -97,6 +97,11 @@ class EtatLecteur(val doc: DocumentPdf, val liste: LazyListState) {
     /** Signature ou tampon pose en cours de deplacement (appui long > Deplacer) et decalage du doigt, en points. */
     var deplacement by mutableStateOf<InfoAnnot?>(null)
     var decalageDepl by mutableStateOf(Offset.Zero)
+    /** Champ de formulaire (texte, case, liste, signature...) que l'on deplace ou redimensionne : son cadre en cours,
+     *  en points (x0, y0, x1, y1), applique a « Ici » ; le coin bas droit change la taille (comme les poignees Windows). */
+    var champDepl by mutableStateOf<InfoChamp?>(null)
+    var cadreChamp by mutableStateOf(floatArrayOf())
+    fun reprendreChamp(c: InfoChamp) { if (c.cadre.size == 4) { cadreChamp = c.cadre.copyOf(); champDepl = c } }
     /** Appui long > Changer : la prochaine signature ou le prochain tampon choisi prend sa place. */
     var remplacer by mutableStateOf<InfoAnnot?>(null)
     var ouvrirSigner by mutableStateOf(false)
@@ -785,7 +790,7 @@ private fun Recherche(etat: EtatLecteur, aller: (Int) -> Unit) {
 @Composable
 private fun Pages(etat: EtatLecteur, tailles: List<Pair<Float, Float>>, modifier: Modifier, auToucher: (() -> Unit)? = null,
                   haut: androidx.compose.ui.unit.Dp = 0.dp, bas: androidx.compose.ui.unit.Dp = 0.dp) {
-    val lire = etat.annot.outil == Outil.MAIN && etat.deplacement == null
+    val lire = etat.annot.outil == Outil.MAIN && etat.deplacement == null && etat.champDepl == null
     val portee = rememberCoroutineScope()
     val hs = rememberScrollState()
     // zoom : les pages sont vraiment mises en page plus larges (nettes, pas une image agrandie) ; un doigt fait
@@ -855,8 +860,35 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
     var trace by remember { mutableStateOf<List<Offset>>(emptyList()) }
     val r = etat.annot
     Box(modifier.aspectRatio((w / h).coerceIn(0.1f, 10f)).background(Color.White)
-        .then(if (!marques) Modifier else Modifier.pointerInput(r.outil, n, etat.deplacement) {
+        .then(if (!marques) Modifier else Modifier.pointerInput(r.outil, n, etat.deplacement, etat.champDepl) {
             val k = { o: Offset -> com.artifex.mupdf.fitz.Point(o.x * w / size.width, o.y * w / size.width) }
+            val cd = etat.champDepl
+            if (cd != null) {
+                // champ de formulaire : le doigt le fait glisser ; pris par le coin bas droit, il change de taille
+                if (cd.page == n) awaitEachGesture {
+                    val bas = awaitFirstDown()
+                    val pas = w / size.width
+                    val p0 = k(bas.position)
+                    val r0 = etat.cadreChamp
+                    val poignee = 30.dp.toPx() * pas
+                    val coin = r0.size == 4 && kotlin.math.abs(p0.x - r0[2]) < poignee && kotlin.math.abs(p0.y - r0[3]) < poignee
+                    var dernier = bas.position
+                    while (true) {
+                        val ev = awaitPointerEvent()
+                        val c = ev.changes.firstOrNull() ?: break
+                        if (!c.pressed) break
+                        val dx = (c.position.x - dernier.x) * pas
+                        val dy = (c.position.y - dernier.y) * pas
+                        dernier = c.position
+                        val f = etat.cadreChamp
+                        if (f.size == 4) etat.cadreChamp = if (coin)
+                            floatArrayOf(f[0], f[1], maxOf(f[0] + 8f, f[2] + dx), maxOf(f[1] + 8f, f[3] + dy))
+                        else floatArrayOf(f[0] + dx, f[1] + dy, f[2] + dx, f[3] + dy)
+                        c.consume()
+                    }
+                }
+                return@pointerInput
+            }
             val dep = etat.deplacement
             if (dep != null) {
                 // deplacer une signature ou un tampon deja pose : il suit le doigt, puis « Ici »
@@ -1057,6 +1089,14 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
                         }
                     })
             }
+        })
+        // outils « Creer un formulaire » : toucher un champ deja pose le reprend (deplacer, taille) ; glisser en
+        // cree un nouveau, comme avant
+        .then(if (!marques || etat.champDepl != null || r.outil !in OUTILS_CHAMP) Modifier else Modifier.pointerInput(r.outil, n) {
+            detectTapGestures(onTap = { o ->
+                val pt = com.artifex.mupdf.fitz.Point(o.x * w / size.width, o.y * w / size.width)
+                portee.launch { etat.doc.champA(n, pt)?.let { c -> etat.reprendreChamp(c) } }
+            })
         })) {
         image?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize()) }
         if (marques) {
@@ -1123,6 +1163,7 @@ private fun ImagePage(etat: EtatLecteur, n: Int, largeurPx: Int, w: Float, h: Fl
         val a = etat.aPoser
         if (marques && r.outil == Outil.POSER && a != null && f != null && f.first == n) Apercu(etat, a, f.second, w)
         etat.deplacement?.takeIf { marques && it.page == n }?.let { Deplacement(etat, it, w) }
+        etat.champDepl?.takeIf { marques && it.page == n }?.let { CadreChamp(etat, it, w) }
         if (marques && r.outil == Outil.IMAGE) CadreImage(etat, n, w)
     }
 }
@@ -1204,6 +1245,50 @@ private fun Apercu(etat: EtatLecteur, a: APoser, centre: Offset, w: Float) {
             OutlinedButton(onClick = { etat.fantome = null; etat.aPoser = null; etat.annot.outil = Outil.MAIN },
                 colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White)) { Text(stringResource(R.string.annuler)) }
         }
+    }
+}
+
+private val OUTILS_CHAMP = setOf(Outil.CHAMP_TEXTE, Outil.CHAMP_CASE, Outil.CHAMP_LISTE, Outil.CHAMP_SIGNATURE, Outil.CHAMP_BOUTON)
+
+/** Champ de formulaire repris : cadre bleu a faire glisser, poignee de taille au coin bas droit, « Ici » et « Annuler ». */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CadreChamp(etat: EtatLecteur, c: InfoChamp, w: Float) {
+    val ctx = LocalContext.current
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val dens = LocalDensity.current
+        val s = with(dens) { maxWidth.toPx() } / w
+        val f = etat.cadreChamp.takeIf { it.size == 4 } ?: floatArrayOf(0f, 0f, 8f, 8f)
+        val x0 = f[0] * s; val y0 = f[1] * s
+        val lw = (f[2] - f[0]) * s; val lh = (f[3] - f[1]) * s
+        val rayon = with(dens) { 9.dp.toPx() }
+        Canvas(Modifier.fillMaxSize()) {
+            drawRect(Color(0x331A73E8), Offset(x0, y0), Size(lw, lh))
+            drawRect(Color(0xFF1A73E8), Offset(x0, y0), Size(lw, lh), style = androidx.compose.ui.graphics.drawscope.Stroke(3f,
+                pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(14f, 10f))))
+            drawCircle(Color.White, rayon + 3f, Offset(x0 + lw, y0 + lh))
+            drawCircle(Color(0xFF1A73E8), rayon, Offset(x0 + lw, y0 + lh))
+        }
+        val hb = with(dens) { 48.dp.toPx() }
+        val yb = if (y0 + lh + hb + 16 < with(dens) { maxHeight.toPx() }) y0 + lh + 16 else (y0 - hb - 8).coerceAtLeast(0f)
+        FlowRow(Modifier.fillMaxWidth().offset { androidx.compose.ui.unit.IntOffset(0, yb.toInt()) },
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
+            Button(onClick = {
+                val cadre = etat.cadreChamp
+                etat.champDepl = null
+                etat.portee?.launch {
+                    if (!etat.doc.placerChamp(c, cadre)) etat.message = ctx.getString(R.string.champ_deplacement_impossible)
+                }
+            }, colors = ButtonDefaults.buttonColors(containerColor = ROUGE)) { Text(stringResource(R.string.ici)) }
+            OutlinedButton(onClick = { etat.champDepl = null },
+                colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White)) { Text(stringResource(R.string.annuler)) }
+            // renommer, proprietes, supprimer : la fenetre du champ
+            OutlinedButton(onClick = { etat.champDepl = null; etat.champOptions = c },
+                colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White)) { Text("⋯", fontSize = 18.sp) }
+        }
+        Text(stringResource(R.string.aide_deplacer_champ), Modifier.align(Alignment.TopCenter).padding(8.dp)
+            .background(Color(0xCC333333), RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
+            color = Color.White, fontSize = 12.sp)
     }
 }
 

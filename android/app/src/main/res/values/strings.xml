@@ -974,4 +974,7 @@
     <string name="ajout_texte_ajouter">Add</string>
     <string name="ajout_texte_image">Edit the image here</string>
     <string name="ajout_texte_impossible">The text could not be added.</string>
+    <string name="deplacer_champ">Move or resize</string>
+    <string name="aide_deplacer_champ">Drag; the round handle (bottom right) changes the size, then “Here”</string>
+    <string name="champ_deplacement_impossible">This field cannot be moved (a signed signature would become invalid).</string>
 </resources>

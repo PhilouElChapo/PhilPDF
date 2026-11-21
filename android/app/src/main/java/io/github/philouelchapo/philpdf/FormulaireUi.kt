@@ -98,6 +98,7 @@ fun OptionsChamp(etat: EtatLecteur, c: InfoChamp, fermer: () -> Unit) {
                 OutlinedTextField(nom, { nom = it }, label = { Text(stringResource(R.string.nom_champ)) }, singleLine = true)
                 Spacer(Modifier.height(8.dp))
                 TextButton(onClick = { proprietes = true }) { Text(stringResource(R.string.proprietes)) }
+                TextButton(onClick = { fermer(); etat.reprendreChamp(c) }) { Text(stringResource(R.string.deplacer_champ)) }
                 if (!confirmer) TextButton(onClick = { confirmer = true }) { Text(stringResource(R.string.supprimer_champ), color = ROUGE) }
                 else TextButton(onClick = { portee.launch { etat.doc.supprimerChamp(c); fermer() } }) {
                     Text(stringResource(R.string.supprimer_champ_ok), color = ROUGE, fontWeight = FontWeight.SemiBold)

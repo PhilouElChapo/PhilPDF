@@ -10,6 +10,12 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.27.10
+- Formulaires : un champ deja pose (texte, case a cocher, liste, bouton, champ de signature) se deplace et change
+  de taille, comme sous Windows. Dans « Creer un formulaire », touchez le champ ; ailleurs, appui long sur le champ >
+  « Deplacer ou redimensionner ». Faites-le glisser ; la pastille bleue en bas a droite change sa taille ; puis « Ici ».
+  Un champ de signature deja signe reste en place (le deplacer rendrait la signature invalide).
+
 1.27.9
 - Signature, paraphe ou tampon deja pose : il suffit de le toucher pour le deplacer (cadre bleu, faites glisser,
   puis « Ici »). Le bouton « ⋯ » donne le reste : plus petit, plus grand, en mettre un autre a la place, supprimer.

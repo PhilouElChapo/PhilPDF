@@ -973,4 +973,7 @@
     <string name="ajout_texte_ajouter">Aggiungi</string>
     <string name="ajout_texte_image">Modifica l\'immagine in questo punto</string>
     <string name="ajout_texte_impossible">Impossibile aggiungere il testo.</string>
+    <string name="deplacer_champ">Sposta o ridimensiona</string>
+    <string name="aide_deplacer_champ">Trascina; il punto (in basso a destra) cambia la dimensione, poi «Qui»</string>
+    <string name="champ_deplacement_impossible">Questo campo non può essere spostato (una firma già apposta non sarebbe più valida).</string>
 </resources>

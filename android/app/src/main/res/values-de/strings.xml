@@ -973,4 +973,7 @@
     <string name="ajout_texte_ajouter">Hinzufügen</string>
     <string name="ajout_texte_image">Bild an dieser Stelle bearbeiten</string>
     <string name="ajout_texte_impossible">Der Text konnte nicht hinzugefügt werden.</string>
+    <string name="deplacer_champ">Verschieben oder Größe ändern</string>
+    <string name="aide_deplacer_champ">Ziehen; der runde Griff (unten rechts) ändert die Größe, dann „Hier“</string>
+    <string name="champ_deplacement_impossible">Dieses Feld kann nicht verschoben werden (eine bereits geleistete Signatur würde ungültig).</string>
 </resources>

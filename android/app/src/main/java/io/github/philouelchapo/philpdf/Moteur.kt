@@ -619,7 +619,8 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
                             try { Regles.champDe(w.getObject()).get("V").let { v -> when {
                                 v.isArray -> (0 until v.size()).map { v.get(it).asString() }
                                 v.isString -> listOf(v.asString())
-                                else -> emptyList() } } } catch (_: Exception) { emptyList() })
+                                else -> emptyList() } } } catch (_: Exception) { emptyList() },
+                            floatArrayOf(r.x0, r.y0, r.x1, r.y1))
                         break
                     }
                 }
@@ -1145,6 +1146,27 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
 
     suspend fun supprimerChamp(c: InfoChamp): Boolean = operation("Supprimer un champ") { p ->
         surPage(p, c.page) { page -> Formulaire.supprimer(p, page, c.index) }
+    }
+
+    /** Deplace ou redimensionne un champ (cadre voulu, en points de la page affichee), comme les poignees de
+     *  PhilPDF Windows. Un champ de signature deja signe reste en place : le deplacer invaliderait la signature. */
+    suspend fun placerChamp(c: InfoChamp, cadre: FloatArray): Boolean = if (cadre.size != 4) false else operation("Déplacer un champ") { p ->
+        surPage(p, c.page) { page ->
+            val w = page.widgets?.getOrNull(c.index)
+            if (w == null || (w.fieldType == PDFWidget.TYPE_SIGNATURE && (try { w.isSigned } catch (_: Exception) { false }))) false
+            else {
+                // le cadre affiche (bounds) et le rectangle du champ (rect) peuvent differer d'une bordure : on transpose
+                val b = w.bounds
+                val o = w.rect
+                val sx = (cadre[2] - cadre[0]) / maxOf(1f, b.x1 - b.x0)
+                val sy = (cadre[3] - cadre[1]) / maxOf(1f, b.y1 - b.y0)
+                w.setRect(Rect(cadre[0] + (o.x0 - b.x0) * sx, cadre[1] + (o.y0 - b.y0) * sy,
+                    cadre[0] + (o.x1 - b.x0) * sx, cadre[1] + (o.y1 - b.y0) * sy))
+                w.update()
+                Journal.ecrire("formulaire", "champ « ${c.nom} » déplacé ou redimensionné (page ${c.page + 1})")
+                true
+            }
+        }
     }
 
     suspend fun renommerChamp(c: InfoChamp, nom: String): Boolean = operation("Renommer un champ") { p ->
@@ -1822,4 +1844,6 @@ data class InfoChamp(val page: Int, val index: Int, val genre: Int, val valeur: 
                      /** liste deroulante ou l'on peut aussi taper sa propre valeur (« saisie libre ») */
                      val libre: Boolean = false,
                      /** liste ouverte a plusieurs choix, et les choix faits */
-                     val plusieurs: Boolean = false, val choisis: List<String> = emptyList())
+                     val plusieurs: Boolean = false, val choisis: List<String> = emptyList(),
+                     /** cadre du champ sur la page affichee, en points (x0, y0, x1, y1) */
+                     val cadre: FloatArray = floatArrayOf())
