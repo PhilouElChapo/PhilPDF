@@ -172,6 +172,7 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
                 Journal.ecrire("enregistrement", "${doc.nom} : enregistré (${if (u == doc.uri) "même fichier" else "autre nom"})")
                 android.widget.Toast.makeText(ctx, if (u == dansDocuments) ctx.getString(R.string.enregistre_documents, doc.nom)
                     else enregistre, android.widget.Toast.LENGTH_SHORT).show()
+                Avis.apresEnregistrement(ctx)
                 if (puisFermer) fermer()
             } catch (e: ErreurCompte) {       // copie gardee sur le telephone, mais pas renvoyee au compte
                 Journal.ecrire("enregistrement", "${doc.nom} : renvoi au compte impossible (${e.message})")
@@ -200,6 +201,7 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
                     Journal.ecrire("enregistrement", "${doc.nom} : copie sur ${c.fournisseur(ctx).nom} ($chemin)")
                     android.widget.Toast.makeText(ctx, ctx.getString(R.string.empl_enregistre, c.fournisseur(ctx).nom, chemin),
                         android.widget.Toast.LENGTH_LONG).show()
+                    Avis.apresEnregistrement(ctx)
                     if (fermerApres) fermer()
                 } catch (e: Exception) {
                     Journal.ecrire("enregistrement", "${doc.nom} : envoi impossible ($e)")

@@ -3095,6 +3095,7 @@
  "Mettre une étoile à PhilPDF (GitHub)": "Give PhilPDF a star (GitHub)",
  "Partager PhilPDF": "Share PhilPDF",
  "Message à envoyer (vous pouvez le modifier) :": "Message to send (you can edit it):",
- "Je te conseille PhilPDF, un éditeur PDF libre et gratuit, sans publicité ni compte : lire, modifier le texte, remplir et signer, numériser, alléger. Pour Windows, Linux et Android : {lien}": "I recommend PhilPDF, a free and open-source PDF editor, with no ads and no account: read, edit text, fill and sign, scan, compress. For Windows, Linux and Android: {lien}",
- "Message copié.": "Message copied."
+ "Message copié.": "Message copied.",
+ "Je te conseille PhilPDF, un éditeur PDF libre et gratuit, sans publicité ni compte : lire, modifier le texte, remplir et signer, numériser, alléger. Pour Windows et Linux : {lien} ; pour Android, sur Google Play : {play}": "I recommend PhilPDF, a free and open-source PDF editor with no ads and no account: read, edit text, fill in and sign, scan, compress. For Windows and Linux: {lien}; for Android, on Google Play: {play}",
+ "PhilPDF sur Android (Google Play)...": "Get PhilPDF on Android (Google Play)..."
 }

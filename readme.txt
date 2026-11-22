@@ -10,6 +10,10 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.27.11
+- PhilPDF est sur Google Play. Apres quelques enregistrements, la version Google Play propose une seule fois de la
+  noter, avec la fenetre officielle de Google (etoiles, sans quitter l'appli). Aide > Noter PhilPDF reste disponible.
+
 1.27.10
 - Formulaires : un champ deja pose (texte, case a cocher, liste, bouton, champ de signature) se deplace et change
   de taille, comme sous Windows. Dans « Creer un formulaire », touchez le champ ; ailleurs, appui long sur le champ >
@@ -581,6 +585,10 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.103
+- Menu Aide : « PhilPDF sur Android (Google Play)... » ouvre la page Google Play de PhilPDF. « Partager PhilPDF... »
+  donne desormais aussi le lien Google Play pour Android.
 
 0.9.102
 - Menu Aide : « Partager PhilPDF... » (message tout pret avec le lien, modifiable, a copier ou envoyer par e-mail) et

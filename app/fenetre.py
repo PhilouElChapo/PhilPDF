@@ -564,6 +564,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
         m.addSeparator()
         act(m, _('Partager PhilPDF...'), self.partager_philpdf, None, "courriel")
         act(m, _('Mettre une étoile à PhilPDF (GitHub)'), self.noter_philpdf, None, "etoile")
+        act(m, _('PhilPDF sur Android (Google Play)...'), self.philpdf_android, None, "telephone")
         act(m, _('A propos de PhilPDF'), self.a_propos, None, "aide")
 
     def verifier_orthographe(self):
@@ -3656,6 +3657,12 @@ class Fenetre(MixinCoteACote, QMainWindow):
         from PySide6.QtCore import QUrl
         QDesktopServices.openUrl(QUrl("https://github.com/PhilouElChapo/PhilPDF"))
 
+    def philpdf_android(self):
+        """La page Google Play de PhilPDF : l'installer sur son telephone, la noter."""
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl("https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf"))
+
     def partager_philpdf(self):
         """Message tout pret avec le lien de PhilPDF, modifiable, puis copie ou envoi par e-mail."""
         from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QApplication
@@ -3668,8 +3675,9 @@ class Fenetre(MixinCoteACote, QMainWindow):
         v = QVBoxLayout(d)
         v.addWidget(QLabel(_("Message à envoyer (vous pouvez le modifier) :")))
         t = QPlainTextEdit(_("Je te conseille PhilPDF, un éditeur PDF libre et gratuit, sans publicité ni compte : lire, "
-                             "modifier le texte, remplir et signer, numériser, alléger. Pour Windows, Linux et Android : {lien}",
-                             lien="https://github.com/PhilouElChapo/PhilPDF"))
+                             "modifier le texte, remplir et signer, numériser, alléger. Pour Windows et Linux : {lien} ; "
+                             "pour Android, sur Google Play : {play}",
+                             lien="https://github.com/PhilouElChapo/PhilPDF", play="https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf"))
         v.addWidget(t, 1)
         h = QHBoxLayout()
         b_copier = QPushButton(icone("copier"), _("Copier"))

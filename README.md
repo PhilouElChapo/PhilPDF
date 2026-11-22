@@ -6,6 +6,8 @@ files in sync across your devices. No account, no ads, no trackers.
 
 *[Version française plus bas](#en-français)*
 
+<a href="https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf"><img alt="Get it on Google Play" src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" height="80"></a>
+
 ![PhilPDF editing a PDF](docs/captures/document_en.png)
 
 ## Download
@@ -16,7 +18,7 @@ Latest version: **[Releases](https://github.com/PhilouElChapo/PhilPDF/releases/l
 |---|---|
 | Windows 10 / 11 | `PhilPDF_Setup.exe` (no admin rights needed) or `PhilPDF_portable.zip` |
 | Linux (Ubuntu, Zorin OS, Fedora, Mint...) | `PhilPDF.flatpak` (double-click, or `flatpak install --user PhilPDF.flatpak`) or `PhilPDF_linux_x86_64.tar.gz` |
-| Android | Google Play (closed testing for now) or the `.apk` in the Android releases |
+| Android | **[Google Play](https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf)** (recommended, automatic updates) or the `.apk` in the Android releases |
 
 Updates are offered inside the app, never forced. The interface is available in English, French, German, Spanish and
 Italian.
@@ -71,9 +73,12 @@ ses fichiers sur tous ses postes. Sans compte, sans publicité, sans pisteur.
 
 ![PhilPDF en français](docs/captures/document_fr.png)
 
+<a href="https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf"><img alt="Disponible sur Google Play" src="https://play.google.com/intl/fr_fr/badges/static/images/badges/fr_badge_web_generic.png" height="80"></a>
+
 - **Télécharger** : [dernière version](https://github.com/PhilouElChapo/PhilPDF/releases/latest) — Windows
   (`PhilPDF_Setup.exe`, installation sans droits administrateur, ou `PhilPDF_portable.zip`), Linux (`PhilPDF.flatpak`
-  ou `PhilPDF_linux_x86_64.tar.gz`), Android.
+  ou `PhilPDF_linux_x86_64.tar.gz`), Android sur **[Google Play](https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf)** (mises à jour automatiques) ou par
+  le fichier `.apk`.
 - **Fonctions** : modifier le texte et les images, organiser les pages, remplir et signer (y compris signature
   numérique), tampons, numérisation et OCR, allègement, conversion Word / Excel, imprimante PDF, biffage, filigrane,
   comparaison, envoi par e-mail ; Google Drive, OneDrive, Dropbox, Box, pCloud, kDrive, WebDAV, NAS et FTP en direct ;
