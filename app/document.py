@@ -706,12 +706,21 @@ class PageWidget(QWidget):
         self.editeur = EditeurEnLigne(self, rect, pt, texte)
 
 
+def _quads(a):
+    """Quadrilateres d'une annotation de texte (souligne, barre) ; [] si aucun."""
+    try:
+        v = a.vertices or []
+        return [fitz.Quad(v[k:k + 4]) for k in range(0, len(v) - 3, 4)]
+    except Exception:                                   # noqa: BLE001
+        return []
+
+
 class EditeurParagraphe(QFrame):
     """Zone de texte posee sur la page, a la largeur du paragraphe : on tape, Entree fait un retour a la ligne,
     la poignee de droite elargit ou retrecit la zone ; Ctrl+Entree (ou clic ailleurs) valide, Echap annule."""
 
     def __init__(self, pw, para=None, coin=None):
-        from PySide6.QtWidgets import QPlainTextEdit
+        from PySide6.QtWidgets import QTextEdit
         super().__init__(pw)
         self.pw, self.para, self.coin = pw, para, coin
         o = pw.o
@@ -730,9 +739,11 @@ class EditeurParagraphe(QFrame):
             r = QRectF(p.x, p.y, 260 * e, self.taille * e * 1.4)
             texte = ""
         self.initial = texte
-        self.zone = QPlainTextEdit(self)
+        # zone riche : gras, italique, souligne, barre peuvent ne toucher qu'une partie (selection) du texte
+        self.zone = QTextEdit(self)
+        self.zone.setAcceptRichText(False)
         self.zone.setPlainText(texte)
-        self.zone.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+        self.zone.setLineWrapMode(QTextEdit.WidgetWidth)
         self.zone.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.zone.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.zone.setStyleSheet(self._style_zone(QColor("#000000")))
@@ -740,6 +751,8 @@ class EditeurParagraphe(QFrame):
         self.zone.document().setDocumentMargin(1)
         f = self._police_affichage()
         f.setPixelSize(max(8, int(self.taille * e * 0.98)))
+        f.setBold(False)                               # gras et italique : par caractere (formats de la zone)
+        f.setItalic(False)
         self.zone.setFont(f)
         self._police_origine = QFont(f)
         self._orthographe(o.params)
@@ -917,6 +930,9 @@ class EditeurParagraphe(QFrame):
                 if inter.is_empty or inter.get_area() < 0.3 * max(1.0, fitz.Rect(a.rect).get_area()):
                     continue
                 (self.annots_barre if a.type[0] == fitz.PDF_ANNOT_STRIKE_OUT else self.annots_souligne).append(a.xref)
+        # style de chaque caractere a l'ouverture (gras / italique du PDF, souligne / barre poses par clic droit)
+        self._formats_depart = self._formats_initiaux(o, para)
+        tous = self._formats_depart
         self.b_styles = {}
         for cle, lib, css, aide, actif in (
                 ("gras", "G", "font-weight:800", _("Gras"), self.gras_depart),
@@ -931,18 +947,137 @@ class EditeurParagraphe(QFrame):
             b.setFixedWidth(30)
             b.setToolTip(aide)
             b.setStyleSheet("QPushButton{padding:2px 4px;%s} QPushButton:checked{background:#dbe8fb;border:1px solid #1462c2}" % css)
-            b.toggled.connect(self._style_change)
+            b.toggled.connect(lambda c, k=cle: self._style_change(k, c))
+            b.setToolTip(aide + "\n" + _("Texte sélectionné : seulement la sélection ; sinon : tout le paragraphe."))
             h.addWidget(b)
             self.b_styles[cle] = b
+        for i, cle in enumerate(("gras", "italique", "souligne", "barre")):
+            self.b_styles[cle].blockSignals(True)
+            self.b_styles[cle].setChecked(any(x[i] for x in tous) if tous else self.b_styles[cle].isChecked())
+            self.b_styles[cle].blockSignals(False)
+        self._appliquer_formats(self._formats_depart)
+        self.zone.selectionChanged.connect(self._etat_boutons)
 
-    def _style_change(self, *_a):
-        f = self.zone.font()
-        f.setBold(self.b_styles["gras"].isChecked())
-        f.setItalic(self.b_styles["italique"].isChecked())
-        f.setUnderline(self.b_styles["souligne"].isChecked())
-        f.setStrikeOut(self.b_styles["barre"].isChecked())
-        self.zone.setFont(f)
+    @staticmethod
+    def _fmt_car(g, i, s_, b_):
+        from PySide6.QtGui import QTextCharFormat
+        f = QTextCharFormat()
+        f.setFontWeight(QFont.Bold if g else QFont.Normal)
+        f.setFontItalic(bool(i))
+        f.setFontUnderline(bool(s_))
+        f.setFontStrikeOut(bool(b_))
+        return f
+
+    def _formats_initiaux(self, o, para):
+        """[(gras, italique, souligne, barre)] pour chaque caractere du texte de la zone ; [] si texte nouveau."""
+        if not para:
+            return []
+        import difflib
+        try:
+            ancien, infos = Editeur(o.doc).caracteres_paragraphe(para)
+        except Exception:                               # noqa: BLE001
+            return []
+        page = o.doc[self.pw.num]
+        traits = []
+        for x in self.annots_souligne + self.annots_barre:
+            a = page.load_annot(x)
+            if a is not None:
+                traits.append((x in self.annots_barre, [fitz.Rect(q.rect) for q in _quads(a)] or [fitz.Rect(a.rect)]))
+
+        def trait(b, barre):
+            if b is None:
+                return False
+            m = fitz.Point((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2)
+            return any(bar == barre and any(r.contains(m) for r in rs) for bar, rs in traits)
+        base = [(g, i, trait(b, False), trait(b, True), b) for g, i, b in infos]
+        # espaces ajoutes entre les lignes : souligne / barre si les deux voisins le sont
+        for k, v in enumerate(base):
+            if v[4] is None and 0 < k < len(base) - 1:
+                p_, n_ = base[k - 1], base[k + 1]
+                base[k] = (v[0], v[1], p_[2] and n_[2], p_[3] and n_[3], None)
+        texte = self.zone.toPlainText()
+        if texte == ancien:
+            return [v[:4] for v in base]
+        out = [(False, False, False, False)] * len(texte)
+        for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, ancien, texte, autojunk=False).get_opcodes():
+            for j in range(j1, j2):
+                i = min(i1 + (j - j1), i2 - 1) if i2 > i1 else max(0, i1 - 1)
+                if base:
+                    out[j] = base[min(i, len(base) - 1)][:4]
+        return out
+
+    def _appliquer_formats(self, formats):
+        from PySide6.QtGui import QTextCursor
+        if not formats:
+            return
+        c = QTextCursor(self.zone.document())
+        k = 0
+        while k < len(formats):
+            j = k
+            while j < len(formats) and formats[j] == formats[k]:
+                j += 1
+            c.setPosition(k)
+            c.setPosition(j, QTextCursor.KeepAnchor)
+            c.setCharFormat(self._fmt_car(*formats[k]))
+            k = j
+        self.zone.document().setModified(False)
+
+    def formats_zone(self):
+        """[(gras, italique, souligne, barre)] de chaque caractere du texte (aligne sur toPlainText)."""
+        out = []
+        b = self.zone.document().begin()
+        premier = True
+        while b.isValid():
+            if not premier:
+                out.append(out[-1] if out else (False, False, False, False))      # retour a la ligne
+            premier = False
+            it = b.begin()
+            while not it.atEnd():
+                fr = it.fragment()
+                if fr.isValid():
+                    f = fr.charFormat()
+                    v = (f.fontWeight() >= 600, f.fontItalic(), f.fontUnderline(), f.fontStrikeOut())
+                    out.extend([v] * len(fr.text()))
+                it += 1
+            b = b.next()
+        return out
+
+    def _style_change(self, cle, actif):
+        """Bouton G / I / S / B : la selection seulement, ou tout le paragraphe s'il n'y a pas de selection."""
+        from PySide6.QtGui import QTextCharFormat, QTextCursor
+        f = QTextCharFormat()
+        if cle == "gras":
+            f.setFontWeight(QFont.Bold if actif else QFont.Normal)
+        elif cle == "italique":
+            f.setFontItalic(actif)
+        elif cle == "souligne":
+            f.setFontUnderline(actif)
+        else:
+            f.setFontStrikeOut(actif)
+        c = self.zone.textCursor()
+        if c.hasSelection():
+            c.mergeCharFormat(f)
+        else:
+            tout = QTextCursor(self.zone.document())
+            tout.select(QTextCursor.Document)
+            tout.mergeCharFormat(f)
+            self.zone.mergeCurrentCharFormat(f)          # et ce qui sera tape ensuite
         self._ajuster()
+
+    def _etat_boutons(self):
+        """Boutons allumes selon la selection (tous ses caracteres) ou, sans selection, le paragraphe (au moins un)."""
+        c = self.zone.textCursor()
+        fm = self.formats_zone()
+        if c.hasSelection():
+            part = fm[c.selectionStart():c.selectionEnd()]
+            etat = [bool(part) and all(x[i] for x in part) for i in range(4)]
+        else:
+            etat = [any(x[i] for x in fm) for i in range(4)]
+        for i, cle in enumerate(("gras", "italique", "souligne", "barre")):
+            b = self.b_styles[cle]
+            b.blockSignals(True)
+            b.setChecked(etat[i])
+            b.blockSignals(False)
 
     def _variante(self, gras, italique):
         """Fichier de la meme police en gras / italique (polices du PC), ou None si ce PC ne l'a pas."""
@@ -1105,7 +1240,7 @@ class EditeurParagraphe(QFrame):
         le texte garde sa vraie couleur (ce que l'on voit est ce qui sera ecrit)."""
         lum = (0.299 * couleur.red() + 0.587 * couleur.green() + 0.114 * couleur.blue()) / 255
         fond = "#ffffff" if lum < 0.62 else "#3a3a3a"
-        return ("QPlainTextEdit{background:%s;border:2px solid #1462c2;border-radius:3px;padding:0px;color:%s;"
+        return ("QTextEdit{background:%s;border:2px solid #1462c2;border-radius:3px;padding:0px;color:%s;"
                 "selection-background-color:#9cc3f5;selection-color:#000}" % (fond, couleur.name()))
 
     def _fermer_annexes(self):
@@ -1242,9 +1377,21 @@ class EditeurParagraphe(QFrame):
         largeur_pt = (self.largeur - 6) / self.e
         taille = self.sp_taille.value() if abs(self.sp_taille.value() - self.taille_depart) > 0.05 else None
         couleur = self.couleur.getRgbF()[:3] if self.couleur_modifiee else None
+        fm = self.formats_zone()
+        if len(fm) != len(texte):
+            fm = fm[:len(texte)] + [fm[-1] if fm else (False, False, False, False)] * (len(texte) - len(fm))
+        if self.para:
+            self._valider_paragraphe(o, texte, fm, largeur_pt, taille, couleur)
+            self.pw.update()
+            return
+        # texte nouveau : gras / italique de l'ensemble (tout le texte), comme avant
+        tous = [x for x, ch in zip(fm, texte) if ch.strip()]
+        for i, cle in enumerate(("gras", "italique")):
+            self.b_styles[cle].blockSignals(True)
+            self.b_styles[cle].setChecked(bool(tous) and all(x[i] for x in tous))
+            self.b_styles[cle].blockSignals(False)
         police, avis = self._appliquer_styles(o, self.police_choisie)
-        souligne_change = (self.b_styles["souligne"].isChecked() != bool(self.annots_souligne)
-                           or self.b_styles["barre"].isChecked() != bool(self.annots_barre))
+        souligne_change = False
         if self.para:
             elargi = abs(largeur_pt - (self.para["x1"] - self.para["x0"])) > 2
             if texte != self.initial or elargi or police or taille or couleur:
@@ -1266,7 +1413,44 @@ class EditeurParagraphe(QFrame):
         elif texte.strip():
             o.ajouter_paragraphe(self.pw.num, self.coin, texte, largeur_pt, taille=self.sp_taille.value(),
                                  couleur=self.couleur.getRgbF()[:3], police=police)
+            if avis:
+                o.message(avis)
         self.pw.update()
+
+    def _valider_paragraphe(self, o, texte, fm, largeur_pt, taille, couleur):
+        """Paragraphe existant : chaque caractere garde ou recoit son gras / italique / souligne / barre (une partie
+        seulement si c'est ce qui a ete selectionne)."""
+        depart = self._formats_depart
+        meme_forme = texte == self.initial and depart and fm == depart
+        elargi = abs(largeur_pt - (self.para["x1"] - self.para["x0"])) > 2
+        if texte == self.initial and meme_forme and not (elargi or self.police_choisie or taille or couleur):
+            return
+        if elargi and getattr(self, "_largeur_tiree", False):
+            self.para["x1"] = self.para["x0"] + largeur_pt
+            self.para["largeur_choisie"] = True         # largeur voulue : on n'allonge pas la ligne au-dela
+        elif elargi and len(self.para.get("lignes", [])) != 1:
+            self.para["x1"] = self.para["x0"] + largeur_pt
+        formats = [{"gras": g, "italique": i, "souligne": s_, "barre": b_} for g, i, s_, b_ in fm]
+        if texte == self.initial and len(depart) == len(fm):
+            # meme texte : seuls les caracteres changes sont imposes (les autres gardent exactement leur police)
+            formats = [f if (v != d or v[2] or v[3]) else None for f, v, d in zip(formats, fm, depart)]
+        o.modifier_paragraphe(self.pw.num, self.para, texte, taille=taille, couleur=couleur, police=self.police_choisie,
+                              formats=formats, variante=self._variante_span,
+                              traits=(self.annots_souligne, self.annots_barre))
+
+    def _variante_span(self, sp, gras, italique):
+        """Fichier de police pour un caractere passe en gras / italique (ou revenu en normal) : meme famille."""
+        from . import polices
+        if self.police_choisie:
+            d = next((p for p in polices.liste() if p["fichier"] == self.police_choisie), None)
+            fam = polices._norme(d["famille"]) if d else ""
+        else:
+            fam = polices._famille_pdf((sp or {}).get("font", ""))
+        for f in [fam] + polices.EQUIVALENTS.get(fam, []):
+            for p in polices.liste():
+                if polices._norme(p["famille"]) == f and p["gras"] == gras and p["italique"] == italique:
+                    return p["fichier"]
+        return None
 
 
 class EditeurEnLigne(QWidget):
@@ -4037,11 +4221,12 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         self.objet = None
         self.apres_modif(ed.journal or [_('Aucun changement.')])
 
-    def modifier_paragraphe(self, n, para, texte, taille=None, couleur=None, police=None):
+    def modifier_paragraphe(self, n, para, texte, taille=None, couleur=None, police=None, formats=None,
+                            variante=None, traits=None):
         self.memoriser(_("Modification d'un paragraphe"))
         ed = Editeur(self.doc)
         try:
-            res = ed.modifier_paragraphe(n, para, texte, taille, couleur, police)
+            res = ed.modifier_paragraphe(n, para, texte, taille, couleur, police, formats=formats, variante=variante)
         except Exception as e:
             (self.annulations.pop(), self.maj_historique())
             self.message(_("Modification impossible : {e}", e=e))
@@ -4049,6 +4234,26 @@ class OngletDocument(MixinSignature, MixinFormulaire, MixinMesure, MixinCommenta
         if res is None:
             (self.annulations.pop(), self.maj_historique())
             return
+        if formats is not None and traits is not None:
+            # souligne / barre : les anciens traits du paragraphe retires, les nouveaux poses sur les lettres voulues
+            page = self.doc[n]
+            couleurs = {}
+            for barre, xrefs in ((False, traits[0]), (True, traits[1])):
+                for x in xrefs:
+                    a = page.load_annot(x)
+                    if a is None:
+                        continue
+                    couleurs.setdefault(barre, (a.colors or {}).get("stroke"))
+                    page.delete_annot(a)
+            for genre, r in res.get("traits", []):
+                a = page.add_strikeout_annot(r) if genre == "barre" else page.add_underline_annot(r)
+                c = couleurs.get(genre == "barre")
+                if c:
+                    a.set_colors(stroke=c)
+                a.update()
+        if res.get("variantes_manquantes"):
+            self.message(_("Ce PC n'a pas la version gras ou italique de cette police : une partie du texte garde son "
+                           "style d'origine. Choisissez une autre police dans la liste, ou installez la police complète."))
         self.objet = None
         self.apres_modif(ed.journal)
         if not res.get("ocr"):                     # texte d'un scan : l'autre methode ne s'applique pas

@@ -3129,5 +3129,7 @@
  "Supprimez ce fichier directement dans {lieu}.": "Elimine este archivo directamente en {lieu}.",
  "{lieu} : compte non relié sur ce poste (Préférences › Comptes)": "{lieu}: cuenta no vinculada en este equipo (Preferencias › Cuentas)",
  "{lieu} : {dossier}": "{lieu}: {dossier}",
- "Fichiers ouverts sur vos téléphones et tablettes": "Archivos abiertos en sus teléfonos y tabletas"
+ "Fichiers ouverts sur vos téléphones et tablettes": "Archivos abiertos en sus teléfonos y tabletas",
+ "Ce PC n'a pas la version gras ou italique de cette police : une partie du texte garde son style d'origine. Choisissez une autre police dans la liste, ou installez la police complète.": "Este equipo no tiene la versión en negrita o cursiva de esta fuente: parte del texto conserva su estilo original. Elija otra fuente de la lista o instale la fuente completa.",
+ "Texte sélectionné : seulement la sélection ; sinon : tout le paragraphe.": "Texto seleccionado: solo la selección; si no: todo el párrafo."
 }

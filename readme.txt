@@ -597,6 +597,12 @@ ANDROID
 WINDOWS ET LINUX
 ----------------
 
+0.9.105
+- Modifier le texte : gras, italique, souligne et barre peuvent ne toucher qu'une partie du paragraphe. Selectionnez
+  quelques mots dans la zone, puis G, I, S ou B : seule la selection change ; sans selection, tout le paragraphe
+  change, comme avant. Les mots deja en gras ou soulignes s'affichent ainsi dans la zone et le restent.
+  Si ce PC n'a pas la version gras ou italique de la police, PhilPDF le dit (une autre police peut etre choisie).
+
 0.9.104
 - Accueil : nouvelle rubrique « Partagés par lien » (dossier PhilPDF › Partages de votre Drive de synchronisation).
   Double-clic : ouvrir (copie de travail, « Enregistrer » remplace le partage apres avertissement ; si le fichier a

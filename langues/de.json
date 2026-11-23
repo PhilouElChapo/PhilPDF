@@ -3129,5 +3129,7 @@
  "Supprimez ce fichier directement dans {lieu}.": "Löschen Sie diese Datei direkt in {lieu}.",
  "{lieu} : compte non relié sur ce poste (Préférences › Comptes)": "{lieu}: Konto auf diesem Rechner nicht verbunden (Einstellungen › Konten)",
  "{lieu} : {dossier}": "{lieu}: {dossier}",
- "Fichiers ouverts sur vos téléphones et tablettes": "Auf Ihren Telefonen und Tablets geöffnete Dateien"
+ "Fichiers ouverts sur vos téléphones et tablettes": "Auf Ihren Telefonen und Tablets geöffnete Dateien",
+ "Ce PC n'a pas la version gras ou italique de cette police : une partie du texte garde son style d'origine. Choisissez une autre police dans la liste, ou installez la police complète.": "Dieser Rechner hat keine fette oder kursive Version dieser Schrift: Ein Teil des Textes behält seinen ursprünglichen Stil. Wählen Sie eine andere Schrift aus der Liste oder installieren Sie die vollständige Schrift.",
+ "Texte sélectionné : seulement la sélection ; sinon : tout le paragraphe.": "Markierter Text: nur die Markierung; sonst: der ganze Absatz."
 }

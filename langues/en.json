@@ -3138,5 +3138,7 @@
  "Supprimez ce fichier directement dans {lieu}.": "Delete this file directly in {lieu}.",
  "{lieu} : compte non relié sur ce poste (Préférences › Comptes)": "{lieu}: account not linked on this computer (Preferences › Accounts)",
  "{lieu} : {dossier}": "{lieu}: {dossier}",
- "Fichiers ouverts sur vos téléphones et tablettes": "Files open on your phones and tablets"
+ "Fichiers ouverts sur vos téléphones et tablettes": "Files open on your phones and tablets",
+ "Ce PC n'a pas la version gras ou italique de cette police : une partie du texte garde son style d'origine. Choisissez une autre police dans la liste, ou installez la police complète.": "This computer doesn't have the bold or italic version of this font: part of the text keeps its original style. Choose another font from the list, or install the full font.",
+ "Texte sélectionné : seulement la sélection ; sinon : tout le paragraphe.": "Selected text: only the selection; otherwise: the whole paragraph."
 }

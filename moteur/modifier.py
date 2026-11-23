@@ -705,10 +705,13 @@ class Editeur:
                 "retrait": para[0]["x0"] - min(l["x0"] for l in para)}
 
     @staticmethod
-    def _texte_paragraphe(lignes):
+    def _texte_paragraphe(lignes, boites=None):
         """Texte continu (lignes recollees, cesures retirees) et style de chaque caractere.
         Une ligne qui s'arrete bien avant la marge alors que le premier mot de la suivante y tenait : c'etait un
-        vrai retour a la ligne (liste, montants...), garde tel quel."""
+        vrai retour a la ligne (liste, montants...), garde tel quel.
+        boites (liste) : recoit en plus le cadre de chaque caractere (None pour un espace ou un retour ajoute)."""
+        if boites is None:
+            boites = []
         texte, styles = "", []
         droite = max((l["x1"] for l in lignes), default=0)
 
@@ -734,27 +737,53 @@ class Editeur:
                 place = droite - precedente["x1"]
                 if texte.endswith("-") and chars[0][0]["c"].islower() and len(texte) > 1 and texte[-2].isalpha():
                     texte, styles = texte[:-1], styles[:-1]
+                    del boites[-1:]
                 elif liste or place > premier_mot(l) + precedente["taille"] * 0.6:
                     texte += "\n"
                     styles.append(styles[-1])
+                    boites.append(None)
                 else:
                     texte += " "
                     styles.append(styles[-1])
+                    boites.append(None)
             for c, sp in chars:
                 texte += c["c"]
                 styles.append(sp)
+                boites.append(fitz.Rect(c["bbox"]))
             precedente = l
         return texte, styles
 
-    def modifier_paragraphe(self, num_page, para, nouveau, taille=None, couleur=None, police=None):
+    @staticmethod
+    def style_gras_italique(sp):
+        """(gras, italique) d'un span : drapeaux du PDF ou nom de la police."""
+        nom = (sp or {}).get("font", "").lower()
+        fl = (sp or {}).get("flags", 0)
+        return (bool(fl & 16) or any(x in nom for x in ("bold", "black", "heavy", "semibold")),
+                bool(fl & 2) or any(x in nom for x in ("italic", "oblique")))
+
+    def caracteres_paragraphe(self, para):
+        """(texte, [(gras, italique, cadre)]) : le style de chaque caractere tel que la zone d'edition l'affiche."""
+        boites = []
+        ancien, styles = self._texte_paragraphe(para["lignes"], boites)
+        if para.get("retenu") and len(para["texte"]) == len(ancien):
+            ancien = para["texte"]
+        return ancien, [self.style_gras_italique(sp) + (b,) for sp, b in zip(styles, boites)]
+
+    def modifier_paragraphe(self, num_page, para, nouveau, taille=None, couleur=None, police=None, formats=None,
+                            variante=None):
         """Reecrit le paragraphe avec le nouveau texte (retours a la ligne compris), coupe a la largeur d'origine.
-        Chaque lettre garde le style (police, gras, taille, couleur) du texte d'origine a cet endroit."""
+        Chaque lettre garde le style (police, gras, taille, couleur) du texte d'origine a cet endroit.
+        formats : pour chaque caractere de « nouveau », None ou {"gras", "italique", "souligne", "barre"} voulu ici
+        (mise en forme d'une partie seulement) ; variante(span, gras, italique) donne le fichier de police a utiliser.
+        Le resultat porte alors "traits" : [("souligne" | "barre", rect)] a poser sur les lettres concernees."""
         import difflib
         page = self.doc[num_page]
         ancien, styles = self._texte_paragraphe(para["lignes"])
         if para.get("retenu") and len(para["texte"]) == len(ancien):
             ancien = para["texte"]                     # meme longueur : retours a la ligne exacts, styles alignes
-        if nouveau == ancien and not (taille or couleur or police):
+        if formats is not None and len(formats) != len(nouveau):
+            formats = None
+        if nouveau == ancien and not (taille or couleur or police or (formats and any(formats))):
             return None
         from . import texte_ocr
         if texte_ocr.est_ocr(para["lignes"]):         # scan : lettres de l'image effacees, texte ecrit visible
@@ -775,7 +804,24 @@ class Editeur:
 
         _connus, choisir = self._choix_glyphes(page, [x for l in para["lignes"] for x in l["chars"]])
 
-        def cible_de(ch, sp):
+        variantes = {}
+        self.variantes_manquantes = set()
+
+        def cible_de(ch, sp, fm=None):
+            if fm and variante and (fm.get("gras"), fm.get("italique")) != self.style_gras_italique(sp):
+                cle_v = (police or sp.get("font"), bool(fm.get("gras")), bool(fm.get("italique")))
+                if cle_v not in variantes:
+                    f_ = None
+                    try:
+                        f_ = variante(sp, cle_v[1], cle_v[2])
+                    except Exception:                    # noqa: BLE001
+                        f_ = None
+                    variantes[cle_v] = PoliceIncorporee(os.path.basename(f_), f_) if f_ else None
+                    if not f_:
+                        self.variantes_manquantes.add(cle_v[1:])
+                v = variantes[cle_v]
+                if v is not None and v.a(ch):
+                    return v
             if incorporee:
                 return incorporee if incorporee.a(ch) else None
             p_sp = self._police_du_span(page, sp)
@@ -796,13 +842,14 @@ class Editeur:
             return r if r.a(ch) else None
         # mots avec leurs lettres (police, taille, couleur, avance)
         lettres = []
-        for ch, sp in zip(nouveau, st):
+        for j, (ch, sp) in enumerate(zip(nouveau, st)):
+            fm = formats[j] if formats else None
             if ch == "\n":
-                lettres.append(("\n", None, 0, None, 0))
+                lettres.append(("\n", None, 0, None, 0, j))
                 continue
             sp = sp or styles[-1]
             sz = sp["size"] * k
-            cible = cible_de(ch if ch != " " else "a", sp) if ch != " " else None
+            cible = cible_de(ch if ch != " " else "a", sp, fm) if ch != " " else None
             if ch != " " and cible is None:
                 continue
             p_esp = self._police_du_span(page, sp) if cible is None else None
@@ -810,7 +857,7 @@ class Editeur:
                 p_esp = p_esp.variante(" ", choisir(p_esp, " ", sp))     # espace de chasse fixe si le texte l'est
             av = (cible.avance(ch) if cible else (p_esp.avance(" ") if p_esp and p_esp.a(" ") else 0.28)) * sz
             coul = couleur or fitz.sRGB_to_pdf(sp["color"])
-            lettres.append((ch, cible, sz, coul, av))
+            lettres.append((ch, cible, sz, coul, av, j))
         # coupure en lignes a la largeur du paragraphe
         x0, x1 = para["x0"], para["x1"] + 0.5
         # paragraphe d'une seule ligne (titre, bandeau, cellule) : un texte plus long s'allonge sur la ligne, dans
@@ -877,7 +924,7 @@ class Editeur:
                 h_dispo = cadre.height - 2
                 f = 1.0
                 while True:
-                    lt = [(c, ci, sz * f, co, av * f) for c, ci, sz, co, av in lettres]
+                    lt = [(c, ci, sz * f, co, av * f, jj) for c, ci, sz, co, av, jj in lettres]
                     lignes = couper(lt)
                     tm = max((l[2] for lg, _f in lignes for l in lg), default=para["taille"] * k * f)
                     hauteur = (len(lignes) - 1) * pas * f + tm
@@ -889,8 +936,9 @@ class Editeur:
                 centrer_lignes = centre
                 reduit = f if f < 0.999 else None
                 etendu = (x0, x1, cadre)
-        # plan d'ecriture
+        # plan d'ecriture ; place de chaque caractere (souligne / barre d'une partie)
         plan = []
+        places = {}
         for n, (ligne, fin_par) in enumerate(lignes):
             while ligne and ligne[-1][0] == " ":
                 ligne = ligne[:-1]
@@ -902,9 +950,10 @@ class Editeur:
                 espaces = sum(1 for l in ligne if l[0] == " ")
                 if espaces:
                     extra = (x1 - x - sum(l[4] for l in ligne)) / espaces
-            for ch, cible, sz, coul, av in ligne:
+            for ch, cible, sz, coul, av, jj in ligne:
                 if ch != " ":
                     plan.append((ch, cible, sz, coul, x, "paragraphe", y))
+                places[jj] = (n, x, x + av, y, sz)
                 x += av + (extra if ch == " " else 0)
             y += pas
         # effacer l'ancien paragraphe (texte seulement), puis ecrire
@@ -917,6 +966,25 @@ class Editeur:
         haut = min(l["rect"].y0 for l in para["lignes"][:1])
         tmax = max((l[2] for lg, _f in lignes for l in lg), default=para["taille"])
         self._retenir_paragraphe(num_page, fitz.Rect(x0, haut, x1, y - pas + tmax * 0.3), nouveau.rstrip("\n"), para["rect"])
+        traits = []
+        if formats:
+            for genre in ("souligne", "barre"):
+                courant = None                            # (ligne, x0, x1, base, taille) d'une suite de lettres
+                for jj in range(len(nouveau) + 1):
+                    pl = places.get(jj) if jj < len(nouveau) and (formats[jj] or {}).get(genre) else None
+                    if pl and nouveau[jj] == " " and not (jj + 1 < len(nouveau) and (formats[jj + 1] or {}).get(genre)):
+                        pl = None                         # espace en fin de suite : pas de trait qui depasse
+                    if pl and courant and pl[0] == courant[0]:
+                        courant = (courant[0], courant[1], pl[2], courant[3], max(courant[4], pl[4]))
+                        continue
+                    if courant:
+                        _l, a0, a1, b_, t_ = courant
+                        traits.append((genre, fitz.Rect(a0, b_ - t_ * 0.8, a1, b_ + t_ * 0.22)))
+                    courant = pl
+            if self.variantes_manquantes:
+                self.journal.append("variante gras / italique absente de ce PC : "
+                                    + ", ".join(f"{'gras' if g else ''}{' ' if g and i else ''}{'italique' if i else ''}"
+                                                or "normal" for g, i in sorted(self.variantes_manquantes)))
         en_plus = len(lignes) - len(para["lignes"])
         self.journal.append(f"paragraphe réécrit : {len(lignes)} ligne(s)" +
                             (f" ({en_plus:+d} par rapport à avant)" if en_plus else "") +
@@ -926,7 +994,7 @@ class Editeur:
         cadre = etendu[2] if etendu else (self.limites_ligne(num_page, para)[3] if en_plus > 0 else None)
         deborde = bool(cadre and en_plus > 0 and y - pas + 1 > cadre.y1)
         return {"lignes": len(lignes), "en_plus": en_plus, "bas": y - pas, "deborde_cadre": deborde, "x0": x0, "x1": x1,
-                "reduit": reduit, "dans_cadre": bool(etendu and etendu[2] is not None and en_plus > 0 and not deborde)}
+                "reduit": reduit, "traits": traits, "variantes_manquantes": sorted(self.variantes_manquantes), "dans_cadre": bool(etendu and etendu[2] is not None and en_plus > 0 and not deborde)}
 
     def limites_ligne(self, num_page, para):
         """Place libre sur la ligne d'un paragraphe d'une ligne : (gauche, droite, centre, cadre).

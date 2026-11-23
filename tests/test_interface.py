@@ -655,6 +655,25 @@ pol_ = {sp["font"] for b in op.doc[0].get_text("dict")["blocks"] for l in b.get(
         if "prestations" in sp["text"]}
 verif(not list(op.doc[0].annots()) and pol_ and all("Bold" in x for x in pol_),
       f"styles : barré enlevé, paragraphe passé en gras ({pol_})")
+# une partie seulement : selection d'un mot -> gras + souligne sur ce mot, le reste inchange
+verif(pw_.ouvrir_paragraphe(fitz.Point(80, 110)), "styles : paragraphe rouvert (3)")
+ed_ = pw_.editeur
+ed_.b_styles["gras"].setChecked(False)
+t_ = ed_.zone.toPlainText()
+k_ = t_.index("prestations")
+c_ = ed_.zone.textCursor(); c_.setPosition(k_); c_.setPosition(k_ + len("prestations"), c_.MoveMode.KeepAnchor)
+ed_.zone.setTextCursor(c_)
+ed_.b_styles["gras"].setChecked(True)
+ed_.b_styles["souligne"].setChecked(True)
+fz_ = ed_.formats_zone()
+verif(fz_[k_][0] and fz_[k_][2] and not fz_[0][0] and not fz_[-1][2], "styles : G et S sur la sélection seulement (zone)")
+ed_.valider()
+spans_ = [(sp["font"], sp["text"]) for b in op.doc[0].get_text("dict")["blocks"] for l in b.get("lines", []) for sp in l["spans"]]
+gras_ = " ".join(t for f, t in spans_ if "Bold" in f)
+autres_ = " ".join(t for f, t in spans_ if "Bold" not in f)
+soul_ = [fitz.Rect(a.rect) for a in op.doc[0].annots() if a.type[0] == fitz.PDF_ANNOT_UNDERLINE]
+verif("prestations" in gras_ and "prestations" not in autres_ and len(gras_.split()) <= 2 and len(soul_) == 1
+      and soul_[0].width < 120, f"styles : une partie seulement en gras et soulignée ({gras_!r}, {len(soul_)} trait)")
 op.changer_mode("ajout_texte")
 pw_.editeur = D.EditeurParagraphe(pw_, None, fitz.Point(72, 300))
 from app import orthographe as ORT
