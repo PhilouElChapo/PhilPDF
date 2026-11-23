@@ -372,6 +372,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
         self.accueil.chercher_recent.connect(self.chercher_recent)
         self.accueil.doublon_choisi.connect(lambda m, e, p: session_de(self.params).apprendre_depuis(m, e, p))
         self.accueil.changer_synchro.connect(lambda: self.bienvenue(seulement_synchro=True))
+        self.accueil.action_partage.connect(self.action_partage)
         self.synchro = None              # (machine, date, fichiers, resultats) trouve au demarrage
         self._session_touchee = False    # on n'ecrit la session que si des fichiers ont ete ouverts ou fermes
         self.outils = PageOutils(self.params)
@@ -492,6 +493,7 @@ class Fenetre(MixinCoteACote, QMainWindow):
         act(m, _('Imprimer...'), lambda: self.lancer_outil("imprimer"), "Ctrl+P", "imprimer")
         act(m, _('Imprimer plusieurs documents...'), self.imprimer_plusieurs, None, "lot")
         act(m, _('Envoyer par e-mail...'), lambda: self.lancer_outil("courriel"), "Ctrl+Shift+E", "courriel")
+        act(m, _('Partager par lien (Google Drive)...'), lambda: self.partager_lien(), None, "courriel")
         act(m, _("Comptes d'envoi d'e-mails..."), self.comptes_mail, None, "courriel")
         m.addSeparator()
         act(m, _("Protéger à l'aide d'un mot de passe..."), lambda: self.lancer_outil("motdepasse"), None, "motdepasse")
@@ -1009,6 +1011,9 @@ class Fenetre(MixinCoteACote, QMainWindow):
         e.acceptProposedAction()
 
     def ouvrir(self, chemin):
+        if chemin.startswith("distant:"):          # fichier d'un Drive (autre poste, telephone) : rouvert la-bas
+            _p, cid, ch = chemin.split(":", 2)
+            return self.ouvrir_distant(compte_id=cid, chemin=ch)
         chemin = os.path.abspath(chemin)
         for o in self.documents():
             if o.chemin and os.path.normcase(o.chemin) == os.path.normcase(chemin):
@@ -1301,6 +1306,14 @@ class Fenetre(MixinCoteACote, QMainWindow):
     def chercher_recent(self, machine, e):
         """Fichier recent d'un autre poste, introuvable ici d'un coup d'oeil : recherche sur ce poste (quelques
         secondes), sinon vous l'indiquez ; PhilPDF retient le dossier pour la suite."""
+        if e.get("distant"):                      # fichier d'un Drive que ce poste n'a pas relie : on ne cherche pas
+            lieu = (e["distant"].get("lieu") or (e["distant"].get("cle") or "").split("|")[0])
+            if QMessageBox.question(self, _("Fichier d'un autre appareil"),
+                                    _("« {nom} » est sur {lieu}, un compte qui n'est pas relié sur ce poste.\n\n"
+                                      "Relier ce compte maintenant (Préférences › Comptes) ?", nom=e.get("nom", ""), lieu=lieu)
+                                    ) == QMessageBox.Yes:
+                self.preferences(onglet="comptes")
+            return
         from .session import retenir_trouve
         s = session_de(self.params)
         from .dialogues_ia import executer_suivi
@@ -1516,6 +1529,9 @@ class Fenetre(MixinCoteACote, QMainWindow):
         o = self.ouvrir(local)
         if o:
             o.distant = {"compte": c["id"], "cle": distant.cle_compte(c), "chemin": chemin, "lieu": distant.libelle(c)}
+            from . import partages
+            if partages.est_partage(partages.compte(self.params), chemin):
+                o.distant["partage_date"] = partages.modifie_le(self.params, chemin, e)
             self._retenir_distant(o)
             self._maj_titre(o)
             self.statusBar().showMessage(_("Ouvert depuis {lieu} : {chemin}", lieu=distant.libelle(c), chemin=chemin), 8000)
@@ -1541,6 +1557,29 @@ class Fenetre(MixinCoteACote, QMainWindow):
         if not e:
             QMessageBox.warning(self, "PhilPDF", _("Copie gardée sur ce PC : {chemin}", chemin=o.chemin))
             return False
+        from . import partages
+        if partages.est_partage(partages.compte(self.params), o.distant["chemin"]):
+            # fichier partage par lien : ceux qui ont le lien verront la nouvelle version ; modifie ailleurs entre-temps ?
+            ailleurs = partages.modifie_le(self.params, o.distant["chemin"], e)
+            if o.distant.get("partage_date") and ailleurs and ailleurs != o.distant["partage_date"]:
+                r = QMessageBox(QMessageBox.Warning, _("Fichier partagé modifié ailleurs"),
+                                _("« {nom} » a été enregistré sur un autre appareil depuis que vous l'avez ouvert.\n\n"
+                                  "Remplacer cette version par la vôtre, ou enregistrer la vôtre ailleurs ?",
+                                  nom=os.path.basename(o.distant["chemin"])), parent=self)
+                b_rempl = r.addButton(_("Remplacer"), QMessageBox.AcceptRole)
+                b_sous = r.addButton(_("Enregistrer sous..."), QMessageBox.ActionRole)
+                r.addButton(_("Annuler"), QMessageBox.RejectRole)
+                r.exec()
+                if r.clickedButton() is b_sous:
+                    self.enregistrer_copie(o)
+                    return False
+                if r.clickedButton() is not b_rempl:
+                    return False
+            elif QMessageBox.question(self, _("Fichier partagé"),
+                                      _("« {nom} » est partagé par lien : les personnes qui ont le lien verront cette "
+                                        "nouvelle version.\n\nEnregistrer ?", nom=os.path.basename(o.distant["chemin"]))
+                                      ) != QMessageBox.Yes:
+                return False
         from .dialogues_ia import en_tache
         try:
             en_tache(self, _("Enregistrer"), _("Envoi vers {lieu} : {nom}...", lieu=distant.libelle(c),
@@ -1553,8 +1592,144 @@ class Fenetre(MixinCoteACote, QMainWindow):
                                                      erreur=ex, chemin=o.chemin), e)
             return False
         self.statusBar().showMessage(_("Enregistré sur {lieu} : {chemin}", lieu=distant.libelle(c), chemin=o.distant["chemin"]), 8000)
+        if "partage_date" in o.distant:
+            o.distant["partage_date"] = partages.modifie_le(self.params, o.distant["chemin"], e)
         self._session()
         return True
+
+    # ------------------------------------------------------------ partages par lien (PhilPDF/Partages du Drive)
+    def partager_lien(self, chemin_local=None):
+        """Depose une copie du document dans PhilPDF/Partages du Drive de synchronisation et donne le lien."""
+        from . import partages
+        import tempfile
+        o = None if chemin_local else self.doc_courant()
+        if not chemin_local and not o:
+            return
+        c = partages.compte(self.params)
+        if not c:
+            QMessageBox.information(self, _("Partager par lien"), _("Choisissez d'abord votre Drive de synchronisation "
+                                                                    "(Accueil, bouton de synchronisation)."))
+            return
+        if not self.params.get("partage_lien_vu"):
+            b = QMessageBox(QMessageBox.Information, _("Partager par lien"),
+                            _("Une copie du PDF est déposée dans PhilPDF › Partages de votre Drive. Toute personne qui "
+                              "reçoit le lien peut le lire (pas le modifier). Vous pouvez couper le lien à tout moment : "
+                              "Accueil › Partagés par lien, clic droit."), parent=self)
+            from PySide6.QtWidgets import QCheckBox
+            cb = QCheckBox(_("Ne plus afficher"))
+            b.setCheckBox(cb)
+            b.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+            if b.exec() != QMessageBox.Ok:
+                return
+            if cb.isChecked():
+                self.params["partage_lien_vu"] = True
+        if o:
+            local = os.path.join(tempfile.mkdtemp(prefix="philpdf-partage-"), os.path.basename(o.chemin or "document.pdf"))
+            with open(local, "wb") as f:
+                f.write(o.octets_en_ajout() if o.octets_signes else o.doc.tobytes(garbage=3, deflate=True))
+            nom = os.path.basename((o.distant or {}).get("chemin") or o.chemin or "document.pdf")
+        else:
+            local, nom = chemin_local, os.path.basename(chemin_local)
+        e = ouvrir_emplacement(self, c)
+        if not e:
+            return
+        from .dialogues_ia import en_tache
+        try:
+            nom, lien = en_tache(self, _("Partager par lien"), _("Dépôt dans PhilPDF › Partages : {nom}...", nom=nom),
+                                 partages.partager, self.params, local, nom, e)
+        except InterruptedError:
+            return
+        except distant.ErreurDistant as ex:
+            erreur_distant(self, distant.libelle(c), ex, e)
+            return
+        self._lien_pret(nom, lien)
+        self.accueil.charger_partages()
+
+    def _lien_pret(self, nom, lien):
+        from PySide6.QtWidgets import QApplication
+        QApplication.clipboard().setText(lien)
+        r = QMessageBox(QMessageBox.Information, _("Lien prêt"),
+                        _("Le lien de « {nom} » est copié : collez-le dans votre message (Ctrl+V).\n\n{lien}",
+                          nom=nom, lien=lien), parent=self)
+        b_mail = r.addButton(_("Ouvrir un e-mail avec le lien"), QMessageBox.ActionRole)
+        r.addButton(QMessageBox.Ok)
+        r.exec()
+        if r.clickedButton() is b_mail:
+            self._courriel_lien(nom, lien)
+
+    def _courriel_lien(self, nom, lien):
+        import urllib.parse
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl("mailto:?" + urllib.parse.urlencode(
+            {"subject": nom, "body": _("Voici le document « {nom} » :", nom=nom) + "\n" + lien}, quote_via=urllib.parse.quote)))
+
+    def action_partage(self, p, action):
+        """Accueil › Partagés par lien : ouvrir, copier le lien, arreter, reprendre, supprimer ; nettoyage, autres comptes."""
+        from . import partages
+        c = partages.compte(self.params)
+        if action == "autres_comptes":
+            autres = [x for x in self.params.get("comptes", []) if not c or x["id"] != c["id"]]
+            if not autres:
+                QMessageBox.information(self, _("Partages"), _("Aucun autre compte n'est relié sur ce poste."))
+                return
+            import posixpath
+            x = autres[0]
+            d = DialogueParcourir(self, self.params, "ouvrir", compte_id=x["id"],
+                                  depart=posixpath.join(x.get("dossier") or "/", "PhilPDF", "Partages"))
+            if d.exec() == QDialog.Accepted and d.choisi:
+                self.ouvrir_distant(compte_id=d.compte()["id"], chemin=d.choisi)
+            return
+        if not c:
+            return
+        if action == "ouvrir":
+            self.ouvrir_distant(compte_id=c["id"], chemin=p["chemin"])
+            return
+        if action == "copier":
+            from PySide6.QtWidgets import QApplication
+            QApplication.clipboard().setText(p["lien"])
+            self.statusBar().showMessage(_("Lien de « {nom} » copié", nom=p["nom"]), 6000)
+            return
+        if action == "courriel":
+            self._courriel_lien(p["nom"], p["lien"])
+            return
+        if action == "nettoyer":
+            vieux = [x for x in self.accueil._partages if x.get("ancien")]
+            if not vieux:
+                return
+            if QMessageBox.question(self, _("Partages de plus de 90 jours"),
+                                    _("Ces partages ont plus de 90 jours :\n\n{liste}\n\nLes mettre à la corbeille du "
+                                      "Drive ? Leurs liens ne marcheront plus (récupérables 30 jours dans la corbeille).",
+                                      liste="\n".join("• " + x["nom"] for x in vieux))) != QMessageBox.Yes:
+                return
+            cibles, verbe = vieux, partages.supprimer
+        elif action == "supprimer":
+            if QMessageBox.question(self, _("Supprimer le partage"),
+                                    _("Mettre « {nom} » à la corbeille du Drive ? Le lien ne marchera plus "
+                                      "(récupérable 30 jours dans la corbeille).", nom=p["nom"])) != QMessageBox.Yes:
+                return
+            cibles, verbe = [p], partages.supprimer
+        elif action == "arreter":
+            cibles, verbe = [p], partages.arreter
+        elif action == "reprendre":
+            cibles, verbe = [p], partages.reprendre
+        else:
+            return
+        e = ouvrir_emplacement(self, c)
+        if not e:
+            return
+        from .dialogues_ia import en_tache
+        lien = None
+        try:
+            for x in cibles:
+                lien = en_tache(self, _("Partages"), _("{nom}...", nom=x["nom"]), verbe, self.params, x, e)
+        except InterruptedError:
+            pass
+        except distant.ErreurDistant as ex:
+            erreur_distant(self, distant.libelle(c), ex, e)
+        if action == "reprendre" and lien:
+            self._lien_pret(p["nom"], lien)
+        self.accueil.charger_partages()
 
     def enregistrer_distant(self, o=None):
         o = o or self.doc_courant()

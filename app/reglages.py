@@ -234,6 +234,8 @@ def ecrire_secrets_drive(params, phrase=None):
     except (PhraseRequise, OSError, ValueError, KeyError):
         anciens = {}
     tous = dict(anciens, **_secrets_partageables(params))
+    if anciens and tous == anciens and os.path.exists(p):
+        return False                   # rien de nouveau : pas de reecriture (le chiffrement changerait le fichier)
     tmp = p + ".tmp"
     exporter(tmp, {"philpdf": 1, "date": maintenant(), "machine": params.get("machine", ""), "communs": {}, "poste": {},
                    "secrets": tous}, phrase)

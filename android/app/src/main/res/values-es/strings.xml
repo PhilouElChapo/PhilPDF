@@ -976,4 +976,27 @@
     <string name="deplacer_champ">Mover o cambiar tamaño</string>
     <string name="aide_deplacer_champ">Arrastre; el punto (abajo a la derecha) cambia el tamaño, luego «Aquí»</string>
     <string name="champ_deplacement_impossible">Este campo no se puede mover (una firma ya realizada dejaría de ser válida).</string>
+    <string name="remplacer">Reemplazar</string>
+    <string name="lien_synchro">Enviar un enlace (%1$s de sincronización)</string>
+    <string name="partages_titre">Compartidos por enlace (%1$d)</string>
+    <string name="partages_autres_comptes">Otras cuentas</string>
+    <string name="partages_anciens">%1$d compartido(s) de más de 90 días</string>
+    <string name="partages_voir_supprimer">Ver y eliminar</string>
+    <string name="partage_supprimer_q">¿Mover «%1$s» a la papelera del Drive? El enlace dejará de funcionar (recuperable 30 días desde la papelera).</string>
+    <string name="partage_envoyer_lien">Enviar el enlace</string>
+    <string name="partage_arreter">Dejar de compartir (el enlace deja de funcionar)</string>
+    <string name="partage_reprendre">Compartir de nuevo (nuevo enlace)</string>
+    <string name="partage_supprimer">Eliminar del Drive</string>
+    <string name="partages_anciens_titre">Compartidos de más de 90 días</string>
+    <string name="partages_anciens_q">Estos compartidos tienen más de 90 días:\n\n%1$s\n\n¿Moverlos a la papelera del Drive? Sus enlaces dejarán de funcionar (recuperables 30 días desde la papelera).</string>
+    <string name="partage_depuis">desde %1$s</string>
+    <string name="partage_arrete">compartido detenido</string>
+    <string name="partage_modifie_ailleurs">Archivo compartido modificado en otro lugar</string>
+    <string name="partage_modifie_ailleurs_q">«%1$s» se ha guardado en otro dispositivo desde que lo abrió. ¿Reemplazar esa versión por la suya, o guardar la suya con otro nombre?</string>
+    <string name="partage_fichier_titre">Archivo compartido</string>
+    <string name="partage_avertir">«%1$s» está compartido por enlace: quienes tengan el enlace verán esta nueva versión. ¿Guardar?</string>
+    <string name="nom_appareil">Nombre de este dispositivo en sus PC: %1$s</string>
+    <string name="nom_appareil_titre">Nombre de este dispositivo</string>
+    <string name="nom_appareil_aide">El nombre que se muestra en sus PC, en «En sus otros equipos», para los archivos abiertos aquí desde un Drive.</string>
+    <string name="modifier">Modificar</string>
 </resources>

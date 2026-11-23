@@ -976,4 +976,27 @@
     <string name="deplacer_champ">Sposta o ridimensiona</string>
     <string name="aide_deplacer_champ">Trascina; il punto (in basso a destra) cambia la dimensione, poi «Qui»</string>
     <string name="champ_deplacement_impossible">Questo campo non può essere spostato (una firma già apposta non sarebbe più valida).</string>
+    <string name="remplacer">Sostituisci</string>
+    <string name="lien_synchro">Invia un link (%1$s di sincronizzazione)</string>
+    <string name="partages_titre">Condivisi tramite link (%1$d)</string>
+    <string name="partages_autres_comptes">Altri account</string>
+    <string name="partages_anciens">%1$d condivisione(i) di oltre 90 giorni</string>
+    <string name="partages_voir_supprimer">Vedi ed elimina</string>
+    <string name="partage_supprimer_q">Spostare «%1$s» nel cestino del Drive? Il link non funzionerà più (recuperabile per 30 giorni dal cestino).</string>
+    <string name="partage_envoyer_lien">Invia il link</string>
+    <string name="partage_arreter">Interrompi la condivisione (il link non funziona più)</string>
+    <string name="partage_reprendre">Condividi di nuovo (nuovo link)</string>
+    <string name="partage_supprimer">Elimina dal Drive</string>
+    <string name="partages_anciens_titre">Condivisioni di oltre 90 giorni</string>
+    <string name="partages_anciens_q">Queste condivisioni hanno più di 90 giorni:\n\n%1$s\n\nSpostarle nel cestino del Drive? I loro link non funzioneranno più (recuperabili per 30 giorni dal cestino).</string>
+    <string name="partage_depuis">da %1$s</string>
+    <string name="partage_arrete">condivisione interrotta</string>
+    <string name="partage_modifie_ailleurs">File condiviso modificato altrove</string>
+    <string name="partage_modifie_ailleurs_q">«%1$s» è stato salvato su un altro dispositivo da quando lo hai aperto. Sostituire quella versione con la tua, o salvare la tua con un altro nome?</string>
+    <string name="partage_fichier_titre">File condiviso</string>
+    <string name="partage_avertir">«%1$s» è condiviso tramite link: chi ha il link vedrà questa nuova versione. Salvare?</string>
+    <string name="nom_appareil">Nome di questo dispositivo sui tuoi PC: %1$s</string>
+    <string name="nom_appareil_titre">Nome di questo dispositivo</string>
+    <string name="nom_appareil_aide">Il nome mostrato sui tuoi PC, in «Sui tuoi altri computer», per i file aperti qui da un Drive.</string>
+    <string name="modifier">Modifica</string>
 </resources>

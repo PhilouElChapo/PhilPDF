@@ -9,6 +9,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -36,6 +38,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 val ROUGE = Color(0xFFC9252D)
 
@@ -79,6 +82,41 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
             Journal.ecrire("autres postes", "${f.chemin} : $e")
             erreurAutre = (e as? ErreurCompte)?.message ?: ctx.getString(R.string.autres_echec, f.nom, e.message ?: e.javaClass.simpleName)
             telechargement = null
+        }
+    }
+    // partages par lien (PhilPDF/Partages du Drive de synchronisation) : lus en arriere-plan, comme les autres postes
+    var partages by remember { mutableStateOf<List<PartageLien>>(emptyList()) }
+    var versionPartages by remember { mutableIntStateOf(0) }
+    var menuPartage by remember { mutableStateOf<PartageLien?>(null) }
+    var ouvrirPartage by remember { mutableStateOf<PartageLien?>(null) }
+    var nettoyer by remember { mutableStateOf(false) }
+    var partagesOuverts by remember { mutableStateOf(ctx.getSharedPreferences("philpdf", 0).getBoolean("partages_ouverts", true)) }
+    val portee = rememberCoroutineScope()
+    LaunchedEffect(versionCompte, versionPartages) {
+        partages = try { Nuage.synchro(ctx)?.listerPartages(ctx) ?: emptyList() } catch (e: Exception) {
+            Journal.ecrire("partage", "liste des partages illisible ($e)"); emptyList() }
+        try { Appareil.publier(ctx) } catch (_: Exception) { }
+    }
+    LaunchedEffect(ouvrirPartage) {
+        val p = ouvrirPartage ?: return@LaunchedEffect
+        try {
+            val u = p.compte.ouvrirFichier(ctx, Entree(p.id, p.nom, false, 0, p.modifie))
+            Distants.marquerPartage(ctx, u, p.modifie)
+            ouvrirPartage = null
+            ouvrir(u)
+        } catch (e: Exception) {
+            Journal.ecrire("partage", "${p.nom} : $e")
+            erreurAutre = (e as? ErreurCompte)?.message ?: ctx.getString(R.string.autres_echec, p.nom, e.message ?: e.javaClass.simpleName)
+            ouvrirPartage = null
+        }
+    }
+    fun agirPartage(p: List<PartageLien>, faire: suspend (PartageLien) -> String?) {
+        portee.launch {
+            var lien: String? = null
+            for (x in p) try { lien = faire(x) } catch (e: Exception) {
+                erreurAutre = (e as? ErreurCompte)?.message ?: e.toString() }
+            lien?.let { envoyerLienPartage(ctx, p.first().nom, it) }
+            versionPartages++
         }
     }
     val pastille: @Composable () -> Unit = {
@@ -154,6 +192,32 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
                 }
             }
         }
+        if (partages.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text((if (partagesOuverts) "▾  " else "▸  ") + stringResource(R.string.partages_titre, partages.size),
+                            Modifier.weight(1f).clickable {
+                                partagesOuverts = !partagesOuverts
+                                ctx.getSharedPreferences("philpdf", 0).edit().putBoolean("partages_ouverts", partagesOuverts).apply()
+                            }.padding(vertical = 6.dp), fontWeight = FontWeight.SemiBold)
+                        val autresComptes = parcourables.filter { it.id != Nuage.synchro(ctx)?.id }
+                        if (autresComptes.isNotEmpty()) TextButton(onClick = { parcourir = autresComptes.first() }) {
+                            Text(stringResource(R.string.partages_autres_comptes), fontSize = 12.sp) }
+                    }
+                    val anciens = partages.filter { it.ancien }
+                    if (anciens.isNotEmpty()) Row(Modifier.fillMaxWidth().background(Color(0xFFFFF8E6), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.partages_anciens, anciens.size), Modifier.weight(1f), fontSize = 13.sp)
+                        TextButton(onClick = { nettoyer = true }) { Text(stringResource(R.string.partages_voir_supprimer)) }
+                    }
+                    if (partagesOuverts) Column(Modifier.heightIn(max = 190.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                        partages.forEach { p -> LignePartage(p, { ouvrirPartage = p }, { menuPartage = p }) }
+                    }
+                }
+            }
+        }
         Spacer(Modifier.height(16.dp))
         Text(stringResource(R.string.recents), fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
@@ -206,6 +270,72 @@ fun Accueil(ouvrir: (Uri) -> Unit, choisir: () -> Unit, numeriser: () -> Unit = 
             title = { Text(stringResource(R.string.accueil_ouvrir)) }, text = { Text(m) })
     }
     if (reglagesIa) ReglagesIa { reglagesIa = false }
+    ouvrirPartage?.let { p ->
+        AlertDialog(onDismissRequest = {}, confirmButton = {}, title = { Text(stringResource(R.string.accueil_ouvrir)) },
+            text = { Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(24.dp)); Spacer(Modifier.width(12.dp))
+                Text(stringResource(R.string.autres_telechargement, p.nom, p.compte.fournisseur(ctx).nom)) } })
+    }
+    menuPartage?.let { p ->
+        var confirmer by remember { mutableStateOf(false) }
+        AlertDialog(onDismissRequest = { menuPartage = null }, title = { Text(p.nom) },
+            text = {
+                Column {
+                    if (confirmer) Text(stringResource(R.string.partage_supprimer_q, p.nom))
+                    else {
+                        TextButton(onClick = { menuPartage = null; ouvrirPartage = p }) { Text(stringResource(R.string.accueil_ouvrir)) }
+                        if (p.actif) {
+                            TextButton(onClick = { menuPartage = null; envoyerLienPartage(ctx, p.nom, p.lien) }) {
+                                Text(stringResource(R.string.partage_envoyer_lien)) }
+                            TextButton(onClick = { menuPartage = null; agirPartage(listOf(p)) { it.compte.lienPartage(ctx, it, false) } }) {
+                                Text(stringResource(R.string.partage_arreter)) }
+                        } else TextButton(onClick = { menuPartage = null; agirPartage(listOf(p)) { it.compte.lienPartage(ctx, it, true) } }) {
+                            Text(stringResource(R.string.partage_reprendre)) }
+                        TextButton(onClick = { confirmer = true }) { Text(stringResource(R.string.partage_supprimer), color = ROUGE) }
+                    }
+                }
+            },
+            confirmButton = { if (confirmer) TextButton(onClick = {
+                menuPartage = null; agirPartage(listOf(p)) { it.compte.corbeillePartage(ctx, it); null } }) {
+                Text(stringResource(R.string.partage_supprimer), color = ROUGE) } },
+            dismissButton = { TextButton(onClick = { menuPartage = null }) { Text(stringResource(R.string.annuler)) } })
+    }
+    if (nettoyer) {
+        val anciens = partages.filter { it.ancien }
+        AlertDialog(onDismissRequest = { nettoyer = false }, title = { Text(stringResource(R.string.partages_anciens_titre)) },
+            text = { Text(stringResource(R.string.partages_anciens_q, anciens.joinToString("\n") { "• " + it.nom })) },
+            confirmButton = { TextButton(onClick = { nettoyer = false; agirPartage(anciens) { it.compte.corbeillePartage(ctx, it); null } }) {
+                Text(stringResource(R.string.partage_supprimer), color = ROUGE) } },
+            dismissButton = { TextButton(onClick = { nettoyer = false }) { Text(stringResource(R.string.annuler)) } })
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun LignePartage(p: PartageLien, ouvrir: () -> Unit, menu: () -> Unit) {
+    val date = try { java.time.Instant.parse(p.cree).toEpochMilli() } catch (_: Exception) { 0L }
+    Row(Modifier.fillMaxWidth().combinedClickable(onClick = ouvrir, onLongClick = menu).padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icones.get("lien", if (p.actif) Color(0xFF2B6CB0) else Color(0xFFAAAAAA)), null, Modifier.size(22.dp), tint = Color.Unspecified)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(p.nom, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (p.actif) Color.Unspecified else Color.Gray)
+            Text(listOfNotNull(if (date > 0) dateFr(date) else null,
+                p.poste.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.partage_depuis, it) },
+                if (!p.actif) stringResource(R.string.partage_arrete) else null).joinToString(" · "),
+                fontSize = 12.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        IconButton(onClick = menu, Modifier.size(36.dp)) { Text("⋯", fontSize = 18.sp, color = Color.Gray) }
+    }
+}
+
+/** Le lien d'un partage part dans le texte du message (messagerie au choix) ; il est aussi copie. */
+private fun envoyerLienPartage(ctx: android.content.Context, nom: String, lien: String) {
+    (ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
+        ?.setPrimaryClip(android.content.ClipData.newPlainText(nom, lien))
+    val i = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_SUBJECT, nom)
+        .putExtra(Intent.EXTRA_TEXT, ctx.getString(R.string.partage_message, nom, lien))
+    ctx.startActivity(Intent.createChooser(i, ctx.getString(R.string.partage_lien)))
 }
 
 @Composable

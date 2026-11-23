@@ -977,4 +977,27 @@
     <string name="deplacer_champ">Move or resize</string>
     <string name="aide_deplacer_champ">Drag; the round handle (bottom right) changes the size, then “Here”</string>
     <string name="champ_deplacement_impossible">This field cannot be moved (a signed signature would become invalid).</string>
+    <string name="remplacer">Replace</string>
+    <string name="lien_synchro">Send a link (sync %1$s)</string>
+    <string name="partages_titre">Shared by link (%1$d)</string>
+    <string name="partages_autres_comptes">Other accounts</string>
+    <string name="partages_anciens">%1$d share(s) older than 90 days</string>
+    <string name="partages_voir_supprimer">See and delete</string>
+    <string name="partage_supprimer_q">Move “%1$s” to the Drive trash? The link will stop working (recoverable for 30 days from the trash).</string>
+    <string name="partage_envoyer_lien">Send the link</string>
+    <string name="partage_arreter">Stop sharing (the link stops working)</string>
+    <string name="partage_reprendre">Share again (new link)</string>
+    <string name="partage_supprimer">Delete from the Drive</string>
+    <string name="partages_anciens_titre">Shares older than 90 days</string>
+    <string name="partages_anciens_q">These shares are older than 90 days:\n\n%1$s\n\nMove them to the Drive trash? Their links will stop working (recoverable for 30 days from the trash).</string>
+    <string name="partage_depuis">from %1$s</string>
+    <string name="partage_arrete">sharing stopped</string>
+    <string name="partage_modifie_ailleurs">Shared file changed elsewhere</string>
+    <string name="partage_modifie_ailleurs_q">“%1$s” was saved on another device since you opened it. Replace that version with yours, or save yours under another name?</string>
+    <string name="partage_fichier_titre">Shared file</string>
+    <string name="partage_avertir">“%1$s” is shared by link: people who have the link will see this new version. Save?</string>
+    <string name="nom_appareil">Name of this device on your PCs: %1$s</string>
+    <string name="nom_appareil_titre">Name of this device</string>
+    <string name="nom_appareil_aide">The name shown on your PCs, in “On your other computers”, for files opened here from a Drive.</string>
+    <string name="modifier">Edit</string>
 </resources>

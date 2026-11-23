@@ -267,15 +267,35 @@ class Session:
         return r
 
     # ------------------------------------------------------------ lecture / ecriture
-    def lire(self):
+    def lire(self, avec_appareils=True):
         try:
             with open(self.chemin, encoding="utf-8") as f:
                 d = json.load(f)
             # ancienne forme 0.1 : {machine: [chemins]}
-            return {m: (v if isinstance(v, dict) else {"maj": "", "fichiers": [{"chemin": c, "nom": os.path.basename(c)} for c in v]})
-                    for m, v in d.items()}
+            d = {m: (v if isinstance(v, dict) else {"maj": "", "fichiers": [{"chemin": c, "nom": os.path.basename(c)} for c in v]})
+                 for m, v in d.items()}
         except (OSError, ValueError):
-            return {}
+            d = {}
+        if avec_appareils:
+            # telephones et tablettes Android : chacun ecrit son fichier appareils/<id>.json (jamais session.json, que
+            # les PC fusionnent) ; seuls les fichiers ouverts depuis un Drive y figurent (un PC peut les rouvrir)
+            dossier = os.path.join(os.path.dirname(self.chemin), "appareils")
+            try:
+                noms = sorted(os.listdir(dossier))
+            except OSError:
+                noms = []
+            for n in noms:
+                if not n.endswith(".json"):
+                    continue
+                try:
+                    with open(os.path.join(dossier, n), encoding="utf-8") as f:
+                        x = json.load(f)
+                except (OSError, ValueError):
+                    continue
+                for m, v in (x.items() if isinstance(x, dict) else []):
+                    if isinstance(v, dict) and m not in d:
+                        d[m] = v
+        return d
 
     def ma_date(self):
         return self.lire().get(self.params["machine"], {}).get("maj", "")
@@ -313,10 +333,12 @@ class Session:
                 e["distant"] = {"cle": dist.get("cle"), "chemin": dist.get("chemin"), "lieu": dist.get("lieu")}
                 e["nom"] = os.path.basename(dist.get("chemin") or p)
             recents.append(e)
-        d = self.lire()
-        d[self.params["machine"]] = {"maj": datetime.datetime.now().isoformat(timespec="minutes"),
-                                     "maison": maison, "systeme": sys.platform, "fichiers": fichiers,
-                                     "recents": recents}
+        d = self.lire(avec_appareils=False)
+        nouveau = {"maison": maison, "systeme": sys.platform, "fichiers": fichiers, "recents": recents}
+        avant = d.get(self.params["machine"]) or {}
+        if avant and {k: v for k, v in avant.items() if k != "maj"} == nouveau:
+            return                     # rien n'a change : le fichier n'est pas reecrit (sinon renvoye a chaque minute)
+        d[self.params["machine"]] = dict(maj=datetime.datetime.now().isoformat(timespec="minutes"), **nouveau)
         try:
             with open(self.chemin, "w", encoding="utf-8") as f:
                 json.dump(d, f, ensure_ascii=False, indent=1)
@@ -389,8 +411,6 @@ class Session:
                     if not deja:
                         _memoriser(m, e, _RESOLUS[cle])
                 trouve = _RESOLUS[cle]
-                if trouve and trouve.startswith("distant:"):
-                    trouve = None
                 k = _norm(trouve) if trouve else None
                 if k and k in par_chemin:                 # deja dans les recents d'ici : signale a cote
                     x = par_chemin[k]
@@ -411,7 +431,8 @@ class Session:
                         x["ouvert_sur"].append(m)
                     continue
                 l = {"chemin": trouve, "chemin_origine": e.get("chemin"), "nom": e.get("nom") or "?",
-                     "dossier": os.path.normpath(os.path.dirname(trouve)) if trouve else _dossier_autre(e.get("chemin") or ""),
+                     "dossier": _dossier_distant(e, trouve) if e.get("distant") else
+                                os.path.normpath(os.path.dirname(trouve)) if trouve else _dossier_autre(e.get("chemin") or ""),
                      "date": date, "rang": 999, "poste": m, "ouvert_sur": [m] if ouvert else [], "aussi_sur": [],
                      "chemins_autres": {},
                      "autre_poste": True, "machine": m, "e": e, "introuvable_ici": not trouve}
@@ -500,10 +521,19 @@ class Session:
         # 0. fichier d'un NAS, d'un FTP ou d'un Drive : meme compte ici -> on le rouvre la-bas
         dist = e.get("distant")
         if dist:
-            for c in self.params.get("comptes", []):
-                from .distant import cle_compte, libelle
-                if cle_compte(c) == dist.get("cle"):
-                    return f"distant:{c['id']}:{dist['chemin']}", _("sur {lieu}", lieu=libelle(c))
+            from .distant import cle_compte, libelle
+            comptes = self.params.get("comptes", [])
+            c = next((c for c in comptes if cle_compte(c) == dist.get("cle")), None)
+            genre = (dist.get("cle") or "").split("|")[0]
+            if c is None and genre:
+                # telephone Android : il ne connait que le genre du Drive (et son e-mail dans « lieu ») ; un seul
+                # compte de ce genre ici, ou celui dont l'adresse figure dans « lieu »
+                memes = [x for x in comptes if x.get("type") == genre]
+                lieu = (dist.get("lieu") or "").lower()
+                c = next((x for x in memes if x.get("utilisateur") and x["utilisateur"].lower() in lieu), None) or \
+                    (memes[0] if len(memes) == 1 else None)
+            if c:
+                return f"distant:{c['id']}:{dist['chemin']}", _("sur {lieu}", lieu=libelle(c))
             return None, None
         src = e["chemin"].replace("\\", "/")
         # 1. correspondance apprise (le dossier lui-meme ou un dossier parent)
@@ -625,6 +655,21 @@ class Session:
                 pa, pb = pa.rsplit("/", 1)[0], os.path.dirname(pb)
             if pa and pb and _norm(pa) != _norm(pb):
                 self.apprendre(machine, pa, pb)
+
+
+def _dossier_distant(e, trouve):
+    """Ligne d'un fichier ouvert depuis un Drive sur un autre poste ou un telephone : ou il est, et si ce poste
+    peut l'ouvrir (meme compte relie ici) ou non."""
+    d = e.get("distant") or {}
+    lieu = d.get("lieu") or (d.get("cle") or "").split("|")[0]
+    dossier = posixpath_dirname(d.get("chemin") or "")
+    if trouve:
+        return _("{lieu} : {dossier}", lieu=lieu, dossier=dossier)
+    return _("{lieu} : compte non relié sur ce poste (Préférences › Comptes)", lieu=lieu)
+
+
+def posixpath_dirname(ch):
+    return ch.rsplit("/", 1)[0] or "/" if "/" in ch else ""
 
 
 def date_fr(iso):

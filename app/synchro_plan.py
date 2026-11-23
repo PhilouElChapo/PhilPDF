@@ -145,6 +145,10 @@ def decrire(plan, params, compte=None, emplacement=None):
                 routine = True                           # montres sur l'Accueil (bandeau une fois par changement)
             else:
                 detail = _("fichiers ouverts sur ce poste (emplacements seulement)")
+        elif rel.startswith("appareils/"):
+            famille = "session"
+            titre = _("Fichiers ouverts sur vos téléphones et tablettes")
+            routine = True                               # montres sur l'Accueil, comme ceux des autres postes
         elif rel == "secrets.philpdf":
             famille = "secrets"
             titre = _("Mots de passe et autorisations")

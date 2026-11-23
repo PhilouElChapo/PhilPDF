@@ -82,6 +82,14 @@ data class Entree(val id: String, val nom: String, val dossier: Boolean, val tai
 /** Fichier ouvert depuis un compte : « Meme fichier » le renvoie a sa place. */
 data class Origine(val compte: String, val id: String, val nom: String)
 
+/** Fichier de PhilPDF/Partages (partage par lien), lu sur le Drive de synchronisation. */
+data class PartageLien(val compte: Nuage, val id: String, val nom: String, val cree: String, val modifie: String,
+                       val poste: String, val lien: String, val actif: Boolean) {
+    val ancien: Boolean get() = try {
+        java.time.Duration.between(java.time.Instant.parse(cree), java.time.Instant.now()).toDays() > 90
+    } catch (_: Exception) { false }
+}
+
 private const val GOOGLE = "https://www.googleapis.com/drive/v3"
 private const val GOOGLE_ENVOI = "https://www.googleapis.com/upload/drive/v3"
 private const val GRAPH = "https://graph.microsoft.com/v1.0"
@@ -607,6 +615,109 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
         Journal.ecrire("compte", "${fournisseur(ctx).nom} : $nom renvoyé à sa place")
     }
 
+    // ------------------------------------------------------------ partages par lien (Accueil › Partagés par lien)
+    /** Fichiers de PhilPDF/Partages du compte (Google Drive : lien, poste d'origine, partage actif ou arrete). */
+    suspend fun listerPartages(ctx: Context): List<PartageLien> {
+        if (fournisseur(ctx).cle != "gdrive") return emptyList()
+        if (ids[""] == null && !trouverRacine(ctx)) return emptyList()
+        val d = gEnfant(ctx, ids[""]!!, "Partages")?.getString("id") ?: return emptyList()
+        val url = "$GOOGLE/files?" + formulaire(mapOf("q" to "'$d' in parents and trashed = false", "spaces" to "drive",
+            "pageSize" to "1000", "fields" to "files(id,name,mimeType,createdTime,modifiedTime,description,webViewLink,permissions(id,type))"))
+        val a = json(ctx, "GET", url)?.optJSONArray("files") ?: return emptyList()
+        return (0 until a.length()).map { a.getJSONObject(it) }
+            .filter { it.optString("mimeType") != "application/vnd.google-apps.folder" }
+            .map { f ->
+                val desc = f.optString("description")
+                val perms = f.optJSONArray("permissions")
+                PartageLien(this, f.getString("id"), f.optString("name"), f.optString("createdTime").ifEmpty { f.optString("modifiedTime") },
+                    f.optString("modifiedTime"), if (desc.contains("PhilPDF :")) desc.substringAfter("PhilPDF :").trim() else "",
+                    f.optString("webViewLink"), perms != null && (0 until perms.length()).any { perms.getJSONObject(it).optString("type") == "anyone" })
+            }.sortedByDescending { it.cree }
+    }
+
+    /** Remet (actif = true) ou coupe le lien public d'un partage. Renvoie le lien quand il est remis. */
+    suspend fun lienPartage(ctx: Context, p: PartageLien, actif: Boolean): String? {
+        if (actif) {
+            val (c, b, _) = appel(ctx, "POST", "$GOOGLE/files/${p.id}/permissions",
+                JSONObject().put("role", "reader").put("type", "anyone").toString().toByteArray(), mapOf("Content-Type" to "application/json"))
+            if (c !in 200..299) throw ErreurCompte(Textes.t(R.string.err_code, fournisseur(ctx).nom, c, String(b).take(200)))
+            Journal.ecrire("partage", "${p.nom} : partage repris")
+            return json(ctx, "GET", "$GOOGLE/files/${p.id}?fields=webViewLink")?.optString("webViewLink")
+        }
+        val (c, b, _) = appel(ctx, "DELETE", "$GOOGLE/files/${p.id}/permissions/anyoneWithLink")
+        if (c !in 200..299 && c != 404) throw ErreurCompte(Textes.t(R.string.err_code, fournisseur(ctx).nom, c, String(b).take(200)))
+        Journal.ecrire("partage", "${p.nom} : partage arrêté (lien coupé)")
+        return null
+    }
+
+    /** Met un partage a la corbeille du Drive (recuperable 30 jours) : le lien ne marche plus. */
+    suspend fun corbeillePartage(ctx: Context, p: PartageLien) {
+        val (c, b, _) = appel(ctx, "PATCH", "$GOOGLE/files/${p.id}", JSONObject().put("trashed", true).toString().toByteArray(),
+            mapOf("Content-Type" to "application/json"))
+        if (c !in 200..299) throw ErreurCompte(Textes.t(R.string.err_code, fournisseur(ctx).nom, c, String(b).take(200)))
+        Journal.ecrire("partage", "${p.nom} : partage supprimé du Drive")
+    }
+
+    /** Date de modification sur le Drive (fichier partage enregistre ailleurs depuis l'ouverture ?). */
+    suspend fun modifieLe(ctx: Context, fid: String): String = if (fournisseur(ctx).cle != "gdrive") "" else
+        try { json(ctx, "GET", "$GOOGLE/files/$fid?fields=modifiedTime")?.optString("modifiedTime") ?: "" } catch (_: Exception) { "" }
+
+    /** Chemin depuis la racine du compte (« /Factures/x.pdf ») d'un fichier connu par son identifiant : c'est ainsi
+     *  que vos PC le retrouvent (comme sous Windows). null si on ne sait pas. */
+    suspend fun cheminDe(ctx: Context, fid: String): String? = try {
+        when (fournisseur(ctx).cle) {
+            "gdrive" -> {
+                val racine = json(ctx, "GET", "$GOOGLE/files/root?fields=id")?.optString("id")
+                val noms = ArrayList<String>()
+                var x: String? = fid
+                var n = 0
+                while (x != null && x != racine && n++ < 20) {
+                    val f = json(ctx, "GET", "$GOOGLE/files/$x?fields=name,parents") ?: break
+                    noms.add(0, f.optString("name"))
+                    x = f.optJSONArray("parents")?.optString(0)
+                }
+                if (x == racine) "/" + noms.joinToString("/") else null
+            }
+            "onedrive" -> json(ctx, "GET", "$GRAPH/me/drive/items/$fid?\$select=name,parentReference")?.let { o ->
+                val p = o.optJSONObject("parentReference")?.optString("path")?.substringAfter("root:", "") ?: return@let null
+                p.trimEnd('/') + "/" + o.optString("name")
+            }
+            "dropbox" -> if (fid.startsWith("/")) fid else json(ctx, "POST", "$DBX/files/get_metadata",
+                JSONObject().put("path", fid))?.optString("path_display")
+            "pcloud", "kdrive", "webdav" -> fid
+            else -> null
+        }
+    } catch (_: Exception) { null }
+
+    /** Ecrit (ou remplace) un petit fichier du dossier PhilPDF : « appareils/<id>.json ». Faux si ce compte ne sait pas. */
+    suspend fun ecrireSynchro(ctx: Context, dossier: String, nom: String, octets: ByteArray): Boolean {
+        if (ids[""] == null && !trouverRacine(ctx)) return false
+        val racine = ids[""]!!
+        val (code, _, _) = when (fournisseur(ctx).cle) {
+            "gdrive" -> {
+                val d = gEnfant(ctx, racine, dossier)?.getString("id")
+                    ?: json(ctx, "POST", "$GOOGLE/files?fields=id", JSONObject().put("name", dossier)
+                        .put("mimeType", "application/vnd.google-apps.folder").put("parents", JSONArray().put(racine)))?.getString("id")
+                    ?: return false
+                val f = gEnfant(ctx, d, nom)?.getString("id")
+                if (f != null) appel(ctx, "PATCH", "$GOOGLE_ENVOI/files/$f?uploadType=media", octets, mapOf("Content-Type" to "application/json"))
+                else {
+                    val bord = "PhilPDF" + java.util.UUID.randomUUID().toString().replace("-", "")
+                    val meta = JSONObject().put("name", nom).put("parents", JSONArray().put(d)).toString()
+                    val corps = ("--$bord\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n$meta\r\n" +
+                        "--$bord\r\nContent-Type: application/json\r\n\r\n").toByteArray() + octets + "\r\n--$bord--\r\n".toByteArray()
+                    appel(ctx, "POST", "$GOOGLE_ENVOI/files?uploadType=multipart&fields=id", corps, mapOf("Content-Type" to "multipart/related; boundary=$bord"))
+                }
+            }
+            "onedrive" -> appel(ctx, "PUT", "$GRAPH/me/drive/items/$racine:/$dossier/${enc(nom)}:/content", octets, mapOf("Content-Type" to "application/json"))
+            "dropbox" -> appel(ctx, "POST", "$DBX_CONTENU/files/upload", octets, mapOf("Content-Type" to "application/octet-stream",
+                "Dropbox-API-Arg" to ascii(JSONObject().put("path", "$racine/$dossier/$nom").put("mode", "overwrite").put("mute", true).toString())))
+            "pcloud", "kdrive", "webdav" -> pcEnvoyer(ctx, "$racine/$dossier", nom, octets)
+            else -> return false
+        }
+        return code in 200..299
+    }
+
     // ------------------------------------------------------------ partage par lien
     /** Depose le PDF dans PhilPDF/Partages du compte et renvoie un lien public (lecture seule), a mettre dans un e-mail. */
     suspend fun partagerParLien(ctx: Context, nom: String, octets: ByteArray): String {
@@ -625,7 +736,10 @@ a{display:inline-block;margin-top:24px;padding:16px 32px;background:#C9252D;colo
                         .put("mimeType", "application/vnd.google-apps.folder").put("parents", JSONArray().put(racine)))?.getString("id")
                     ?: throw ErreurCompte(Textes.t(R.string.err_dossier_creer, f.nom, "Partages"))
                 val bord = "PhilPDF" + java.util.UUID.randomUUID().toString().replace("-", "")
-                val meta = JSONObject().put("name", nom).put("parents", JSONArray().put(dossier)).toString()
+                var n = nom; var k = 2                           // jamais deux partages du meme nom (comme sous Windows)
+                while (gEnfant(ctx, dossier, n) != null) { n = nom.substringBeforeLast('.') + " ($k)." + nom.substringAfterLast('.', "pdf"); k++ }
+                val meta = JSONObject().put("name", n).put("parents", JSONArray().put(dossier))
+                    .put("description", "PhilPDF : " + Appareil.nom(ctx)).toString()
                 val corps = ("--$bord\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n$meta\r\n" +
                     "--$bord\r\nContent-Type: application/pdf\r\n\r\n").toByteArray() + octets + "\r\n--$bord--\r\n".toByteArray()
                 val (c1, b1, _) = appel(ctx, "POST", "$GOOGLE_ENVOI/files?uploadType=multipart&fields=id", corps,
@@ -1019,6 +1133,13 @@ object Distants {
     fun retenir(ctx: Context, f: File, o: Origine) {
         prefs(ctx).edit().putString(f.absolutePath, JSONObject().put("compte", o.compte).put("id", o.id).put("nom", o.nom).toString()).apply()
     }
+
+    /** Copie d'un fichier partage par lien, avec la date du Drive a l'ouverture (modifie ailleurs depuis ?). */
+    fun marquerPartage(ctx: Context, uri: Uri, modifie: String) {
+        uri.path?.let { prefs(ctx).edit().putString("partage:$it", modifie).apply() }
+    }
+
+    fun partage(ctx: Context, uri: Uri): String? = if (uri.scheme != "file") null else prefs(ctx).getString("partage:${uri.path}", null)
 
     fun origine(ctx: Context, uri: Uri): Pair<File, Origine>? {
         if (uri.scheme != "file") return null

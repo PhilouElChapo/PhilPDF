@@ -158,6 +158,7 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
     val etat = remember(doc) { EtatLecteur(doc, LazyListState()) }
     var quitter by remember { mutableStateOf(false) }
     var fermerApres by remember { mutableStateOf(false) }
+    var avertirPartage by remember { mutableStateOf<Pair<android.net.Uri, Boolean>?>(null) }
     val portee = rememberCoroutineScope()
     etat.portee = portee
     etat.texteImagePartagee = stringResource(R.string.image_partagee)
@@ -168,6 +169,8 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
         portee.launch {
             try {
                 doc.enregistrer(ctx, u)
+                if (Distants.partage(ctx, u) != null) Distants.origine(ctx, u)?.let { (_, o) ->   // date du Drive apres envoi
+                    Nuage.liste(ctx).firstOrNull { it.id == o.compte }?.let { n -> Distants.marquerPartage(ctx, u, n.modifieLe(ctx, o.id)) } }
                 if (u != doc.uri) { doc.cible = u; doc.cibleCompte = null }    // « Enregistrer » y réécrira la prochaine fois
                 Journal.ecrire("enregistrement", "${doc.nom} : enregistré (${if (u == doc.uri) "même fichier" else "autre nom"})")
                 android.widget.Toast.makeText(ctx, if (u == dansDocuments) ctx.getString(R.string.enregistre_documents, doc.nom)
@@ -300,6 +303,29 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
         etat.noteA = null
         portee.launch { doc.note(n, pt, texte, etat.annot.couleur(Outil.NOTE).versPdf()) }
     } }
+    avertirPartage?.let { (u, q) ->
+        var ailleurs by remember { mutableStateOf(false) }
+        LaunchedEffect(u) {
+            val avant = Distants.partage(ctx, u) ?: ""
+            val (_, o) = Distants.origine(ctx, u) ?: return@LaunchedEffect
+            val n = Nuage.liste(ctx).firstOrNull { it.id == o.compte } ?: return@LaunchedEffect
+            val maintenant = n.modifieLe(ctx, o.id)
+            ailleurs = avant.isNotEmpty() && maintenant.isNotEmpty() && maintenant != avant
+        }
+        AlertDialog(onDismissRequest = { avertirPartage = null },
+            title = { Text(stringResource(if (ailleurs) R.string.partage_modifie_ailleurs else R.string.partage_fichier_titre)) },
+            text = { Text(stringResource(if (ailleurs) R.string.partage_modifie_ailleurs_q else R.string.partage_avertir, doc.nom)) },
+            confirmButton = { TextButton(onClick = {
+                avertirPartage = null
+                ecrireVers(u, q)
+            }) { Text(stringResource(if (ailleurs) R.string.remplacer else R.string.enregistrer)) } },
+            dismissButton = { Row {
+                if (ailleurs) TextButton(onClick = { avertirPartage = null; fermerApres = q
+                    autreNom.launch(doc.nom.removeSuffix(".pdf") + Textes.t(R.string.suffixe_modifie) + ".pdf") }) {
+                    Text(stringResource(R.string.autre_nom)) }
+                TextButton(onClick = { avertirPartage = null }) { Text(stringResource(R.string.annuler)) }
+            } })
+    }
     // « Enregistrer » : toujours la question, meme fichier ou autre nom
     if (etat.demandeEnregistrer || quitter) {
         val q = quitter
@@ -314,7 +340,11 @@ fun Lecteur(doc: DocumentPdf, ouvrirFichier: (java.io.File) -> Unit = {}, fermer
                     val ici = if (!doc.neuf) doc.uri else doc.cible
                     val compte = doc.cibleCompte
                     when {
-                        ici != null -> TextButton(onClick = { etat.demandeEnregistrer = false; quitter = false; ecrireVers(ici, q) }) {
+                        ici != null -> TextButton(onClick = {
+                            etat.demandeEnregistrer = false; quitter = false
+                            // fichier partage par lien : ceux qui ont le lien verront la nouvelle version (on previent)
+                            if (Distants.partage(ctx, ici) != null) avertirPartage = ici to q else ecrireVers(ici, q)
+                        }) {
                             Text(stringResource(if (doc.neuf) R.string.enregistrer_meme_endroit else R.string.meme_fichier))
                         }
                         compte != null -> TextButton(onClick = {

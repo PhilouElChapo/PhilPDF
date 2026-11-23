@@ -208,6 +208,26 @@ fun EcranComptes(fermer: () -> Unit, parcourir: (Nuage) -> Unit) {
                             TextButton(onClick = { changer = !changer }, enabled = occupe == null) { Text(stringResource(R.string.changer_emplacement)) }
                             TextButton(onClick = { aRetirer = n }, enabled = occupe == null) { Text(stringResource(R.string.deconnecter), color = Color.Gray) }
                         }
+                        // nom de cet appareil, tel que vos PC l'affichent (« Sur vos autres postes »)
+                        var nomAppareil by remember { mutableStateOf(Appareil.nom(ctx)) }
+                        var editerNom by remember { mutableStateOf(false) }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(stringResource(R.string.nom_appareil, nomAppareil), Modifier.weight(1f), fontSize = 13.sp, color = Color.Gray)
+                            TextButton(onClick = { editerNom = true }) { Text(stringResource(R.string.modifier)) }
+                        }
+                        if (editerNom) {
+                            var t by remember { mutableStateOf(nomAppareil) }
+                            AlertDialog(onDismissRequest = { editerNom = false }, title = { Text(stringResource(R.string.nom_appareil_titre)) },
+                                text = { Column {
+                                    Text(stringResource(R.string.nom_appareil_aide), fontSize = 13.sp)
+                                    OutlinedTextField(t, { t = it }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                } },
+                                confirmButton = { TextButton(onClick = {
+                                    Appareil.changerNom(ctx, t.ifBlank { Appareil.nomSysteme(ctx) }); nomAppareil = Appareil.nom(ctx); editerNom = false
+                                    portee.launch { try { Appareil.publier(ctx, forcer = true) } catch (_: Exception) {} }
+                                }) { Text("OK") } },
+                                dismissButton = { TextButton(onClick = { editerNom = false }) { Text(stringResource(R.string.annuler)) } })
+                        }
                     }
                     if (synchro == null || changer) {
                         Spacer(Modifier.height(6.dp))

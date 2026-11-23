@@ -22,6 +22,7 @@ RACINE_DISTANTE = "/PhilPDF"
 
 
 TEMPORAIRES = (".distant", ".tmp", ".part")
+EXCLUS = "Partages"           # dossier des PDF partages par lien : hors synchronisation
 
 
 def journal(texte):
@@ -210,6 +211,14 @@ def _synchroniser(params, compte, emplacement, choix, sens, plan):
         os.makedirs(ld, exist_ok=True)
         locaux = {n for n in os.listdir(ld)}
         for nom in sorted(set(distants) | locaux):
+            if not rel_dossier and nom == EXCLUS:
+                # PDF partages par lien : lus sur le Drive a la demande (Accueil › Partagés), jamais recopies ici
+                lp_ = os.path.join(local_racine, nom)
+                if os.path.isdir(lp_):
+                    import shutil
+                    shutil.rmtree(lp_, ignore_errors=True)
+                    journal("copie locale du dossier Partages retirée (les partages restent sur le Drive)")
+                continue
             if nom.endswith(TEMPORAIRES):            # restes d'un transfert interrompu : jamais envoyes ni recus
                 if nom in locaux and nom not in distants:
                     try:

@@ -977,4 +977,27 @@
     <string name="deplacer_champ">Déplacer ou redimensionner</string>
     <string name="aide_deplacer_champ">Faites glisser ; la pastille (en bas à droite) change la taille, puis « Ici »</string>
     <string name="champ_deplacement_impossible">Ce champ ne peut pas être déplacé (une signature déjà apposée deviendrait invalide).</string>
+    <string name="remplacer">Remplacer</string>
+    <string name="lien_synchro">Envoyer un lien (%1$s de synchronisation)</string>
+    <string name="partages_titre">Partagés par lien (%1$d)</string>
+    <string name="partages_autres_comptes">Autres comptes</string>
+    <string name="partages_anciens">%1$d partage(s) de plus de 90 jours</string>
+    <string name="partages_voir_supprimer">Voir et supprimer</string>
+    <string name="partage_supprimer_q">Mettre « %1$s » à la corbeille du Drive ? Le lien ne marchera plus (récupérable 30 jours dans la corbeille).</string>
+    <string name="partage_envoyer_lien">Envoyer le lien</string>
+    <string name="partage_arreter">Arrêter le partage (le lien ne marche plus)</string>
+    <string name="partage_reprendre">Partager à nouveau (nouveau lien)</string>
+    <string name="partage_supprimer">Supprimer du Drive</string>
+    <string name="partages_anciens_titre">Partages de plus de 90 jours</string>
+    <string name="partages_anciens_q">Ces partages ont plus de 90 jours :\n\n%1$s\n\nLes mettre à la corbeille du Drive ? Leurs liens ne marcheront plus (récupérables 30 jours dans la corbeille).</string>
+    <string name="partage_depuis">depuis %1$s</string>
+    <string name="partage_arrete">partage arrêté</string>
+    <string name="partage_modifie_ailleurs">Fichier partagé modifié ailleurs</string>
+    <string name="partage_modifie_ailleurs_q">« %1$s » a été enregistré sur un autre appareil depuis que vous l\'avez ouvert. Remplacer cette version par la vôtre, ou enregistrer la vôtre sous un autre nom ?</string>
+    <string name="partage_fichier_titre">Fichier partagé</string>
+    <string name="partage_avertir">« %1$s » est partagé par lien : les personnes qui ont le lien verront cette nouvelle version. Enregistrer ?</string>
+    <string name="nom_appareil">Nom de cet appareil sur vos PC : %1$s</string>
+    <string name="nom_appareil_titre">Nom de cet appareil</string>
+    <string name="nom_appareil_aide">Le nom affiché sur vos PC, dans « Sur vos autres postes », pour les fichiers ouverts ici depuis un Drive.</string>
+    <string name="modifier">Modifier</string>
 </resources>

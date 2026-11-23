@@ -678,9 +678,10 @@ class _Ligne(QTreeWidgetItem):
 class DialogueParcourir(QDialog):
     """Choisir un PDF a ouvrir, ou un dossier et un nom pour enregistrer, sur un emplacement distant."""
 
-    def __init__(self, parent, params, mode="ouvrir", nom="", compte_id=None):
+    def __init__(self, parent, params, mode="ouvrir", nom="", compte_id=None, depart=None):
         super().__init__(parent)
         self.params, self.mode = params, mode
+        self._depart = depart                           # dossier ouvert d'abord (ex. PhilPDF/Partages du compte)
         self.setWindowTitle(_("Ouvrir depuis un emplacement") if mode == "ouvrir" else _("Enregistrer vers un emplacement"))
         self.resize(760, 520)
         v = QVBoxLayout(self)
@@ -767,6 +768,12 @@ class DialogueParcourir(QDialog):
             return
         self.e = ouvrir_emplacement(self, c)
         if self.e:
+            depart, self._depart = self._depart, None
+            if depart:
+                self.dossier = None
+                self.aller(depart)
+                if self.dossier == depart:
+                    return
             self.aller(self.e.racine())
 
     def aller(self, dossier):

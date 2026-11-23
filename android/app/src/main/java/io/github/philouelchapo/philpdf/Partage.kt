@@ -27,9 +27,10 @@ fun ChoixPartage(etat: EtatLecteur, fermer: () -> Unit) {
     val ctx = LocalContext.current
     val portee = rememberCoroutineScope()
     val possibles = remember { Nuage.liste(ctx).filter { Nuage.peutLien(ctx, it) } }
-    // Google Drive : celui de la synchronisation s'il y en a un, sinon le premier relie
-    val drive = remember { possibles.filter { it.fournisseur(ctx).cle == "gdrive" }
-        .let { l -> l.firstOrNull { it.id == Nuage.synchro(ctx)?.id } ?: l.firstOrNull() } }
+    // par defaut : le Drive de synchronisation (ses partages sont listes sur tous vos appareils, Accueil › Partagés
+    // par lien) ; sinon le premier Google Drive relie. Les autres comptes restent proposes, plus bas.
+    val drive = remember { possibles.firstOrNull { it.id == Nuage.synchro(ctx)?.id }
+        ?: possibles.firstOrNull { it.fournisseur(ctx).cle == "gdrive" } }
     val autres = remember { possibles.filter { it.id != drive?.id } }
     var deplier by remember { mutableStateOf(false) }
     var occupe by remember { mutableStateOf<Nuage?>(null) }
@@ -58,8 +59,8 @@ fun ChoixPartage(etat: EtatLecteur, fermer: () -> Unit) {
                     fermer(); portee.launch { partager(ctx, etat.doc) }
                 }
                 Spacer(Modifier.height(6.dp))
-                if (drive != null) Ligne("lien", stringResource(R.string.lien_drive),
-                    stringResource(R.string.partage_lien_aide, "Google Drive · " + drive.libelle(ctx)), libre) { lien(drive) }
+                if (drive != null) Ligne("lien", stringResource(R.string.lien_synchro, drive.fournisseur(ctx).nom),
+                    stringResource(R.string.partage_lien_aide, drive.fournisseur(ctx).nom + " · " + drive.libelle(ctx)), libre) { lien(drive) }
                 if (autres.isNotEmpty()) {
                     Spacer(Modifier.height(6.dp))
                     Ligne("lien", stringResource(R.string.lien_autre) + if (deplier) "  ▴" else "  ▾",

@@ -403,6 +403,7 @@ class PageAccueil(QWidget):
     rechercher = Signal()         # rechercher dans tous mes PDF
     numeriser = Signal(str)       # « photos » ou « scanner »
     changer_synchro = Signal()    # changer l'emplacement de synchronisation
+    action_partage = Signal(object, str)   # partage par lien (dict de partages.lister), action
 
     def __init__(self, params):
         super().__init__()
@@ -536,6 +537,40 @@ class PageAccueil(QWidget):
         bs.clicked.connect(lambda: self.synchro_drive.emit() if self.params.get("drive_compte") else self.synchroniser.emit())
         hl.addWidget(bs)
         v.addLayout(hl)
+        # --- Partagés par lien (dossier PhilPDF/Partages du Drive de synchronisation, lu en arriere-plan)
+        self.cadre_partages = QFrame()
+        self.cadre_partages.setObjectName("cadre_partages")
+        self.cadre_partages.setStyleSheet("#cadre_partages{background:#fff;border:1px solid #e2e2e2;border-radius:10px}")
+        vp = QVBoxLayout(self.cadre_partages)
+        vp.setContentsMargins(14, 8, 14, 8)
+        hp = QHBoxLayout()
+        self.titre_partages = QPushButton()
+        self.titre_partages.setFlat(True)
+        self.titre_partages.setStyleSheet("QPushButton{font-size:15px;font-weight:600;text-align:left;border:none}")
+        self.titre_partages.clicked.connect(lambda: self._replier_partages(not self.liste_partages.isHidden()))
+        hp.addWidget(self.titre_partages, 1)
+        self.lien_autres_partages = QLabel('<a href="autres">' + _("Voir aussi les partages de vos autres comptes") + '</a>')
+        self.lien_autres_partages.setStyleSheet("font-size:12px")
+        self.lien_autres_partages.linkActivated.connect(lambda _l: self.action_partage.emit(None, "autres_comptes"))
+        hp.addWidget(self.lien_autres_partages)
+        vp.addLayout(hp)
+        self.ancien_partages = QLabel()
+        self.ancien_partages.setTextFormat(Qt.RichText)
+        self.ancien_partages.setStyleSheet("QLabel{background:#fff8e6;border-radius:6px;padding:4px 8px}")
+        self.ancien_partages.linkActivated.connect(lambda _l: self.action_partage.emit(None, "nettoyer"))
+        self.ancien_partages.hide()
+        vp.addWidget(self.ancien_partages)
+        self.liste_partages = QListWidget()
+        self.liste_partages.setStyleSheet("QListWidget{border:none;font-size:13px}QListWidget::item{padding:5px}"
+                                          "QListWidget::item:hover{background:#f4f7fb}")
+        self.liste_partages.setMaximumHeight(170)
+        self.liste_partages.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.liste_partages.customContextMenuRequested.connect(self._menu_partage)
+        self.liste_partages.itemDoubleClicked.connect(lambda it: self.action_partage.emit(it.data(Qt.UserRole), "ouvrir"))
+        vp.addWidget(self.liste_partages)
+        self.cadre_partages.hide()
+        v.addWidget(self.cadre_partages)
+        self._partages = []
         r = QLabel(_('Récents'))
         r.setStyleSheet("font-size:18px;font-weight:600")
         v.addWidget(r)
@@ -599,6 +634,100 @@ class PageAccueil(QWidget):
         self._t_fiche.setSingleShot(True)
         self._t_fiche.timeout.connect(lambda: self.fiche.montrer(getattr(self, "_l_fiche", None)))
         QTimer.singleShot(50, self.rafraichir)       # apres l'affichage : un NAS lent ne retarde plus l'ouverture
+        QTimer.singleShot(1500, self.charger_partages)
+
+    # ---- partages par lien
+    def charger_partages(self):
+        """Liste des partages lue sur le Drive en arriere-plan (une fraction de seconde, rien n'est telecharge)."""
+        from .partages import compte
+        if not compte(self.params):
+            self.cadre_partages.hide()
+            return
+        from PySide6.QtCore import QThread, Signal as _S
+
+        class _T(QThread):
+            pret = _S(object)
+
+            def __init__(s_, params):
+                super().__init__()
+                s_.params = params
+
+            def run(s_):
+                try:
+                    from . import partages
+                    s_.pret.emit(partages.lister(s_.params))
+                except Exception as ex:              # noqa: BLE001
+                    try:
+                        from .journal import ecrire
+                        ecrire("partage", f"liste des partages illisible : {ex}")
+                    except Exception:                # noqa: BLE001
+                        pass
+                    s_.pret.emit(None)
+        t = _T(self.params)
+        _TACHES_ACCUEIL.add(t)
+        t.pret.connect(self.afficher_partages)
+        t.finished.connect(lambda t=t: _TACHES_ACCUEIL.discard(t))
+        t.start()
+
+    def afficher_partages(self, liste):
+        if liste is None:
+            return
+        self._partages = liste
+        if not liste:
+            self.cadre_partages.hide()
+            return
+        from .session import date_fr
+        self.liste_partages.clear()
+        for p in liste:
+            infos = [date_fr(p["cree"][:16]) if p.get("cree") else ""]
+            if p.get("poste"):
+                infos.append(_("depuis {poste}", poste=p["poste"]))
+            if p.get("id") and not p.get("actif"):
+                infos.append(_("partage arrêté"))
+            it = QListWidgetItem(icone("courriel", "#2b6cb0" if p.get("actif") or not p.get("id") else "#999999"),
+                                 p["nom"] + "   ·   " + "   ·   ".join(x for x in infos if x))
+            it.setToolTip(_("Double-clic : ouvrir. Clic droit : copier le lien, arrêter le partage, supprimer."))
+            it.setData(Qt.UserRole, p)
+            if p.get("id") and not p.get("actif"):
+                it.setForeground(Qt.gray)
+            self.liste_partages.addItem(it)
+        anciens = [p for p in liste if p.get("ancien")]
+        if anciens:
+            self.ancien_partages.setText(_("{n} partage(s) de plus de 90 jours. ", n=len(anciens)) +
+                                         '<a href="nettoyer">' + _("Voir et supprimer...") + '</a>')
+            self.ancien_partages.show()
+        else:
+            self.ancien_partages.hide()
+        self._replier_partages(bool(self.params.get("partages_replies")), memoriser=False)
+        self.cadre_partages.show()
+
+    def _replier_partages(self, replier, memoriser=True):
+        self.liste_partages.setVisible(not replier)
+        n = len(self._partages)
+        self.titre_partages.setText(("▸  " if replier else "▾  ") + _("Partagés par lien ({n})", n=n))
+        if memoriser:
+            self.params["partages_replies"] = replier
+
+    def _menu_partage(self, pos):
+        it = self.liste_partages.itemAt(pos)
+        if not it:
+            return
+        p = it.data(Qt.UserRole)
+        m = QMenu(self)
+        m.addAction(icone("ouvrir", "#444444"), _("Ouvrir"), lambda: self.action_partage.emit(p, "ouvrir"))
+        if p.get("id"):
+            if p.get("actif"):
+                m.addAction(icone("copier", "#444444"), _("Copier le lien"), lambda: self.action_partage.emit(p, "copier"))
+                m.addAction(icone("courriel", "#444444"), _("Envoyer le lien par e-mail..."),
+                            lambda: self.action_partage.emit(p, "courriel"))
+                m.addAction(icone("fermer", "#444444"), _("Arrêter le partage (le lien ne marche plus)"),
+                            lambda: self.action_partage.emit(p, "arreter"))
+            else:
+                m.addAction(icone("courriel", "#444444"), _("Partager à nouveau (nouveau lien)"),
+                            lambda: self.action_partage.emit(p, "reprendre"))
+            m.addSeparator()
+            m.addAction(icone("supprimer", "#c9252d"), _("Supprimer du Drive..."), lambda: self.action_partage.emit(p, "supprimer"))
+        m.exec(self.liste_partages.viewport().mapToGlobal(pos))
 
     def eventFilter(self, obj, ev):
         """Apercu seulement quand la souris est sur l'icone, le nom ou le chemin : pas dans le blanc de la ligne."""
@@ -691,7 +820,7 @@ class PageAccueil(QWidget):
             if x.get("autre_poste"):
                 x = dict(x)
                 c = x.get("chemin")
-                if c and not c.replace("/", "\\").startswith("\\\\") and not os.path.exists(c):
+                if c and not c.startswith("distant:") and not c.replace("/", "\\").startswith("\\\\") and not os.path.exists(c):
                     x["chemin"], x["section"], x["introuvable_ici"] = None, "introuvable", True
                 autres.append(x)
         rang = {"ici": 0, "autres": 1, "introuvable": 2}

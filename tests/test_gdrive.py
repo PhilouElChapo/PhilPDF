@@ -158,6 +158,27 @@ miroir.synchroniser(pa)
 sa = lire(la, "session.json")
 verifie(sa["A"]["fichiers"] == ["a2.pdf"] and sa["B"]["fichiers"] == ["b.pdf"], "modifs des deux côtés : session fusionnée, rien de perdu")
 verifie(miroir.synchroniser(pa) == (0, 0), "plus rien à faire ensuite")
+# --- partages par lien : PhilPDF/Partages n'est jamais recopie ; un telephone ecrit appareils/<id>.json
+racine_id = next(i for i, f in FICHIERS.items() if f["name"] == "PhilPDF")
+FICHIERS["PARTAGES"] = {"name": "Partages", "mime": distant.DOSSIER_MIME, "parents": [racine_id], "data": b"", "mod": 0}
+FICHIERS["PDF1"] = {"name": "Madrid Frais.pdf", "mime": "application/pdf", "parents": ["PARTAGES"], "data": b"%PDF-1.4", "mod": 0}
+os.makedirs(os.path.join(la, "Partages"), exist_ok=True)
+open(os.path.join(la, "Partages", "ancienne copie.pdf"), "wb").write(b"%PDF")
+r = miroir.synchroniser(pa)
+verifie(r == (0, 0) and not os.path.exists(os.path.join(la, "Partages")), "Partages : rien de recopié, l'ancienne copie locale retirée")
+from app import partages
+verifie([x["nom"] for x in partages.lister(pa)] == ["Madrid Frais.pdf"], "Partages : liste lue sur le Drive")
+verifie(partages.est_partage(c, "/PhilPDF/Partages/Madrid Frais.pdf") and not partages.est_partage(c, "/PhilPDF/x.pdf"),
+        "Partages : un fichier partagé est reconnu à l'enregistrement")
+FICHIERS["APP"] = {"name": "appareils", "mime": distant.DOSSIER_MIME, "parents": [racine_id], "data": b"", "mod": 0}
+FICHIERS["TEL"] = {"name": "tel1.json", "mime": "application/json", "parents": ["APP"], "mod": 0,
+                   "data": json.dumps({"Galaxy S24": {"maj": "2026-11-23T11:00", "systeme": "android", "fichiers": [],
+                                                      "recents": [{"nom": "x.pdf", "date": "2026-11-23T11:00",
+                                                                   "distant": {"cle": "gdrive||", "chemin": "/Docs/x.pdf"}}]}}).encode()}
+miroir.synchroniser(pa)
+from app.session import Session
+s_ = Session(pa, os.path.join(la, "session.json"), os.path.join(la, "corresp.json"))
+verifie("Galaxy S24" in s_.lire() and "Galaxy S24" not in s_.lire(avec_appareils=False), "téléphone : sa liste reçue et lue avec celles des PC")
 srv.shutdown()
 from PySide6.QtGui import QGuiApplication
 _app = QGuiApplication.instance() or QGuiApplication([])

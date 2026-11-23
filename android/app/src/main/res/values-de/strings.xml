@@ -976,4 +976,27 @@
     <string name="deplacer_champ">Verschieben oder Größe ändern</string>
     <string name="aide_deplacer_champ">Ziehen; der runde Griff (unten rechts) ändert die Größe, dann „Hier“</string>
     <string name="champ_deplacement_impossible">Dieses Feld kann nicht verschoben werden (eine bereits geleistete Signatur würde ungültig).</string>
+    <string name="remplacer">Ersetzen</string>
+    <string name="lien_synchro">Link senden (Synchronisierungs-%1$s)</string>
+    <string name="partages_titre">Per Link geteilt (%1$d)</string>
+    <string name="partages_autres_comptes">Andere Konten</string>
+    <string name="partages_anciens">%1$d Freigabe(n) älter als 90 Tage</string>
+    <string name="partages_voir_supprimer">Anzeigen und löschen</string>
+    <string name="partage_supprimer_q">„%1$s“ in den Papierkorb des Drive verschieben? Der Link funktioniert dann nicht mehr (30 Tage im Papierkorb wiederherstellbar).</string>
+    <string name="partage_envoyer_lien">Link senden</string>
+    <string name="partage_arreter">Freigabe beenden (der Link funktioniert nicht mehr)</string>
+    <string name="partage_reprendre">Erneut teilen (neuer Link)</string>
+    <string name="partage_supprimer">Vom Drive löschen</string>
+    <string name="partages_anciens_titre">Freigaben älter als 90 Tage</string>
+    <string name="partages_anciens_q">Diese Freigaben sind älter als 90 Tage:\n\n%1$s\n\nIn den Papierkorb des Drive verschieben? Ihre Links funktionieren dann nicht mehr (30 Tage im Papierkorb wiederherstellbar).</string>
+    <string name="partage_depuis">von %1$s</string>
+    <string name="partage_arrete">Freigabe beendet</string>
+    <string name="partage_modifie_ailleurs">Geteilte Datei woanders geändert</string>
+    <string name="partage_modifie_ailleurs_q">„%1$s“ wurde auf einem anderen Gerät gespeichert, seit Sie sie geöffnet haben. Diese Version durch Ihre ersetzen oder Ihre unter einem anderen Namen speichern?</string>
+    <string name="partage_fichier_titre">Geteilte Datei</string>
+    <string name="partage_avertir">„%1$s“ ist per Link geteilt: Wer den Link hat, sieht diese neue Version. Speichern?</string>
+    <string name="nom_appareil">Name dieses Geräts auf Ihren PCs: %1$s</string>
+    <string name="nom_appareil_titre">Name dieses Geräts</string>
+    <string name="nom_appareil_aide">Der Name, der auf Ihren PCs unter „Auf Ihren anderen Rechnern“ für hier aus einem Drive geöffnete Dateien angezeigt wird.</string>
+    <string name="modifier">Ändern</string>
 </resources>

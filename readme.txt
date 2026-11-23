@@ -10,6 +10,17 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.27.12
+- Accueil : nouvelle rubrique « Partagés par lien » (dossier PhilPDF › Partages de votre Drive de synchronisation, la meme
+  sur tous vos appareils). Toucher : ouvrir. Appui long ou « ⋯ » : envoyer le lien, arreter le partage (le lien ne
+  marche plus), partager a nouveau, supprimer du Drive (corbeille, recuperable 30 jours). Les partages de plus de
+  90 jours sont signales : vous voyez la liste avant de les supprimer.
+- Partager par lien : le Drive de synchronisation est propose d'abord ; « par un autre compte » reste disponible.
+- Enregistrer un fichier partage : PhilPDF previent que les personnes qui ont le lien verront la nouvelle version, et
+  propose « Remplacer » ou « Autre nom » s'il a ete enregistre ailleurs depuis son ouverture.
+- Vos PC voient maintenant les fichiers ouverts sur ce telephone depuis un Drive (« Sur vos autres postes »), sous le
+  nom de l'appareil, modifiable dans Comptes et synchronisation.
+
 1.27.11
 - PhilPDF est sur Google Play. Apres quelques enregistrements, la version Google Play propose une seule fois de la
   noter, avec la fenetre officielle de Google (etoiles, sans quitter l'appli). Aide > Noter PhilPDF reste disponible.
@@ -585,6 +596,20 @@ ANDROID
 
 WINDOWS ET LINUX
 ----------------
+
+0.9.104
+- Accueil : nouvelle rubrique « Partagés par lien » (dossier PhilPDF › Partages de votre Drive de synchronisation).
+  Double-clic : ouvrir (copie de travail, « Enregistrer » remplace le partage apres avertissement ; si le fichier a
+  ete enregistre ailleurs depuis, « Remplacer » ou « Enregistrer sous »). Clic droit : copier le lien, l'envoyer par
+  e-mail, arreter le partage, partager a nouveau, supprimer du Drive. Partages de plus de 90 jours signales, liste
+  montree avant suppression. « Voir aussi les partages de vos autres comptes » ouvre leur dossier Partages.
+- Fichier › Partager par lien (Google Drive)... : comme sur Android, le lien est copie et peut partir dans un e-mail.
+- Le dossier Partages n'est plus recopie par la synchronisation (la copie deja faite est retiree) : plus de
+  « mise a jour » proposee pour un PDF partage depuis le telephone.
+- « Sur vos autres postes » montre aussi les fichiers ouverts sur vos telephones depuis un Drive, et les rouvre
+  directement sur le Drive ; compte non relie sur ce poste : ligne grisee, un clic propose de le relier.
+- Synchronisation plus legere : la liste des fichiers ouverts n'est plus renvoyee chaque minute quand rien ne change,
+  ni les mots de passe a chaque demarrage.
 
 0.9.103
 - Menu Aide : « PhilPDF sur Android (Google Play)... » ouvre la page Google Play de PhilPDF. « Partager PhilPDF... »
