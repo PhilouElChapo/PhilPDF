@@ -1000,4 +1000,5 @@
     <string name="nom_appareil_titre">Name of this device</string>
     <string name="nom_appareil_aide">The name shown on your PCs, in “On your other computers”, for files opened here from a Drive.</string>
     <string name="modifier">Edit</string>
+    <string name="aide_gras_selection">Select words to make only them bold or italic; with no selection, the G (bold) and I buttons apply to the whole text.</string>
 </resources>

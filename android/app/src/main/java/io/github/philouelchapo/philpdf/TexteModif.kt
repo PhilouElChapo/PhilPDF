@@ -385,8 +385,30 @@ object TexteModif {
         return c.takeIf { kotlin.math.abs(milieu - (c.x0 + c.x1) / 2) < maxOf(3f, (c.x1 - c.x0) * 0.02f) && l.gauche - c.x0 > 6 }
     }
 
+    /** Gras / italique d'une police d'apres son nom (sinon ceux de la ligne). */
+    fun styleDe(fonte: String, l: LigneTexte): Pair<Boolean, Boolean> =
+        if (fonte.isEmpty() || fonte == l.police) l.gras to l.italique
+        else (fonte.contains("Bold", true) || fonte.contains("Black", true) || fonte.contains("Heavy", true) ||
+            fonte.contains("Semibold", true)) to (fonte.contains("Italic", true) || fonte.contains("Oblique", true))
+
+    /** Style (gras, italique) de chaque caractere du paragraphe, tel que la fenetre « Modifier le texte » l'affiche
+     *  (retours a la ligne compris, comme Paragraphe.texte). */
+    fun stylesDe(par: Paragraphe): List<Pair<Boolean, Boolean>> {
+        val out = ArrayList<Pair<Boolean, Boolean>>()
+        par.lignes.forEachIndexed { i, l ->
+            if (i > 0) out += out.lastOrNull() ?: (l.gras to l.italique)
+            for (k in l.texte.indices) out += styleDe(l.fontes.getOrNull(k) ?: "", l)
+        }
+        return out
+    }
+
+    /**
+     * voulus : gras / italique de chaque lettre, par ligne (une partie du texte seulement, choisie dans la fenetre) ;
+     * une lettre dont le style change est ecrite dans la police standard correspondante, les autres gardent la leur.
+     */
     fun reecrire(pdf: PDFDocument, page: PDFPage, par: Paragraphe, nouvelles: List<String>, taille: Float, argb: Int,
-                 gras: Boolean, italique: Boolean, droite: Boolean): ResultatTexte {
+                 gras: Boolean, italique: Boolean, droite: Boolean,
+                 voulus: List<List<Pair<Boolean, Boolean>>>? = null): ResultatTexte {
         val l0 = par.lignes.first()
         val centrer = try { cadreCentre(page, par, nouvelles, droite) } catch (_: Exception) { null }
         val t = par.table
@@ -421,6 +443,11 @@ object TexteModif {
         // gras et normal melanges dans le paragraphe, style non change par l'utilisateur : chaque lettre garde la police
         // qu'elle avait (le texte tape prend celle du texte qu'il remplace)
         val nomsFontes = par.lignes.flatMap { it.fontes }.filter { it.isNotEmpty() }.toSet()
+        if (voulus != null) {
+            // une partie en gras / italique : ecriture lettre par lettre (police d'origine ou standard)
+            val tables = par.tables.ifEmpty { t?.let { tt -> (nomsFontes + l0.police).associateWith { tt } } ?: emptyMap() }
+            return ecrireMixte(pdf, page, par, nouvelles, taille, argb, droite, fonts, centrer, voulus, tables)
+        }
         if (!styleChange && nomsFontes.size > 1 && par.tables.isNotEmpty())
             return ecrireMixte(pdf, page, par, nouvelles, taille, argb, droite, fonts, centrer)
         val nomPolice: String
@@ -524,9 +551,11 @@ object TexteModif {
     }
 
     private fun ecrireMixte(pdf: PDFDocument, page: PDFPage, par: Paragraphe, nouvelles: List<String>, taille: Float, argb: Int,
-                            droite: Boolean, fonts: PDFObject, centrer: Rect? = null): ResultatTexte {
+                            droite: Boolean, fonts: PDFObject, centrer: Rect? = null,
+                            voulus: List<List<Pair<Boolean, Boolean>>>? = null,
+                            tables: Map<String, TablePolice> = par.tables): ResultatTexte {
         val l0 = par.lignes.first()
-        par.tables.values.forEach { it.reglerSur(l0.texte, l0.x1 - l0.x0, l0.taille) }
+        tables.values.forEach { it.reglerSur(l0.texte, l0.x1 - l0.x0, l0.taille) }
         val noms = HashMap<PDFObject, String>()
         // la police d'origine, rattachee aux ressources sous un nom sur (le caviardage peut les avoir reecrites)
         fun nomDe(t: TablePolice): String = noms.getOrPut(t.objet) {
@@ -547,7 +576,17 @@ object TexteModif {
             }
         }
         fun morceau(texte: String, fonte: String): Pair<String, Float> {
-            val t = par.tables[fonte]
+            if (fonte.startsWith("§")) {                 // style change par l'utilisateur : police standard demandee
+                secoursUtilise = true
+                val std = fonte.substring(1)
+                val nom = secours.getOrPut(std) {
+                    nouveauNom(fonts, "PhilB").also { fonts.put(it, pdf.addSimpleFont(Font(std), Font.SIMPLE_ENCODING_LATIN)) }
+                }
+                val fm = try { Font(std) } catch (_: Exception) { null }
+                val larg = fm?.let { m -> texte.sumOf { c -> m.advanceGlyph(m.encodeCharacter(c.code), false).toDouble() }.toFloat() * taille } ?: 0f
+                return "/$nom ${f(taille)} Tf <" + texte.toByteArray(cp).joinToString("") { "%02X".format(it.toInt() and 255) } + "> Tj " to larg
+            }
+            val t = tables[fonte]
             return if (t != null && t.peutEcrire(texte)) {
                 val sb = StringBuilder(); var cour: TablePolice? = null
                 for (c in texte) {
@@ -572,7 +611,12 @@ object TexteModif {
         val derniere = par.lignes.last().fontes.lastOrNull { it.isNotEmpty() } ?: l0.police
         nouvelles.forEachIndexed { i, s ->
             val ref = par.lignes.getOrNull(i)
-            val fs = if (ref != null) styler(ref.texte, ref.fontes, s, derniere) else List(s.length) { derniere }
+            val fs0 = if (ref != null) styler(ref.texte, ref.fontes, s, derniere) else List(s.length) { derniere }
+            val v = voulus?.getOrNull(i)
+            val fs = if (v == null || v.size != s.length) fs0 else fs0.mapIndexed { k, fo ->
+                val lr = ref ?: l0
+                if (v[k] == styleDe(fo, lr)) fo else "§" + policeSecours(lr.copy(police = fo.ifEmpty { lr.police }), v[k].first, v[k].second)
+            }
             // morceaux de meme police
             val morceaux = ArrayList<Pair<String, Float>>()
             var debut = 0

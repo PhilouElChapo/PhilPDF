@@ -10,6 +10,13 @@ Dans PhilPDF : Aide > Nouveautes (Windows, Linux), Accueil > Aide > Nouveautes (
 ANDROID
 -------
 
+1.27.13
+- Modifier le texte : gras et italique peuvent ne toucher qu'une partie du texte. Selectionnez des mots dans la
+  zone (appui long, puis les poignees), puis G ou I : seule la selection change ; sans selection, tout le texte,
+  comme avant. Les parties deja en gras ou en italique s'affichent ainsi dans la zone, et le texte tape prend le
+  style de la lettre d'avant. Les lettres dont le style change sont ecrites en police standard (Helvetica, Times,
+  Courier), les autres gardent leur police d'origine.
+
 1.27.12
 - Accueil : nouvelle rubrique « Partagés par lien » (dossier PhilPDF › Partages de votre Drive de synchronisation, la meme
   sur tous vos appareils). Toucher : ouvrir. Appui long ou « ⋯ » : envoyer le lien, arreter le partage (le lien ne

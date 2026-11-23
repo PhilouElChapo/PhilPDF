@@ -999,4 +999,5 @@
     <string name="nom_appareil_titre">Nome di questo dispositivo</string>
     <string name="nom_appareil_aide">Il nome mostrato sui tuoi PC, in «Sui tuoi altri computer», per i file aperti qui da un Drive.</string>
     <string name="modifier">Modifica</string>
+    <string name="aide_gras_selection">Seleziona delle parole per mettere solo quelle in grassetto o corsivo; senza selezione, G e I valgono per tutto il testo.</string>
 </resources>

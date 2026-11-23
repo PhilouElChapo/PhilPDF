@@ -553,14 +553,15 @@ class DocumentPdf private constructor(val uri: Uri, val nom: String, val fichier
 
     /** Remplace le texte du paragraphe (une seule etape d'annulation). */
     suspend fun reecrireTexte(par: Paragraphe, lignes: List<String>, taille: Float, argb: Int, gras: Boolean,
-                              italique: Boolean, droite: Boolean): ResultatTexte {
+                              italique: Boolean, droite: Boolean,
+                              voulus: List<List<Pair<Boolean, Boolean>>>? = null): ResultatTexte {
         val p = pdf ?: return ResultatTexte(false, false, "", "document non modifiable")
         var res = ResultatTexte(false, false, "")
         val r = verrou.withLock {
             withContext(Dispatchers.IO) {
                 p.beginOperation("Modifier le texte")
                 try {
-                    surPage(p, par.page) { page -> res = TexteModif.reecrire(p, page, par, lignes, taille, argb, gras, italique, droite); res.ok }
+                    surPage(p, par.page) { page -> res = TexteModif.reecrire(p, page, par, lignes, taille, argb, gras, italique, droite, voulus); res.ok }
                 } catch (e: Exception) {
                     res = ResultatTexte(false, false, "", e.message ?: e.javaClass.simpleName); false
                 } finally { p.endOperation() }

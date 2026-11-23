@@ -999,4 +999,5 @@
     <string name="nom_appareil_titre">Nombre de este dispositivo</string>
     <string name="nom_appareil_aide">El nombre que se muestra en sus PC, en «En sus otros equipos», para los archivos abiertos aquí desde un Drive.</string>
     <string name="modifier">Modificar</string>
+    <string name="aide_gras_selection">Seleccione palabras para poner solo esas en negrita o cursiva; sin selección, G e I se aplican a todo el texto.</string>
 </resources>

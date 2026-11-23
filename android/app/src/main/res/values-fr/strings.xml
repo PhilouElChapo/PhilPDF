@@ -1000,4 +1000,5 @@
     <string name="nom_appareil_titre">Nom de cet appareil</string>
     <string name="nom_appareil_aide">Le nom affiché sur vos PC, dans « Sur vos autres postes », pour les fichiers ouverts ici depuis un Drive.</string>
     <string name="modifier">Modifier</string>
+    <string name="aide_gras_selection">Sélectionnez des mots pour ne mettre qu\'eux en gras ou en italique ; sans sélection, G et I touchent tout le texte.</string>
 </resources>

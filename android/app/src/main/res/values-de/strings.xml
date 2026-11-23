@@ -999,4 +999,5 @@
     <string name="nom_appareil_titre">Name dieses Geräts</string>
     <string name="nom_appareil_aide">Der Name, der auf Ihren PCs unter „Auf Ihren anderen Rechnern“ für hier aus einem Drive geöffnete Dateien angezeigt wird.</string>
     <string name="modifier">Ändern</string>
+    <string name="aide_gras_selection">Wählen Sie Wörter aus, um nur sie fett oder kursiv zu setzen; ohne Auswahl gelten G und I für den ganzen Text.</string>
 </resources>
