@@ -20,6 +20,8 @@ Latest version: **[Releases](https://github.com/PhilouElChapo/PhilPDF/releases/l
 | Linux (Ubuntu, Zorin OS, Fedora, Mint...) | `PhilPDF.flatpak` (double-click, or `flatpak install --user PhilPDF.flatpak`) or `PhilPDF_linux_x86_64.tar.gz` |
 | Android | **[Google Play](https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf)** (recommended, automatic updates) or the `.apk` in the Android releases |
 
+[Code signing policy](CODE_SIGNING_POLICY.md) (Windows builds are made only by GitHub Actions from this repository).
+
 Updates are offered inside the app, never forced. The interface is available in English, French, German, Spanish and
 Italian.
 
@@ -78,7 +80,7 @@ ses fichiers sur tous ses postes. Sans compte, sans publicité, sans pisteur.
 - **Télécharger** : [dernière version](https://github.com/PhilouElChapo/PhilPDF/releases/latest) — Windows
   (`PhilPDF_Setup.exe`, installation sans droits administrateur, ou `PhilPDF_portable.zip`), Linux (`PhilPDF.flatpak`
   ou `PhilPDF_linux_x86_64.tar.gz`), Android sur **[Google Play](https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf)** (mises à jour automatiques) ou par
-  le fichier `.apk`.
+  le fichier `.apk`. [Code signing policy](CODE_SIGNING_POLICY.md) (politique de signature du code).
 - **Fonctions** : modifier le texte et les images, organiser les pages, remplir et signer (y compris signature
   numérique), tampons, numérisation et OCR, allègement, conversion Word / Excel, imprimante PDF, biffage, filigrane,
   comparaison, envoi par e-mail ; Google Drive, OneDrive, Dropbox, Box, pCloud, kDrive, WebDAV, NAS et FTP en direct ;

@@ -327,6 +327,7 @@ jobs:
 
             PhilPDF pour Android : publications « PhilPDF Android » (numero propre a Android).
             Ce qui a change : readme.txt (aussi dans PhilPDF : Aide > Nouveautes).
+            Code signing policy : https://github.com/PhilouElChapo/PhilPDF/blob/main/CODE_SIGNING_POLICY.md
           files: |
             PhilPDF_portable.zip
             PhilPDF_Setup.exe
