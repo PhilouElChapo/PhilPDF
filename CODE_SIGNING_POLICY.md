@@ -7,7 +7,7 @@ from the public repository [PhilouElChapo/PhilPDF](https://github.com/PhilouElCh
 (workflow `.github/workflows/fabriquer.yml`). Nothing is built or signed on a personal computer.
 
 Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
-*(Application in progress: until it is accepted, Windows releases are not signed.)*
+*(Planned: Windows releases are not signed yet.)*
 
 ## Team roles
 
@@ -36,7 +36,7 @@ Full privacy policy: [philouelchapo.github.io/PhilPDF/confidentialite.html](http
 ## Politique de signature du code (français)
 
 PhilPDF pour Windows est fabriqué uniquement par GitHub Actions à partir du dépôt public, jamais sur un ordinateur
-personnel. Signature gratuite fournie par SignPath.io, certificat de la SignPath Foundation (demande en cours : tant
-qu'elle n'est pas acceptée, les versions Windows ne sont pas signées). Auteur, relecteur et approbateur :
+personnel. Signature gratuite fournie par SignPath.io, certificat de la SignPath Foundation (prévu : les versions Windows ne sont pas
+encore signées). Auteur, relecteur et approbateur :
 PhilouElChapo, avec double authentification sur GitHub et SignPath. Seuls les programmes construits depuis ce dépôt
 sont signés. Confidentialité : voir le lien ci-dessus.
