@@ -18,7 +18,11 @@ Latest version: **[Releases](https://github.com/PhilouElChapo/PhilPDF/releases/l
 |---|---|
 | Windows 10 / 11 | `PhilPDF_Setup.exe` (no admin rights needed) or `PhilPDF_portable.zip` |
 | Linux (Ubuntu, Zorin OS, Fedora, Mint...) | `PhilPDF.flatpak` (double-click, or `flatpak install --user PhilPDF.flatpak`) or `PhilPDF_linux_x86_64.tar.gz` |
-| Android | **[Google Play](https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf)** (recommended, automatic updates) or the `.apk` in the Android releases |
+| Android | **[Google Play](https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf)** (recommended, automatic updates), **[F-Droid](https://philouelchapo.github.io/PhilPDF/#fdroid)** (own repository, see below) or the `.apk` in the Android releases |
+
+**F-Droid:** in F-Droid, open *Settings › Repositories › +* and scan the QR code on the
+[PhilPDF page](https://philouelchapo.github.io/PhilPDF/#fdroid), or paste `https://philouelchapo.github.io/PhilPDF/fdroid/repo?fingerprint=5ECBFD713BF46AA760A64450F24CA959C7272748377851D00843B314291DB5F7`.
+Same APKs as in the releases, signed with the PhilPDF key. This is not the official f-droid.org catalogue.
 
 [Code signing policy](CODE_SIGNING_POLICY.md) (Windows builds are made only by GitHub Actions from this repository).
 
@@ -79,8 +83,9 @@ ses fichiers sur tous ses postes. Sans compte, sans publicité, sans pisteur.
 
 - **Télécharger** : [dernière version](https://github.com/PhilouElChapo/PhilPDF/releases/latest) — Windows
   (`PhilPDF_Setup.exe`, installation sans droits administrateur, ou `PhilPDF_portable.zip`), Linux (`PhilPDF.flatpak`
-  ou `PhilPDF_linux_x86_64.tar.gz`), Android sur **[Google Play](https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf)** (mises à jour automatiques) ou par
-  le fichier `.apk`. [Code signing policy](CODE_SIGNING_POLICY.md) (politique de signature du code).
+  ou `PhilPDF_linux_x86_64.tar.gz`), Android sur **[Google Play](https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf)** (mises à jour automatiques), sur
+  **[F-Droid](https://philouelchapo.github.io/PhilPDF/#fdroid)** (dépôt PhilPDF : dans F-Droid, *Réglages › Dépôts › +*,
+  QR code sur la page) ou par le fichier `.apk`. [Code signing policy](CODE_SIGNING_POLICY.md) (politique de signature du code).
 - **Fonctions** : modifier le texte et les images, organiser les pages, remplir et signer (y compris signature
   numérique), tampons, numérisation et OCR, allègement, conversion Word / Excel, imprimante PDF, biffage, filigrane,
   comparaison, envoi par e-mail ; Google Drive, OneDrive, Dropbox, Box, pCloud, kDrive, WebDAV, NAS et FTP en direct ;

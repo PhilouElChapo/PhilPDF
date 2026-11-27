@@ -10,7 +10,7 @@ ul{padding-left:20px}a{color:var(--rouge)}footer{color:var(--gris);font-size:14p
 .bouton{display:inline-block;background:var(--rouge);color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600}
 .langue{float:right;font-size:14px}
 .marque{font-size:14px;color:var(--gris);letter-spacing:.04em;margin:0 0 18px}.marque b{color:var(--texte)}
-.boutons a{margin:4px 8px 4px 0}.bouton.clair{background:transparent;color:var(--rouge);border:1px solid var(--rouge)}
+.boutons a{margin:4px 8px 4px 0}.qr{float:right;margin:0 0 8px 16px;width:150px;height:150px;border-radius:8px;background:#fff}code{font-size:12px;word-break:break-all}.bouton.clair{background:transparent;color:var(--rouge);border:1px solid var(--rouge)}
 </style></head><body><main>
 <p class="langue"><a href="#en">English</a></p>
 <p class="marque"><b>PhilFactory</b> · logiciels libres, sans publicité ni collecte de données</p>
@@ -21,13 +21,20 @@ ul{padding-left:20px}a{color:var(--rouge)}footer{color:var(--gris);font-size:14p
 organise les pages, ajoute filigranes et en-têtes, et ouvre ou enregistre vos fichiers sur l'appareil, un NAS, un serveur FTP ou votre Drive.</p>
 <p>Il fonctionne entièrement sur votre appareil. L'accès à Google Drive, OneDrive, Dropbox ou Box, s'il est autorisé, sert uniquement à ouvrir
 et enregistrer vos propres fichiers et à retrouver vos fichiers, tampons et signatures sur vos autres appareils.</p>
-<p class="boutons"><a class="bouton" href="https://github.com/PhilouElChapo/PhilPDF/releases/latest">Windows et Linux</a><a class="bouton clair" href="https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf">Android (Google Play)</a></p>
+<p class="boutons"><a class="bouton" href="https://github.com/PhilouElChapo/PhilPDF/releases/latest">Windows et Linux</a><a class="bouton clair" href="https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf">Android (Google Play)</a><a class="bouton clair" href="#fdroid">Android (F-Droid)</a></p>
 <p style="font-size:13px"><a href="https://github.com/PhilouElChapo/PhilPDF/blob/main/CODE_SIGNING_POLICY.md">Code signing policy</a> (politique de signature du code)</p>
 <p class="boutons"><a href="https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf"><img alt="Disponible sur Google Play" src="https://play.google.com/intl/fr_fr/badges/static/images/badges/fr_badge_web_generic.png" height="72"></a></p>
 </div>
 <h2>Sur Android</h2>
 <p>Lecture, recherche, commentaires, formulaires, signature au doigt et tampons, modification du texte de la page avec sa police d'origine,
 synchronisation avec PhilPDF Windows par votre compte Google Drive, OneDrive, Dropbox ou Box. <a href="https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf">Disponible sur Google Play</a>.</p>
+<h2 id="fdroid">Sur F-Droid</h2>
+<div class="carte"><img class="qr" src="fdroid_qr.png" alt="QR code du dépôt F-Droid de PhilPDF">
+<p>PhilPDF a son propre dépôt F-Droid : mêmes APK que sur GitHub, signés avec la clef PhilPDF, mises à jour automatiques dans F-Droid.</p>
+<p class="boutons"><a class="bouton" href="fdroidrepos://philouelchapo.github.io/PhilPDF/fdroid/repo?fingerprint=5ECBFD713BF46AA760A64450F24CA959C7272748377851D00843B314291DB5F7">Ajouter à F-Droid</a></p>
+<p>Ou, dans F-Droid : <b>Réglages › Dépôts › +</b>, puis scannez le QR code ou collez l'adresse :<br><code>https://philouelchapo.github.io/PhilPDF/fdroid/repo?fingerprint=5ECBFD713BF46AA760A64450F24CA959C7272748377851D00843B314291DB5F7</code></p>
+<p style="font-size:13px;color:var(--gris)">Empreinte de la clef (SHA-256) : <code>5ECBFD713BF46AA760A64450F24CA959C7272748377851D00843B314291DB5F7</code>.<br>
+Ce dépôt n'est pas le catalogue officiel f-droid.org. F-Droid signale deux points : le scanner utilise Google ML Kit (services Google Play), et les clouds et l'assistant IA facultatifs sont des services non libres.</p></div>
 <h2>Contact</h2>
 <p>Questions, idées, problèmes : <a href="mailto:PhilFactory.Dev@gmail.com">PhilFactory.Dev@gmail.com</a>, ou la <a href="https://github.com/PhilouElChapo/PhilPDF/issues">page de contact du projet</a> sur GitHub.</p>
 <h2 id="en">English</h2>
@@ -35,7 +42,7 @@ synchronisation avec PhilPDF Windows par votre compte Google Drive, OneDrive, Dr
 <p>PhilPDF is a free PDF editor for Windows, Linux and Android. It edits text while keeping the original font, places stamps and signatures,
 recognizes scanned text (OCR) and opens or saves files on your device, a NAS, an FTP server or your Drive. Everything runs on your device.
 <a href="https://play.google.com/store/apps/details?id=io.github.philouelchapo.philpdf"><img alt="Get it on Google Play" src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" height="64" style="vertical-align:middle"></a>
-Contact: <a href="mailto:PhilFactory.Dev@gmail.com">PhilFactory.Dev@gmail.com</a> or the <a href="https://github.com/PhilouElChapo/PhilPDF/issues">project contact page</a> on GitHub.</p>
+Also on F-Droid through its own repository: <a href="fdroidrepos://philouelchapo.github.io/PhilPDF/fdroid/repo?fingerprint=5ECBFD713BF46AA760A64450F24CA959C7272748377851D00843B314291DB5F7">add to F-Droid</a> or add <code>https://philouelchapo.github.io/PhilPDF/fdroid/repo?fingerprint=5ECBFD713BF46AA760A64450F24CA959C7272748377851D00843B314291DB5F7</code> in F-Droid (Settings › Repositories). Contact: <a href="mailto:PhilFactory.Dev@gmail.com">PhilFactory.Dev@gmail.com</a> or the <a href="https://github.com/PhilouElChapo/PhilPDF/issues">project contact page</a> on GitHub.</p>
 <p><a href="confidentialite.html#en">Privacy policy</a> · <a href="conditions.html#en">Terms of use</a></p>
 <footer><a href="./">PhilPDF</a> · <a href="confidentialite.html">Règles de confidentialité</a> · <a href="conditions.html">Conditions d'utilisation</a> ·
 <a href="https://github.com/PhilouElChapo/PhilPDF">Code source</a><br>PhilFactory · <a href="mailto:PhilFactory.Dev@gmail.com">PhilFactory.Dev@gmail.com</a> · logiciels libres (GNU AGPL v3)</footer>
