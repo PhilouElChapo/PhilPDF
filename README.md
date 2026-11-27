@@ -1,8 +1,8 @@
 # PhilPDF
 
-**A free and open-source PDF editor for Windows, Linux and Android — an alternative to Adobe Acrobat.**
-Read, edit text with the original font, fill and sign, OCR, compress, convert to Word and Excel, scan, and keep your
-files in sync across your devices. No account, no ads, no trackers.
+**Edit PDF text in its original font, sign, scan and OCR — on Windows, Linux and Android, synced across your devices.**
+A free and open-source alternative to Adobe Acrobat, with no subscription: fill forms, compress, convert to Word and
+Excel, and find your recent files, stamps and signatures on every device. No account, no ads, no trackers.
 
 *[Version française plus bas](#en-français)*
 
@@ -73,9 +73,10 @@ Built with PyMuPDF / MuPDF (AGPL, Artifex), Qt / PySide6 (LGPL), Tesseract (Apac
 
 ## En français
 
-**Éditeur PDF libre et gratuit pour Windows, Linux et Android, une alternative à Adobe Acrobat.** Lire, modifier le
-texte avec la police d'origine, remplir et signer, OCR, alléger, convertir vers Word et Excel, numériser, et retrouver
-ses fichiers sur tous ses postes. Sans compte, sans publicité, sans pisteur.
+**Modifiez le texte d'un PDF dans sa police d'origine, signez, numérisez — sur Windows, Linux et Android, synchronisé entre vos appareils.**
+Une alternative libre et gratuite à Adobe Acrobat, sans abonnement : remplir les formulaires, OCR, alléger, convertir
+vers Word et Excel, et retrouver fichiers récents, tampons et signatures sur tous vos postes. Sans compte, sans
+publicité, sans pisteur.
 
 ![PhilPDF en français](docs/captures/document_fr.png)
 
