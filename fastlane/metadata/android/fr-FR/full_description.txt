@@ -12,6 +12,7 @@ PhilPDF est un éditeur PDF libre et gratuit : modifiez, signez, remplissez et n
 <ul>
 <li>Remplir les formulaires PDF, ajouter des champs, cases à cocher et listes</li>
 <li>Signer à la main ou avec une signature numérique (certificat), et vérifier les signatures reçues</li>
+<li>Signatures et champs se déplacent et se redimensionnent après coup</li>
 <li>Tampons réutilisables : « Payé », « Reçu le », votre cachet…</li>
 </ul>
 

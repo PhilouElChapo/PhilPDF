@@ -1,0 +1,46 @@
+PhilPDF è un editor PDF gratuito e open source: modifica, firma, compila e scansiona i tuoi documenti direttamente sul telefono. Nessun abbonamento, nessuna pubblicità, nessun account da creare e nessun tracker.
+
+<b>✏️ Modifica i tuoi PDF</b>
+<ul>
+<li>Modifica il testo mantenendo il carattere originale</li>
+<li>Evidenzia, sottolinea, barra, note, disegni, frecce, forme, immagini e timbri</li>
+<li>Oscuramento reale: il testo nascosto viene davvero eliminato, non solo coperto</li>
+<li>Filigrana, intestazione e piè di pagina</li>
+</ul>
+
+<b>🖊️ Compila e firma</b>
+<ul>
+<li>Compila moduli PDF, aggiungi campi, caselle di controllo ed elenchi</li>
+<li>Firma a mano o con firma digitale (certificato) e verifica le firme ricevute</li>
+<li>Firme e campi si possono spostare e ridimensionare in seguito</li>
+<li>Timbri riutilizzabili: «Pagato», «Ricevuto il», il timbro della tua azienda…</li>
+</ul>
+
+<b>📷 Scansiona e riconosci il testo</b>
+<ul>
+<li>Scansiona documenti con la fotocamera, più pagine alla volta</li>
+<li>Raddrizza e pulisci le scansioni: sfondo bianco, testo nitido, anche su carta di sicurezza</li>
+<li>Riconoscimento del testo (OCR): le scansioni diventano ricercabili e copiabili</li>
+</ul>
+
+<b>📄 Organizza, comprimi, unisci</b>
+<ul>
+<li>Riordina, ruota, estrai ed elimina pagine</li>
+<li>Unisci più PDF in uno solo</li>
+<li>Comprimi un PDF troppo grande da inviare per e-mail</li>
+<li>Ricerca nel documento, segnalibri, modalità lettura per schermi piccoli</li>
+<li>Stampa, condividi il file o un link</li>
+</ul>
+
+<b>☁️ I tuoi cloud, direttamente</b>
+Apri e salva su Google Drive, OneDrive, Dropbox, Box, pCloud, Infomaniak kDrive e WebDAV, con più account e uno preferito. Crea cartelle senza uscire dall'app. Sincronizzazione con PhilPDF su Windows e Linux: file recenti, timbri e firme ti seguono.
+
+<b>🤖 Assistente IA facoltativo</b>
+Con la tua chiave Claude o Gemini: riassumere, spiegare in modo semplice, tradurre un documento, compilare un modulo, rinominare e archiviare, estrarre i dati di una fattura. Nulla viene inviato senza il tuo tocco, i dati sensibili vengono segnalati prima dell'invio e ogni risposta può essere segnalata.
+
+<b>🔒 I tuoi documenti restano tuoi</b>
+PhilPDF non ha server. I tuoi file restano sul tuo dispositivo; cloud e IA vengono contattati solo quando lo chiedi.
+
+<b>💚 Software libero</b>
+Open source (AGPL v3), disponibile anche su Windows e Linux. Interfaccia in italiano, inglese, francese, tedesco e spagnolo.
+Codice sorgente e versioni: https://github.com/PhilouElChapo/PhilPDF

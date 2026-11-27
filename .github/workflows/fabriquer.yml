@@ -23,7 +23,7 @@ permissions:
 jobs:
   # ---------------------------------------------------------------- ce qui a change
   # Windows et Linux (numero dans app/config.py) ne sont refabriques que si leur code change ;
-  # Android (numero dans android/version.txt) seulement si android/ change. readme.txt, docs, fastlane : rien.
+  # Android (numero dans android/version.txt) seulement si android/ change. readme.txt, docs, fastlane, fdroid : rien (site.yml).
   changements:
     runs-on: ubuntu-latest
     outputs:
@@ -53,9 +53,9 @@ jobs:
           echo "$f"
           a=false; b=false
           echo "$f" | grep -q '^android/' && a=true
-          echo "$f" | grep -vE '^(android/|readme\.txt$|docs/|fastlane/|README\.md$)' | grep -q . && b=true
+          echo "$f" | grep -vE '^(android/|readme\.txt$|docs/|fastlane/|fdroid/|README\.md$|\.github/workflows/site\.yml$)' | grep -q . && b=true
           # le programme de fabrication lui-meme change : tout refaire pour le verifier
-          echo "$f" | grep -q '^\.github/' && { a=true; b=true; }
+          echo "$f" | grep '^\.github/' | grep -vq '^\.github/workflows/site\.yml$' && { a=true; b=true; }
           echo "bureau=$b" >> "$GITHUB_OUTPUT"; echo "android=$a" >> "$GITHUB_OUTPUT"
           echo "::notice title=Fabrication::Windows et Linux : $b ; Android : $a"
 

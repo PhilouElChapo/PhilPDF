@@ -12,6 +12,7 @@ PhilPDF is a free and open-source PDF editor: edit, sign, fill and scan your doc
 <ul>
 <li>Fill PDF forms, add fields, checkboxes and lists</li>
 <li>Sign by hand or with a digital signature (certificate), and verify the signatures you receive</li>
+<li>Signatures and fields can be moved and resized afterwards</li>
 <li>Reusable stamps: "Paid", "Received on", your company stamp…</li>
 </ul>
 

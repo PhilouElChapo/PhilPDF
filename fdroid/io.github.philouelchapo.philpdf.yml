@@ -1,0 +1,20 @@
+# Fiche F-Droid de PhilPDF (depot F-Droid de PhilouElChapo).
+# Les textes (nom, resume, description, icone) viennent de fastlane/metadata/android/<langue>/.
+AuthorName: PhilouElChapo
+AuthorWebSite: https://philouelchapo.github.io/PhilPDF/
+License: AGPL-3.0-only
+WebSite: https://philouelchapo.github.io/PhilPDF/
+SourceCode: https://github.com/PhilouElChapo/PhilPDF
+IssueTracker: https://github.com/PhilouElChapo/PhilPDF/issues
+Changelog: https://github.com/PhilouElChapo/PhilPDF/releases
+Categories:
+  - Reading
+  - Writing
+  - Office
+AntiFeatures:
+  NonFreeComp:
+    en-US: The document scanner uses Google ML Kit (Google Play services) and the app contains the Google Play in-app review library (only used in the Google Play version).
+    fr-FR: Le scanner de documents utilise Google ML Kit (services Google Play) et l'application contient la bibliotheque de demande de note Google Play (utilisee seulement dans la version Google Play).
+  NonFreeNet:
+    en-US: Optional, only when you ask for it - Google Drive, OneDrive, Dropbox, Box and the Claude or Gemini AI assistant (with your own key).
+    fr-FR: Facultatif, seulement a votre demande - Google Drive, OneDrive, Dropbox, Box et l'assistant IA Claude ou Gemini (avec votre propre clef).

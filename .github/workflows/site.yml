@@ -1,0 +1,74 @@
+# Publication du site philouelchapo.github.io/PhilPDF (dossier docs/) et du depot F-Droid
+# (philouelchapo.github.io/PhilPDF/fdroid/repo), sans rien ajouter au depot Git :
+# les APK sont repris des versions Android publiees et le catalogue est signe avec la clef PhilPDF.
+# Reglage necessaire une fois : Settings > Pages > Source : "GitHub Actions".
+name: Publier le site et F-Droid
+
+on:
+  push:
+    branches: [main]
+    paths: ["docs/**", "fastlane/**", "fdroid/**", ".github/workflows/site.yml"]
+  workflow_run:
+    workflows: ["Fabriquer PhilPDF"]
+    types: [completed]
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * *"     # filet de securite : une fois par jour
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publier:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Outils F-Droid
+        shell: bash
+        run: |
+          pip install -q fdroidserver
+          bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          echo "$bt" >> "$GITHUB_PATH"
+          echo "apksigner : $bt"
+      - name: Depot F-Droid
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          FDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          FDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          FDROID_KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_B64" ]; then
+            echo "::error title=F-Droid::secret ANDROID_KEYSTORE_B64 absent : catalogue non signe, rien n'est publie"; exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/philpdf.jks"
+          export FDROID_KEYSTORE="$RUNNER_TEMP/philpdf.jks"
+          bash fdroid/fabriquer_depot.sh site_fdroid
+          rm -f "$RUNNER_TEMP/philpdf.jks"
+      - name: Assembler le site
+        shell: bash
+        run: |
+          mkdir -p site
+          cp -r docs/. site/
+          mv site_fdroid site/fdroid
+          du -sh site; ls site site/fdroid/repo | head -40
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+      - id: deploiement
+        uses: actions/deploy-pages@v4

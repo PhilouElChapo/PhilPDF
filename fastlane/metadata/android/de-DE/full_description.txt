@@ -1,0 +1,46 @@
+PhilPDF ist ein kostenloser Open-Source-PDF-Editor: Bearbeiten, unterschreiben, ausfüllen und scannen Sie Ihre Dokumente direkt auf dem Handy. Kein Abo, keine Werbung, kein Konto und keine Tracker.
+
+<b>✏️ PDFs bearbeiten</b>
+<ul>
+<li>Text bearbeiten, die Originalschrift bleibt erhalten</li>
+<li>Hervorheben, unterstreichen, durchstreichen, Notizen, Zeichnungen, Pfeile, Formen, Bilder und Stempel</li>
+<li>Echtes Schwärzen: verdeckter Text wird wirklich entfernt, nicht nur überdeckt</li>
+<li>Wasserzeichen, Kopf- und Fußzeile</li>
+</ul>
+
+<b>🖊️ Ausfüllen und unterschreiben</b>
+<ul>
+<li>PDF-Formulare ausfüllen, Felder, Kontrollkästchen und Listen hinzufügen</li>
+<li>Handschriftlich oder digital (Zertifikat) unterschreiben und erhaltene Signaturen prüfen</li>
+<li>Signaturen und Felder lassen sich nachträglich verschieben und in der Größe ändern</li>
+<li>Wiederverwendbare Stempel: „Bezahlt", „Erhalten am", Ihr Firmenstempel…</li>
+</ul>
+
+<b>📷 Scannen und Text erkennen</b>
+<ul>
+<li>Dokumente mit der Kamera scannen, mehrere Seiten auf einmal</li>
+<li>Scans begradigen und säubern: weißer Hintergrund, scharfer Text, auch auf Sicherheitspapier</li>
+<li>Texterkennung (OCR): Ihre Scans werden durchsuchbar und kopierbar</li>
+</ul>
+
+<b>📄 Organisieren, komprimieren, zusammenführen</b>
+<ul>
+<li>Seiten neu anordnen, drehen, extrahieren und löschen</li>
+<li>Mehrere PDFs zu einem zusammenführen</li>
+<li>Ein zu großes PDF für den E-Mail-Versand komprimieren</li>
+<li>Suche im Dokument, Lesezeichen, Lesemodus für kleine Bildschirme</li>
+<li>Drucken, Datei oder Link teilen</li>
+</ul>
+
+<b>☁️ Ihre Clouds, direkt</b>
+Öffnen und speichern in Google Drive, OneDrive, Dropbox, Box, pCloud, Infomaniak kDrive und WebDAV, mit mehreren Konten und einem bevorzugten Konto. Ordner direkt in der App anlegen. Synchronisation mit PhilPDF unter Windows und Linux: zuletzt geöffnete Dateien, Stempel und Signaturen sind überall dabei.
+
+<b>🤖 Optionaler KI-Assistent</b>
+Mit Ihrem eigenen Claude- oder Gemini-Schlüssel: zusammenfassen, einfach erklären, ein Dokument übersetzen, ein Formular ausfüllen, umbenennen und ablegen, Rechnungsdaten auslesen. Nichts wird ohne Ihr Tippen gesendet, sensible Daten werden vor dem Senden markiert, und jede Antwort kann gemeldet werden.
+
+<b>🔒 Ihre Dokumente bleiben Ihre</b>
+PhilPDF hat keinen Server. Ihre Dateien bleiben auf Ihrem Gerät; Clouds und KI werden nur auf Ihren Wunsch kontaktiert.
+
+<b>💚 Freie Software</b>
+Open Source (AGPL v3), auch für Windows und Linux erhältlich. Oberfläche auf Deutsch, Englisch, Französisch, Spanisch und Italienisch.
+Quellcode und Versionen: https://github.com/PhilouElChapo/PhilPDF
